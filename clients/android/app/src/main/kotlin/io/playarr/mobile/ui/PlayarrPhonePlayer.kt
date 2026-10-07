@@ -51,6 +51,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -274,6 +275,14 @@ internal fun BoxScope.PhonePlayerOverlay(
                     Modifier
                         .size(42.dp)
                         .then(if (controls.qualityOptions.isEmpty() || controls.switching) Modifier.alpha(0.76f) else Modifier)
+                        // `.player-quality-button[aria-expanded="true"]`: a 15% white disc and 1.08x while its menu is open.
+                        .then(
+                            if (openMenu == PlayarrPlayerMenu.Quality) {
+                                Modifier.graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }.background(Color.White.copy(alpha = 0.15f), CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        )
                         .clickable(enabled = controls.qualityOptions.isNotEmpty() && !controls.switching) {
                             onMenu(if (openMenu == PlayarrPlayerMenu.Quality) null else PlayarrPlayerMenu.Quality)
                         }

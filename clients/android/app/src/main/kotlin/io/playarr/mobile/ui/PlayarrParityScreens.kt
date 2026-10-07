@@ -3067,6 +3067,31 @@ internal fun ExperienceParitySettingsScreen(
             viewModel.refreshInviteRequest()
         }
     }
+    if (isTelevision) {
+        PlayarrPageScaffold(
+            title = playarrString(PlayarrString.SettingsTitle),
+            onBack = onBack,
+            isTelevision = true,
+            padBody = false,
+            backActive = true,
+        ) {
+            TvSettingsBody(
+                section = section,
+                onPick = { picked = it },
+                state = state,
+                serverUrl = serverUrl,
+                inviteBusy = inviteBusy,
+                pinBusy = pinBusy,
+                servers = servers,
+                hasKnownServerGroup = hasKnownServerGroup,
+                serverOperation = serverOperation,
+                connectionTest = connectionTest,
+                viewModel = viewModel,
+            )
+        }
+        invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
+        return
+    }
     PlayarrPageScaffold(
         title = playarrString(PlayarrString.SettingsTitle),
         subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
@@ -3186,6 +3211,10 @@ private fun SettingsSectionContent(
         SettingsSection.YourData -> playarrString(PlayarrString.SettingsYourDataDescription)
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
         else -> null
+    }
+    if (isTelevision && section == SettingsSection.Appearance) {
+        TvAppearancePanel(display)
+        return
     }
     SettingsCard(playarrString(section.label), description) {
         when (section) {
@@ -3724,12 +3753,170 @@ private fun PlayerLanguageChoices(
     }
 }
 
+private val LocalSettingsPlainPanel = androidx.compose.runtime.compositionLocalOf { false }
+
+/** Web TV `.tv-settings`: palette values read off the committed references (dark and light). */
+private object TvSettingsPalette {
+    val listBackground get() = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
+    val selectedRow get() = if (webIsDark) Color(0xFF312A30) else Color(0xFFDFDCDD)
+    val segment get() = if (webIsDark) Color(0xFF151315) else Color(0xFFF5F3F2)
+    val segmentBorder get() = if (webIsDark) Color(0xFF474347) else Color(0xFFC3BCBC)
+    val divider get() = if (webIsDark) Color(0xFF393538) else Color(0xFFD7D3D3)
+    val headerLine get() = if (webIsDark) Color(0xFF484547) else Color(0xFFC5BFBC)
+}
+
+@Composable
+private fun TvSettingsBody(
+    section: SettingsSection,
+    onPick: (SettingsSection) -> Unit,
+    state: ParityLoad<SettingsSnapshot>,
+    serverUrl: String,
+    inviteBusy: Boolean,
+    pinBusy: Boolean,
+    servers: List<SettingsServerEntry>,
+    hasKnownServerGroup: Boolean,
+    serverOperation: SettingsServerOperation?,
+    connectionTest: SettingsConnectionTest,
+    viewModel: ParitySettingsViewModel,
+) {
+    val locale = LocalPlayarrLanguage.current.locale
+    val entries = phoneSettingsIndex
+    val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.offset(x = 227.dp, y = 112.dp).width(365.dp).height(1.dp).background(TvSettingsPalette.headerLine))
+        Text(
+            playarrString(section.label).uppercase(locale),
+            color = WebInkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 18.sp,
+            modifier = Modifier.offset(x = 227.dp, y = 120.dp),
+        )
+        Text(
+            playarrString(description).uppercase(locale),
+            color = WebInkMuted, fontSize = 11.sp, letterSpacing = 0.5.sp, lineHeight = 16.sp, maxLines = 1,
+            modifier = Modifier.offset(x = 227.dp, y = 143.dp).width(420.dp),
+        )
+        LazyColumn(
+            Modifier.offset(x = 154.dp, y = 162.dp).width(480.dp).fillMaxHeight(),
+        ) {
+            itemsIndexed(entries.map { it.first }) { index, candidate ->
+                var focused by remember { mutableStateOf(false) }
+                val selected = candidate == section
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                        .background(if (selected || focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
+                        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onPick(candidate) }
+                        .clickable { onPick(candidate) },
+                ) {
+                    Text(
+                        settingsSectionNumber(index),
+                        color = WebInkMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, lineHeight = 12.sp,
+                        modifier = Modifier.offset(x = 32.dp, y = 27.dp),
+                    )
+                    Text(
+                        playarrString(candidate.label),
+                        color = WebInk, fontSize = 29.4.sp, fontWeight = FontWeight(430), lineHeight = 40.sp, letterSpacing = (-0.6).sp,
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 92.dp),
+                    )
+                    Text(
+                        "\u2192",
+                        color = if (selected) WebInk else WebInkMuted, fontSize = if (selected) 20.sp else 17.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp),
+                    )
+                }
+            }
+        }
+        Column(
+            Modifier.offset(x = 774.dp, y = 212.dp).width(995.dp),
+        ) {
+            when (val current = state) {
+                ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
+                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                is ParityLoad.Ready -> androidx.compose.runtime.CompositionLocalProvider(LocalSettingsPlainPanel provides true) {
+                    SettingsSectionContent(
+                        section = section,
+                        snapshot = current.value,
+                        serverUrl = serverUrl,
+                        isTelevision = true,
+                        inviteBusy = inviteBusy,
+                        pinBusy = pinBusy,
+                        servers = servers,
+                        hasKnownServerGroup = hasKnownServerGroup,
+                        serverOperation = serverOperation,
+                        connectionTest = connectionTest,
+                        viewModel = viewModel,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Web TV segmented control: square cells in one bordered strip, the selected cell inverted. */
+@Composable
+private fun <T> TvSegmented(choices: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    Row(Modifier.height(50.dp).border(1.dp, TvSettingsPalette.segmentBorder)) {
+        choices.forEach { (value, label) ->
+            val active = value == selected
+            var focused by remember { mutableStateOf(false) }
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .background(if (active) WebInk else TvSettingsPalette.segment)
+                    .then(if (focused) Modifier.border(2.dp, WebInk) else Modifier)
+                    .onFocusChanged { focused = it.isFocused }
+                    .clickable { onSelected(value) }
+                    .padding(horizontal = 18.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, color = if (active) WebBackground else WebInkSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
+    Text(playarrString(PlayarrString.SettingsColourTheme), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Spacer(Modifier.height(20.dp))
+    TvSegmented(
+        choices = listOf(
+            PlayarrThemePreference.System to playarrString(PlayarrString.SettingsThemeSystem),
+            PlayarrThemePreference.Light to playarrString(PlayarrString.SettingsThemeLight),
+            PlayarrThemePreference.Dark to playarrString(PlayarrString.SettingsThemeDark),
+        ),
+        selected = display.theme,
+    ) { display.setTheme(it) }
+    Spacer(Modifier.height(30.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
+    Spacer(Modifier.height(32.dp))
+    Text(playarrString(PlayarrString.SettingsHomeViewTitle), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Spacer(Modifier.height(9.dp))
+    Text(playarrString(PlayarrString.SettingsHomeViewDescription), color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp)
+    Spacer(Modifier.height(17.dp))
+    TvSegmented(
+        choices = listOf(
+            PlayarrHomeViewPreference.Thumbnail to playarrString(PlayarrString.SettingsHomeViewThumbnail),
+            PlayarrHomeViewPreference.Cover to playarrString(PlayarrString.SettingsHomeViewCover),
+        ),
+        selected = display.homeView,
+    ) { display.setHomeView(it) }
+}
+
 @Composable
 private fun SettingsCard(
     title: String,
     description: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (LocalSettingsPlainPanel.current) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+            description?.let { Text(it, color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp) }
+            content()
+        }
+        return
+    }
     Surface(color = WebSurfaceStrong, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.2f)), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)

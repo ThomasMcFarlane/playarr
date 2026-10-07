@@ -32,8 +32,8 @@
         "id": "series",
         "title": "Series library",
         "status": "pass",
-        "mismatchPercent": 0.437,
-        "mismatchedPixels": 12943,
+        "mismatchPercent": 0.42,
+        "mismatchedPixels": 12435,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -72,8 +72,8 @@
         "id": "calendar",
         "title": "Calendar",
         "status": "fail",
-        "mismatchPercent": 2.388,
-        "mismatchedPixels": 70751,
+        "mismatchPercent": 1.803,
+        "mismatchedPixels": 53405,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -102,8 +102,8 @@
         "id": "player-quality-menu",
         "title": "Player quality menu open",
         "status": "fail",
-        "mismatchPercent": 1.597,
-        "mismatchedPixels": 47318,
+        "mismatchPercent": 1.219,
+        "mismatchedPixels": 36120,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true

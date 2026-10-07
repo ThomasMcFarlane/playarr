@@ -274,10 +274,12 @@ internal fun PlayarrPageHeaderRow(
                     variant = PlayarrButtonVariant.Ghost,
                     // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
                     modifier = Modifier
+                        // Settings opens with the back button focused: web draws it 1.2x with a heavy ink ring.
+                        .then(if (backActive) Modifier.graphicsLayer { scaleX = 1.2f; scaleY = 1.2f } else Modifier)
                         .background(webHeaderIconFill(), CircleShape)
-                        .border(1.dp, webHeaderIconRing(), CircleShape),
+                        .border(if (backActive) 3.dp else 1.dp, if (backActive) WebInk else webHeaderIconRing(), CircleShape),
                 ) {
-                    Text("\u2190", color = WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
+                    Text("\u2190", color = if (backActive) WebInk else WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
                 }
             } else {
                 PlayarrPhoneHeaderPill(onClick = onBack, contentDescription = backLabel, active = backActive, focusScale = if (backActive) 1.055f else 1f, shape = WebEllipseShape) {

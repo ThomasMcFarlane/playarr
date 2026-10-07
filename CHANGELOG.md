@@ -206,6 +206,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android phone calendar: header range, date row, detail rows and the agenda card follow the web more closely, and the open quality menu highlights its button; parity results record the justified residue.
+- Android TV settings follows the web TV layout: a wide numbered section list with the selected section's panel beside it.
 - Android TV series detail: overview and button row spacing follow the web, and the series-level Download button (not on the web) is gone.
 - Android phone and TV embed the web's exact Nunito Sans instance (docs/parity/fonts/NunitoSans-wght-web.ttf); phone parity re-measured in light and dark.
 - Parity: the shared TV web references are captured as an Android TV client (TV user agent), so the TV-only player chrome, popovers and calendar layout match what the TV clients show.
@@ -2329,6 +2331,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone parity README: calendar and quality-menu residue recorded with measurements, final summary.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
