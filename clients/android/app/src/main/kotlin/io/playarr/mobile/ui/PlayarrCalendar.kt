@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -542,19 +543,52 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     val time = entry.releaseAt?.atZone(zone)?.let { "%02d:%02d".format(it.hour, it.minute) } ?: playarrString(PlayarrString.CalendarAllDay)
     val kind = CalendarMediaKind.fromWire(entry.mediaKind)
     val shape = RoundedCornerShape(12.dp)
+    val ink = WebInk
+    val fill = WebSurfaceStrong
     Surface(
         onClick = onClick,
-        modifier = Modifier.padding(start = 4.7.dp, end = 7.7.dp).fillMaxWidth().height(90.dp),
-        shape = shape, color = WebSurfaceStrong,
-        border = if (selected) BorderStroke(2.dp, WebInk) else BorderStroke(1.dp, WebPillBorder),
+        modifier = Modifier.padding(start = 4.7.dp, end = 7.7.dp).fillMaxWidth().height(90.dp).then(
+            if (selected) {
+                // `.calendar-entry.is-selected`: a 4 px left border and 1 px borders in ink, plus a 1 px inset ring, so the
+                // padding box has a rounder inner left edge than the outer shape.
+                Modifier.drawBehind {
+                    val r = 12.dp.toPx()
+                    val left = 4.dp.toPx()
+                    val line = 1.dp.toPx()
+                    drawRoundRect(ink, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r))
+                    val inner = androidx.compose.ui.graphics.Path().apply {
+                        addRoundRect(
+                            androidx.compose.ui.geometry.RoundRect(
+                                left, line, size.width - line, size.height - line,
+                                topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(r - left, r - line),
+                                topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(r - line),
+                                bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(r - line),
+                                bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(r - left, r - line),
+                            ),
+                        )
+                    }
+                    drawPath(inner, fill)
+                    clipPath(inner) {
+                        drawPath(inner, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2 * line))
+                    }
+                }
+            } else {
+                Modifier
+            },
+        ),
+        shape = shape, color = if (selected) Color.Transparent else fill,
+        border = if (selected) null else BorderStroke(1.dp, WebPillBorder),
     ) {
-        Row(Modifier.padding(horizontal = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            CalendarPoster(entry.posterUrl, Modifier.size(width = 40.dp, height = 60.dp).clip(RoundedCornerShape(4.dp)))
+        Row(
+            Modifier.padding(start = if (selected) 16.dp else 14.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CalendarPoster(entry.posterUrl, Modifier.size(width = 40.dp, height = 60.dp).clip(RoundedCornerShape(6.dp)))
             Column(Modifier.weight(1f).padding(start = 14.4.dp)) {
                 Text(item.title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(640), style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(2.6.dp))
+                Spacer(Modifier.height(2.4.dp))
                 Text(calendarItemSubtitle(item), color = WebInkSoft, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(1.3.dp))
+                Spacer(Modifier.height(2.4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(time, color = WebInkMuted, fontSize = 12.8.sp, lineHeight = 19.2.sp, style = WebTextStyle)
                     Text(calendarReleaseTypeLabel(entry.releaseType), color = WebInkMuted, fontSize = 12.8.sp, lineHeight = 19.2.sp, style = WebTextStyle)
