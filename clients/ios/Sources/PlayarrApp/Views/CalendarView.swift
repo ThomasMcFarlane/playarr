@@ -68,17 +68,9 @@ struct CalendarView: View {
             filterCount: viewModel.filters.activeCount,
             onFilters: { showingFilters = true }
         ) {
-            Button {
+            PlayarrHeaderPill(label: "Calendar link", systemImage: "bell", iconOnly: phone) {
                 showingSubscription = true
-            } label: {
-                Label("Calendar link", systemImage: "link")
-                    .labelStyle(.iconOnly)
-                    .frame(width: 40, height: 40)
-                    .background(PlayarrStyle.surfaceStrong.opacity(0.72), in: Circle())
-                    .overlay { Circle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Calendar link")
         }
         // Keep clear of the profile button the shell floats at the top right on phones.
         .padding(.trailing, phone ? 52 : 0)

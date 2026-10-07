@@ -1,0 +1,3 @@
+- Android TV: the Filters button on every page and the Calendar's Filters and Calendar link buttons are now one shared button that matches the web's header button exactly (50 dp pill, 19.2 dp padding, 17 dp sliders glyph, 13.44 sp label at weight 680, 70% surface fill, inverted fill and ring when focused or open). The earlier calendar restyle had changed the shared button for every page, dropped its focus state and swapped its glyph.
+- tvOS: the library Filters launcher and the calendar's Calendar link and Filters pills are drawn by one shared pill view (previously two separately styled copies with different icon colour, fill and border).
+- iOS: the Calendar link button is drawn by the same pill as the Filters button (previously a separate 40 pt circle).

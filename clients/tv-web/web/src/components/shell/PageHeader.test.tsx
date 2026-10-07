@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -48,5 +49,32 @@ describe("PageHeader filters slot", () => {
     const classes = (attr: string) => new RegExp(`<button[^>]*class="([^"]*)"[^>]*${attr}`).exec(markup)?.[1];
     expect(classes("data-panel-button")).toBe(classes("data-filters-button"));
     expect(markup).toContain('class="page-header-stack"');
+  });
+
+  it("styles every header button through the one .page-filters-button rule, with no per-page override", () => {
+    const css = readFileSync(
+      new URL("../../styles/global.css", import.meta.url),
+      "utf8",
+    );
+    const selectors = [
+      ...css.matchAll(/([^{}]*page-filters-button[^{}]*)\{/g),
+    ].map((m) => m[1]!.trim());
+    // Only the shared rule, its svg/state/count variants and the phone icon-only media rule may name it.
+    const allowed =
+      /^(\.page-filters-button(:hover|:focus-visible|\.is-active|\s+svg|\s+span)?,?\s*)+$/;
+    const stray = selectors.filter(
+      (sel) => !allowed.test(sel.replace(/\s+/g, " ")),
+    );
+    expect(stray).toEqual([]);
+    for (const page of ["Calendar.css", "Calendar.tsx"]) {
+      const source = readFileSync(
+        new URL(`../../pages/${page}`, import.meta.url),
+        "utf8",
+      );
+      expect(
+        source,
+        `${page} must not restyle the shared header buttons`,
+      ).not.toMatch(/page-filters-button/);
+    }
   });
 });

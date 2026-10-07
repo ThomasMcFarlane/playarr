@@ -66,10 +66,34 @@ struct PlayarrFiltersButton: View {
     let action: () -> Void
 
     var body: some View {
+        PlayarrHeaderPill(
+            label: "Filters",
+            systemImage: "line.3.horizontal.decrease.circle",
+            count: count,
+            accessibilityLabel: count > 0 ? "Filters, \(count) active" : "Filters",
+            action: action
+        )
+    }
+}
+
+/// The one header pill. Filters and the Calendar link are both drawn by this view, so the calendar's header
+/// buttons always match the library's Filters button (shape, height, padding, label font, fill and ring).
+/// `iconOnly` hides the label (compact widths) but keeps every other metric.
+struct PlayarrHeaderPill: View {
+    let label: String
+    let systemImage: String
+    var count: Int = 0
+    var iconOnly = false
+    var accessibilityLabel: String?
+    let action: () -> Void
+
+    var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                Text("Filters")
+                Image(systemName: systemImage)
+                if !iconOnly {
+                    Text(label)
+                }
                 if count > 0 {
                     Text("\(count)")
                         .font(.custom("Avenir Next", fixedSize: 10).weight(.heavy))
@@ -82,11 +106,11 @@ struct PlayarrFiltersButton: View {
             .font(.custom("Avenir Next", fixedSize: 12).weight(.bold))
             .foregroundStyle(PlayarrStyle.ink)
             .padding(.horizontal, 12)
-            .frame(minHeight: 40)
+            .frame(minWidth: 40, minHeight: 40)
             .background(PlayarrStyle.surfaceStrong.opacity(0.72), in: Capsule())
             .overlay { Capsule().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(count > 0 ? "Filters, \(count) active" : "Filters")
+        .accessibilityLabel(accessibilityLabel ?? label)
     }
 }

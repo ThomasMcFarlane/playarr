@@ -385,19 +385,7 @@ struct TVCalendarView: View {
     }
 
     private func pill(_ label: String, symbol: String, x: CGFloat, width: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .regular))
-            Text(label)
-                .font(TVTheme.font(size: 13.44, weight: .semibold))
-        }
-        .foregroundStyle(DesignTokens.Color.textSecondary)
-        .frame(width: width, height: 50)
-        .background(
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.7))
-                .overlay(Capsule().stroke(DesignTokens.Stage.inkMuted.opacity(0.35), lineWidth: 1))
-        )
-        .placed(x: x, y: 56.2, w: width, h: 50)
+        TVHeaderPill(label: label, symbol: symbol, width: width)
+            .placed(x: x, y: 56.2, w: width, h: TVHeaderPill.height)
     }
 }

@@ -824,3 +824,30 @@ enum TVFontLoader {
         return font
     }
 }
+
+/// The one header pill (Filters, Calendar link, ...): web `.page-filters-button`, a 50 pt outlined capsule with a
+/// line icon and a 13.44 pt label. Every page header uses this view so the calendar buttons and the library
+/// Filters button cannot drift apart (TVWebParityTests pins both call sites to it).
+struct TVHeaderPill: View {
+    let label: String
+    let symbol: String
+    let width: CGFloat
+
+    static let height: CGFloat = 50
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .regular))
+            Text(label)
+                .font(TVTheme.font(size: 13.44, weight: .semibold))
+        }
+        .foregroundStyle(DesignTokens.Color.textSecondary)
+        .frame(width: width, height: Self.height)
+        .background(
+            Capsule()
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.7))
+                .overlay(Capsule().stroke(DesignTokens.Stage.inkMuted.opacity(0.35), lineWidth: 1))
+        )
+    }
+}

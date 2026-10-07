@@ -208,7 +208,7 @@ internal fun PlayarrHeaderActions(
         if (filters != null) {
             PlayarrHeaderButton(
                 label = filters.label,
-                icon = Icons.Outlined.Tune,
+                icon = PlayarrWebIcons.Filters,
                 isTelevision = isTelevision,
                 active = filters.active,
                 badge = filters.badge,
@@ -382,30 +382,55 @@ internal fun PlayarrHeaderButton(
         }
         return
     }
-    // Web TV `.ui-btn`: an outlined 50 px pill with a 14 px line icon and a 14.4 px bold label.
+    // Web TV `.page-filters-button` (Filters, Calendar link, Create, ... on every page): a 50 px outlined pill,
+    // 19.2 px side padding, an 8 px gap, a 17 px line icon and a 13.44 px / 680 label, 70% surface fill. Focus
+    // (and an open panel) inverts to ink with a 3 px ink ring at 1.055x, as the web does.
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    val lit = active || focused
+    val focusScale = if (focused) 1.055f else 1f
     androidx.compose.material3.Surface(
         onClick = onClick,
-        modifier = modifier.height(50.dp),
+        interactionSource = source,
+        modifier = modifier
+            .height(50.dp)
+            .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+            .then(
+                if (focused) {
+                    Modifier.drawBehind {
+                        val grow = 1.5.dp.toPx()
+                        drawRoundRect(
+                            color = WebInk,
+                            topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
+                            size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2 + grow),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         shape = CircleShape,
-        color = if (active) WebSurfaceStrong else WebSurface,
-        contentColor = WebInkSoft,
+        color = if (lit) WebInk else WebSurfaceStrong.copy(alpha = 0.7f),
+        contentColor = if (lit) WebBackground else WebInkSoft,
         border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
     ) {
-      Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
-        Text(label, fontSize = 14.4.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        if (badge > 0) {
-            Surface(color = WebPink, shape = CircleShape) {
-                Text(
-                    badge.toString(),
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
-                )
+        Row(Modifier.padding(horizontal = 19.2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp))
+            Text(label, fontSize = 13.44.sp, fontWeight = FontWeight(680), maxLines = 1)
+            if (badge > 0) {
+                Surface(color = WebPink, shape = CircleShape) {
+                    Text(
+                        badge.toString(),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
+                    )
+                }
             }
         }
-      }
     }
 }
 
