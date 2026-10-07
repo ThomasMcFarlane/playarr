@@ -14,10 +14,18 @@ const adminLogin = await login(base, USERS.admin.username, FIXTURE_PASSWORD, { p
 if (!adminLogin.api) throw new Error(`admin login failed: ${adminLogin.status} ${adminLogin.text}`);
 const admin = adminLogin.api;
 
-// 1. Sources (Sonarr/Radarr/Dubarr stand-ins).
+// 1. Sources (Sonarr/Radarr/Dubarr stand-ins). They are created and synced strictly one after another
+// (radarr, then sonarr, then dubarr), each waited for: registering a source starts a background sync, so
+// creating them together raced and gave the catalogue (and the order of the home rails) a different
+// insertion order in every fresh database.
 const existingSources = await admin.get("/api/v1/admin/source-instances");
 const sourceIds = {};
-for (const [kind, prefix] of [["sonarr", "sonarr"], ["radarr", "radarr"], ["dubarr", "dubarr"]]) {
+const titleCount = async () => {
+  const cat = await admin.raw("GET", "/api/v1/catalog?limit=100");
+  return (cat.json?.items ?? cat.json ?? []).length;
+};
+let titlesSoFar = 0;
+for (const [kind, prefix, titles] of [["radarr", "radarr", MOVIES.length], ["sonarr", "sonarr", SERIES.length], ["dubarr", "dubarr", 0]]) {
   const name = `Fixture ${kind}`;
   const have = (existingSources.items ?? existingSources).find?.((s) => s.name === name);
   const res = await admin.post("/api/v1/admin/source-instances", {
@@ -25,6 +33,10 @@ for (const [kind, prefix] of [["sonarr", "sonarr"], ["radarr", "radarr"], ["duba
   });
   sourceIds[kind] = res.id ?? have?.id;
   console.log(`source ${kind}: ${sourceIds[kind]}`);
+  await admin.raw("POST", `/api/v1/admin/source-instances/${sourceIds[kind]}/sync`, {});
+  titlesSoFar += titles;
+  for (let i = 0; i < 60 && (await titleCount()) < titlesSoFar; i++) await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 1200)); // the next source's items must be strictly newer
 }
 const libraries = [sourceIds.sonarr, sourceIds.radarr];
 
@@ -88,10 +100,7 @@ for (const [who, pin] of [["guardian", GUARDIAN_PIN], ["child", CHILD_PIN]]) {
   console.log(`PIN set for ${USERS[who].username}`);
 }
 
-// 5. First sync: ask each source to sync, then wait for the catalogue.
-for (const kind of ["sonarr", "radarr", "dubarr"]) {
-  await admin.raw("POST", `/api/v1/admin/source-instances/${sourceIds[kind]}/sync`, {});
-}
+// 5. The sources were synced in step 1; confirm the catalogue.
 const expected = SERIES.length + MOVIES.length;
 let seen = 0;
 for (let i = 0; i < 60; i++) {

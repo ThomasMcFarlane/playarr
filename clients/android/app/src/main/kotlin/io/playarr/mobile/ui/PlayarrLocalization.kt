@@ -766,6 +766,10 @@ internal enum class PlayarrString(
     DetailEpisodeNumber("Episode {{number}}", "ตอนที่ {{number}}", "エピソード{{number}}"),
     DetailEpisodeCount("{{count}} episodes", "{{count}} ตอน", "{{count}}話"),
     DetailAired("Aired {{date}}", "ออกอากาศ {{date}}", "放送日 {{date}}"),
+    DetailTitlesCountOne("{{count}} title", "{{count}} เรื่อง", "{{count}}件のタイトル"),
+    DetailTitlesCountOther("{{count}} titles", "{{count}} เรื่อง", "{{count}}件のタイトル"),
+    DetailPremiered("Premiered {{date}}", "ฉายรอบปฐมทัศน์เมื่อ {{date}}", "初公開日 {{date}}"),
+    DetailAdded("Added {{date}}", "เพิ่มเมื่อ {{date}}", "追加日 {{date}}"),
     DetailRuntimeMinutes("{{minutes}} min", "{{minutes}} นาที", "{{minutes}}分"),
     DetailRuntimeHours("{{hours}}h", "{{hours}} ชม.", "{{hours}}時間"),
     DetailRuntimeHoursMinutes(
@@ -857,11 +861,11 @@ internal enum class PlayarrString(
     PlayerChannelsStereo("Stereo", "สเตอริโอ", "ステレオ"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
-    PlayerSourceQuality("Source quality", "คุณภาพต้นฉบับ", "ソース画質"),
     PlayerMute("Mute", "ปิดเสียง", "ミュート"),
     PlayerUnmute("Unmute", "เปิดเสียง", "ミュート解除"),
     PlayerEnterFullscreen("Enter full screen", "เต็มหน้าจอ", "全画面表示"),
     PlayerExitFullscreen("Exit full screen", "ออกจากเต็มหน้าจอ", "全画面表示を終了"),
+    PlayerQualitySource("Source quality", "คุณภาพต้นฉบับ", "元の画質"),
     PlayerPlaylistLabelSingular(
         "Playlist: {{count}} item",
         "เพลย์ลิสต์: {{count}} รายการ",

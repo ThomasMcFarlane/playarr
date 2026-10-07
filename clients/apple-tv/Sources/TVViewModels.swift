@@ -16,6 +16,8 @@ final class TVHomeViewModel {
 
     private(set) var state: State = .idle
     private(set) var works: [Work] = []
+    /// Server-computed Home shelves (same source as the web Home).
+    private(set) var rails: [HomeRail] = []
     private let apiClient: PlayarrAPIClient
 
     init(apiClient: PlayarrAPIClient) {
@@ -24,6 +26,9 @@ final class TVHomeViewModel {
 
     func load() async {
         state = .loading
+        if TVParityLaunch.isLive {
+            rails = (try? await apiClient.fetchHomeRails()) ?? []
+        }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
         if TVParityLaunch.requestedScreen != nil,
@@ -124,6 +129,10 @@ final class TVWorkDetailViewModel {
 
     private(set) var state: State = .idle
     private(set) var detail: WorkDetail?
+    /// Titles similar to this one (`/similar`), shown under a movie's chapters.
+    private(set) var similar: [Work] = []
+    /// How long a series usually takes to appear after release.
+    private(set) var availabilityLag: AvailabilityLag?
     private let workID: UUID
     private let seedWork: Work?
     private let apiClient: PlayarrAPIClient
@@ -159,8 +168,13 @@ final class TVWorkDetailViewModel {
             return
         }
         do {
-            detail = try await apiClient.fetchWork(id: workID)
+            let loaded = try await apiClient.fetchWork(id: workID)
+            detail = loaded
             state = .loaded
+            similar = (try? await apiClient.fetchSimilarWorks(id: workID, limit: 12)) ?? []
+            if loaded.work.kind == .series {
+                availabilityLag = (try? await apiClient.fetchAvailabilityLag(id: workID)) ?? nil
+            }
         } catch let error as APIError {
             state = .failed(error.displayMessage)
         } catch {
@@ -183,6 +197,13 @@ final class TVPlayerViewModel {
     private(set) var playbackMode: PlaybackMode?
     private(set) var currentTitle = ""
     private(set) var currentSubtitle: String?
+    /// Playback position, duration and play state, for the chrome.
+    private(set) var position: Double = 0
+    private(set) var duration: Double = 0
+    private(set) var isPlaying = false
+    private(set) var qualityLabel = "Original"
+    private(set) var selectedQualityID = "original"
+    @ObservationIgnored private var positionObservation: AnyCancellable?
     let engine: PlayerEngine
     /// End card / up-next countdown; see `EndOfPlaybackMachine`.
     let endOfPlayback = EndOfPlaybackController()
@@ -221,9 +242,19 @@ final class TVPlayerViewModel {
             .sink { [weak self] playback in
                 Task { @MainActor in self?.handle(playback) }
             }
+        positionObservation = engine.currentTimePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] seconds in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.position = seconds
+                    self.duration = self.engine.duration
+                }
+            }
     }
 
     private func handle(_ playback: PlayerPlaybackState) {
+        isPlaying = playback == .playing
         switch playback {
         case .ended: endOfPlayback.mediaEnded()
         case .playing: endOfPlayback.playbackResumed()
@@ -256,6 +287,7 @@ final class TVPlayerViewModel {
             }
 
             playbackMode = info.mode
+            applyQuality(info)
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title))
             engine.play()
             state = .ready
@@ -267,6 +299,45 @@ final class TVPlayerViewModel {
     }
 
     func setSubtitle(_ subtitle: String?) { currentSubtitle = subtitle }
+
+    func togglePlay() {
+        if isPlaying { engine.pause() } else { engine.play() }
+    }
+
+    func seek(by seconds: Double) {
+        let target = min(max(0, position + seconds), duration > 0 ? duration : position + seconds)
+        Task { await engine.seek(to: target) }
+    }
+
+    /// The quality label the controls show (web `qualityDisplayLabel`): "Original · 0.3 Mbps".
+    private func applyQuality(_ info: PlaybackInfoResponse) {
+        selectedQualityID = info.selectedQualityID
+        let option = info.qualityOptions.first { $0.id == info.selectedQualityID }
+        if option?.id == "original" || option == nil {
+            if let bps = option?.videoBitrateBPS, bps > 0, Double(bps) / 1_000_000 >= 0.05 {
+                qualityLabel = String(format: "Original \u{00B7} %.1f Mbps", Double(bps) / 1_000_000)
+            } else {
+                qualityLabel = "Original"
+            }
+        } else if let option {
+            qualityLabel = option.label
+        }
+        duration = Double(info.durationMS) / 1000
+    }
+
+    /// Reads playback info only (parity route): no stream is started.
+    func loadInfo(mediaFileID: UUID) async {
+        if let info = try? await apiClient.playbackInfo(
+            mediaFileID: mediaFileID,
+            containers: ["mp4", "mov", "m4v", "mkv"],
+            videoCodecs: ["h264", "hevc"],
+            audioCodecs: ["aac", "ac3", "eac3"],
+            maxBitrateBps: 40_000_000,
+            profile: "apple-tv"
+        ) {
+            applyQuality(info)
+        }
+    }
 
     func stop() {
         // Leaving the screen (including to a suggestion) is explicit: the

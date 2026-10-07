@@ -42,6 +42,8 @@ enum TVParityArtwork {
     }
 
     private static func gradientImage(seed: String, size: CGSize) -> Image? {
+        // Fixture screens only: live routes show the server's own artwork (or the text tile).
+        guard TVParityLaunch.requestedScreen != nil else { return nil }
         let h = hash(seed)
         func hue(_ shift: UInt64) -> CGFloat { CGFloat((h >> shift) & 0xff) / 255.0 }
         let top = UIColor(hue: hue(0), saturation: 0.45, brightness: 0.42, alpha: 1)

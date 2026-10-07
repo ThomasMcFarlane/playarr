@@ -13,7 +13,7 @@ struct PlayarrTVApp: App {
             TVRootView()
                 .environment(environment)
                 .environment(displayPreferences)
-                .preferredColorScheme(displayPreferences.colorScheme)
+                .preferredColorScheme(TVParityLaunch.theme ?? displayPreferences.colorScheme)
         }
     }
 }

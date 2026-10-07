@@ -440,7 +440,7 @@
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
-  font-family: ui-monospace, monospace;
+  font-family: var(--mono);
   font-size: 0.85rem;
 }
 

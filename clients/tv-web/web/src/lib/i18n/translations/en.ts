@@ -258,6 +258,8 @@ export const en = {
   "pages.deviceLink.linkedHeading": "TV linked",
   "pages.deviceLink.linking": "Linking…",
   "pages.deviceLink.title": "Link a TV",
+  "pages.deviceLink.openOnServer": "Your Playarr Server uses http://, which this secure page cannot reach. One step: approve the code on your server's own page instead.",
+  "pages.deviceLink.openOnServerLink": "Open on your server",
   "pages.downloads.activeHeading": "Active",
   "pages.downloads.backToHome": "Back to Home",
   "pages.downloads.bytesOfTotal": "{{downloaded}} of {{total}}",
@@ -386,7 +388,8 @@ export const en = {
     "Your browser connects directly to this server. Playarr does not proxy your login.",
   "pages.login.errorGeneric": "Sign-in failed. Check your username and password and try again.",
   "pages.login.errorInsecureContentBlocked":
-    "The browser blocked this direct HTTP connection. Open the site settings for playarr.app, set Insecure content to Allow, reload Playarr, then try again.",
+    "The browser blocked this http:// connection from the secure playarr.app page. One step: open Playarr from your own server using the link below (http://your-server/tv/), then sign in there.",
+  "pages.login.openFromServer": "Open Playarr from your server instead (no browser setting needed)",
   "pages.login.errorLanUnreachable":
     "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.",
   "pages.login.errorMissingCredentials": "This server requires a username and password to sign in.",

@@ -220,7 +220,7 @@ export function DeviceLogin({
         clearExpiryTimers();
         const serverUrl = publicIpv4RelayUrl(claim.server_url);
         const serverUrls = [...new Set([claim.server_url, ...claim.server_urls])].map(
-          publicIpv4RelayUrl
+          (url) => publicIpv4RelayUrl(url)
         );
         const serverClient = new ApiClient({
           baseUrl: serverUrl,

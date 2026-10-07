@@ -92,6 +92,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -1864,25 +1865,27 @@ private fun TelevisionProfilesStage(
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 120.dp)
+                .padding(top = 162.dp)
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Web `.profiles-heading`: 10.368 px kicker at y 162, 80.64 px h1 at y 184.8.
             Text(
                 playarrString(PlayarrString.ProfilesTitle).uppercase(language.locale),
                 color = ProfilesBrandRose,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 2.2.sp,
+                fontSize = 10.368.sp,
+                fontWeight = FontWeight(820),
+                letterSpacing = 1.348.sp,
+                lineHeight = 15.6.sp,
             )
             Text(
                 playarrString(PlayarrString.ProfilesHeading),
                 color = WebInk,
-                fontSize = 56.sp,
+                fontSize = 80.64.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = (-3.6).sp,
-                lineHeight = 54.sp,
-                modifier = Modifier.padding(top = 8.dp),
+                letterSpacing = (-5.806).sp,
+                lineHeight = 76.6.sp,
+                modifier = Modifier.padding(top = 7.2.dp),
             )
         }
 
@@ -1892,7 +1895,7 @@ private fun TelevisionProfilesStage(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(top = 300.dp)
+                .padding(top = 382.4.dp)
                 .height(420.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
@@ -1935,7 +1938,7 @@ private fun TelevisionProfilesStage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 140.dp),
-                    horizontalArrangement = Arrangement.spacedBy(38.dp, Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(42.2.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.Top,
                 ) { track() }
             } else {
@@ -2111,16 +2114,16 @@ private fun BoxScope.ProfilesStageChrome() {
         tint = Color.Unspecified,
         modifier = Modifier
             .align(Alignment.TopStart)
-            .padding(start = 51.dp, top = 34.dp)
+            .padding(start = 60.6.dp, top = 60.2.dp)
             .size(42.dp)
             .zIndex(3f),
     )
     Row(
         modifier = Modifier
             .align(Alignment.TopEnd)
-            .padding(end = 36.dp, top = 30.dp)
+            .padding(end = 42.dp, top = 50.dp)
             .zIndex(3f),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProfilesChromeThemeDropdown(display)
@@ -2337,9 +2340,9 @@ private fun ProfileChoice(
     onSettings: () -> Unit,
     onSignOut: (() -> Unit)?,
 ) {
-    // Web `.profile-choice` flex-basis clamp(160px, 13vw, 244px) → ~200 at 1080p TV.
-    val cardWidth = if (isTelevision) 200.dp else 148.dp
-    val avatarSize = if (isTelevision) 200.dp else 132.dp
+    // Web `.profile-choice` flex-basis clamp(160px, 13vw, 244px): 13vw is 249.6 at 1920, so 244.
+    val cardWidth = if (isTelevision) 244.dp else 148.dp
+    val avatarSize = if (isTelevision) 244.dp else 132.dp
     val avatarDescription = playarrString(
         if (profile.isCurrent) PlayarrString.ProfilesAvatarLabelCurrent else PlayarrString.ProfilesAvatarLabel,
         "name" to profile.displayName,
@@ -2402,13 +2405,13 @@ private fun ProfileChoice(
         Text(
             profile.displayName,
             color = if (selected) WebInk else WebInkSoft,
-            fontSize = if (isTelevision) 16.sp else 14.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = if (isTelevision) 17.28.sp else 14.sp,
+            fontWeight = if (isTelevision) FontWeight(680) else FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier
-                .padding(top = 12.dp)
+                .padding(top = if (isTelevision) 8.8.dp else 12.dp)
                 .fillMaxWidth(),
         )
         if (!serverLabel.isNullOrBlank()) {
@@ -2432,16 +2435,16 @@ private fun ProfileChoice(
                 },
             ).uppercase(LocalPlayarrLanguage.current.locale),
             color = WebInkMuted,
-            fontSize = if (isTelevision) 10.sp else 8.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.6.sp,
-            modifier = Modifier.padding(top = 4.dp),
+            fontSize = if (isTelevision) 9.408.sp else 8.sp,
+            fontWeight = if (isTelevision) FontWeight(690) else FontWeight.Bold,
+            letterSpacing = if (isTelevision) 0.423.sp else 0.6.sp,
+            modifier = Modifier.padding(top = if (isTelevision) 8.8.dp else 4.dp),
         )
         if (selected) {
             // Web `.profile-actions`
             Row(
-                modifier = Modifier.padding(top = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(top = if (isTelevision) 21.2.dp else 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 8.8.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // `.profile-settings-button` 44×44
@@ -2476,8 +2479,8 @@ private fun ProfileChoice(
                             Text(
                                 playarrString(PlayarrString.ProfilesSignOut),
                                 color = WebInkSoft,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = if (isTelevision) 10.752.sp else 11.sp,
+                                fontWeight = if (isTelevision) FontWeight(720) else FontWeight.Bold,
                             )
                         }
                     }
@@ -2495,8 +2498,8 @@ private fun AddProfileChoice(
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
-    val cardWidth = if (isTelevision) 200.dp else 148.dp
-    val avatarSize = if (isTelevision) 200.dp else 132.dp
+    val cardWidth = if (isTelevision) 244.dp else 148.dp
+    val avatarSize = if (isTelevision) 244.dp else 132.dp
     val lift = if (selected) Modifier.offset(y = (-8).dp).scale(1.045f) else Modifier
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -2510,15 +2513,29 @@ private fun AddProfileChoice(
             modifier = Modifier
                 .size(avatarSize)
                 .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            WebSurfaceStrong.copy(alpha = 0.84f),
-                            ProfilesBrandRose.copy(alpha = 0.18f),
-                        ),
-                    ),
-                )
                 .drawBehind {
+                    // Web `.profile-avatar` plate: 145deg from surface-strong mixed 16% to #cf3157 towards #a82655,
+                    // plus a soft highlight at 34% 26%.
+                    val side = size.width
+                    val rad = Math.toRadians(145.0)
+                    val dx = Math.sin(rad).toFloat()
+                    val dy = (-Math.cos(rad)).toFloat()
+                    val half = side * (kotlin.math.abs(dx) + kotlin.math.abs(dy)) / 2f
+                    val mid = Offset(side / 2f, side / 2f)
+                    drawRect(
+                        Brush.linearGradient(
+                            listOf(lerp(WebSurfaceStrong, Color(0xFFCF3157), 0.16f), Color(0xFFA82655)),
+                            start = Offset(mid.x - dx * half, mid.y - dy * half),
+                            end = Offset(mid.x + dx * half, mid.y + dy * half),
+                        ),
+                    )
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.28f), Color.Transparent),
+                            center = Offset(side * 0.34f, side * 0.26f),
+                            radius = side * 0.2677f,
+                        ),
+                    )
                     drawCircle(
                         color = WebInkMuted.copy(alpha = 0.45f),
                         style = Stroke(
@@ -2539,25 +2556,25 @@ private fun AddProfileChoice(
             Text(
                 "+",
                 color = WebInkSoft,
-                fontSize = if (isTelevision) 72.sp else 52.sp,
+                fontSize = if (isTelevision) 76.8.sp else 52.sp,
                 fontWeight = FontWeight.Light,
             )
         }
         Text(
             playarrString(PlayarrString.ProfilesSignIn),
             color = if (selected) WebInk else WebInkSoft,
-            fontSize = if (isTelevision) 16.sp else 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 12.dp),
+            fontSize = if (isTelevision) 17.28.sp else 14.sp,
+            fontWeight = if (isTelevision) FontWeight(680) else FontWeight.SemiBold,
+            modifier = Modifier.padding(top = if (isTelevision) 8.8.dp else 12.dp),
         )
         Text(
             playarrString(PlayarrString.ProfilesAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
             color = WebInkMuted,
-            fontSize = if (isTelevision) 10.sp else 8.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.6.sp,
+            fontSize = if (isTelevision) 9.408.sp else 8.sp,
+            fontWeight = if (isTelevision) FontWeight(690) else FontWeight.Bold,
+            letterSpacing = if (isTelevision) 0.423.sp else 0.6.sp,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = if (isTelevision) 8.8.dp else 4.dp),
         )
     }
 }
@@ -3019,6 +3036,9 @@ private val phoneSettingsIndex = listOf(
     SettingsSection.YourData to PlayarrString.SettingsYourDataDescription,
 )
 
+/** Two-digit section number as web `PRODUCT_SETTINGS_SECTIONS` prints it (01 ... 09, 10). */
+internal fun settingsSectionNumber(index: Int): String = (index + 1).toString().padStart(2, '0')
+
 @Composable
 internal fun ExperienceParitySettingsScreen(
     serverUrl: String,
@@ -3067,7 +3087,7 @@ internal fun ExperienceParitySettingsScreen(
                 Column(Modifier.width(260.dp).fillMaxHeight()) {
                     SettingsSection.entries.filter { it != SettingsSection.RequestLatency }.forEachIndexed { index, candidate ->
                         Text(
-                            "0${index + 1}  ${playarrString(candidate.label)}",
+                            "${settingsSectionNumber(index)}  ${playarrString(candidate.label)}",
                             color = if (candidate == section) WebInk else WebInkMuted,
                             fontWeight = if (candidate == section) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.fillMaxWidth().clickable { picked = candidate }.padding(vertical = 12.dp),

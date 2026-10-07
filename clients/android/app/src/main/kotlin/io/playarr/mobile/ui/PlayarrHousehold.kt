@@ -100,6 +100,8 @@ internal fun HouseholdBlockedScreen(
     modifier: Modifier = Modifier,
     /** Web phone layout: the empty-state group (art circle and copy) over two outlined pills. */
     webPhone: Boolean = false,
+    /** Web television layout: the empty-state tile and copy at y 130 and two outlined pills at y 313.6. */
+    webTv: Boolean = false,
 ) {
     val language = LocalPlayarrLanguage.current
     val until = formatHouseholdInstant(block.until, language.locale)
@@ -121,6 +123,22 @@ internal fun HouseholdBlockedScreen(
     val firstAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstAction.requestFocus() } }
 
+    if (webTv) {
+        TelevisionHouseholdBlocked(
+            title = title, description = description, sending = sending, requestState = requestState,
+            onAsk = {
+                sending = true
+                scope.launch {
+                    requestState = onAskGuardian(block.approvalSubject)
+                    sending = false
+                }
+            },
+            onSwitchProfile = onSwitchProfile,
+            askFocus = firstAction,
+            modifier = modifier,
+        )
+        return
+    }
     if (webPhone) {
         PhoneHouseholdBlocked(
             title = title, description = description, sending = sending, requestState = requestState,
@@ -239,6 +257,66 @@ private fun PhoneHouseholdBlocked(
                 )
                 null -> Unit
             }
+        }
+    }
+}
+
+/** Web `.household-blocked` at 1920 x 1080 (tile 163.5 at y 130, copy 42.5 to its right, pills 50 high at y 313.6). */
+@Composable
+private fun TelevisionHouseholdBlocked(
+    title: String,
+    description: String,
+    sending: Boolean,
+    requestState: Boolean?,
+    onAsk: () -> Unit,
+    onSwitchProfile: () -> Unit,
+    askFocus: FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    val icon = androidx.compose.ui.graphics.lerp(WebKicker, WebInk, 0.22f)
+    val border = if (webIsDark) Color(0xFFDFDCDD).copy(alpha = 0.1157f) else Color(0xFF382621).copy(alpha = 0.139f)
+    androidx.compose.foundation.layout.Box(modifier.fillMaxSize().background(WebBackground).semantics { liveRegion = LiveRegionMode.Polite }) {
+        Column(Modifier.fillMaxWidth().padding(top = 130.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(42.5.dp)) {
+                androidx.compose.foundation.layout.Box(
+                    Modifier.size(163.5.dp).background(WebSurfaceStrong.copy(alpha = 0.54f), androidx.compose.foundation.shape.CircleShape)
+                        .border(1.dp, border, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(PlayarrWebIcons.EmptyDetails, contentDescription = null, tint = icon, modifier = Modifier.size(49.6.dp, 32.1.dp))
+                }
+                Column {
+                    Text(title, color = WebInk, fontSize = 22.08.sp, lineHeight = 33.12.sp, fontWeight = FontWeight(650), letterSpacing = (-0.442).sp, style = WebTextStyle)
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(7.2.dp))
+                    Text(description, color = WebInkMuted, fontSize = 10.752.sp, lineHeight = 16.128.sp, style = WebTextStyle)
+                }
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.height(20.1.dp))
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(12.2.dp)) {
+                TelevisionHouseholdPill(playarrString(PlayarrString.HouseholdAskGuardian), width = 294.1.dp, enabled = !sending && requestState != true, onClick = onAsk, modifier = Modifier.focusRequester(askFocus))
+                TelevisionHouseholdPill(playarrString(PlayarrString.ProfilesSwitchProfile), width = 162.4.dp, enabled = true, onClick = onSwitchProfile)
+            }
+            when (requestState) {
+                true -> Text(playarrString(PlayarrString.HouseholdRequestSent), color = WebInkSoft, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+                false -> Text(
+                    playarrString(PlayarrString.HouseholdRequestFailed),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error, fontSize = 13.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                null -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun TelevisionHouseholdPill(label: String, width: androidx.compose.ui.unit.Dp, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        onClick = onClick, enabled = enabled, shape = androidx.compose.foundation.shape.CircleShape, color = Color.Transparent, contentColor = WebInk,
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebInk), modifier = modifier.size(width, 50.dp),
+    ) {
+        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 16.8.sp, lineHeight = 25.2.sp, style = WebTextStyle, maxLines = 1)
         }
     }
 }

@@ -24,6 +24,7 @@ import {
   PrivacyPolicyPage,
   TermsPage,
 } from "./pages/Legal";
+import "./styles/fonts.css";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -55,7 +56,7 @@ const isPublicLegalRoute =
 
 createRoot(container).render(
   <StrictMode>
-    <Router>
+    <Router basename={IS_PACKAGED_TV ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "")}>
       <LanguageProvider>
         <ThemeProvider>
           {isPublicLegalRoute ? (

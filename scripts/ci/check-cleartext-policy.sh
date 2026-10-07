@@ -34,6 +34,15 @@ for cap in ('internetClient', 'privateNetworkClientServer'):
 if not re.search(r'<access\s+origin="\*"', read('clients/tv-web/apps/tv-tizen/tizen-manifest.xml')):
     errors.append('Tizen manifest: <access origin="*"> is required')
 
+# VIDAA / hosted launcher: the server must serve the web client itself (/tv/) so an http:// server works,
+# and the hosted sign-in must keep offering that route instead of a dead end.
+if 'build_router_with_tv' not in read('backend/src/main.rs'):
+    errors.append('server must mount the server-hosted web client at /tv/ (build_router_with_tv)')
+if 'serverHostedEntryUrl' not in read('clients/tv-web/web/src/pages/Login.tsx'):
+    errors.append('hosted sign-in must offer the server-hosted /tv/ entry for http:// servers')
+if 'build:server' not in read('infra/docker/backend.Dockerfile'):
+    errors.append('server image must build the server-hosted web client (build:server)')
+
 # Chromecast: the receiver and senders must never refuse an http:// server up front.
 # (A failed attempt is explained with the remedy instead; see docs/architecture/clients/cast.md.)
 if 'Refusing to load an insecure' in read('clients/tv-web/apps/cast-receiver/src/main.ts'):
@@ -42,6 +51,13 @@ if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobil
     errors.append('Android cast availability must not depend on the server being https')
 if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobile/ui/PlayarrExperience.kt'):
     errors.append('Android cast button must be offered for http:// servers')
+
+# TV QR pairing with an http:// server: the server's default verification page is its own /tv/link,
+# and the hosted /link page hands off to it.
+if '"/tv/link"' not in read('backend/src/main.rs'):
+    errors.append('server must default the device verification page to its own /tv/link when it serves the client')
+if 'serverHostedEntryUrl' not in read('clients/tv-web/web/src/pages/DeviceLink.tsx'):
+    errors.append('hosted /link page must offer the server-hosted /tv/link hand-off for http:// servers')
 
 if errors:
     print('\n'.join(errors)); sys.exit(1)

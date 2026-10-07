@@ -10,7 +10,10 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
   version: string;
 };
 
-export default defineConfig({
+// `--mode server` builds the client for hosting by Playarr Server itself under /tv/
+// (so a TV that can only reach an http:// server avoids mixed content).
+export default defineConfig(({ mode }) => ({
+  base: mode === "server" ? "/tv/" : "/",
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
@@ -32,7 +35,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: mode === "server" ? "dist-server" : "dist",
     target: "es2020",
   },
-});
+}));

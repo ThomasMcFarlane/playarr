@@ -616,17 +616,20 @@ public struct Episode: Codable, Identifiable, Hashable, Sendable {
 public struct EpisodeDetail: Codable, Identifiable, Hashable, Sendable {
     public var episode: Episode
     public var mediaFileID: UUID?
+    public var runtimeMs: Int64?
 
     public var id: UUID { episode.id }
 
     enum CodingKeys: String, CodingKey {
         case episode
         case mediaFileID = "media_file_id"
+        case runtimeMs = "runtime_ms"
     }
 
-    public init(episode: Episode, mediaFileID: UUID? = nil) {
+    public init(episode: Episode, mediaFileID: UUID? = nil, runtimeMs: Int64? = nil) {
         self.episode = episode
         self.mediaFileID = mediaFileID
+        self.runtimeMs = runtimeMs
     }
 }
 
@@ -887,17 +890,21 @@ public struct WorkDetail: Codable, Sendable {
     /// `BookDetail.mediaFileID`), and `nil` for a movie too until a file
     /// has synced for it.
     public var mediaFileID: UUID?
+    /// Fixed source-container runtime for a movie (series runtimes are on each episode).
+    public var runtimeMs: Int64?
 
     enum CodingKeys: String, CodingKey {
         case work
         case children
         case mediaFileID = "media_file_id"
+        case runtimeMs = "runtime_ms"
     }
 
-    public init(work: Work, children: WorkChildren, mediaFileID: UUID? = nil) {
+    public init(work: Work, children: WorkChildren, mediaFileID: UUID? = nil, runtimeMs: Int64? = nil) {
         self.work = work
         self.children = children
         self.mediaFileID = mediaFileID
+        self.runtimeMs = runtimeMs
     }
 }
 
@@ -1605,5 +1612,22 @@ public struct APIErrorBody: Codable, Sendable {
     public init(error: String, message: String) {
         self.error = error
         self.message = message
+    }
+}
+
+/// `GET /api/v1/catalog/{id}/availability-lag`: how long a series usually takes to appear after release.
+public struct AvailabilityLag: Decodable, Sendable {
+    public var averageSeconds: Int64?
+    public var sampleCount: Int
+    public var backfillCount: Int
+    public var backfillThresholdDays: Int
+    public var unknownCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case averageSeconds = "average_seconds"
+        case sampleCount = "sample_count"
+        case backfillCount = "backfill_count"
+        case backfillThresholdDays = "backfill_threshold_days"
+        case unknownCount = "unknown_count"
     }
 }

@@ -4,17 +4,16 @@
 The status bar (top 72 px) and the gesture navigation bar (bottom 72 px) are drawn by the OS,
 not by Playarr, and the web reference has none. For every candidate PNG this copies those two
 bands from the web reference, so both images are identical there. Usage:
-  mask.py <ref-dir> <raw-cand-dir> <out-dir> [theme]
-Each directory holds <screen-id>.png. The output goes to <out-dir>/mobile/<theme>/<id>.png (theme defaults to light),
-the layout diff.mjs reads with --cand <out-dir>.
+  mask.py <ref-dir> <raw-cand-dir> <out-dir> [theme]   (each holds <screen-id>.png; out gets mobile/<id>.png, or
+  mobile/<theme>/<id>.png when a theme is given, the layout diff.mjs reads)
 """
 import os, sys
 from PIL import Image
 
 TOP, BOTTOM = 72, 72
 
-def main(ref, cand, out, theme="light"):
-    dest = f"{out}/mobile/{theme}"
+def main(ref, cand, out, theme=None):
+    dest = f"{out}/mobile/{theme}" if theme else f"{out}/mobile"
     os.makedirs(dest, exist_ok=True)
     for name in sorted(os.listdir(cand)):
         if not name.endswith(".png"):

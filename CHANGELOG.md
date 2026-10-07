@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Phone profile page: the theme and language selectors sit in the logo row instead of covering the "Who's watching?" heading.
+- TV QR sign-in with an `http://` Playarr Server: the server's default verification page is now its own `/tv/link` (reachable over the same scheme), the hosted `playarr.app/link` page hands off to `http://<server>/tv/link?user_code=...` with a one-step explanation, the hosted link endpoints allow cross-origin calls so that page can report the approval back, and the server-hosted client no longer rewrites a public `http://` address to the relay name.
+- VIDAA (and any HTTPS-hosted launcher): an `http://` Playarr Server now works. The server serves the web client itself at `/tv/` (same scheme as the server, so no mixed content), the image and release tarball ship it as `web/tv/`, and the hosted sign-in links to `http://<server>/tv/` with a one-step explanation when it detects an `http://` server instead of failing silently.
 - Chromecast: an `http://` Playarr Server is no longer refused up front by the receiver or hidden on Android. The receiver tries it; if the Cast device blocks the mixed-content request, the sender now shows a clear message with the one-step remedy (an `https://` address via `PLAYARR_RELAY_REGISTER` or a reverse proxy) instead of failing silently. The Android cast dialog now shows receiver errors.
 - Remote control: reinstalling the app no longer leaves a stale "Offline" device and duplicate pairings. Registering a target now accepts an optional `fingerprint`; a new install on the same account with the same fingerprint (or, when either side has none, the same name and platform as an offline target) takes over the old target, its pairings and nothing else. Targets unseen for 30 days are pruned with their pairings revoked, and the target list hides a target that has been offline for over a day when a fresher one has the same name and platform. The Android app sends a hash of its per-device Android id as the fingerprint.
 - Android TV search: pressing Up from Filters now lands on the search field instead of the Back button, matching the web TV search page. Tests pin the focus order on both clients and the first-Enter/OK activation of web TV cards.
@@ -75,6 +78,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS: a Request latency page in Settings, matching the web page (per-route HTTP latency for admins, with the "Admins only" state for other users), backed by a new `HttpLatencyClient` in PlayarrKit with unit tests.
+- Apple parity workflow: captures both themes, a web layout dump per screen, a player screen pair (controls, quality menu) with the video hidden, and the household blocked screen (fx-child-locked).
+- PlayarrKit: Home rails, availability lag, household status, profile avatar preset and media thumbnail calls; runtime on work and episode details.
 - Web title detail: an Add to Playlist pill beside Add to watchlist, and a Download button in each season heading of a series (shown when downloads are allowed); both open the existing playlist picker and download quality drawer.
 - iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
 - iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
@@ -194,6 +200,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV: series detail uses the web episode rail and ink Start pill with the availability note between the meta chips and the synopsis, and the player quality menu is the web popover with the Original choice over the Low, Medium and High matrix instead of a side panel.
+- Web: Nunito Sans and JetBrains Mono are now bundled as self-hosted variable webfonts (SIL OFL) and lead the font stacks, so the UI no longer depends on a platform-specific font; the parity references were re-captured with them.
+- Pixel parity tooling now covers the light and dark themes: `capture-web.mjs --theme`, theme-aware `diff.mjs` and `screens.json`, web references under `docs/parity/web/<layout>/<theme>/`, and a deterministic source sync order in the fixture seed.
+- tvOS: Home, Library, title detail, Search, Settings, Release Calendar, profile switcher, the household blocked screen and the player now follow the web TV layout (1920x1080) in light and dark, with the web's nav tabs, preset profile avatars, key art treatment and a web-style player with quality matrix.
 - Every client now allows cleartext `http://` connections to the self-hosted Playarr Server the user enters: the Android Google Play flavour no longer denies cleartext, iOS sets `NSAllowsArbitraryLoads`, and the Xbox package declares `privateNetworkClientServer` for home-network servers. HTTPS remains supported and preferred.
 - Android phone: header, navigation, home rails, library grid, search, settings index, title detail pages and calendar follow the web mobile layout in light and dark themes.
 - Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.

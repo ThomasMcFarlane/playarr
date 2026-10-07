@@ -990,6 +990,23 @@ pub fn build_router(
     version_gate: VersionGateLayer,
     web_assets_dir: Option<PathBuf>,
 ) -> (Router, utoipa::openapi::OpenApi) {
+    build_router_with_tv(state, version_gate, web_assets_dir, None)
+}
+
+/// [`build_router`] plus `tv_assets_dir`: when `Some`, the Playarr Web
+/// client built for server hosting (`vite --mode server`, `base: "/tv/"`) is
+/// served under `/tv/` over whatever scheme the operator's listener uses.
+/// This is how a TV whose browser can only reach an `http://` server (VIDAA)
+/// avoids mixed content: the hosted `https://` launcher cannot call an
+/// `http://` API, but a page served by the server itself over `http://` can.
+/// Unknown paths under `/tv/` fall back to its `index.html` (client-side
+/// routes); the API routes and the Admin fallback are unaffected.
+pub fn build_router_with_tv(
+    state: AppState,
+    version_gate: VersionGateLayer,
+    web_assets_dir: Option<PathBuf>,
+    tv_assets_dir: Option<PathBuf>,
+) -> (Router, utoipa::openapi::OpenApi) {
     let readiness_for_alias = state.readiness.clone();
     let state_for_request_timing = state.clone();
     let (router, mut api) = api_router().with_state(state).split_for_parts();
@@ -1024,6 +1041,14 @@ pub fn build_router(
             request_timing_middleware::record_request_timing,
         ));
 
+    let router = match tv_assets_dir {
+        Some(dir) => {
+            let index_html = ServeFile::new(dir.join("index.html"));
+            router.nest_service("/tv", ServeDir::new(dir).fallback(index_html))
+        }
+        None => router,
+    };
+
     let router = match web_assets_dir {
         Some(dir) => {
             // Deliberately `.fallback(...)`, not `.not_found_service(...)`:
@@ -1051,6 +1076,48 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use playarr_model::VersionEnvelope;
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn tv_assets_are_served_under_tv_with_spa_fallback() {
+        let dir = std::env::temp_dir().join(format!("playarr-tv-assets-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        std::fs::write(dir.join("index.html"), "<html>tv shell</html>").unwrap();
+        std::fs::write(dir.join("assets/app.js"), "console.log(1)").unwrap();
+        let (_unused, test) = test_support::test_state().await;
+        let app = test.app.clone();
+        let (router, _api) = build_router_with_tv(
+            app,
+            test_support::test_version_gate(),
+            None,
+            Some(dir.clone()),
+        );
+        let get = |uri: &'static str| {
+            let router = router.clone();
+            async move {
+                let response = router
+                    .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                    .await
+                    .unwrap();
+                let status = response.status();
+                let body = axum::body::to_bytes(response.into_body(), 1 << 20)
+                    .await
+                    .unwrap();
+                (status, String::from_utf8_lossy(&body).to_string())
+            }
+        };
+        assert_eq!(
+            get("/tv/").await,
+            (StatusCode::OK, "<html>tv shell</html>".to_string())
+        );
+        assert_eq!(get("/tv/assets/app.js").await.1, "console.log(1)");
+        assert_eq!(
+            get("/tv/library/42").await,
+            (StatusCode::OK, "<html>tv shell</html>".to_string())
+        );
+        assert_eq!(get("/tv").await.0, StatusCode::OK);
+        assert_eq!(get("/healthz").await.0, StatusCode::OK);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[tokio::test]
     async fn health_endpoint_returns_200() {

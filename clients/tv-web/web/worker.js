@@ -641,10 +641,19 @@ export default {
       return handleRelayRequest(request, env);
     }
     if (url.pathname.startsWith("/api/link/")) {
+      // CORS is open on every link endpoint. Packaged TV webviews need `code`/`qr`;
+      // `session` and `authorize` are also called from the web client that a
+      // plain-http Playarr Server serves itself at /tv/ (an http:// page cannot
+      // be same-origin with https://playarr.app, and the https page cannot call
+      // the http server, so the approval has to run on the server's page and
+      // report back here). No credentials are involved: the one-time user code
+      // is the secret, exactly as for any non-browser caller.
       const packagedLinkEndpoint =
         url.pathname === "/api/link/code" ||
         url.pathname.startsWith("/api/link/code/") ||
-        url.pathname === "/api/link/qr";
+        url.pathname === "/api/link/qr" ||
+        url.pathname === "/api/link/session" ||
+        url.pathname === "/api/link/authorize";
       if (request.method === "OPTIONS") {
         return packagedLinkEndpoint
           ? linkCorsPreflight()

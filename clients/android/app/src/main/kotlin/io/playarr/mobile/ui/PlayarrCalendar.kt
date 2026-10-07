@@ -1446,7 +1446,7 @@ private fun shareCalendarLink(context: android.content.Context, chooserTitle: St
  * samples, and a subtle line for items it excluded (backfills and undated items).
  */
 @Composable
-internal fun PlayarrAvailabilityLagLine(lag: io.playarr.shared.data.model.AvailabilityLag, modifier: Modifier = Modifier) {
+internal fun PlayarrAvailabilityLagLine(lag: io.playarr.shared.data.model.AvailabilityLag, modifier: Modifier = Modifier, webTv: Boolean = false) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         val average = lag.averageSeconds
         Text(
@@ -1455,9 +1455,10 @@ internal fun PlayarrAvailabilityLagLine(lag: io.playarr.shared.data.model.Availa
             } else {
                 playarrString(PlayarrString.AvailabilityLagNone)
             },
-            color = WebInkSoft,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
+            color = if (webTv) WebInk else WebInkSoft,
+            fontSize = if (webTv) 19.2.sp else 13.sp,
+            lineHeight = if (webTv) 28.8.sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+            fontWeight = if (webTv) FontWeight(640) else FontWeight.Medium,
         )
         if (average != null && lag.sampleCount > 0) {
             Text(playarrString(PlayarrString.AvailabilityLagBasedOn, "count" to lag.sampleCount), color = WebInkMuted, fontSize = 11.sp)

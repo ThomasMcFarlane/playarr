@@ -54,7 +54,14 @@ function encodedPublicIpv4Octets(
  * DNS resolves the name straight back to the encoded address; neither
  * Playarr nor Cloudflare relays the request or its response.
  */
-export function publicIpv4RelayUrl(value: string): string {
+export function publicIpv4RelayUrl(
+  value: string,
+  pageProtocol: string | undefined = typeof window === "undefined" ? undefined : window.location.protocol
+): string {
+  // A page served over plain http (the web client a Playarr Server serves itself at /tv/) has no
+  // mixed content to avoid, and the server may not be registered with the relay: use the address as
+  // entered rather than a secure name that might not exist. Playarr never blocks an http:// server.
+  if (pageProtocol === "http:") return value;
   const input = value.trim();
   const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input)
     ? input

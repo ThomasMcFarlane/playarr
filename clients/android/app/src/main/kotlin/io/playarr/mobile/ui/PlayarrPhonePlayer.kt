@@ -425,7 +425,7 @@ private fun PhoneQualityMatrix(controls: PlayarrPlaybackControls, onQuality: (St
                 val selected = option.id == controls.activeQualityId
                 PhoneMatrixChoice(
                     title = playarrQualityLabel(option.label, option.videoBitrateBps, option.id == "original"),
-                    detail = if (option.id == "original") playarrString(PlayarrString.PlayerSourceQuality) else playarrQualityBitrateDetail(option.videoBitrateBps),
+                    detail = if (option.id == "original") playarrString(PlayarrString.PlayerQualitySource) else playarrQualityBitrateDetail(option.videoBitrateBps),
                     selected = selected, enabled = !controls.switching, modifier = Modifier.fillMaxWidth(), check = true,
                 ) { onQuality(option.id) }
             }

@@ -25,8 +25,8 @@
   --success: #347559;
   --shadow-soft: 0 22px 65px rgba(56, 38, 33, 0.09);
   --shadow-focus: 0 24px 70px rgba(56, 38, 33, 0.2);
-  --font: "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
-  --mono: "SFMono-Regular", Consolas, monospace;
+  --font: "Nunito Sans", "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   --header-height: clamp(78px, calc(8.5 * var(--viewport-unit)), 112px);
   --screen-x: clamp(28px, 4.5vw, 92px);
   --screen-y: clamp(24px, calc(3.5 * var(--viewport-unit)), 54px);
@@ -10045,6 +10045,12 @@ html.is-native-scroll-root .profile-auth-scroll {
 
   .tv-stage-chrome-logo {
     top: var(--mobile-top-inset, 14px);
+  }
+
+  /* One row with the logo: the theme and language selectors stay clear of the heading that starts 58px lower. */
+  .tv-stage-chrome-controls {
+    top: var(--mobile-top-inset, 14px);
+    gap: 8px;
   }
 
   .tv-stage-chrome .tv-stage-chrome-heading {

@@ -11,6 +11,9 @@ struct TVPlayerView: View {
     let suggestionsWorkID: UUID?
     @State private var viewModel: TVPlayerViewModel
     @State private var suggestions: [Work] = []
+    /// Parity route: draw the chrome statically at this position over a black stage.
+    let parity: (position: Double, duration: Double, menuOpen: Bool)?
+    @State private var menuOpen = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -21,8 +24,10 @@ struct TVPlayerView: View {
         suggestionsWorkID: UUID? = nil,
         queue: [PlaybackQueueEntry] = [],
         advance: EndOfPlaybackMachine.Advance = .countdown,
-        subtitle: String? = nil
+        subtitle: String? = nil,
+        parity: (position: Double, duration: Double, menuOpen: Bool)? = nil
     ) {
+        self.parity = parity
         self.mediaFileID = mediaFileID
         self.title = title
         self.apiClient = apiClient
@@ -34,10 +39,32 @@ struct TVPlayerView: View {
     }
 
     var body: some View {
+        if let parity {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                TVPlayerChrome(
+                    state: TVPlayerChromeState(
+                        position: parity.position,
+                        duration: viewModel.duration > 0 ? viewModel.duration : parity.duration,
+                        isPlaying: false,
+                        qualityLabel: viewModel.qualityLabel,
+                        selectedQualityID: viewModel.selectedQualityID,
+                        menuOpen: parity.menuOpen
+                    ),
+                    frozen: true
+                )
+            }
+            .ignoresSafeArea()
+            .task { await viewModel.loadInfo(mediaFileID: mediaFileID) }
+        } else {
+            playerBody
+        }
+    }
+
+    private var playerBody: some View {
         ZStack {
-            // Player stage uses background.base so chrome matches ui-tv PlayerScreen
-            // when media has not yet painted.
-            DesignTokens.Color.backgroundBase.ignoresSafeArea()
+            // The stage is black behind the video, as on the web.
+            Color.black.ignoresSafeArea()
 
             switch viewModel.state {
             case .idle, .negotiating:
@@ -45,11 +72,30 @@ struct TVPlayerView: View {
                     .tint(DesignTokens.Color.brandPrimary)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
             case .ready:
-                VideoPlayer(player: viewModel.player)
+                TVVideoSurface(player: viewModel.player)
                     .ignoresSafeArea()
-                    .overlay(alignment: .bottomLeading) {
-                        playerChrome
+                TVPlayerChrome(
+                    state: TVPlayerChromeState(
+                        position: viewModel.position,
+                        duration: viewModel.duration,
+                        isPlaying: viewModel.isPlaying,
+                        qualityLabel: viewModel.qualityLabel,
+                        selectedQualityID: viewModel.selectedQualityID,
+                        menuOpen: menuOpen
+                    ),
+                    onClose: { dismiss() },
+                    onTogglePlay: { viewModel.togglePlay() },
+                    onToggleQualityMenu: { menuOpen.toggle() }
+                )
+                .onPlayPauseCommand { viewModel.togglePlay() }
+                .onExitCommand { if menuOpen { menuOpen = false } else { dismiss() } }
+                .onMoveCommand { direction in
+                    switch direction {
+                    case .left: viewModel.seek(by: -10)
+                    case .right: viewModel.seek(by: 10)
+                    default: break
                     }
+                }
             case .failed(let message):
                 TVErrorView(title: "Playback failed", message: message) {
                     Task { await viewModel.play(mediaFileID: mediaFileID, title: title) }
@@ -97,25 +143,5 @@ struct TVPlayerView: View {
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.stop()
         }
-    }
-
-    /// Transport chrome aligned with ui-tv `PlayerScreen` (title + mode badge).
-    private var playerChrome: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
-            Text(title)
-                .font(TVTheme.titleFont())
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-            if let mode = viewModel.playbackMode {
-                Text(mode == .direct ? "Direct play" : "Streaming")
-                    .font(TVTheme.captionFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .padding(.horizontal, DesignTokens.Spacing.md)
-                    .padding(.vertical, DesignTokens.Spacing.xs)
-                    .background(
-                        Capsule().fill(DesignTokens.Color.backgroundRaised.opacity(0.9))
-                    )
-            }
-        }
-        .padding(DesignTokens.Spacing.xl)
     }
 }
