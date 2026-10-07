@@ -3,89 +3,131 @@
   "threshold": 0.1,
   "maxMismatchPercent": 1,
   "generatedFrom": {
-    "ref": "web mobile reference, light theme, 390x844 at DPR 3 (Roboto, 24 dp safe areas)",
+    "ref": "web mobile reference, light theme, 390x844 at DPR 3, captured on the same fixture with the shared tooling (no safe area, the web's own fonts)",
     "cand": "Android phone captures, light theme, system bars masked"
   },
-  "screens": [
-    {
-      "id": "home",
-      "title": "Home",
-      "status": "fail",
-      "mismatchPercent": 2.44,
-      "mismatchedPixels": 72280,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "movies",
-      "title": "Movies library",
-      "status": "pass",
-      "mismatchPercent": 0.485,
-      "mismatchedPixels": 14382,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "series",
-      "title": "Series library",
-      "status": "pass",
-      "mismatchPercent": 0.399,
-      "mismatchedPixels": 11823,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "film-detail",
-      "title": "Title detail (film)",
-      "status": "fail",
-      "mismatchPercent": 1.173,
-      "mismatchedPixels": 34751,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "series-detail",
-      "title": "Title detail (series with seasons)",
-      "status": "fail",
-      "mismatchPercent": 1.373,
-      "mismatchedPixels": 40668,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "search",
-      "title": "Search with results",
-      "status": "fail",
-      "mismatchPercent": 1.517,
-      "mismatchedPixels": 44947,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "calendar",
-      "title": "Calendar",
-      "status": "fail",
-      "mismatchPercent": 2.996,
-      "mismatchedPixels": 88762,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    },
-    {
-      "id": "settings",
-      "title": "Settings",
-      "status": "fail",
-      "mismatchPercent": 1.253,
-      "mismatchedPixels": 37110,
-      "reference": "1170x2532",
-      "candidate": "1170x2532",
-      "sizeMatch": true
-    }
-  ]
+  "themes": {
+    "light": [
+      {
+        "id": "home",
+        "title": "Home",
+        "status": "pass",
+        "mismatchPercent": 0.946,
+        "mismatchedPixels": 28015,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "movies",
+        "title": "Movies library",
+        "status": "pass",
+        "mismatchPercent": 0.528,
+        "mismatchedPixels": 15653,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "series",
+        "title": "Series library",
+        "status": "pass",
+        "mismatchPercent": 0.405,
+        "mismatchedPixels": 12010,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "film-detail",
+        "title": "Title detail (film)",
+        "status": "pass",
+        "mismatchPercent": 0.999,
+        "mismatchedPixels": 29608,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "series-detail",
+        "title": "Title detail (series with seasons)",
+        "status": "fail",
+        "mismatchPercent": 1.137,
+        "mismatchedPixels": 33674,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "search",
+        "title": "Search with results",
+        "status": "pass",
+        "mismatchPercent": 0.613,
+        "mismatchedPixels": 18151,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "calendar",
+        "title": "Calendar",
+        "status": "fail",
+        "mismatchPercent": 2.587,
+        "mismatchedPixels": 76646,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "settings",
+        "title": "Settings",
+        "status": "fail",
+        "mismatchPercent": 1.351,
+        "mismatchedPixels": 40025,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "player-controls",
+        "title": "Player with controls visible",
+        "status": "fail",
+        "mismatchPercent": 5.185,
+        "mismatchedPixels": 153590,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "player-quality-menu",
+        "title": "Player quality menu open",
+        "status": "fail",
+        "mismatchPercent": 4.243,
+        "mismatchedPixels": 125708,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "profile-switcher",
+        "title": "Profile switcher",
+        "status": "pass",
+        "mismatchPercent": 0.972,
+        "mismatchedPixels": 28790,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      },
+      {
+        "id": "household-blocked",
+        "title": "Household blocked",
+        "status": "fail",
+        "mismatchPercent": 1.023,
+        "mismatchedPixels": 30295,
+        "reference": "1170x2532",
+        "candidate": "1170x2532",
+        "sizeMatch": true
+      }
+    ]
+  }
 }

@@ -1,0 +1,1 @@
+- Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
