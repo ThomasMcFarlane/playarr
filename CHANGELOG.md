@@ -299,6 +299,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the shell clock and the right-hand column sit exactly where Home puts them on Movies, Series, Music, Playlists, Downloads, Watchlist and Requests (one shared stage split), instead of the clock shifting right on library pages.
 - Calendar: the API now answers from a persisted cache that is refreshed in the background (on a schedule, on webhooks and on "Sync now") with per-call timeouts and backoff, so it never waits on a source and keeps serving the last good data when one is down. Source errors are no longer shown to users; admins see each source's last successful calendar sync under Tasks.
 - Web: the legacy page frame is gone: every routed page renders through the shared page layout, and the old frame components, button aliases and dead header and fade CSS are removed.
 - Web: route changes play one short fade-and-rise of the page body (about 220 ms) with the shell, nav rail and page header staying put; Back settles the other way, skeletons ride the same transition, and reduced motion makes it instant. The separate Android TV and VIDAA page entrance animations are removed in its favour.

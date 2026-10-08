@@ -12,6 +12,11 @@
  */
 
 :root {
+  /* Width of the right-hand column (rails, library panel) from the right edge. The shell clock sits on its divider on every
+     page, exactly where Home puts it (owner ruling 2026-10-08): the layout parity job compares them. */
+  --stage-split: 65%;
+  /* Width of the right-hand column itself: Home's rails, the library rail surface and the library grid panel. */
+  --stage-rail-width: 62%;
   --page-header-top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
   --page-end: clamp(24px, calc(4 * var(--vw)), 96px);
   --page-control-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
@@ -198,7 +203,7 @@
 .app-clock {
   position: absolute;
   top: var(--page-header-top);
-  right: calc(65% + clamp(18px, calc(2 * var(--vw)), 38px));
+  right: calc(var(--stage-split) + clamp(18px, calc(2 * var(--vw)), 38px));
   bottom: auto;
   left: auto;
   height: var(--page-control-height);
@@ -410,11 +415,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
     padding: 0;
     border-radius: 14px;
   }
-}
-
-/* Long page titles must not run into the shell clock sitting at the stage divider. */
-.app-shell:has(.page-header) .app-clock {
-  right: calc(65% - clamp(10px, calc(2 * var(--vw)), 40px));
 }
 
 /* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
@@ -819,3 +819,7 @@ body[data-input-mode="remote"] .tv-page-back {
 .app-main[data-route-motion="back-a"] > :not([data-page-id]) { animation-name: route-enter-back-a; }
 .app-main[data-route-motion="back-b"] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
 .app-main[data-route-motion="back-b"] > :not([data-page-id]) { animation-name: route-enter-back-b; }
+/* A state panel (loading, empty, error) keeps Home's column split too, so the page does not shift when data arrives. */
+.tv-library-grid-panel.page-layout-state {
+  width: var(--stage-rail-width);
+}

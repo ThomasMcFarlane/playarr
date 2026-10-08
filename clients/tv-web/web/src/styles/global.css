@@ -7153,7 +7153,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   top: 0;
   right: 0;
   bottom: 0;
-  left: 38%;
+  left: calc(100% - var(--stage-rail-width));
   width: auto;
   height: 100%;
   display: grid;
@@ -7582,7 +7582,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   z-index: 10;
   top: 0;
   right: 0;
-  width: 62%;
+  width: var(--stage-rail-width);
   height: 100%;
   min-width: 0;
   overflow: hidden;
@@ -11053,6 +11053,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
  * sidebar split, so the padding it needs belongs back on the panel itself.
  */
 .tv-downloads-panel {
+  /* Home's column split, like every other library-style page (page-layout.css, --stage-rail-width). */
+  width: var(--stage-rail-width);
   padding: clamp(24px, calc(3 * var(--vw)), 58px);
 }
 

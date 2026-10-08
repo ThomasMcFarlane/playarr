@@ -268,6 +268,37 @@ if (referenceFrom) {
 }
 
 // --- checks --------------------------------------------------------------------------------------------------------
+// --- stage split ---------------------------------------------------------------------------------------------------
+// Home is the reference for the shell clock and the column boundary (owner ruling 2026-10-08, "homepage and the library
+// pages have the date/time in a different place"): every library-style page must put the clock where Home puts it and
+// start its right-hand column where Home's rails start, on the TV (1920x1080) and desktop (1280x720) layouts, both themes.
+const STAGE_PAGES = ["/movies", "/series", "/music", "/playlists", "/downloads", "/watchlist", "/requests"];
+async function stageGeometry(layoutId, theme, route) {
+  const page = await newPage(layoutId, theme);
+  await page.goto(`${base}${route}`, { waitUntil: "load" });
+  await page.addStyleTag({ content: FREEZE });
+  await page.waitForSelector(".app-clock", { timeout: 20000 });
+  await page.waitForSelector(".tv-home-rails, .tv-library-grid-panel", { timeout: 20000 });
+  await page.waitForTimeout(600);
+  const out = await page.evaluate(() => {
+    const r = (el) => (el ? (({ left, top, right, bottom }) => [left, top, right, bottom].map((n) => Math.round(n * 10) / 10))(el.getBoundingClientRect()) : null);
+    return { clock: r(document.querySelector(".app-clock")), column: r(document.querySelector(".tv-home-rails, .tv-library-grid-panel"))?.[0] ?? null };
+  });
+  await page.context().close();
+  return out;
+}
+for (const layoutId of ["tv", "desktop"]) {
+  for (const theme of themes) {
+    const home = await stageGeometry(layoutId, theme, "/");
+    for (const route of STAGE_PAGES) {
+      const geometry = await stageGeometry(layoutId, theme, route);
+      if (JSON.stringify(geometry.clock) !== JSON.stringify(home.clock)) fail(`${layoutId}/${theme} ${route}: the clock sits at ${JSON.stringify(geometry.clock)}, Home's is ${JSON.stringify(home.clock)}`);
+      else if (geometry.column !== home.column) fail(`${layoutId}/${theme} ${route}: the right-hand column starts at ${geometry.column}, Home's starts at ${home.column}`);
+      else console.log(`ok    ${layoutId}/${theme} ${route} clock and column split equal Home's`);
+    }
+  }
+}
+
 const pages = registry();
 let pillsChecked = 0;
 let bandsChecked = 0;

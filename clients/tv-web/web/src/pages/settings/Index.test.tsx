@@ -149,7 +149,8 @@ describe("SettingsIndexPage", () => {
       'class="tv-rail-panel tv-library-grid-panel settings-detail-panel"'
     );
     expect(css).toMatch(/\.tv-library-grid-panel\s*\{[^}]*width:\s*65%[^}]*height:\s*100%/s);
-    expect(css).toMatch(/\.app-clock\s*\{[^}]*right:\s*calc\(65%\s*\+/s);
+    expect(css).toMatch(/\.app-clock\s*\{[^}]*right:\s*calc\(var\(--stage-split\)\s*\+/s);
+    expect(css).toMatch(/--stage-split:\s*65%/);
     expect(css).toMatch(
       /\.settings-options-scroll,\s*\.settings-detail-scroll\s*\{[^}]*overflow-y:\s*auto/s
     );
