@@ -27,6 +27,9 @@ pub enum ArtworkStyle {
     /// alpha, soft right-edge fade from 72% width so the art dissolves into
     /// the stage surface without a hard crop.
     Stage,
+    /// Light-theme TV stage key-art: greyscale, contrast 0.88, brightness 1.1,
+    /// opacity 0.4 baked into alpha, with the same right-edge fade as `Stage`.
+    StageLight,
 }
 
 impl ArtworkStyle {
@@ -34,6 +37,7 @@ impl ArtworkStyle {
         match self {
             Self::Original => "original",
             Self::Stage => "stage",
+            Self::StageLight => "stage-light",
         }
     }
 
@@ -42,6 +46,7 @@ impl ArtworkStyle {
         match self {
             Self::Original => None,
             Self::Stage => Some("stage"),
+            Self::StageLight => Some("stage-light"),
         }
     }
 
@@ -49,7 +54,7 @@ impl ArtworkStyle {
     pub fn output_content_type(self) -> Option<&'static str> {
         match self {
             Self::Original => None,
-            Self::Stage => Some("image/png"),
+            Self::Stage | Self::StageLight => Some("image/png"),
         }
     }
 }
@@ -67,6 +72,7 @@ impl FromStr for ArtworkStyle {
         match raw.trim().to_ascii_lowercase().as_str() {
             "" | "original" | "raw" | "source" => Ok(Self::Original),
             "stage" | "stage_hero" | "tv-stage" | "tv_stage" => Ok(Self::Stage),
+            "stage-light" | "stage_light" => Ok(Self::StageLight),
             _ => Err(()),
         }
     }
@@ -92,14 +98,37 @@ pub fn apply_artwork_style(
         ArtworkStyle::Original => Err(ArtworkStyleError::Encode(
             "original style has no derivative encode path".into(),
         )),
-        ArtworkStyle::Stage => encode_stage(source),
+        ArtworkStyle::Stage => encode_stage(source, STAGE_DARK),
+        ArtworkStyle::StageLight => encode_stage(source, STAGE_LIGHT),
     }
 }
 
-fn encode_stage(source: &[u8]) -> Result<(Vec<u8>, &'static str), ArtworkStyleError> {
+/// The CSS filter numbers of one theme's `.tv-key-art img`.
+#[derive(Clone, Copy)]
+struct StageLook {
+    contrast: f32,
+    brightness: f32,
+    opacity: f32,
+}
+
+const STAGE_DARK: StageLook = StageLook {
+    contrast: 0.82,
+    brightness: 0.6,
+    opacity: 0.72,
+};
+const STAGE_LIGHT: StageLook = StageLook {
+    contrast: 0.88,
+    brightness: 1.1,
+    opacity: 0.4,
+};
+
+fn encode_stage(
+    source: &[u8],
+    look: StageLook,
+) -> Result<(Vec<u8>, &'static str), ArtworkStyleError> {
     let image = image::load_from_memory(source)
         .map_err(|error| ArtworkStyleError::Decode(error.to_string()))?;
-    let rgba = stage_process(image);
+    let rgba = stage_process(image, look);
     let mut out = Cursor::new(Vec::new());
     rgba.write_to(&mut out, ImageFormat::Png)
         .map_err(|error| ArtworkStyleError::Encode(error.to_string()))?;
@@ -109,7 +138,7 @@ fn encode_stage(source: &[u8]) -> Result<(Vec<u8>, &'static str), ArtworkStyleEr
 /// Mirrors dark-theme `.tv-key-art img` pixel math from tv-web:
 /// `filter: grayscale(1) contrast(0.82) brightness(0.6)` then opacity 0.72
 /// and a right-edge alpha fade (mask solid until 72% width).
-fn stage_process(image: DynamicImage) -> RgbaImage {
+fn stage_process(image: DynamicImage, look: StageLook) -> RgbaImage {
     // Cap insane sources so a 8K still does not blow memory on the API node.
     let image = {
         let (w, h) = image.dimensions();
@@ -124,9 +153,11 @@ fn stage_process(image: DynamicImage) -> RgbaImage {
     let mut out = RgbaImage::new(width, height);
 
     // CSS contrast(c) around mid: (x - 0.5) * c + 0.5, then brightness(b): * b.
-    let contrast = 0.82_f32;
-    let brightness = 0.6_f32;
-    let base_opacity = 0.72_f32;
+    let StageLook {
+        contrast,
+        brightness,
+        opacity: base_opacity,
+    } = look;
     let fade_start = 0.72_f32;
 
     for y in 0..height {
@@ -187,6 +218,31 @@ mod tests {
             ArtworkStyle::Original
         );
         assert!("neon".parse::<ArtworkStyle>().is_err());
+    }
+
+    #[test]
+    fn stage_light_is_lighter_and_fainter_than_stage() {
+        assert_eq!(
+            "stage-light".parse::<ArtworkStyle>().unwrap(),
+            ArtworkStyle::StageLight
+        );
+        let jpeg = sample_jpeg();
+        let dark =
+            image::load_from_memory(&apply_artwork_style(&jpeg, ArtworkStyle::Stage).unwrap().0)
+                .unwrap()
+                .to_rgba8();
+        let light = image::load_from_memory(
+            &apply_artwork_style(&jpeg, ArtworkStyle::StageLight)
+                .unwrap()
+                .0,
+        )
+        .unwrap()
+        .to_rgba8();
+        let (d, l) = (dark.get_pixel(4, 12), light.get_pixel(4, 12));
+        assert_eq!(l[0], l[1]);
+        assert!(l[0] > d[0], "light {} dark {}", l[0], d[0]);
+        assert!(l[3] < d[3], "light alpha {} dark alpha {}", l[3], d[3]);
+        assert!((90..=115).contains(&l[3]), "alpha={}", l[3]);
     }
 
     #[test]

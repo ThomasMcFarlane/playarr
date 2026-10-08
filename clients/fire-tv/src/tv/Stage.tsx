@@ -3,9 +3,9 @@
  * `.tv-stage-wash`, drawn at the web's 1920x1080 measurements.
  *
  * Vega has no CSS filters or masks. The web draws the art with `grayscale(1) contrast(.82) brightness(.6)` at 72% opacity
- * (dark) or `grayscale(1) contrast(.88) brightness(1.1)` at 40% (light) and masks its right edge to transparent. The
- * mask is reproduced with a gradient of the surface colour over the image; the grayscale cannot be, so the art keeps
- * its colour and brightness is approximated with a black veil. That residual is the documented exception for the hero.
+ * (dark) or `grayscale(1) contrast(.88) brightness(1.1)` at 40% (light) and masks its right edge to transparent. The server
+ * bakes exactly that into a PNG (`?style=stage` or `stage-light`), so the device draws it as is. A server without the style
+ * answers with an error and the art falls back to the colour original under a veil.
  */
 import React from 'react';
 import {StyleSheet, View} from 'react-native';
@@ -25,6 +25,30 @@ function clear(colour: string): string {
   return mix(colour, 0);
 }
 
+/** The server-baked key art look for the theme. */
+export function styledArtUri(uri: string, dark: boolean): string {
+  return `${uri}${uri.includes('?') ? '&' : '?'}style=${dark ? 'stage' : 'stage-light'}`;
+}
+
+/** A server that does not know the style: the original colour art with a veil and an edge gradient, as before. */
+function LegacyArt({uri, accessToken, dark, surface}: {uri: string; accessToken?: string; dark: boolean; surface: string}): React.ReactElement {
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <View style={[StyleSheet.absoluteFill, {opacity: dark ? 0.72 : 0.4}]}>
+        <ArtworkImage uri={uri} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+        <Fill style={{backgroundColor: dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.1)'}} />
+      </View>
+      <LinearGradient
+        style={StyleSheet.absoluteFill}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 0}}
+        colors={[clear(surface), clear(surface), surface]}
+        locations={[0, 0.72, 1]}
+      />
+    </View>
+  );
+}
+
 export function Stage({artUri, accessToken, children}: StageProps): React.ReactElement {
   const {colour, scheme} = useTheme();
   const dark = scheme === 'dark';
@@ -33,17 +57,13 @@ export function Stage({artUri, accessToken, children}: StageProps): React.ReactE
     <View style={[StyleSheet.absoluteFill, {backgroundColor: surface, overflow: 'hidden'}]}>
       {artUri ? (
         <Box x={-20} y={-22.9} w={1038.3} h={1190.6} style={{overflow: 'hidden'}}>
-          {/* Opacity applies to the art and its veil only; the edge gradient stays outside it so it ends on the exact page colour. */}
-          <View style={[StyleSheet.absoluteFill, {opacity: dark ? 0.72 : 0.4}]}>
-            <ArtworkImage uri={artUri} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" />
-            <Fill style={{backgroundColor: dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.1)'}} />
-          </View>
-          <LinearGradient
-            style={StyleSheet.absoluteFill}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 0}}
-            colors={[clear(surface), clear(surface), surface]}
-            locations={[0, 0.72, 1]}
+          {/* The server bakes the web's greyscale, contrast, brightness, opacity and right-edge fade (`style=stage`). */}
+          <ArtworkImage
+            uri={styledArtUri(artUri, dark)}
+            accessToken={accessToken}
+            style={{width: '100%', height: '100%'}}
+            resizeMode="cover"
+            fallback={<LegacyArt uri={artUri} accessToken={accessToken} dark={dark} surface={surface} />}
           />
         </Box>
       ) : null}

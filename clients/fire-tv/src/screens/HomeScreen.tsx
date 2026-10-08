@@ -31,8 +31,17 @@ interface HomeRail {
 
 const RAIL_PITCH = 317.9;
 const FIRST_HEADING_Y = 426.1;
-const CARD_PITCH = 243.9;
+const CARD_PITCH = 243.85;
 const CARD_W = 218.9;
+/** Art 123.13 + gap 9.9 + title 17 + gap 2.6 + subtitle 13. */
+const CARD_H = 165.7;
+/**
+ * The web snaps each card to a whole pixel from its fractional position (x = 881.6 + n * 243.85); the device's row layout
+ * rounds every card's width and margin separately and drifts by a pixel per card, so cards are placed one by one instead.
+ */
+function cardLeft(index: number): number {
+  return Math.round(RAIL_X + index * CARD_PITCH) - RAIL_X;
+}
 const RAIL_X = 881.6;
 
 function mergeRecent(...groups: Work[][]): Work[] {
@@ -197,12 +206,12 @@ export function HomeScreen(): React.ReactElement {
         <T size={12.288} weight={820} ls={0.983} color="#cf3157" upper lh={18.4}>
           {kicker}
         </T>
-        <View style={{marginTop: u(25.9)}}>
+        <View style={{marginTop: u(25.9), left: u(2.5), top: u(3)}}>
           <BalancedT key={featureTitle} width={373.2} size={69.12} weight={560} ls={-4.9766} lh={62.2} color={colour.ink}>
             {featureTitle}
           </BalancedT>
         </View>
-        <View style={{marginTop: u(21.6), width: u(324)}}>
+        <View style={{marginTop: u(21.6), width: u(324), top: u(2)}}>
           <T size={12.864} weight={400} lh={20.3} color={colour.inkMuted} lines={5}>
             {featureOverview}
           </T>
@@ -218,24 +227,14 @@ export function HomeScreen(): React.ReactElement {
             const active = railIndex === focus.rail;
             return (
               <View key={rail.id} pointerEvents="box-none">
-                <View
-                  style={{
-                    position: 'absolute',
-                    left: u(RAIL_X - 729.6),
-                    top: u(headingY),
-                    transform: active ? [{translateX: u(-6.2)}, {translateY: -1}, {scale: 1.16}, {translateX: u(6.2)}] : [],
-                  }}
-                >
-                  <T size={17.664} weight={610} ls={-0.53} lh={26.5} color={colour.ink}>
-                    {rail.title}
-                  </T>
-                </View>
+                <RailHeading title={rail.title} x={RAIL_X - 729.6} y={headingY} active={active} colour={colour.ink} />
                 <Animated.View
                   style={{
                     position: 'absolute',
                     left: scrollX[railIndex] ?? railLeft,
                     top: u(headingY + 26.5 + 17.28 + 18),
-                    flexDirection: 'row',
+                    width: u(rail.items.length * CARD_PITCH),
+                    height: u(CARD_H),
                   }}
                 >
                   {rail.items.map((work, itemIndex) => {
@@ -256,6 +255,7 @@ export function HomeScreen(): React.ReactElement {
                       progress={progress}
                       progressReady={progressRows !== null}
                       first={railIndex === 0 && itemIndex === 0}
+                      index={itemIndex}
                       baseUrl={baseUrl}
                       token={token}
                       selected={active && itemIndex === focus.item}
@@ -278,12 +278,15 @@ export function HomeScreen(): React.ReactElement {
                   size={TRACK_GUTTER}
                 />
                 <EdgeFade
+                  kind="mask"
                   side="right"
                   active={rail.items.length * CARD_PITCH - (scrolled[railIndex] ?? 0) > 1920 - RAIL_X + 8}
                   x={0}
-                  y={headingY + 26.5}
+                  y={headingY + 44}
                   w={1190.4}
-                  h={230}
+                  h={183}
+                  size={70}
+                  solid={8}
                 />
               </View>
             );
@@ -291,6 +294,26 @@ export function HomeScreen(): React.ReactElement {
         </Animated.View>
       </Box>
     </Stage>
+  );
+}
+
+/** A rail heading. The active one grows 16% from its left edge and rises 1 px, as the web's `.tv-media-track.is-active h2` does. */
+function RailHeading({title, x, y, active, colour}: {title: string; x: number; y: number; active: boolean; colour: string}): React.ReactElement {
+  const [width, setWidth] = useState(0);
+  return (
+    <View
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{
+        position: 'absolute',
+        left: u(x),
+        top: u(y),
+        transform: active ? [{translateX: width * 0.08}, {translateY: -1}, {scale: 1.16}] : [],
+      }}
+    >
+      <T size={17.664} weight={610} ls={-0.53} lh={26.5} color={colour}>
+        {title}
+      </T>
+    </View>
   );
 }
 
@@ -302,6 +325,7 @@ function HomeCard(props: {
   progress: WatchProgress | undefined;
   progressReady: boolean;
   first: boolean;
+  index: number;
   baseUrl: string;
   token: string | undefined;
   selected: boolean;
@@ -309,7 +333,7 @@ function HomeCard(props: {
   onFocus: () => void;
   onPress: () => void;
 }): React.ReactElement {
-  const {work, mediaFileId, title, progress, progressReady, first, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
+  const {work, mediaFileId, title, progress, progressReady, first, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
   const {colour} = useTheme();
   const kind = preferredArtworkKind(work, ['backdrop', 'poster']);
   const uri = mediaFileId ? mediaThumbnailUrl(baseUrl, mediaFileId) : kind ? workArtworkUrl(baseUrl, work.id, kind) : undefined;
@@ -320,7 +344,7 @@ function HomeCard(props: {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
-      style={{width: u(CARD_W), marginRight: u(CARD_PITCH - CARD_W)}}
+      style={{position: 'absolute', top: 0, left: u(cardLeft(index)), width: u(CARD_W)}}
     >
       <MediaFocus variant="home" focused={selected} width={CARD_W} height={123.13} radius={12.48}>
         <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
@@ -329,12 +353,12 @@ function HomeCard(props: {
         </View>
       </MediaFocus>
       <View style={{marginTop: u(9.9)}}>
-        <T size={11.328} weight={630} color={colour.ink} lh={17} lines={1}>
+        <T size={11.328} weight={630} color={colour.ink} lh={17} lines={1} dy={-2}>
           {title}
         </T>
       </View>
       <View style={{marginTop: u(2.6)}}>
-        <T size={8.64} weight={400} color={colour.inkMuted} lh={13} lines={1}>
+        <T size={8.64} weight={400} color={colour.inkMuted} lh={13} lines={1} dy={-2}>
           {subtitle}
         </T>
       </View>

@@ -15,6 +15,11 @@ export function u(value: number): number {
   return PixelRatio.roundToNearestPixel(value * scale);
 }
 
+/** One web CSS pixel in device pixels without snapping to the pixel grid: font sizes, letter spacing and line heights stay fractional. */
+export function uf(value: number): number {
+  return value * (Dimensions.get('window').width / 1920);
+}
+
 export interface BoxProps {
   x?: number;
   y?: number;
@@ -59,6 +64,8 @@ export interface TProps {
   ls?: number;
   /** Line height in px. */
   lh?: number;
+  /** A vertical nudge in web px, for glyphs the device font places differently from the web's. */
+  dy?: number;
   color: string;
   upper?: boolean;
   mono?: boolean;
@@ -80,14 +87,14 @@ export function halfLeading(size: number, lh: number | undefined): number {
   return lh >= content ? (lh - content) / 2 : (content - lh) * 0.18;
 }
 
-export function T({size, weight = 400, ls, lh, color, upper, mono, lines, style, onTextLayout, children}: TProps): React.ReactElement {
-  const run = textRun(u(size), weight, {letterSpacing: ls === undefined ? undefined : u(ls), lineHeight: lh === undefined ? undefined : u(lh), mono});
+export function T({size, weight = 400, ls, lh, dy = 0, color, upper, mono, lines, style, onTextLayout, children}: TProps): React.ReactElement {
+  const run = textRun(uf(size), weight, {letterSpacing: ls === undefined ? undefined : uf(ls), lineHeight: lh === undefined ? undefined : uf(lh), mono});
   return (
     <Text
       numberOfLines={lines}
       onTextLayout={onTextLayout}
       allowFontScaling={false}
-      style={[run, {color, includeFontPadding: false, position: 'relative', top: u(halfLeading(size, lh))}, upper ? {textTransform: 'uppercase'} : null, style]}
+      style={[run, {color, includeFontPadding: false, position: 'relative', top: u(halfLeading(size, lh) + dy)}, upper ? {textTransform: 'uppercase'} : null, style]}
     >
       {children}
     </Text>

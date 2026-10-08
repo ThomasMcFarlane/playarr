@@ -30,13 +30,15 @@ export interface EdgeFadeProps {
   h: number;
   /** Thickness; defaults to the 152 px track gutter for `left` on a track, 54 px otherwise. */
   size?: number;
-  /** `gutter` covers with the page colour (track mask); `shade` is the glow. */
-  kind?: 'gutter' | 'shade';
+  /** `gutter` covers with the page colour (track mask); `shade` is the glow; `mask` covers with the page colour to a hard clip. */
+  kind?: 'gutter' | 'shade' | 'mask';
+  /** `mask` only: pixels at the screen edge that are fully covered (the web clips its track a few pixels short of the edge). */
+  solid?: number;
   /** The gutter lies over the Home frost panel: blend towards it so no box shows. */
   tint?: boolean;
 }
 
-export function EdgeFade({side, active, x, y, w, h, size, kind = 'shade', tint}: EdgeFadeProps): React.ReactElement {
+export function EdgeFade({side, active, x, y, w, h, size, kind = 'shade', tint, solid = 0}: EdgeFadeProps): React.ReactElement {
   const {colour, scheme} = useTheme();
   const opacity = useRef(new Animated.Value(active ? 1 : 0)).current;
   useEffect(() => {
@@ -45,8 +47,8 @@ export function EdgeFade({side, active, x, y, w, h, size, kind = 'shade', tint}:
 
   const horizontal = side === 'left' || side === 'right';
   const thickness = size ?? (kind === 'gutter' ? TRACK_GUTTER : EDGE_SIZE);
-  const base = kind === 'gutter' ? colour.surface : scheme === 'dark' ? colour.surface : 'rgba(31, 14, 20, 1)';
-  const strength = kind === 'gutter' ? 1 : scheme === 'dark' ? 0.92 : 0.3;
+  const base = kind === 'gutter' || kind === 'mask' ? colour.surface : scheme === 'dark' ? colour.surface : 'rgba(31, 14, 20, 1)';
+  const strength = kind === 'gutter' || kind === 'mask' ? 1 : scheme === 'dark' ? 0.92 : 0.3;
   // Colour at the screen edge first, clear last.
   const edge = mix(base, strength);
   const clear = mix(base, 0);
@@ -56,10 +58,12 @@ export function EdgeFade({side, active, x, y, w, h, size, kind = 'shade', tint}:
   // Light: the art wash under the frost is pinker than the flat frost colour, so a full-strength cover shows as a box; soften it.
   const tintPeak = scheme === 'dark' ? 1 : 0.6;
   const stops =
-    kind === 'gutter' && tint
-      ? [mix(colour.surface, tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.35), 0.62 * tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.7), 0.22 * tintPeak), mix(blend(frost, colour.surface, frostAlpha), 0)]
-      : [edge, mix(base, strength * 0.35), clear];
-  const locations = stops.length === 4 ? [0, 0.35, 0.7, 1] : [0, 0.45, 1];
+    kind === 'mask'
+      ? [edge, edge, clear]
+      : kind === 'gutter' && tint
+        ? [mix(colour.surface, tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.35), 0.62 * tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.7), 0.22 * tintPeak), mix(blend(frost, colour.surface, frostAlpha), 0)]
+        : [edge, mix(base, strength * 0.35), clear];
+  const locations = kind === 'mask' ? [0, Math.min(0.95, solid / thickness), 1] : stops.length === 4 ? [0, 0.35, 0.7, 1] : [0, 0.45, 1];
   const forward = side === 'left' || side === 'top';
   const start = horizontal ? {x: forward ? 0 : 1, y: 0} : {x: 0, y: forward ? 0 : 1};
   const end = horizontal ? {x: forward ? 1 : 0, y: 0} : {x: 0, y: forward ? 1 : 0};

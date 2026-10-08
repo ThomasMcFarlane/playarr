@@ -62,7 +62,8 @@ const appOrigin = `http://127.0.0.1:${port}`;
 const layout = spec.layouts.tv;
 
 // Elements that change between runs on a live server: the clock, and the version label.
-const LIVE_MASKS = [".app-clock-time", ".app-clock-date", ".app-user-version"];
+// Live or device-local regions: the clock, the version, the signed-in avatar (chosen on the device) and the On deck thumbnail (a frame the server extracts, which the web shows late).
+const LIVE_MASKS = [".app-clock-time", ".app-clock-date", ".app-user-version", ".app-user-avatar", '[data-navigation-focus-key^="home:primary:"] .tv-home-card-art'];
 
 const SCREENS = [
   { id: "home", path: "/" },
@@ -158,6 +159,23 @@ async function capture(theme, screen) {
       await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
     }
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 20000 }).catch(() => {});
+    // Lazy artwork tiles on screen show their title until the image arrives: wait for every visible tile to hold a loaded image.
+    await page
+      .waitForFunction(
+        () =>
+          [...document.querySelectorAll('[class*="card-art"], [class*="poster"], [class*="tile-art"]')]
+            .filter((el) => {
+              const r = el.getBoundingClientRect();
+              return r.width > 40 && r.height > 40 && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight;
+            })
+            .every((el) => {
+              const img = el.tagName === "IMG" ? el : el.querySelector("img");
+              return !el.textContent?.trim() || (img && img.complete && img.naturalWidth > 0);
+            }),
+        null,
+        { timeout: 20000 }
+      )
+      .catch(() => {});
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.waitForTimeout(1200);
     await page.screenshot({ path: join(out, "tv", theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });

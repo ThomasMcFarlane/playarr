@@ -40,7 +40,7 @@ export function BackButton({onPress, x = 153.6, y = 56.2, size = 50, accessibili
         transform: [{scale: focused ? 1.056 : 1}],
       }}
     >
-      <T size={17.28} weight={720} color={focused ? colour.bg : colour.inkSoft} lh={25.9}>
+      <T size={17.28} weight={720} color={focused ? colour.bg : colour.inkSoft} lh={25.9} dy={3}>
         {'←'}
       </T>
       {focused ? (
@@ -71,7 +71,7 @@ export function PageHeader({title, detail, detailUpper = true, onBack, titleWidt
       <BackButton onPress={onBack} />
       <View style={{position: 'absolute', left: u(226.6), top: u(56.2), height: u(50.4), flexDirection: 'row', alignItems: 'center'}} pointerEvents="none">
         <View style={{width: titleWidth === undefined ? undefined : u(titleWidth)}}>
-          <T size={33.6} weight={580} ls={-1.512} lh={50.4} color={colour.ink} lines={1}>
+          <T size={33.6} weight={580} ls={-1.512} lh={50.4} dy={1} color={colour.ink} lines={1}>
             {title}
           </T>
         </View>
