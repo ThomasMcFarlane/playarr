@@ -38,7 +38,8 @@ pub struct RefreshTiming {
 impl Default for RefreshTiming {
     fn default() -> Self {
         Self {
-            chunk_timeout: Duration::from_secs(30),
+            // Nothing waits on a refresh, so a slow instance gets time to answer.
+            chunk_timeout: Duration::from_secs(120),
             interval: Duration::from_secs(10 * 60),
             backoff_base: Duration::from_secs(60),
             backoff_max: Duration::from_secs(30 * 60),
@@ -349,7 +350,7 @@ impl CalendarCache {
             snapshot
         };
         if let Some(error) = &failure {
-            tracing::warn!(instance = %instance.name, state = ?error.0, failures = health.consecutive_failures, "calendar refresh failed; serving the last good data");
+            tracing::warn!(instance = %instance.name, state = ?error.0, reason = %error.1, failures = health.consecutive_failures, "calendar refresh failed; serving the last good data");
         }
         if let Some(store) = &self.store {
             let stored = StoredHealth {
