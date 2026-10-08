@@ -1781,6 +1781,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Calendar API: each work's files are read once and concurrently when building per-entry actions, and the time spent resolving titles and files is logged.
 - Calendar API: building per-entry actions reads the viewer's household gate, request backend and watch progress once per request instead of once per entry.
 - Web: Calendar posters load directly from the provider at tile width again; routing them through the artwork proxy finished slower on a high-latency link.
 - Web: Calendar posters ask the image provider for a tile-sized width instead of the 1 to 2 MB original.

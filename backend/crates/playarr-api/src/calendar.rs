@@ -343,6 +343,7 @@ async fn attach_actions(
         }
         keys.push(key);
     }
+    let phase = std::time::Instant::now();
     let memo = crate::discovery::ResolveMemo::default();
     let memo = &memo;
     let resolved: HashMap<String, ResolvedTitle> = futures::stream::iter(distinct)
@@ -359,7 +360,14 @@ async fn attach_actions(
         .filter_map(|r| async move { r })
         .collect()
         .await;
-    let mut files: HashMap<Uuid, WorkFiles> = HashMap::new();
+    let resolve_ms = phase.elapsed().as_millis();
+    // Each distinct work's files are read once, concurrently.
+    let work_ids: HashSet<Uuid> = candidates.iter().filter_map(|c| c.entry.work_id).collect();
+    let files: HashMap<Uuid, WorkFiles> = futures::stream::iter(work_ids)
+        .map(|work_id| async move { (work_id, work_files(state, viewer, work_id).await) })
+        .buffer_unordered(8)
+        .collect()
+        .await;
     for (candidate, key) in candidates.iter_mut().zip(keys) {
         let Some(key) = key else { continue };
         candidate.entry.snapshot = entry_snapshot(candidate);
@@ -367,16 +375,20 @@ async fn attach_actions(
             continue;
         };
         let own_file = match candidate.entry.work_id {
-            Some(work_id) => {
-                if let std::collections::hash_map::Entry::Vacant(slot) = files.entry(work_id) {
-                    slot.insert(work_files(state, viewer, work_id).await);
-                }
-                files[&work_id].file_for(&candidate.entry)
-            }
+            Some(work_id) => files
+                .get(&work_id)
+                .and_then(|f| f.file_for(&candidate.entry)),
             None => None,
         };
         candidate.entry.actions = calendar_actions(title, own_file);
     }
+    tracing::info!(
+        distinct_titles = resolved.len(),
+        works = files.len(),
+        resolve_ms,
+        total_ms = phase.elapsed().as_millis(),
+        "calendar actions built"
+    );
 }
 
 /// Resolves the requested window, applying defaults and the span cap.
