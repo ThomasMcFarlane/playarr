@@ -96,13 +96,7 @@ export function SettingsProfileLockPage() {
   }
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.profileLock.kicker")}
-      title={t("settings.profileLock.title")}
-      description={t("settings.profileLock.description", {
-        name: currentUserName ?? t("settings.profileLock.thisProfile"),
-      })}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <form className="profile-pin-settings" onSubmit={(event) => void handleProfilePinSave(event)}>
           <label className="form-label" htmlFor="profile-lock-pin">

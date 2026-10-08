@@ -16,11 +16,7 @@ export function SettingsAppearancePage() {
   const { showToast } = useToast();
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.appearance.kicker")}
-      title={t("settings.appearance.title")}
-      description={t("settings.appearance.description")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <div className="appearance-setting">
           <div className="appearance-setting-heading">

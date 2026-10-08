@@ -275,6 +275,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: Settings renders through the shared page layout: the header shows the section name over its description, phones show the section title, and the panels get the shared scroll-edge fade and the shared loading, empty and error states.
 - Android (phone and TV): every page now renders through the one shared page layout in `core-designsystem`, with a registry id, typed header actions, shared loading, empty and error states that keep the header and Back, the calendar's period navigation as a page action, and on television the shell action column at the right edge. Card focus (lift and soft shadow) values live in the design system.
 - Roku: in the light theme the hero and Library key art use the server's light stage bake (greyscale at the web's contrast, brightness and opacity) instead of the raw colour image.
 - Web: the Release Calendar and Folders render through the shared page layout; the calendar's previous, Today and next controls are the shared navigation group (hidden at phone width, where the page shows its own sub-row), and Folders gains the shared scroll-edge fade.

@@ -822,6 +822,7 @@ export const th: Translations = {
   "settings.profileLock.lockOff": "การล็อกด้วย PIN ปิดอยู่",
   "settings.profileLock.removePin": "ลบ PIN",
 
+  "settings.requestLatency.errorTitle": "ไม่สามารถโหลดเวลาแฝงของคำขอได้",
   "settings.requestLatency.kicker": "ปรับให้เป็นสไตล์ของคุณ",
   "settings.requestLatency.title": "ความหน่วงของคำขอ",
   "settings.requestLatency.description": "ความหน่วงของคำขอแยกตามเส้นทาง เรียงจากช้าที่สุดไปเร็วที่สุด",

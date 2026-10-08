@@ -45,7 +45,7 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
   { file: "Playlists.tsx", mode: "layout", pageId: "playlists", routes: ["playlists"], urls: ["/playlists"] },
   { file: "Requests.tsx", mode: "layout", pageId: "requests", routes: ["requests"], urls: ["/requests"] },
   { file: "Search.tsx", mode: "layout", pageId: "search", routes: ["search"], urls: ["/search"] },
-  { file: "settings/Index.tsx", mode: "unmigrated", pageId: "settings", routes: ["settings"], urls: ["/settings"], step: "W5" },
+  { file: "settings/Index.tsx", mode: "layout", pageId: "settings", routes: ["settings"], urls: ["/settings"] },
   { file: "Watchlist.tsx", mode: "layout", pageId: "watchlist", routes: ["watchlist"], urls: ["/watchlist"] },
   {
     file: "WorkDetail.tsx",
@@ -100,4 +100,4 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
 ];
 
 /** The ratchet: a literal, lowered by the PR that migrates a page; the test fails when more pages are listed than this. */
-export const MAX_UNMIGRATED = 3;
+export const MAX_UNMIGRATED = 2;

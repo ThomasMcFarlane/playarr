@@ -819,6 +819,7 @@ export const ja: Translations = {
   "settings.profileLock.lockOff": "PINロックはオフです。",
   "settings.profileLock.removePin": "PINを削除",
 
+  "settings.requestLatency.errorTitle": "リクエストのレイテンシを読み込めませんでした",
   "settings.requestLatency.kicker": "自分好みにカスタマイズ",
   "settings.requestLatency.title": "リクエストのレイテンシ",
   "settings.requestLatency.description": "ルートごとのリクエストのレイテンシを遅い順に表示します。",

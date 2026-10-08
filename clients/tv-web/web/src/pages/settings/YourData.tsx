@@ -615,11 +615,7 @@ export function SettingsYourDataPage() {
   }
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.yourData.kicker")}
-      title={t("settings.yourData.title")}
-      description={t("settings.yourData.description")}
-    >
+    <SettingsSectionLayout>
       <YourDataView
         t={t}
         fileTransferAvailable={fileTransferAvailable}

@@ -62,11 +62,7 @@ export function SettingsHomePage() {
   }, [client, language]);
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.language.kicker")}
-      title={t("pages.home.customise.title")}
-      description={t("pages.home.customise.hint")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         {state.status === "loading" ? (
           <LoadingState size="inline" label={t("pages.home.customise.loading")} />

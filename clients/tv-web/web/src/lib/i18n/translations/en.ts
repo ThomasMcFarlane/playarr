@@ -880,6 +880,7 @@ export const en = {
   "settings.requestLatency.emptyDescription":
     "Latency samples will appear here once the server has handled some requests.",
   "settings.requestLatency.emptyTitle": "No samples yet",
+  "settings.requestLatency.errorTitle": "Request latency could not be loaded",
   "settings.requestLatency.forbiddenDescription":
     "Sign in with an admin account to see per-route request latency.",
   "settings.requestLatency.forbiddenTitle": "Admins only",
