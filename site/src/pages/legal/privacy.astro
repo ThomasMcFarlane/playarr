@@ -6,13 +6,13 @@ import { LINKS, SITE } from '../../consts'
 
 <BaseLayout
   title="Privacy"
-  description="What this website collects, what a self-hosted Playarr server does with your data, and what the hosted Playarr linking service briefly holds."
+  description="What this website collects, what a self-hosted Playarr server and the Playarr apps do with your data, and what the hosted Playarr linking service briefly holds."
 >
   <Section eyebrow="Legal" title="Privacy">
     <div class="prose">
       <p class="lede">
-        Three separate things are worth keeping apart: this website, the server you run yourself,
-        and the hosted Playarr service.
+        Four separate things are worth keeping apart: this website, the server you run yourself,
+        the Playarr apps, and the hosted Playarr service.
       </p>
 
       <h2>This website</h2>
@@ -39,6 +39,41 @@ import { LINKS, SITE } from '../../consts'
         the URLs those applications provide, caching it locally.
       </p>
 
+      <h2>The Playarr apps</h2>
+      <p>
+        This covers the Playarr apps for iPhone, iPad, Apple TV, Android, Android TV and the web.
+        The developer collects no data from them. The apps contain no advertising, no tracking, and
+        no third-party analytics or crash-reporting libraries, and they do not follow you across
+        other companies' apps or websites.
+      </p>
+      <p>What the apps keep on your own device:</p>
+      <ul>
+        <li>the addresses of the servers you add,</li>
+        <li>
+          your sign-in session, held in the operating system's secure storage (the Keychain on
+          Apple devices),
+        </li>
+        <li>your preferences, such as language, theme and playback settings, and</li>
+        <li>
+          anything you choose to download for offline viewing, with its playback progress, which
+          is removed when you delete the download or the app.
+        </li>
+      </ul>
+      <p>
+        Everything else the apps show, including your library, watch history and accounts, is
+        fetched from your own server and handled as described under "The server you run". Signing
+        out, or deleting the app, removes the session and settings from the device. Deleting your
+        account or history is a matter for whoever runs your server.
+      </p>
+      <p>
+        On Apple devices the app asks for local network access so that it can find your server and
+        any Chromecast devices on your home network. Chromecast support uses Google's Cast
+        software, which is governed by Google's own privacy policy. Apple may separately give the
+        developer aggregate, non-identifying crash and usage reports if you have chosen to share
+        them in your device settings. Beta testers on TestFlight are also subject to Apple's
+        TestFlight terms.
+      </p>
+
       <h2>The hosted Playarr service</h2>
       <p>
         <a href={LINKS.playarrApp} rel="noopener">playarr.app</a> hosts the Playarr web application
@@ -62,6 +97,12 @@ import { LINKS, SITE } from '../../consts'
         If any of the above changes, particularly if analytics are ever added to this site, or the
         hosted service ever holds more than it does today, this page will be updated to say so
         before the change ships.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about this policy, or requests about data held by the hosted service, can go to
+        <a href="mailto:support@playarr.app">support@playarr.app</a>.
       </p>
     </div>
   </Section>

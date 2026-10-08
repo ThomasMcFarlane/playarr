@@ -35,11 +35,9 @@ public enum InstalledAppVersion {
         Bundle.main.bundleIdentifier ?? "com.playarr.ios"
     }
 
-    /// `TODO`: replace with the app's real numeric App Store id once
-    /// published — `itms-apps://itunes.apple.com/app/id<this>` only
-    /// resolves to a real listing after that. Left as an obviously-fake
-    /// placeholder (rather than a real-looking number) so it fails loudly
-    /// — the App Store shows "can't find app" — instead of silently
-    /// deep-linking to an unrelated app if this ever ships un-replaced.
-    public static let appStoreID = "0000000000"
+    /// Numeric App Store id of the Playarr record (iOS and tvOS share it).
+    /// `itms-apps://itunes.apple.com/app/id<this>` resolves to the public
+    /// listing once the app is released; during TestFlight it is the
+    /// record's Apple ID. An App Store id is public, not a secret.
+    public static let appStoreID = "6818958016"
 }

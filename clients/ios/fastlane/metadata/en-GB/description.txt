@@ -1,0 +1,15 @@
+Playarr is a native iPhone, iPad and Apple TV client for a Playarr Server operated by you, your household or your organisation.
+
+Use Playarr to:
+• Connect to a Playarr Server using its HTTPS address, or sign in on Apple TV with a short code approved from a phone or computer.
+• Browse films, television series, music, books and playlists.
+• Search the catalogue and view titles, seasons, episodes and media details.
+• Stream supported video and audio with the native Apple player, including direct play and HLS.
+• Resume where you left off with server-synchronised watch progress.
+• Download permitted media for offline playback on iPhone and iPad.
+• Switch between profiles managed by your Playarr Server.
+• Send playback to a Chromecast on your home network.
+
+Playarr does not provide or sell media, streaming subscriptions, cloud storage, user accounts or a public catalogue. You need access to a reachable Playarr Server. The person or organisation operating that server supplies and controls access. Available libraries and features depend on the server configuration and the access granted by its operator.
+
+Playarr collects no data, shows no advertising and contains no tracking. Questions: support@playarr.app

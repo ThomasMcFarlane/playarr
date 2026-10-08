@@ -1,0 +1,9 @@
+Playarr is a client for a Playarr Server that the user runs. It has no content of its own, so App Review needs a reachable demonstration server.
+
+Sign-in: choose Add server, enter the demonstration server address given in the Demo Account fields of this submission, then sign in with the demo username and password in the same fields. On Apple TV, use the on-screen short code instead and approve it from a browser at the address shown on screen.
+
+The demonstration library contains only openly licensed films (Blender Foundation open movies). The app plays them with the native player. Downloads, profiles and Chromecast are optional and need no extra setup.
+
+Local network access is requested only to find a server and Chromecast devices on the user's own network.
+
+Contact: support@playarr.app

@@ -1,0 +1,31 @@
+# Manual check of the per-owner Ops App credentials used by release.yml and backend-release.yml to
+# notify the cluster release gate. Mints a token limited to read access on the cluster repository and
+# reads its name. It dispatches nothing and changes nothing.
+name: Ops App credentials check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Mint a read-only Ops App token
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.OPS_APP_ID }}
+          private-key: ${{ secrets.OPS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: .cluster
+          permission-contents: read
+      - name: Read the cluster repository
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY_OWNER}/.cluster" --jq '"readable: " + .name'

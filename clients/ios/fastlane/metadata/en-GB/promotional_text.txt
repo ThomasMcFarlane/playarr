@@ -1,0 +1,1 @@
+Browse, search and play the library on your own Playarr server, with watch progress that follows you between phone, tablet and Apple TV.

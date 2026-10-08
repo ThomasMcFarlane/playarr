@@ -1,0 +1,1 @@
+playarr,self-hosted,media server,library,movies,series,music,cast,tvOS,watch progress,household
