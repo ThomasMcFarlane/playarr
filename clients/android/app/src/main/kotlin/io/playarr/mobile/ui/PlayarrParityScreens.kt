@@ -1440,6 +1440,14 @@ internal class ProfilesViewModel @Inject constructor(
 
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
+        adoptServerIdentityIfMissing(
+            hasIdentity = tokenStore.currentUserId.first() != null,
+            hasAccessToken = !tokenStore.accessToken.first().isNullOrBlank(),
+            listProfiles = { api.listAvailableProfiles() },
+            saveIdentity = { id, name ->
+                tokenStore.saveIdentity(id, name, serverConfigStore.baseUrl.first().takeIf { it.isNotBlank() })
+            },
+        )
         val saved = tokenStore.savedProfiles.first()
         val currentServer = tokenStore.currentServerUrl.first()?.takeIf { it.isNotBlank() }
         val currentUserId = tokenStore.currentUserId.first()

@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android (TV and phone): the profile chip now opens the profile switcher with the account's profiles even when the session never learnt its user id at sign-in, instead of an empty "Who's watching?" that looked like a sign-out.
 - `GET /api/v1/media/{id}/thumbnail` answers 204 No Content instead of 500 for a file with no video frame or cover art (audio without embedded art); the web client treats it as an expected miss, keeps its fallback, and no longer retries or logs a console error.
 - Downloads, Watchlist and Requests now fill the page on a phone instead of keeping Home's 62% column, and the Downloads storage line starts below the page header.
 - Web: QR sign-in retries network blips and server errors silently (2 s doubling to 30 s, keeping the current code while it is valid) instead of showing an error with Try again; only denial or an unexpected failure shows it.
