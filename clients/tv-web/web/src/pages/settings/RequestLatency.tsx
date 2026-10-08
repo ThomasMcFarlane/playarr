@@ -77,7 +77,7 @@ export function RequestLatencyContent({ state, onRetry }: { state: HttpLatencySt
 
   return (
     <section className="card settings-card settings-card-wide">
-      <div className="http-latency-table-wrap">
+      <div className="http-latency-table-wrap" role="region" aria-label={t("settings.requestLatency.tableLabel")} tabIndex={0}>
         <table
           className="http-latency-table"
           aria-label={t("settings.requestLatency.tableLabel")}

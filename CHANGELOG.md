@@ -172,6 +172,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Storybook: one interactive story with Controls for every shared component, using a fixture API client; the Request latency table scrolls with the keyboard.
 - CI builds and signs the Android (TV and phone) APK from every push to `main` and uploads it as a workflow artefact named `playarr-android-main-<version>-main.<commits>`, with a versionCode above every release so it installs over one without uninstalling.
 - Series pages have an "Ask again" button that forgets the recorded Resume answers for that series.
 - Ended series show their year range ("Series · 2011–2019") on tiles, previews, search and the title page. The server stores `end_date` on each work (Sonarr `lastAired`, else `previousAiring`, only while Sonarr reports the series as ended), exposed in the Work API and OpenAPI.

@@ -105,3 +105,7 @@ body,
   background-color: var(--surface) !important;
   color: var(--ink) !important;
 }
+
+.sb-cards > li {
+  width: 12rem;
+}

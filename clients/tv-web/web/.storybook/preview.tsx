@@ -2,6 +2,7 @@ import type { Decorator, Preview } from "@storybook/react-vite";
 import { withThemeByDataAttribute } from "@storybook/addon-themes";
 import { MemoryRouter } from "react-router-dom";
 import { LanguageProvider } from "../src/lib/i18n/LanguageProvider";
+import { ThemeContext } from "../src/lib/theme";
 import "../src/styles/fonts.css";
 import "../src/styles/global.css";
 import "../src/styles/page-layout.css";
@@ -26,13 +27,20 @@ const withRemoteInput: Decorator = (Story) => {
   return <Story />;
 };
 
-const withAppProviders: Decorator = (Story) => (
-  <MemoryRouter>
-    <LanguageProvider>
-      <Story />
-    </LanguageProvider>
-  </MemoryRouter>
-);
+/** The toolbar owns the document theme; pages that call `useTheme()` read it from here instead of the real provider. */
+const withAppProviders: Decorator = (Story, context) => {
+  const resolvedTheme = context.globals.theme === "light" ? "light" : "dark";
+  const value = { preference: resolvedTheme, resolvedTheme, setPreference: () => undefined, toggleTheme: () => undefined } as const;
+  return (
+    <ThemeContext.Provider value={value}>
+      <MemoryRouter>
+        <LanguageProvider>
+          <Story />
+        </LanguageProvider>
+      </MemoryRouter>
+    </ThemeContext.Provider>
+  );
+};
 
 /**
  * "Compare" toolbar item: renders the same story twice, light above dark, each in its own frame so the

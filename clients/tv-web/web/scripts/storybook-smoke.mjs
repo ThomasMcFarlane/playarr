@@ -95,17 +95,18 @@ for (const layout of layoutNames) {
     for (const theme of THEMES) {
       pageErrors.length = 0;
       const label = `${story.id} [${theme}, ${layout}]`;
-      await page.goto(`${base}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story&globals=theme:${theme}`, { waitUntil: "load" });
+      const url = `${base}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story&globals=theme:${theme}`;
+      await page.goto(url, { waitUntil: "load" });
       try {
         await page.waitForFunction(
-          () => {
+          (expected) => {
             const root = document.querySelector("#storybook-root");
             return (
-              (root && root.childElementCount > 0 && document.documentElement.dataset.theme) ||
+              (root && root.childElementCount > 0 && document.documentElement.dataset.theme === expected) ||
               document.querySelector(".sb-show-errordisplay")
             );
           },
-          undefined,
+          theme,
           { timeout: 15000 },
         );
       } catch {
@@ -118,6 +119,15 @@ for (const layout of layoutNames) {
         const visible = err && getComputedStyle(err).display !== "none";
         return { error: visible ? (document.querySelector("#error-message")?.textContent ?? "error display") : "", theme: document.documentElement.dataset.theme };
       });
+      if (shown.error.includes("dynamically imported module")) {
+        // A chunk fetch can fail while the machine is busy; load once more before calling it a failure.
+        await page.goto(url, { waitUntil: "load" });
+        await page.waitForTimeout(1000);
+        shown.error = await page.evaluate(() => {
+          const err = document.querySelector(".sb-show-errordisplay");
+          return err && getComputedStyle(err).display !== "none" ? (document.querySelector("#error-message")?.textContent ?? "error display") : "";
+        });
+      }
       if (shown.error) {
         failures.push(`${label}: ${shown.error.trim().slice(0, 200)}`);
         continue;
