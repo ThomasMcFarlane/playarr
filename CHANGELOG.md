@@ -2526,6 +2526,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Added a keyboard e2e check that the shared side-panel drawer returns focus to its opener (Filters on Movies, Search and Calendar; Escape and remote Back; both themes).
 - Web: a per-frame keyboard e2e asserts that opening and closing the library Filters drawer does not move the grid, header or preview (Movies and Series, both themes, 1920x1080 and 1280x720).
 - Web: a Playwright check (`scripts/edge-fade-e2e.mjs`, in the web layout parity job) asserts the edge fade has no hard edge, is present at first paint, adds no box over content and leaves the focused card's shadow unclipped, in both themes.
 - Web: `focusStyle.test.ts` pins the ring token and the card-focus values and fails on a focusable card without `media-card`, a ringed or filled card, or a control with a fill, glow or scale on focus; `scripts/focus-style-e2e.mjs` (`pnpm run smoke:focus`) checks real keyboard focus in both themes at 1920x1080 and 1280x720.
