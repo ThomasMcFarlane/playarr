@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": ".", "types": ["vite/client", "chromecast-caf-sender"] },
+  "include": ["src", "stories", ".storybook"]
+}

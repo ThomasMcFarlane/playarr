@@ -26,7 +26,11 @@
     "smoke:calendar-nav": "node scripts/calendar-nav.mjs",
     "smoke:tablet-layout": "node scripts/tablet-layout.mjs",
     "smoke:tv-viewport": "node scripts/tv-viewport.mjs",
-    "smoke:drawer-close": "node scripts/drawer-close.mjs"
+    "smoke:drawer-close": "node scripts/drawer-close.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build:storybook": "storybook build -o dist-storybook --disable-telemetry",
+    "typecheck:storybook": "tsc -p tsconfig.storybook.json --noEmit",
+    "smoke:storybook": "node scripts/storybook-smoke.mjs"
   },
   "dependencies": {
     "@playarr-tv/api-client": "workspace:*",
@@ -45,14 +49,21 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "10.6.1",
+    "@storybook/addon-docs": "10.6.1",
+    "@storybook/addon-themes": "10.6.1",
+    "@storybook/react-vite": "10.6.1",
     "@types/chrome": "catalog:",
     "@types/chromecast-caf-sender": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "axe-core": "4.11.0",
     "esbuild": "0.21.5",
     "html-to-image": "1.11.13",
     "playwright-core": "^1.63.0",
+    "storybook": "10.6.1",
+    "storybook-addon-pseudo-states": "10.6.1",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "^2.1.8"

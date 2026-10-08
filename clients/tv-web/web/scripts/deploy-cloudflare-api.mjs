@@ -165,6 +165,8 @@ const metadata = {
         "/clients/*",
         "/downloads/*",
         "/legal/*",
+        "/storybook",
+        "/storybook/*",
       ],
     },
   },

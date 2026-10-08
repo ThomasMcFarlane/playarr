@@ -180,6 +180,33 @@ function renderClientMeta(html, clientId, copy, url) {
   return renderPageMeta(html, title, copy.description, `/clients/${clientId}`, url);
 }
 
+/**
+ * The public Storybook (static build under /storybook/, see .github/workflows/web-ci.yml). HTML and index.json are
+ * never cached (a deploy must show at once); hashed files under /storybook/assets/ are immutable. A request that would
+ * fall through to the SPA fallback (a missing file) is a real 404, never the app's index.html.
+ */
+async function storybookResponse(url, env, request) {
+  if (url.pathname === "/storybook") {
+    return new Response(null, { status: 301, headers: { Location: "/storybook/" } });
+  }
+  // Cloudflare redirects an explicit "*.html" request (307) to the extensionless form; serve the form directly.
+  const target = new URL(url);
+  if (target.pathname.endsWith("/index.html")) target.pathname = target.pathname.slice(0, -"index.html".length);
+  else if (target.pathname.endsWith(".html")) target.pathname = target.pathname.slice(0, -".html".length);
+  const response = await env.ASSETS.fetch(new Request(target, request));
+  if (response.status >= 300) return response;
+  const contentType = response.headers.get("Content-Type") ?? "";
+  const isHtml = contentType.startsWith("text/html");
+  const hasExtension = /\.[^./]+$/.test(url.pathname);
+  if (isHtml && hasExtension && !url.pathname.endsWith(".html")) {
+    return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
+  const headers = new Headers(response.headers);
+  if (isHtml || url.pathname.endsWith("/index.json")) headers.set("Cache-Control", "no-cache");
+  else if (url.pathname.startsWith("/storybook/assets/")) headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 /** The bare /clients index redirects to this client's own page client-side (see ClientsPage in Clients.tsx) -- a crawler never runs that redirect, so this is what it should see instead. */
 const CLIENTS_INDEX_REDIRECT_TARGET = "vidaa";
 
@@ -678,6 +705,9 @@ export default {
         response = json({ error: "not_found" }, { status: 404 });
       }
       return packagedLinkEndpoint ? withLinkCors(response) : response;
+    }
+    if (url.pathname === "/storybook" || url.pathname.startsWith("/storybook/")) {
+      return storybookResponse(url, env, request);
     }
     if (url.pathname === "/clients") {
       return clientPageResponse(CLIENTS_INDEX_REDIRECT_TARGET, url, env, request);

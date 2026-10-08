@@ -846,3 +846,48 @@ describe("public legal page meta tags", () => {
     expect(html).toContain('content="https://playarr.app/legal/account-deletion"');
   });
 });
+
+describe("public Storybook", () => {
+  const html = () =>
+    new Response("<html>storybook</html>", { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
+
+  it("redirects /storybook to the trailing-slash form", async () => {
+    const response = await worker.fetch(new Request("https://playarr.app/storybook"), environment());
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/storybook/");
+  });
+
+  it("serves index.html and iframe.html with no-cache, without the extension redirect", async () => {
+    const env = environment();
+    env.ASSETS.fetch.mockImplementation(async () => html());
+    for (const [path, asset] of [
+      ["/storybook/", "/storybook/"],
+      ["/storybook/index.html", "/storybook/"],
+      ["/storybook/iframe.html", "/storybook/iframe"],
+    ]) {
+      const response = await worker.fetch(new Request(`https://playarr.app${path}?id=x`), env);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Cache-Control")).toBe("no-cache");
+      const requested = env.ASSETS.fetch.mock.calls.at(-1)[0];
+      expect(new URL(requested.url).pathname).toBe(asset);
+    }
+  });
+
+  it("marks hashed assets immutable and index.json no-cache", async () => {
+    const env = environment();
+    env.ASSETS.fetch.mockImplementation(
+      async () => new Response("x", { status: 200, headers: { "Content-Type": "text/javascript" } })
+    );
+    const asset = await worker.fetch(new Request("https://playarr.app/storybook/assets/iframe-abc.js"), env);
+    expect(asset.headers.get("Cache-Control")).toContain("immutable");
+    const index = await worker.fetch(new Request("https://playarr.app/storybook/index.json"), env);
+    expect(index.headers.get("Cache-Control")).toBe("no-cache");
+  });
+
+  it("turns the SPA fallback into a 404 for a missing file", async () => {
+    const env = environment();
+    env.ASSETS.fetch.mockImplementation(async () => html());
+    const response = await worker.fetch(new Request("https://playarr.app/storybook/assets/missing.js"), env);
+    expect(response.status).toBe(404);
+  });
+});

@@ -15,7 +15,9 @@
       "/clients",
       "/clients/*",
       "/downloads/*",
-      "/legal/*"
+      "/legal/*",
+      "/storybook",
+      "/storybook/*"
     ]
   },
   "durable_objects": {

@@ -90,6 +90,13 @@ jobs:
         if: steps.guard_early.outputs.deploy == 'true'
         run: pnpm --filter @playarr-tv/web... run build
 
+      - name: Build Storybook into the bundle (served at /storybook)
+        if: steps.guard_early.outputs.deploy == 'true'
+        run: |
+          pnpm --filter @playarr-tv/web run build:storybook
+          rm -rf web/dist/storybook
+          cp -r web/dist-storybook web/dist/storybook
+
       - name: Test web client
         if: steps.guard_early.outputs.deploy == 'true'
         run: pnpm --filter @playarr-tv/web run test

@@ -625,6 +625,55 @@ jobs:
         run: docker buildx build -f infra/docker/backend.Dockerfile --target web --output type=cacheonly .
 
   # ---------------------------------------------------------------------
+  # Storybook (clients/tv-web/web/.storybook): the public component catalogue deployed at /storybook. Builds it and
+  # runs the render and accessibility smoke over every story in both themes (scripts/storybook-smoke.mjs).
+  # ---------------------------------------------------------------------
+  web-storybook:
+    name: web storybook
+    needs: changes
+    if: needs.changes.outputs.tv-web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: clients/tv-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clients/tv-web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web workspace dependencies
+        working-directory: clients/tv-web
+        run: pnpm --filter './packages/**' run build
+
+      - name: Typecheck the stories
+        working-directory: clients/tv-web/web
+        run: pnpm run typecheck:storybook
+
+      - name: Build Storybook
+        working-directory: clients/tv-web/web
+        run: pnpm run build:storybook
+
+      - name: Install the capture tools and Chromium
+        working-directory: scripts/parity
+        run: npm ci --no-audit --no-fund && npx playwright-core install --with-deps chromium
+
+      - name: Render and accessibility smoke over every story
+        working-directory: clients/tv-web/web
+        run: node scripts/storybook-smoke.mjs
+
+  # ---------------------------------------------------------------------
   # Terminal aggregator -- see the file header comment for why this is the
   # only job that should be a required status check.
   # ---------------------------------------------------------------------
@@ -640,6 +689,7 @@ jobs:
       - server-image-web
       - firetv-check
       - web-layout-parity
+      - web-storybook
       - openapi-contract-check
     if: always()
     runs-on: ubuntu-latest
@@ -652,7 +702,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in
