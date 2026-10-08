@@ -27,7 +27,7 @@ class PlayarrPageTokensTest {
         val phone = PlayarrPageTokens.of(PlayarrFormFactor.Phone)
         assertEquals(2.dp, phone.headerTop)
         assertEquals(16.dp, phone.start)
-        assertEquals(72.dp, phone.headerEnd)
+        assertEquals(66.dp, phone.headerEnd)
         assertEquals(16.dp, phone.bodyEnd)
         assertEquals(38.dp, phone.control)
         assertEquals(44.dp, phone.pillWidth)
