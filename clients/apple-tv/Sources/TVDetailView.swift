@@ -521,8 +521,6 @@ struct TVWorkDetailView: View {
                     ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
                         let selected = episode.episode.id == activeID
                         episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)
-                            .scaleEffect(selected ? 1.025 : 1)
-                            .offset(y: selected ? -7.05 : 0)
                             .placed(x: 881.6 + CGFloat(index) * 293, y: top + 80.7, w: 268, h: 190, alignment: .topLeading)
                     }
                 }
