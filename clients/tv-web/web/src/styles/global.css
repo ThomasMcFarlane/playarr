@@ -10899,6 +10899,18 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   padding: clamp(24px, calc(3 * var(--vw)), 58px);
 }
 
+/* On a phone the Downloads panel and the state panels are the whole page (they keep Home's 62% column on larger
+   layouts), and Downloads' storage line starts below the page header. */
+@media (max-width: 760px), (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
+  .app-main [data-page-id] .tv-library-grid-panel,
+  .app-main .tv-downloads-panel {
+    width: 100%;
+  }
+  .app-main .tv-downloads-panel {
+    padding: var(--page-body-top) var(--mobile-page-gutter) calc(var(--mobile-nav-height) + 12px);
+  }
+}
+
 .tv-downloads-offline-badge {
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
