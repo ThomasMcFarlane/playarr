@@ -416,6 +416,21 @@ class PlayerChromeTests(unittest.TestCase):
         self.assertIn('"/api/v1/household/approvals"', pages)
         self.assertIn("Ask a guardian for more time", pages)
 
+    def test_household_block_states_open_and_leave_the_blocked_page(self) -> None:
+        """The blocked screen cannot be captured on the real device account (it is not a restricted profile, and users are never
+        created on the regional servers), so the state mapping is pinned here."""
+        pages = (ROOT / "components" / "Pages.brs").read_text(encoding="utf-8")
+        accept = re.search(r"sub acceptHouseholdStatus.*?\nend sub", pages, re.S).group(0)
+        # Both blocking states map to a block with the time it lifts.
+        self.assertIn('data.state = "outside_schedule"', accept)
+        self.assertIn('kind: "schedule", until: data.next_start_at', accept)
+        self.assertIn('data.state = "budget_exhausted"', accept)
+        self.assertIn('kind: "budget", until: data.resets_at', accept)
+        # A blocked status opens the page once; an allowed one leaves it and returns Home.
+        self.assertIn('openPage("household")', accept)
+        self.assertIn("enterHome(m.currentProfileName)", accept)
+        self.assertIn("function householdUntilText", pages)
+
 
 class SeriesFocusTests(unittest.TestCase):
     def test_series_opens_on_the_resume_plan_episode(self) -> None:

@@ -42,7 +42,7 @@ captures (they show real library artwork).
 | profile-switcher | 6.09% | 7.29% | open (the light web capture was blank) |
 | player-controls | 0.72% | not measured | pass (chrome regions only: top-right controls and the bottom bar; the video plane screenshots black) |
 | player-quality-menu | 0.82% | not measured | pass (chrome regions only) |
-| household-blocked | n/a | n/a | needs a restricted profile; the real device account is not one |
+| household-blocked | n/a | n/a | justified exception: the screen only shows for a restricted profile outside its schedule or over its budget. The real device account is not one, and users are never created on the regional production servers, so it cannot be captured on the device. The state mapping and the screen's strings are pinned by `test_household_block_states_open_and_leave_the_blocked_page`; its geometry reuses the shared page shell measured on the other page screens. |
 | home-scrolled | 9.13% | 31.83% | open (rail viewport shift differs from web's track scroll) |
 | movies-scrolled | 4.28% | 49.46% | open (grid shifts like web once the fifth row is reached) |
 | settings-player-scrolled | 2.83% | 3.40% | open |
