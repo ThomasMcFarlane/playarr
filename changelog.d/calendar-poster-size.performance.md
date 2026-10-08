@@ -1,0 +1,1 @@
+- Web: Calendar posters ask the image provider for a tile-sized width instead of the 1 to 2 MB original.

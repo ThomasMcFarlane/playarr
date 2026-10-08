@@ -43,6 +43,7 @@ import {
   localDayOf,
   parseDay,
   shiftAnchor,
+  sizedPosterUrl,
   visibleRange,
   weekStartsOn,
   workRouteForEntry,
@@ -258,7 +259,7 @@ function Poster({ entry }: { entry: CalendarEntry }) {
   return entry.poster_url ? (
     <img
       className="calendar-poster"
-      src={entry.poster_url}
+      src={sizedPosterUrl(entry.poster_url)}
       alt=""
       loading="lazy"
       decoding="async"
