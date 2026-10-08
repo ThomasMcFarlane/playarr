@@ -1766,6 +1766,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Web: Calendar posters ask the image provider for a tile-sized width instead of the 1 to 2 MB original.
+- Web: episode frames and Home On Deck frames load only for rails within about a row of the page's viewport (previously every season's rail below the fold fetched its first frames on page load), and Calendar posters come through the artwork proxy at tile width, falling back to the provider's tile-sized poster.
 - Web: the page header measures its layout when its content changes or its box resizes, instead of on every render of the page (and no longer rebuilds its resize observer each time).
 - Web: focusing or hovering a library entry in the nav now also fetches the artwork of the first row of that page, so the page opens with its posters already decoded (about 660 ms instead of 1.2 s to first content on a slow link).
 - Web: a per-account, per-profile query cache with stale-while-revalidate and request de-duplication (Back, revisits and Home paint from the stored copy and revalidate in the background; any write or live event drops what it makes stale), prefetching of a card's detail and hero art after a 200 ms focus dwell and of a page when its nav item is focused or hovered, card-sized artwork requests with version tokens, a memory cap on decoded artwork, and static asset caching headers (`/assets/*` immutable, entry points revalidated).

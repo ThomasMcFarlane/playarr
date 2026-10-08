@@ -450,3 +450,21 @@ export function groupSeriesEpisodes(entries: readonly CalendarEntry[]): Calendar
     return { kind: "series", key, title: sorted[0]!.title, entries: sorted, codes: formatEpisodeCodes(sorted) };
   });
 }
+
+/**
+ * A calendar poster is a provider URL the browser loads directly, and the server sends the
+ * full-size original (1 to 2 MB for a 100 px tile). The image provider serves fixed smaller widths
+ * under the same path, so ask for one that fits the tile. Any other URL is returned unchanged.
+ */
+export function sizedPosterUrl(url: string, width = 185): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== "image.tmdb.org") return url;
+    const match = /^\/t\/p\/original\/(.+)$/.exec(parsed.pathname);
+    if (!match) return url;
+    parsed.pathname = `/t/p/w${width}/${match[1]}`;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}

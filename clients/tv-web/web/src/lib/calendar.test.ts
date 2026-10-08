@@ -23,6 +23,7 @@ import {
   humanDuration,
   localDayOf,
   shiftAnchor,
+  sizedPosterUrl,
   startOfWeek,
   visibleRange,
   workRouteForEntry,
@@ -253,5 +254,18 @@ describe("entry availability (left border colour)", () => {
     const b = entry({ id: "b", has_file: false });
     expect(itemAvailability({ kind: "series", key: "k", title: "S", entries: [a, a], codes: "S01E01" } as never)).toBe("available");
     expect(itemAvailability({ kind: "series", key: "k", title: "S", entries: [a, b], codes: "S01E01" } as never)).toBe("unavailable");
+  });
+});
+
+describe("sizedPosterUrl", () => {
+  it("asks the image provider for a tile-sized width instead of the original", () => {
+    expect(sizedPosterUrl("https://image.tmdb.org/t/p/original/abc.jpg")).toBe("https://image.tmdb.org/t/p/w185/abc.jpg");
+    expect(sizedPosterUrl("https://image.tmdb.org/t/p/original/abc.jpg", 342)).toBe("https://image.tmdb.org/t/p/w342/abc.jpg");
+  });
+
+  it("leaves every other URL alone", () => {
+    expect(sizedPosterUrl("https://image.tmdb.org/t/p/w500/abc.jpg")).toBe("https://image.tmdb.org/t/p/w500/abc.jpg");
+    expect(sizedPosterUrl("https://example.com/t/p/original/abc.jpg")).toBe("https://example.com/t/p/original/abc.jpg");
+    expect(sizedPosterUrl("not a url")).toBe("not a url");
   });
 });

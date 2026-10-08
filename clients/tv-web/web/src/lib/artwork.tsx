@@ -202,7 +202,8 @@ export function useCachedArtwork(
   work: Pick<Work, "id" | "images">,
   kinds: readonly ImageKind[],
   enabled = true,
-  width?: number
+  width?: number,
+  versioned = true
 ): { url: string | null; available: boolean; loading: boolean } {
   const client = useApiClient();
   const kindsKey = kinds.join(":");
@@ -215,8 +216,8 @@ export function useCachedArtwork(
   const artWidth = kind ? (width ?? defaultArtworkWidth(kind)) : 0;
   const version = useMemo(() => {
     const image = kind ? work.images.find((candidate) => candidate.kind === kind) : undefined;
-    return image ? artworkVersion(image.url) : undefined;
-  }, [kind, work.images]);
+    return image && versioned ? artworkVersion(image.url) : undefined;
+  }, [kind, work.images, versioned]);
   const [url, setUrl] = useState<string | null>(() => {
     if (!kind) return null;
     return artworkCache(client).get(artworkKey(work.id, kind, artWidth))?.url ?? null;

@@ -97,6 +97,52 @@ function loadMediaThumbnail(
   return record;
 }
 
+// One shared observer answers "is this rail within a row of the page's viewport?". A rail that
+// scrolls inside the page is its own intersection root for its items, and an item counts as
+// intersecting that root whether or not the rail itself is on screen, so without this gate every
+// season's rail below the fold fetched its first frames on page load.
+const nearCallbacks = new WeakMap<Element, Set<() => void>>();
+const nearElements = new WeakSet<Element>();
+let nearObserver: IntersectionObserver | null = null;
+
+function observeNearViewport(element: Element, onNear: () => void): () => void {
+  if (!nearObserver) {
+    nearObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          // Once near, a rail stays near: every waiting item is released and the rail is dropped.
+          const callbacks = nearCallbacks.get(entry.target);
+          nearObserver?.unobserve(entry.target);
+          nearCallbacks.delete(entry.target);
+          nearElements.add(entry.target);
+          callbacks?.forEach((callback) => callback());
+        }
+      },
+      { rootMargin: "400px 0px" }
+    );
+  }
+  if (nearElements.has(element)) {
+    onNear();
+    return () => undefined;
+  }
+  let callbacks = nearCallbacks.get(element);
+  if (!callbacks) {
+    callbacks = new Set();
+    nearCallbacks.set(element, callbacks);
+    nearObserver.observe(element);
+  }
+  callbacks.add(onNear);
+  return () => {
+    const current = nearCallbacks.get(element);
+    current?.delete(onNear);
+    if (current && current.size === 0) {
+      nearCallbacks.delete(element);
+      nearObserver?.unobserve(element);
+    }
+  };
+}
+
 /**
  * Authenticated media-frame artwork shared by episode rails and On Deck.
  *
@@ -139,16 +185,34 @@ export function MediaThumbnailArtwork({
     const root = intersectionRootSelector
       ? container.closest<HTMLElement>(intersectionRootSelector)
       : null;
+    // Load when the item is near its rail's visible part AND the rail is near the page's viewport.
+    let itemNear = false;
+    let railNear = root === null;
+    const maybeLoad = () => {
+      if (!itemNear || !railNear) return;
+      setShouldLoad(true);
+      observer.disconnect();
+      stopRailWatch();
+    };
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
-        setShouldLoad(true);
-        observer.disconnect();
+        itemNear = true;
+        maybeLoad();
       },
       { root, rootMargin }
     );
+    const stopRailWatch = root
+      ? observeNearViewport(root, () => {
+          railNear = true;
+          maybeLoad();
+        })
+      : () => undefined;
     observer.observe(container);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      stopRailWatch();
+    };
   }, [client, fallback, intersectionRootSelector, mediaFileId, positionMs, rootMargin]);
 
   useEffect(() => {
