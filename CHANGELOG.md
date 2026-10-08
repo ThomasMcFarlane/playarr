@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Storybook: the theme toolbar now drives the whole preview (canvas, docs page and its canvas toolbar use the app `--bg` and surface tokens), and the Storybook manager defaults to dark.
 - Web: every page opens with focus in the page (movie detail on Play, empty pages on Back), the start focus is no longer reset once a minute, Downloads, Watchlist, Calendar and Folders restore focus on return, and the profile-switcher selects and calendar period picker work with the remote.
 - Web: closing a side drawer (Filters and the others) now eases out smoothly. The reversed expo curve sat still for half the time and then dashed away, which read as a jump; the close now starts moving at once over the same path and duration as the opening, and a per-frame e2e checks the drawn close.
 - Web: the library's left preview (title, year line, description) now follows the remote within a frame instead of after about 600 ms, never blanks, and the backdrop art cross-fades once the next image has loaded.
