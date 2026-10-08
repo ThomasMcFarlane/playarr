@@ -26,7 +26,7 @@
 #      any block, or main moving after the fold, force-pushes the original head back (with lease), so
 #      a PR branch never keeps folded TASKS/CHANGELOG content,
 #   4. on any failure removes `ready`, adds `blocked`, writes the reason to the
-#      run's job summary and logs (never a PR comment: the train posts none) and
+#      run's job summary and logs (and in full as a PR comment) and
 #      moves on to the next PR.
 #
 # Environment:
@@ -109,12 +109,16 @@ block() { # <pr> <reason>
   if [ "$DRY" != true ] && [ -n "$TRAIN_BR" ]; then
     unfold_branch "$pr" "$TRAIN_BR" || log "PR #$pr: could not restore $TRAIN_BR to its pre-fold head"
   fi
-  # The train never comments on a PR. The reason goes to the job summary and the log; the PR's agent
-  # watches for the `blocked` label, reads the run summary, fixes the cause and re-adds `ready`.
+  # The reason goes to the job summary, the log and, in full, a PR comment (run logs expire, so the
+  # PR's agent must not depend on them); it watches for the `blocked` label, fixes the cause and
+  # re-adds `ready`.
   log "PR #$pr blocked: $reason"
   echo "::warning title=Merge train blocked PR #$pr::$reason"
   if [ "$DRY" = true ]; then return; fi
   gh pr edit "$pr" --repo "$REPO" --remove-label ready --add-label blocked >/dev/null 2>&1
+  local run_url=""
+  [ -n "${GITHUB_RUN_ID:-}" ] && run_url="${GITHUB_SERVER_URL:-https://github.com}/$REPO/actions/runs/$GITHUB_RUN_ID"
+  gh pr comment "$pr" --repo "$REPO" --body "$(printf 'Merge train: removed `ready`, added `blocked`.\n\n%s\n\nFix the cause, then re-add `ready`.%s' "${reason:0:6000}" "${run_url:+ Run: $run_url}")" >/dev/null 2>&1 || true
 }
 
 ensure_labels() {

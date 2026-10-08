@@ -38,14 +38,24 @@ batch_members() {
 batch_drop() { [ "$DRY" = true ] || git push -q origin --delete "$BATCH_BR" >/dev/null 2>&1 || true; }
 
 # resolve_shared_conflicts: after a conflicted `git merge --squash`, succeeds when every conflicted path is
-# CHANGELOG.md or TASKS.md (PRs add fragments and never edit them; a conflict there is stale fold content)
-# and takes the stack's version. Fails, leaving the index alone, when anything else conflicts.
+#   - CHANGELOG.md or TASKS.md (PRs add fragments and never edit them; a conflict there is stale fold
+#     content): takes the stack's version; or
+#   - a regenerated parity capture (docs/parity/**/*.png, binary, so never mergeable): takes the PR's
+#     capture. The stack's own CI then judges it (layout parity compares at 0 pixels), and a wrong
+#     capture turns the stack red, so the halving blocks that PR alone.
+# Fails, leaving the index alone, when anything else conflicts.
 resolve_shared_conflicts() {
+  PNG_RESOLVED=false
   local u; u=$(git diff --name-only --diff-filter=U)
   [ -n "$u" ] || return 1
-  grep -qvxE 'CHANGELOG\.md|TASKS\.md' <<<"$u" && return 1
-  # shellcheck disable=SC2086
-  git checkout -q --ours -- $u && git add -- $u
+  grep -qvxE 'CHANGELOG\.md|TASKS\.md|docs/parity/.*\.png' <<<"$u" && return 1
+  local f
+  while IFS= read -r f; do
+    case "$f" in
+      *.png) git checkout -q --theirs -- "$f" && git add -- "$f" || return 1; PNG_RESOLVED=true; log "regenerated capture $f conflicted: taking the PR's version for the stack's CI to judge" >&2 ;;
+      *) git checkout -q --ours -- "$f" && git add -- "$f" || return 1 ;;
+    esac
+  done <<<"$u"
 }
 
 # batch_stack <pr> <tip>: stack one PR's squash commit on top of <tip>. Prints the new commit on success;
@@ -82,6 +92,7 @@ batch_stack() {
   esac
 
   git checkout -q -f -B batch-work "$tip" && git clean -fdq
+  PNG_RESOLVED=false
   if ! git merge --squash --no-commit "origin/$br" >/tmp/train-merge.log 2>&1; then
     if ! resolve_shared_conflicts; then
       local files; files=$(git diff --name-only --diff-filter=U | head -20 | sed 's/^/- `/;s/$/`/')
@@ -134,6 +145,21 @@ $(printf '%s' "$hosted_out" | head -c 1500)
   # Landing guard, as for a single PR, against the stack this PR lands on: the PR head itself (own diff,
   # reverts), then the fold (TASKS/CHANGELOG lines), and the squash may differ from the plain merge only in
   # the shared board files.
+  if [ "$PNG_RESOLVED" = true ]; then
+    # The plain merge of the head conflicts (binary captures), so the guards below cannot compute it.
+    # Equivalent check: the stack commit changes only files the PR's own diff touches, plus board files.
+    local own extra
+    own=$(git diff --name-only --no-renames "$(git merge-base "$tip" "$head")" "$head" | sort -u)
+    extra=$(comm -23 <(git diff --name-only --no-renames "$tip" "$sq" | sort -u) <(printf '%s\n' "$own") | grep -Ev "$SHARED_RE" || true)
+    if [ -n "$extra" ]; then
+      git reset -q --hard "$tip"
+      block "$pr" "Landing guard: after resolving regenerated parity captures, landing \`$head\` on \`main\` (\`$tip\`) would change more than this PR's own diff:
+
+$(sed 's/^/- changes `/;s/$/`, which the PR does not touch/' <<<"$extra")" >&2
+      return 1
+    fi
+    echo "$sq"; return 0
+  fi
   if ! guard=$(landing_guard "$tip" "$head"); then
     git reset -q --hard "$tip"
     block "$pr" "Landing guard: landing \`$head\` on \`main\` (\`$tip\`) would change more than this PR's own diff:

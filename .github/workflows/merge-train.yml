@@ -7,7 +7,7 @@
 # exact SHA, squash-merge. In key mode it batches instead (scripts/merge-train-batch.sh: several ready PRs are
 # stacked on train/batch, tested with one CI run and landed by one fast-forward). Each run is a short step (no runner is held while CI
 # runs): it advances the head of the queue and exits; the CI-completion trigger
-# and the schedule resume it. Failures remove `ready`, add `blocked` and write the reason to the run summary (no PR comments).
+# and the schedule resume it. Failures remove `ready`, add `blocked` and write the reason to the run summary and post it as a PR comment.
 #
 # Authentication: if the repository secret TRAIN_DEPLOY_KEY (a write deploy key,
 # which must be re-created for this repository: deploy keys are per repository)

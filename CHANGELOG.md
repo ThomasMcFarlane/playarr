@@ -313,6 +313,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: web layout parity runs as three parallel shards (about 18 min down to about 8); the merge train comments the full block reason on the PR and takes the PR's capture when a regenerated parity PNG conflicts; changes to the CI workflow now select the web, storybook, server-image and HarmonyOS jobs.
 - The calendar API keeps each viewer's built response for up to two minutes and rebuilds it as soon as a live event for that viewer or the library, or a source refresh, changes what it depends on. Repeat and revisited periods answer from memory.
 - Storybook: one interactive story per component with Controls for props and states; hover, focus-visible, active and focus-within come from the Pseudo states toolbar item (applied to the whole page, portals included).
 - Calendar builds read each work's detail once per request instead of three times, which cuts the time to resolve a month of releases.

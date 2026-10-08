@@ -55,7 +55,9 @@ permissions:
 jobs:
   # ---------------------------------------------------------------------
   # Detect which platform(s) a PR/push touches, so downstream jobs can
-  # skip themselves when irrelevant. Directory names below reflect the
+  # skip themselves when irrelevant. Owner rule: selection follows the dependency graph (Rust crates,
+  # Android modules and tv-web packages plus their dependents); a shared input (this workflow, a
+  # scope script, a root manifest or toolchain file) selects everything; `ci-required` always reports. Directory names below reflect the
   # monorepo layout as defined by the in-flight scaffolding tasks for each
   # component -- update these globs here if a component's directory layout
   # changes.
@@ -184,16 +186,19 @@ jobs:
               - '.github/workflows/ci.yml'
             harmony:
               - 'clients/harmony/**'
+              - '.github/workflows/ci.yml'
             tv-web:
               - 'clients/tv-web/**'
               # The layout parity job diffs against these pins with the shared capture tools.
               - 'docs/parity/web/layout/**'
               - 'scripts/parity/**'
+              - '.github/workflows/ci.yml'
             # The server image builds the Admin and web assets from clients/tv-web inside the Dockerfile.
             server-image:
               - 'infra/docker/backend.Dockerfile'
               - '.dockerignore'
               - 'clients/tv-web/**'
+              - '.github/workflows/ci.yml'
             # The Fire TV app builds against the shared tv-web packages, the shared translations and the web
             # stylesheet its token test reads, so a change to any of them can break its tests.
             firetv:
@@ -486,11 +491,17 @@ jobs:
   # built web client with the deterministic mock API of scripts/nav-perf.
   # ---------------------------------------------------------------------
   web-layout-parity:
-    name: web layout parity
+    # Three shards (measured 18.5 min as one job: 7.3 + 5.2 + 4.3 min of independent steps), each
+    # a separate runner; ci-required reads the combined result of the matrix under this job id.
+    name: web layout parity (${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.tv-web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [layout, drawer, nav]
     permissions:
       contents: read
     steps:
@@ -519,22 +530,27 @@ jobs:
         run: npm ci --no-audit --no-fund && npx playwright-core install --with-deps chromium
 
       - name: Layout parity (reference pin, pill identity, header bands)
+        if: matrix.shard == 'layout'
         working-directory: clients/tv-web/web
         run: node scripts/layout-parity.mjs --out "$RUNNER_TEMP/layout-parity"
 
       - name: Drawer close mirrors drawer open
+        if: matrix.shard == 'drawer'
         working-directory: clients/tv-web/web
         run: node scripts/drawer-close.mjs
 
-      - name: Build the web client for the edge fade check
+      - name: Build the web client for the edge fade and keyboard checks
+        if: matrix.shard != 'layout'
         working-directory: clients/tv-web/web
         run: pnpm exec vite build
 
       - name: Scroll edge fade (profile, first paint, no box, unclipped focus shadow) in both themes
+        if: matrix.shard == 'drawer'
         working-directory: clients/tv-web/web
         run: node scripts/edge-fade-e2e.mjs
 
       - name: Keyboard e2e (BACK keys, focus start and restore)
+        if: matrix.shard == 'nav'
         working-directory: clients/tv-web/web
         run: |
           for script in scripts/nav-*-e2e.mjs; do node "$script" --no-build --dist dist || exit 1; done
@@ -543,7 +559,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: layout-parity-diffs
+          name: layout-parity-diffs-${{ matrix.shard }}
           path: ${{ runner.temp }}/layout-parity
           if-no-files-found: ignore
 

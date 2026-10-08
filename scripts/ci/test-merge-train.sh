@@ -263,6 +263,47 @@ ogit "$be" rev-parse -q --verify refs/heads/train/batch >/dev/null && bad "batch
 [ -z "$(ogit "$be" for-each-ref 'refs/train/*')" ] && ok "batch: no pre-fold refs left" || bad "batch: stale pre-fold ref"
 rm -rf "$be"
 
+# resolve_shared_conflicts: PNG captures take the PR's version, board files the stack's, anything else fails.
+rs=$(mktemp -d)
+(
+  cd "$rs"; git init -q -b main .; git config user.name t; git config user.email t@example.invalid
+  mkdir -p docs/parity/web; printf 'base\000\001' >docs/parity/web/a.png; printf 'x\n' >TASKS.md
+  git add -A; git commit -qm base
+  git checkout -q -b pr; printf 'pr\000\002' >docs/parity/web/a.png; printf 'pr\n' >TASKS.md; git commit -qam pr
+  git checkout -q main; printf 'main\000\003' >docs/parity/web/a.png; printf 'main\n' >TASKS.md; git commit -qam main
+  git merge --squash --no-commit pr >/dev/null 2>&1 || true
+  resolve_shared_conflicts >/dev/null 2>&1 && echo resolved >"$rs.res"
+  printf '%s|%s\n' "$(cat docs/parity/web/a.png | tr '\0\2' '02')" "$(cat TASKS.md)" >"$rs.out"
+)
+[ "$(cat "$rs.res" 2>/dev/null)" = resolved ] && ok "conflict resolver: PNG and board-file conflicts resolve" || bad "conflict resolver: did not resolve"
+[ "$(cat "$rs.out" 2>/dev/null)" = "pr02|main" ] && ok "conflict resolver: PNG takes the PR's capture, TASKS.md the stack's" || bad "conflict resolver: wrong sides ($(cat "$rs.out" 2>/dev/null))"
+rm -rf "$rs" "$rs.res" "$rs.out"
+rs=$(mktemp -d)
+(
+  cd "$rs"; git init -q -b main .; git config user.name t; git config user.email t@example.invalid
+  mkdir -p docs/parity/web; printf 'x\n' >s.txt; printf 'b\000' >docs/parity/web/a.png; git add -A; git commit -qm base
+  git checkout -q -b pr; printf 'pr\n' >s.txt; printf 'p\000' >docs/parity/web/a.png; git commit -qam pr
+  git checkout -q main; printf 'm\n' >s.txt; printf 'm\000' >docs/parity/web/a.png; git commit -qam main
+  git merge --squash --no-commit pr >/dev/null 2>&1 || true
+  resolve_shared_conflicts >/dev/null 2>&1 || echo refused >"$rs.res"
+)
+[ "$(cat "$rs.res" 2>/dev/null)" = refused ] && ok "conflict resolver: a source-file conflict is still refused" || bad "conflict resolver: resolved a source conflict"
+rm -rf "$rs" "$rs.res"
+
+# A PR whose regenerated parity capture conflicts with main's is stacked with its own capture, not blocked.
+be=$(mktemp -d); batch_env "$be"
+(
+  cd "$be/seed"; git checkout -q main; mkdir -p docs/parity/web; printf 'v0\000' >docs/parity/web/p.png; git add -A; git commit -qm "capture v0"
+  git checkout -q -b feat5; printf 'v1\000' >docs/parity/web/p.png; printf 'five\n' >src/five.txt; git add -A; git commit -qm "pr 5"
+  git checkout -q main; printf 'v2\000' >docs/parity/web/p.png; git commit -qam "capture v2"
+  git push -q "$be/origin.git" main feat5
+)
+m0=$(ogit "$be" rev-parse main)
+run_batch "$be" pending "5"
+if [ "$(ogit "$be" rev-list --count "$m0..train/batch" 2>/dev/null)" = 1 ] && [ "$(ogit "$be" show train/batch:docs/parity/web/p.png | tr '\0' 0)" = v10 ]; then ok "batch: a conflicting parity PNG is stacked with the PR's capture"; else bad "batch: PNG conflict not auto-resolved"; cat "$be/train.log"; fi
+grep -q 'blocked 5' "$be/gh.log" 2>/dev/null && bad "batch: PNG-conflict PR was blocked" || ok "batch: PNG-conflict PR not blocked"
+rm -rf "$be"
+
 # Red batch: halved down to the culprit, which alone is blocked.
 be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
 run_batch "$be" pending "1 2 4"
@@ -292,19 +333,19 @@ run_batch "$be" success "1 2"
 if [ "$(ogit "$be" rev-parse main)" = "$moved" ] && grep -q 'main moved since the batch was built' "$be/train.log"; then ok "batch: a moved main discards the tested stack"; else bad "batch: landed on a moved main"; cat "$be/train.log"; fi
 rm -rf "$be"
 
-# block(): label change and summary only, never a comment.
+# block(): label change, job summary and one full-reason PR comment.
 bl=$(mktemp -d)
 (
   gh() { echo "$*" >>"$bl/gh.log"; }
   SUMMARY="$bl/summary.md" DRY=false block 9 "reason text" >"$bl/out.log" 2>&1
 )
 grep -q 'pr edit 9 .*--remove-label ready --add-label blocked' "$bl/gh.log" && ok "block removes ready and adds blocked" || bad "block did not relabel"
-grep -qE 'comment' "$bl/gh.log" && bad "block posted a comment" || ok "block posts no comment"
+[ "$(grep -c '^pr comment 9 ' "$bl/gh.log")" = 1 ] && grep -q 'reason text' "$bl/gh.log" && ok "block posts one comment with the full reason" || bad "block comment missing or wrong"
 grep -q 'reason text' "$bl/summary.md" && ok "block writes the reason to the job summary" || bad "block left the reason out of the summary"
 rm -rf "$bl"
-# Static: no comment call of any kind may exist in the train.
-grep -nE 'gh pr comment|pr/comments|issues/[^ ]*/comments|-X POST[^|]*comments' "$root/scripts/merge-train.sh" "$root/.github/workflows/merge-train.yml" >/dev/null \
-  && bad "a comment call exists in the train" || ok "no comment call exists in the train"
+# Static: the only comment call in the train is the block reason.
+[ "$(grep -cE 'gh pr comment|pr/comments|issues/[^ ]*/comments|-X POST[^|]*comments' "$root/scripts/merge-train.sh" "$root/scripts/merge-train-batch.sh" | awk -F: '{n+=$2} END{print n}')" = 1 ] \
+  && ok "block is the only comment call in the train" || bad "unexpected comment calls in the train"
 
 # check-fragments: a commit editing TASKS.md is rejected unless it carries the trailer.
 git checkout -q -b origin-main "$base"; git update-ref refs/remotes/origin/main HEAD
