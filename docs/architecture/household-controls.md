@@ -18,7 +18,7 @@ authorisation system.
    evaluated per request, not baked into a JWT, so a stolen/reused token or a
    session that crosses a schedule boundary stops working at the next request.
 4. **Honest limits.** Where only an OS or a provider can enforce (installing an
-   app, buying on a third-party store, a native game launch) the server records
+   app, a native game launch) the server records
    the approval and exposes it, and the row stays `blocked` until that
    platform integration exists.
 
@@ -33,7 +33,7 @@ authorisation system.
 | `daily_budget_minutes` | Optional watch-time cap per local day. |
 | `channel_allow`, `game_allow`, `app_allow` | `None` = unrestricted, `Some(ids)` = allowlist (empty = nothing). Contract only until tasks 22/28/36 land; see blocked rows. |
 | `guardian_user_ids` | Users who may approve for this profile and who may switch into it without the profile PIN lockout applying to them. |
-| `approval_required` | Subset of `purchase`, `install`, `content`, `time` that needs a guardian approval. |
+| `approval_required` | Subset of the approval kinds (`content`, `time`) that needs a guardian approval. |
 | `offline_ttl_hours` | Maximum age of a client's cached authorisation (default 24, capped at 72). |
 
 Stored as one JSON column (`policies.household`), synced between peers with
@@ -92,15 +92,12 @@ expires_at, status, decided_by, decided_at, max_uses, uses, bonus_seconds)`.
   decide one. `decide` requires the caller to be listed in the profile's
   `guardian_user_ids`, to be a different user, and, if the guardian has a PIN,
   to present it (step-up; shares the lockout below).
-* Approvals are bounded: `expires_at` (default 15 min for purchase/install, end
-  of day for time/content), `max_uses` (default 1), consumed atomically
+* Approvals are bounded: `expires_at` (default end of day for time/content), `max_uses` (default 1), consumed atomically
   (`UPDATE ... WHERE uses < max_uses AND expires_at > now`), so reuse and
   replay fail.
 * Server-enforceable kinds: `content` (lets one work through the rating gate
   until expiry) and `time` (adds bonus seconds to today's budget/overrides the
-  schedule until expiry). `purchase` and `install` are recorded and
-  verifiable via `POST /api/v1/household/approvals/{id}/consume`, but the
-  OS/provider hook that must call it does not exist yet (blocked, row 113).
+  schedule until expiry).
 
 ### Protected switching and PIN attempts
 
@@ -130,7 +127,7 @@ the TTL is short and online playback is always server-evaluated.
 | `POST /api/v1/household/approvals` | the requesting profile | create a pending request |
 | `GET /api/v1/household/approvals` | profile or its guardians | own requests plus those of guarded profiles |
 | `POST /api/v1/household/approvals/{id}/decision` | a listed guardian with a PIN | approve (PIN step-up, bounded duration) or deny |
-| `POST /api/v1/household/approvals/{id}/consume` | the requesting profile | spend one use (purchase/install hooks) |
+| `POST /api/v1/household/approvals/{id}/consume` | the requesting profile | spend one use |
 | `GET/PUT /api/v1/admin/users/{id}/household` | admin | rating, tags, schedule, timezone, budget, guardians |
 
 A blocked request is `403 household_blocked` with
@@ -159,8 +156,8 @@ restricted guardian stays `forbidden`. Clients match the code, not the message.
 * Row 34 (PlayarrOS isolated sessions) provides per-user OS sessions and app
   credential isolation; "escape through another app/account" is only
   verifiable there.
-* OS install and third-party provider purchase paths cannot be intercepted from
-  Playarr; approval records are available for those integrations to require.
+* Playarr has no store and no purchases; purchase approval is out of scope
+  (owner decision, 2026-10-09).
 
 ## Validation (row 57)
 
