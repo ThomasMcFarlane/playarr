@@ -48,7 +48,8 @@ const dock = async (steps, wait = 8) => { const downs = hasMusic && steps >= 4 ?
 // Preferences opens from the profile picker's gear; the section rows are walked with Down and opened with Select.
 const settings = async (row) => {
   await coldStart();
-  await presses(["Down", "Select"], 2);
+  // Down lands on the bottom row; Left makes sure the gear (not Sign out) is focused before Select.
+  await presses(["Down", "Left", "Select"], 2);
   await presses(Array(row).fill("Down"), 0.8);
   if (row > 0) await press("Select", 3);
 };
