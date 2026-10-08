@@ -2436,6 +2436,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web parity captures are reproducible: backdrop blur, the browser storage estimate, the player focus ring and the paused video frame are pinned, and all references are recaptured from current main on a fresh fixture.
 - CI gate: a PR that changes a shared page layout look file (the page-layout stylesheet, the shared layout components, the layout references and pins, the Android page package and goldens) fails unless its body carries `Layout-Change: owner request <date>, reference <id>`.
 - Page layout guards: the page registry now ratchets (every page is `layout`, `unmigrated` or `exempt` with evidence, and the unmigrated list may only shrink), `pageLayoutAudit` and `pageLayoutCss` fail when a page or a stylesheet draws its own header, pill, scroll container or state, and a new `web layout parity` CI job diffs the canonical header and action pill against the committed 30 September reference and pins (and every page's pills and header band) at 0 pixels in both themes.
 - Android TV instrumented navigation tests cover the draw-only card lift (focus-target bounds unchanged), geometric vertical moves from a scrolled rail, and media cards drawing no ring or fill in both themes.

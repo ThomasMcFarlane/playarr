@@ -10,8 +10,8 @@
 // --dump-dom also writes <out>/<layout>/<theme>/dom/<id>.json: the rect, font and colour of every visible element, so a
 // native layout can be fixed from numbers. PARITY_CHROME_CHANNEL=chrome launches the installed Google Chrome (it plays the
 // H.264 fixture clips on runners whose Chromium build cannot).
-// Determinism: fixed clock (Date frozen), reduced motion, animations and transitions off, caret hidden,
-// no artwork (the fixture serves none, so the web draws its title placeholder tiles), fixed locale and
+// Determinism: no backdrop blur (see FREEZE_CSS), a fixed storage estimate, fixed clock (Date frozen), reduced motion, animations and transitions off, caret hidden,
+// the fixture's own seeded artwork, fixed locale and
 // time zone, fixed fixture users and device ids.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -98,7 +98,11 @@ async function resolveRoute(route, token) {
   return r;
 }
 
-const FREEZE_CSS = `*,*::before,*::after{animation:none!important;animation-delay:0s!important;transition:none!important;scroll-behavior:auto!important;caret-color:transparent!important}
+// backdrop-filter is switched off: Chromium's software raster of a blurred backdrop is not reproducible (about one
+// capture in ten of the same page put the TV nav rail's label glyphs one pixel higher and dithered its shadow
+// differently; with the filter off 33 of 33 captures were byte-identical). The surfaces are translucent over a flat
+// page background, so the blur is almost invisible and native clients are compared without it.
+const FREEZE_CSS = `*,*::before,*::after{animation:none!important;animation-delay:0s!important;transition:none!important;scroll-behavior:auto!important;caret-color:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 ::-webkit-scrollbar{display:none}`;
 
 async function runStep(page, step, layout) {
@@ -135,6 +139,21 @@ async function runStep(page, step, layout) {
         v.pause();
       }, step.seconds ?? 2);
       await page.waitForTimeout(400);
+      // A touch tap on the stage (revealControls) or a timer can resume playback after the seek. Pin the frame:
+      // until the video is paused exactly at the target, pause and seek again.
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const pinned = await page.evaluate(async (t) => {
+          const v = document.querySelector("video");
+          if (!v) return true;
+          if (v.paused && Math.abs(v.currentTime - t) < 0.05) return true;
+          v.pause();
+          await new Promise((res) => { v.addEventListener("seeked", res, { once: true }); v.currentTime = t; setTimeout(res, 4000); });
+          v.pause();
+          return false;
+        }, step.seconds ?? 2);
+        await page.waitForTimeout(400);
+        if (pinned) break;
+      }
       break;
     }
     case "hideVideo":
@@ -143,6 +162,12 @@ async function runStep(page, step, layout) {
       break;
     case "waitGone":
       await page.getByText(step.text).first().waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+      break;
+    case "blurFocus":
+      // The player moves focus to its play button on a timer, so whether the ring is painted depends on timing.
+      // Settle, then drop focus so every capture shows the same unfocused control bar.
+      await page.waitForTimeout(step.ms ?? 600);
+      await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
       break;
     case "wait":
       await page.waitForTimeout(step.ms ?? 500);
@@ -220,6 +245,13 @@ async function captureOnce(layoutId, layout, theme, screen) {
       },
       { base, s, dev: deviceId(user), theme }
     );
+    // The Downloads page prints the browser's storage estimate, which varies run to run (an IndexedDB or cache
+    // size). Fix it so the reference is reproducible: 0 B used of 10 GB.
+    await context.addInitScript(() => {
+      try {
+        Object.defineProperty(navigator.storage, "estimate", { value: async () => ({ usage: 0, quota: 10 * 1024 * 1024 * 1024 }), configurable: true });
+      } catch {}
+    });
     const page = await context.newPage();
     if (safeArea.length) {
       const [top = 0, bottom = 0, left = 0, right = 0] = safeArea;
