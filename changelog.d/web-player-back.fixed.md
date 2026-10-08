@@ -1,0 +1,1 @@
+- Web player: BACK leaves on the first press while the stream is loading, buffering, failed or showing the end card, and the mute button is reachable with the remote.

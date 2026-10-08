@@ -32,8 +32,22 @@ export function resolvePlayerBack(options: {
   minimised: boolean;
   inlineMusic: boolean;
   fullscreen: boolean;
+  /** Engine state; controls only stay hidden while playing or paused. */
+  playbackState?: string;
+  /** The end-of-playback card is up: BACK leaves at once. */
+  endScreen?: boolean;
 }): "hide-controls" | "exit" {
   if (options.minimised || options.inlineMusic || options.fullscreen) return "exit";
+  if (options.endScreen) return "exit";
+  // While loading, buffering, failed or ended the controls are forced visible again on every state change, so a
+  // hide would be undone and BACK would never leave.
+  if (
+    options.playbackState !== undefined &&
+    options.playbackState !== "playing" &&
+    options.playbackState !== "paused"
+  ) {
+    return "exit";
+  }
   return options.controlsVisible ? "hide-controls" : "exit";
 }
 

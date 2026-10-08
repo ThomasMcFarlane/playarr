@@ -48,6 +48,18 @@ describe("player BACK sequence", () => {
     expect(isPlayerBackKey({ key: "Enter", keyCode: 13 })).toBe(false);
   });
 
+  it("exits on the first press when the controls cannot stay hidden (loading, buffering, error, end card)", () => {
+    for (const playbackState of ["idle", "loading", "buffering", "error", "ended"]) {
+      expect(resolvePlayerBack({ ...base, playbackState })).toBe("exit");
+    }
+    expect(resolvePlayerBack({ ...base, endScreen: true, playbackState: "playing" })).toBe("exit");
+  });
+
+  it("still hides visible controls while playing or paused", () => {
+    expect(resolvePlayerBack({ ...base, playbackState: "playing" })).toBe("hide-controls");
+    expect(resolvePlayerBack({ ...base, playbackState: "paused" })).toBe("hide-controls");
+  });
+
   it("does not intercept minimised, inline music or fullscreen", () => {
     expect(resolvePlayerBack({ ...base, minimised: true })).toBe("exit");
     expect(resolvePlayerBack({ ...base, inlineMusic: true })).toBe("exit");
