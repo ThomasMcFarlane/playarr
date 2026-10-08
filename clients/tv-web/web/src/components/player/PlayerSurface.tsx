@@ -994,6 +994,7 @@ export function PlayerSurface({
       const video = videoRef.current as WebKitFullscreenVideo | null;
       const decision = resolvePlayerBack({
         controlsVisible: controlsVisibleRef.current,
+        playbackState: engineStateRef.current.state,
         minimised,
         inlineMusic,
         fullscreen: Boolean(

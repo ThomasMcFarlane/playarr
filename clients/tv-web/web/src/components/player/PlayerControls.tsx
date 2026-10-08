@@ -471,6 +471,7 @@ export function PlayerControls({
         previousButtonRef.current,
         playButtonRef.current,
         nextButtonRef.current,
+        muteButtonRef.current,
         audioButtonRef.current,
         subtitlesButtonRef.current,
         playlistButtonRef.current,
