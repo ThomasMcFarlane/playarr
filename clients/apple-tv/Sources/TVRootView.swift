@@ -323,7 +323,7 @@ private struct TVProductionShell<Stage: View>: View {
             VStack {
                 Spacer()
                 HStack {
-                    TVProfileChip(name: "Viewer", version: nil)
+                    TVProfileChip(name: environment.profileName ?? "Viewer", version: nil)
                         .padding(.leading, DesignTokens.Shell.navEdge - 4)
                         .padding(.bottom, 36)
                     Spacer()

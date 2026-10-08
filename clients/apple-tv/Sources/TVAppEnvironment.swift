@@ -196,8 +196,21 @@ final class TVAppEnvironment {
 
         // Restore prior device-link session so relaunch stays signed in.
         // (After every stored property is initialised.)
+        // Start with the last signed-in profile name, so an offline start still shows one
+        // (the live profile list replaces it as soon as it loads).
+        profileName = defaults.string(forKey: Self.lastProfileNameKey)
+
+        // The saved session is read synchronously first: the async restore below can lose the race
+        // against the pairing gate, which starts a code request as soon as it appears and so leaves
+        // the signed-out state the restore needs.
         if launchToken == nil, hasConfiguredServer {
-            Task { await self.restoreSessionIfPossible() }
+            if let data = defaults.data(forKey: "com.playarr.playarr.tvos.session.\(effectiveURL.absoluteString)"),
+               let saved = try? JSONDecoder().decode(StoredAuthSession.self, from: data),
+               saved.expiresAt > Date().addingTimeInterval(30) {
+                pairingState = .signedIn
+            } else {
+                Task { await self.restoreSessionIfPossible() }
+            }
         }
     }
 

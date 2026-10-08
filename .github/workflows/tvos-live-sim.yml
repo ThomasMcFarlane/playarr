@@ -95,7 +95,8 @@ jobs:
         run: |
           set -euo pipefail
           brew tap facebook/fb
-          brew install idb-companion
+          brew trust --formula facebook/fb/idb-companion
+          brew install facebook/fb/idb-companion
           python -m venv "$RUNNER_TEMP/idb-venv"
           "$RUNNER_TEMP/idb-venv/bin/pip" install --quiet -r scripts/sim-vnc/requirements.txt
           echo "IDB=$RUNNER_TEMP/idb-venv/bin/idb" >> "$GITHUB_ENV"
@@ -108,8 +109,11 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
           app=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name 'PlayarrTV.app' | head -1)
           xcrun simctl install "$udid" "$app"
-          # Shut the simulator's own window out of the picture: only the simulator screen is streamed.
           echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+          # The idb companion talks to the booted simulator; the idb client reaches it over localhost.
+          nohup idb_companion --udid "$udid" --grpc-port 10880 > "$RUNNER_TEMP/idb-companion.log" 2>&1 &
+          sleep 5
+          "$IDB" connect localhost 10880
 
       - name: Sign in as the device test account
         env:
@@ -120,8 +124,20 @@ jobs:
           set -euo pipefail
           [[ -n "$SERVER_URL" && -n "$TEST_USERNAME" && -n "$TEST_PASSWORD" ]] || { echo "::error::the device test account secrets are not set"; exit 1; }
           python3 scripts/sim-vnc/seed_session.py --udid "$SIM_UDID" --bundle "$APP_BUNDLE_ID"
-          xcrun simctl ui "$SIM_UDID" appearance dark
           xcrun simctl launch "$SIM_UDID" "$APP_BUNDLE_ID" -PlayarrTheme dark
+
+      - name: Self-check the simulator screen and input
+        continue-on-error: true
+        run: |
+          set +e
+          sleep 20
+          echo "saved defaults keys (names only):"
+          xcrun simctl spawn "$SIM_UDID" defaults read "$APP_BUNDLE_ID" | grep -E '^ *"?com\.playarr' | cut -d= -f1 | sed -E 's#session\..*#session.<server>#'
+          xcrun simctl spawn "$SIM_UDID" log show --last 2m --style compact --predicate 'process == "PlayarrTV"' 2>/dev/null | grep -i -E "profile|decod|401|refresh" | cut -c1-200 | tail -15
+          xcrun simctl io "$SIM_UDID" screenshot --type=jpeg "$RUNNER_TEMP/check.jpg" && sips -g pixelWidth -g pixelHeight "$RUNNER_TEMP/check.jpg"
+          "$IDB" ui key --udid "$SIM_UDID" 79; echo "idb key exit: $?"
+          timeout 8 "$IDB" video-stream --udid "$SIM_UDID" --fps 30 --format mjpeg | head -c 200000 | wc -c
+          tail -n 5 "$RUNNER_TEMP/idb-companion.log"
 
       - name: Start the VNC server on the tailnet address
         env:
