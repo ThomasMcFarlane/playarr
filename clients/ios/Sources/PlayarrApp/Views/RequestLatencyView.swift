@@ -6,8 +6,38 @@ import SwiftUI
 struct RequestLatencyView: View {
     let transport: PlayarrRequestTransport
     @State private var state: HttpLatencyState = .loading
+    /// Web mobile settings panel: no card, the empty states use the shared disc layout.
+    var webStyle = false
 
     var body: some View {
+        if webStyle { webBody } else { cardBody }
+    }
+
+    private var webBody: some View {
+        Group {
+            switch state {
+            case .loading:
+                WMText("Loading request latency\u{2026}", 16, 400, color: WM.muted, lh: 24)
+            case .forbidden:
+                WMEmptyStateRow(title: "Admins only", description: "Sign in with an admin account to see per-route request latency.")
+                    .offset(x: 13)
+            case .error(let message):
+                WMEmptyStateRow(title: "Couldn't load request latency", description: message, isError: true).offset(x: 13)
+            case .ready(let rows) where rows.isEmpty:
+                WMEmptyStateRow(title: "No samples yet", description: "Latency samples will appear here once the server has handled some requests.")
+                    .offset(x: 13)
+            case .ready(let rows):
+                table(rows)
+            }
+        }
+        .frame(width: 318, alignment: .topLeading)
+        .task {
+            state = .loading
+            state = await HttpLatencyClient(transport: transport).load()
+        }
+    }
+
+    private var cardBody: some View {
         VStack(alignment: .leading, spacing: 17) {
             Text("Request latency").font(.title2.weight(.semibold)).foregroundStyle(PlayarrStyle.ink)
             Text("Per-route request latency, from slowest to fastest.")

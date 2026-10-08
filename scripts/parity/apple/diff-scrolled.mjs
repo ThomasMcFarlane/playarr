@@ -15,16 +15,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const web = opt("web"), native = opt("native"), out = opt("out", "scrolled-diff"), id = opt("id", "home-scrolled");
+const layout = opt("layout", "tv");
 const themes = opt("theme", "dark,light").split(",");
 mkdirSync(out, { recursive: true });
 // Left gutter of the first rail (x 730 to 882 at 1920 px, `--tv-track-left-fade`), rows of its cards.
-const BAND = "730,500,882,640";
+const BAND = opt("band", "730,500,882,640");
 const BG = { dark: "#151315", light: "#f5f3f2" };
 let failed = false;
 console.log(`| ${id} | mismatch % | web edge | native edge |\n| --- | --- | --- | --- |`);
 for (const theme of themes) {
-  const a = PNG.sync.read(readFileSync(join(web, "tv", theme, `${id}.png`)));
-  const b = PNG.sync.read(readFileSync(join(native, "tv", theme, `${id}.png`)));
+  const a = PNG.sync.read(readFileSync(join(web, layout, theme, `${id}.png`)));
+  const b = PNG.sync.read(readFileSync(join(native, layout, theme, `${id}.png`)));
   const w = Math.max(a.width, b.width), h = Math.max(a.height, b.height);
   const pad = (p) => { const q = new PNG({ width: w, height: h }); PNG.bitblt(p, q, 0, 0, p.width, p.height, 0, 0); return q; };
   const A = pad(a), B = pad(b), D = new PNG({ width: w, height: h });
@@ -32,7 +33,7 @@ for (const theme of themes) {
   const pct = (100 * n) / (w * h);
   writeFileSync(join(out, `${theme}-${id}-diff.png`), PNG.sync.write(D));
   const edge = (side, file) => spawnSync("node", [join(here, "../check-edge-fade.mjs"), file, "--edge", "left", "--band", BAND, "--bg", BG[theme], "--max-ratio", "0.35"], { encoding: "utf8" });
-  const ea = edge("web", join(web, "tv", theme, `${id}.png`)), eb = edge("native", join(native, "tv", theme, `${id}.png`));
+  const ea = edge("web", join(web, layout, theme, `${id}.png`)), eb = edge("native", join(native, layout, theme, `${id}.png`));
   console.error(ea.stdout.trim(), "\n", eb.stdout.trim());
   // The check's default limit is calibrated on a rail gutter that fades to nothing. The web is the reference, so the native
   // edge passes when it is no harder than the web's own (within 0.05 of its ratio) or under the limit.

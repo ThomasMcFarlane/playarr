@@ -4,8 +4,8 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    private enum Section: String, CaseIterable, Identifiable {
-        case appearance, avatar, language, player, server, lock, invite, requestLatency, remote, data
+    fileprivate enum Section: String, CaseIterable, Identifiable {
+        case appearance, avatar, language, player, server, lock, invite, requestLatency, remote, data, home
         var id: String { rawValue }
         var number: String { String(format: "%02d", Self.allCases.firstIndex(of: self)! + 1) }
         var title: String {
@@ -15,25 +15,27 @@ struct SettingsView: View {
             case .language: "Language"
             case .player: "Player"
             case .remote: "Phone remote"
-            case .server: "Server"
+            case .server: "Server connection"
             case .lock: "Profile lock"
             case .invite: "Invite a friend"
             case .requestLatency: "Request latency"
             case .data: "Your data"
+            case .home: "Customise Home"
             }
         }
         var description: String {
             switch self {
-            case .appearance: "Choose how Playarr looks on this device."
-            case .avatar: "Pick a playful preset or use your own photo."
-            case .language: "Choose the language used by Playarr."
-            case .player: "Set quality, audio, and subtitle defaults."
+            case .appearance: "Choose this device's theme and home screen artwork."
+            case .avatar: "Choose how your profile appears on this device."
+            case .language: "Follow this device or keep a language fixed."
+            case .player: "Choose how Playarr should start quality, subtitles and audio."
             case .remote: "Control this device from your phone, or control another device."
-            case .server: "Review or change the connected Playarr Server."
-            case .lock: "Protect this profile with a four-digit PIN."
-            case .invite: "Request a one-use invitation for someone else."
+            case .server: "Combine libraries from multiple servers in one Playarr interface."
+            case .lock: "Require a four-digit PIN before switching profiles."
+            case .invite: "Ask your Playarr Server admin for one friend-invite QR code."
             case .requestLatency: "Per-route HTTP request latency for admins."
             case .data: "Export your watch progress, playlists and preferences, or import them from another Playarr Server."
+            case .home: "Show, hide and reorder the rails on Home."
             }
         }
         var icon: String {
@@ -48,6 +50,7 @@ struct SettingsView: View {
             case .invite: "person.badge.plus"
             case .requestLatency: "speedometer"
             case .data: "square.and.arrow.up.on.square"
+            case .home: "house"
             }
         }
     }
@@ -59,19 +62,22 @@ struct SettingsView: View {
     }
 
     let environment: AppEnvironment
-    @AppStorage("com.playarr.ios.appearance") private var appearance = "dark"
-    @AppStorage("com.playarr.ios.language") private var language = "en"
+    @AppStorage("com.playarr.ios.appearance") private var appearance = "system"
+    @AppStorage("com.playarr.ios.language") private var language = "system"
     @AppStorage(NativePlayerDefaults.qualityKey) private var qualityID = "original"
     @AppStorage(NativePlayerDefaults.subtitleModeKey) private var subtitleMode = "off"
     @AppStorage(NativePlayerDefaults.subtitleLanguageKey) private var subtitleLanguage = "en"
     @AppStorage(NativePlayerDefaults.audioLanguageKey) private var audioLanguage = "en"
 
-    @State private var selected: Section? = .appearance
+    @Environment(\.playarrGoHome) private var goHome
+    @State private var selected: Section? = SettingsView.initialSection
     @State private var serverURL: String
     @State private var avatar: ProfileAvatarPreference?
     @State private var photoItem: PhotosPickerItem?
     @State private var pinLocked = false
     @State private var pin = ""
+    @State private var serverPassword = ""
+    @State private var serverAddress = ""
     @State private var inviteRequest: UserInviteRequest?
     @State private var inviteMessage = ""
     @State private var inviteLink: URL?
@@ -89,7 +95,7 @@ struct SettingsView: View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack {
-                settingsBackground
+                if phone && selected == nil { WM.page } else { settingsBackground }
                 if phone { phoneLayout(safeTop: proxy.safeAreaInsets.top) }
                 else { wideLayout(proxy: proxy) }
             }
@@ -115,33 +121,72 @@ struct SettingsView: View {
         }
     }
 
-    private func phoneLayout(safeTop: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                if selected != nil {
-                    Button { selected = nil } label: {
-                        Image(systemName: "chevron.left").frame(width: 42, height: 42)
+    /// Web mobile "Preferences" index: back arrow, title and numbered rows of 88pt.
+    private var phoneIndex: some View {
+        ZStack(alignment: .topLeading) {
+            Button { goHome() } label: {
+                Text("←")
+                    .font(WM.font(12.8, 720))
+                    .foregroundStyle(WM.shell)
+                    .frame(width: 44, height: 40)
+                    .background(WM.ink, in: Ellipse())
+            }
+            .buttonStyle(.plain)
+            .offset(x: 15, y: WM.topInset + 1)
+            WMText("Preferences", 21.6, 580, lh: 32.4, ls: -0.972)
+                .offset(x: 68, y: WM.topInset + 5)
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    ForEach(Array(Section.allCases.enumerated()), id: \.element.id) { index, section in
+                        Button { selected = section } label: {
+                            ZStack(alignment: .topLeading) {
+                                if index == 0 { WM.artFill }
+                                WMText(section.number, 8.96, 760, color: WM.muted, lh: 13.44).offset(x: 12, y: 15.4)
+                                WMText(section.title, 16, 480, lh: 18.4, ls: -0.56)
+                                    .frame(width: 257, alignment: .leading)
+                                    .offset(x: 56, y: 24.4)
+                                Text(section.description)
+                                    .font(WM.font(10.88))
+                                    .foregroundStyle(WM.muted)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .frame(width: 257, height: 15.776, alignment: .leading)
+                                    .offset(x: 56, y: 46.4)
+                                Text("→")
+                                    .font(WM.font(20.8))
+                                    .foregroundStyle(index == 0 ? WM.ink : WM.muted)
+                                    .offset(x: index == 0 ? 330 : 325, y: 28)
+                            }
+                            .frame(width: 358, height: 88, alignment: .topLeading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                Text(selected?.title ?? "Settings")
-                    .font(.custom("Avenir Next", fixedSize: 23).weight(.semibold))
-                    .tracking(-1)
-                Spacer()
+                .padding(.leading, 16)
+                .padding(.top, 84)
+                .padding(.bottom, 130)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .foregroundStyle(PlayarrStyle.ink)
-            .padding(.horizontal, 16)
-            .padding(.top, max(56, safeTop + 6))
-            .padding(.bottom, 12)
-
-            if let selected {
-                ScrollView { detail(for: selected).padding(16).padding(.bottom, 120) }
-                    .scrollIndicators(.hidden)
-            } else {
-                ScrollView { sectionList.padding(.horizontal, 16).padding(.bottom, 120) }
-                    .scrollIndicators(.hidden)
-            }
+            .scrollIndicators(.hidden)
         }
-        .onAppear { selected = nil }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func phoneLayout(safeTop: CGFloat) -> some View {
+        if selected == nil {
+            phoneIndex
+        } else {
+            phoneDetailLayout(safeTop: safeTop)
+        }
+    }
+
+    @ViewBuilder
+    private func phoneDetailLayout(safeTop: CGFloat) -> some View {
+        if let selected {
+            phonePanel(selected)
+        }
     }
 
     private func wideLayout(proxy: GeometryProxy) -> some View {
@@ -225,6 +270,7 @@ struct SettingsView: View {
             case .invite: inviteContent
             case .requestLatency: RequestLatencyView(transport: environment.apiClient)
             case .data: YourDataView(transport: environment.apiClient)
+            case .home: HomeCustomiseView(apiClient: environment.apiClient)
             }
         }
         .frame(maxWidth: 620, alignment: .leading)
@@ -461,6 +507,14 @@ struct SettingsView: View {
         }
     }
 
+    /// Adding a second server needs the multi-server list; until then the address field only
+    /// replaces the connected server when it holds a valid address.
+    private func connectServer() {
+        guard !serverAddress.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        serverURL = serverAddress
+        saveServer()
+    }
+
     private func saveServer() {
         do {
             let corrected = try LoginServerURL.normalise(serverURL)
@@ -497,5 +551,382 @@ private extension String {
 private extension Color {
     init(hex: Int) {
         self.init(red: Double((hex >> 16) & 0xff) / 255, green: Double((hex >> 8) & 0xff) / 255, blue: Double(hex & 0xff) / 255)
+    }
+}
+
+// MARK: - Web mobile panels
+
+extension SettingsView {
+    /// Debug-only deep link used by the parity capture (`settings:<panel>`).
+    fileprivate static var initialSection: Section? {
+        #if DEBUG
+        switch ParityLaunch.panel {
+        case "avatar": return .avatar
+        case "language": return .language
+        case "player": return .player
+        case "server": return .server
+        case "lock": return .lock
+        case "invite": return .invite
+        case "remote": return .remote
+        case "latency": return .requestLatency
+        case "your-data": return .data
+        case "home": return .home
+        default: return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    @ViewBuilder
+    fileprivate func phonePanel(_ section: Section) -> some View {
+        switch section {
+        case .avatar: avatarPanel(section)
+        case .language: languagePanel(section)
+        case .player: playerPanel(section)
+        case .server: serverPanel(section)
+        case .lock: lockPanel(section)
+        case .invite: invitePanel(section)
+        case .remote: remotePanel(section)
+        case .requestLatency:
+            WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+                RequestLatencyView(transport: environment.apiClient, webStyle: true)
+                    .offset(x: 36, y: 108)
+            }
+        case .data:
+            WMPanelPage(kicker: section.title, subtitle: section.description, height: 1000, onBack: { selected = nil }) {
+                YourDataView(transport: environment.apiClient, webStyle: true)
+                    .offset(x: 36, y: 108)
+            }
+        case .home:
+            HomeCustomiseView(apiClient: environment.apiClient)
+        case .appearance:
+            WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+                detail(for: section).padding(.horizontal, 36).padding(.top, 108)
+            }
+        }
+    }
+
+    private func panelH3(_ text: String, size: CGFloat = 18.72, weight: Int = 700, lh: CGFloat = 28, ls: CGFloat = 0) -> some View {
+        WMText(text, size, weight, lh: lh, ls: ls).frame(width: 318, alignment: .leading)
+    }
+
+    private func panelLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(WM.font(11.2, 720))
+            .tracking(0.896)
+            .foregroundStyle(WM.muted)
+            .lineLimit(1)
+            .frame(width: 318, height: 17, alignment: .leading)
+    }
+
+    // Profile avatar
+
+    private func avatarPanel(_ section: Section) -> some View {
+        let current = (avatar ?? environment.currentAvatar)
+        let selectedID = current?.kind == .custom ? nil : (current?.value ?? "astronaut")
+        let columns: [CGFloat] = [36, 201]
+        let rows: [CGFloat] = [108, 273, 438]
+        return WMPanelPage(kicker: section.title, subtitle: section.description, height: 800, onBack: { selected = nil }) {
+            ForEach(Array(Self.avatarPresets.enumerated()), id: \.element.id) { index, preset in
+                let x = columns[index % 2], y = rows[index / 2]
+                let isSelected = selectedID == preset.id
+                Button { saveAvatar(ProfileAvatarPreference(kind: .preset, value: preset.id)) } label: {
+                    ZStack {
+                        if isSelected { Circle().stroke(WM.pink, lineWidth: 1).frame(width: 162, height: 162) }
+                        WMAvatarPresetView(presetID: preset.id, size: isSelected ? 143 : 135)
+                    }
+                    .frame(width: isSelected ? 162 : 153, height: isSelected ? 162 : 153)
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+                .offset(x: isSelected ? x - 4.6 : x, y: isSelected ? y - 4.6 : y)
+            }
+            ZStack {
+                WMPanelButton(label: "Upload custom photo", primary: false, width: 158, height: 44)
+                PhotosPicker(selection: $photoItem, matching: .images) { Color.clear.frame(width: 158, height: 44) }
+            }
+            .offset(x: 36, y: 611)
+            WMPara(
+                text: "JPEG, PNG or WebP up to 10 MB. Photos are cropped square and synced to your profile.",
+                size: 16, weight: 400, lh: 24, width: 318, height: 72
+            )
+            .offset(x: 36, y: 669)
+        }
+    }
+
+    // Language
+
+    private func languagePanel(_ section: Section) -> some View {
+        let detected = Locale(identifier: "en").localizedString(
+            forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en"
+        ) ?? "English"
+        let names: [(String, String)] = [
+            ("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "German"), ("it", "Italian"),
+            ("pt", "Portuguese"), ("ja", "Japanese"), ("ko", "Korean"), ("zh", "Chinese"), ("hi", "Hindi"),
+            ("ar", "Arabic"), ("th", "Thai"),
+        ]
+        let label = language == "system" ? "Auto" : (names.first { $0.0 == language }?.1 ?? "Auto")
+        return WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+            Menu {
+                Button("Auto") { language = "system" }
+                ForEach(names, id: \.0) { code, name in Button(name) { language = code } }
+            } label: {
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(WM.shell)
+                    Image(systemName: "globe").font(.system(size: 14)).foregroundStyle(WM.inkSoft).offset(x: 19, y: 15)
+                    WMText(label, 11.52, 720, lh: 17).frame(width: 232, alignment: .leading).offset(x: 45, y: 15)
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(WM.muted)
+                        .offset(x: 288, y: 18)
+                }
+                .frame(width: 318, height: 48, alignment: .topLeading)
+                .overlay(Rectangle().stroke(WM.line.opacity(0.28), lineWidth: 1))
+            }
+            .offset(x: 36, y: 108)
+            WMPara(
+                text: "Playarr detected \(detected) from this device. Choose a language above to override it.",
+                size: 12.48, weight: 400, lh: 18.5, width: 318, height: 37
+            )
+            .offset(x: 36, y: 176)
+        }
+    }
+
+    // Player
+
+    private func playerPanel(_ section: Section) -> some View {
+        let resolutions: [(String, String, String, [Int])] = [
+            ("UHD", "2160p", "2160p", [12, 20, 35]),
+            ("FHD", "1080p", "1080p", [4, 8, 12]),
+            ("HD", "720p", "720p", [2, 4, 6]),
+            ("SD", "480p", "480p", [1, 2, 3]),
+        ]
+        let tiers = ["Low", "Medium", "High"]
+        let columnX: [CGFloat] = [100, 187, 273]
+        let subtitleModes: [(String, String)] = [("off", "Off"), ("forced", "Forced only"), ("always", "Always on")]
+        return WMPanelPage(kicker: section.title, subtitle: section.description, height: 1000, onBack: { selected = nil }) {
+            panelH3("Default quality", size: 16.8, weight: 560, lh: 25, ls: -0.588).offset(x: 36, y: 108)
+            WMText("Start playback at this quality when the server can provide it.", 10.56, 400, color: WM.muted, lh: 16)
+                .frame(width: 318, alignment: .leading).offset(x: 36, y: 139)
+            Button { qualityID = "original" } label: {
+                WMQualityCell(width: 318, selected: qualityID == "original") {
+                    WMText("Original", 9.28, 700, lh: 14).offset(x: 11, y: 11)
+                    WMText("Best available source", 7.04, 400, color: WM.muted, lh: 11).offset(x: 11, y: 27)
+                    Text("\u{2713}").font(WM.font(11.84, 400)).foregroundStyle(WM.pink).offset(x: 291, y: 15)
+                }
+            }
+            .buttonStyle(.plain)
+            .offset(x: 36, y: 170)
+            ForEach(0..<3, id: \.self) { column in
+                Text(tiers[column].uppercased())
+                    .font(WM.font(7.68, 760)).tracking(0.6144).foregroundStyle(WM.muted)
+                    .frame(width: 81, height: 24)
+                    .offset(x: columnX[column], y: 226)
+            }
+            ForEach(Array(resolutions.enumerated()), id: \.offset) { row, resolution in
+                let y = 256 + CGFloat(row) * 54
+                WMText(resolution.0, 8.96, 760, lh: 13).offset(x: 40, y: y + 11)
+                WMText(resolution.1, 7.04, 400, color: WM.muted, lh: 11).offset(x: 40, y: y + 26)
+                ForEach(0..<3, id: \.self) { column in
+                    let id = "h264-\(resolution.2)-\(resolution.3[column])mbps"
+                    Button { qualityID = id } label: {
+                        WMQualityCell(width: 81, selected: qualityID == id) {
+                            WMText("\(resolution.3[column]) Mbps", 9.28, 700, color: WM.inkSoft, lh: 14).frame(width: 37, alignment: .leading).offset(x: 11, y: 11)
+                            WMText(tiers[column], 7.04, 400, color: WM.muted, lh: 11).offset(x: 11, y: 27)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: columnX[column], y: y)
+                }
+            }
+            panelH3("Default subtitles", size: 16.8, weight: 560, lh: 25, ls: -0.588).offset(x: 36, y: 511)
+            WMPara(
+                text: "Keep subtitles off, show forced dialogue only, or turn them on automatically.",
+                size: 10.56, weight: 400, lh: 16.5, width: 318, height: 33
+            )
+            .offset(x: 36, y: 541)
+            ForEach(Array(subtitleModes.enumerated()), id: \.offset) { index, mode in
+                Button { subtitleMode = mode.0 } label: {
+                    WMQualityCell(width: 318, height: 54, selected: subtitleMode == mode.0, bar: true) {
+                        WMText(mode.1, 11.2, 700, color: subtitleMode == mode.0 ? WM.ink : WM.inkSoft, lh: 17).offset(x: 15, y: 19)
+                    }
+                }
+                .buttonStyle(.plain)
+                .offset(x: 36, y: 589 + CGFloat(index) * 62)
+            }
+            panelH3("Default audio track", size: 16.8, weight: 560, lh: 25, ls: -0.588).offset(x: 36, y: 812)
+            WMText("Prefer this audio language whenever a matching track exists.", 10.56, 400, color: WM.muted, lh: 16)
+                .frame(width: 318, alignment: .leading).offset(x: 36, y: 843)
+            settingPicker("Audio language", selection: $audioLanguage) { languageOptions }
+                .onChange(of: audioLanguage) { _, value in savePlayerLanguage(value) }
+                .frame(width: 318)
+                .offset(x: 36, y: 875)
+        }
+    }
+
+    // Server connection
+
+    private func serverPanel(_ section: Section) -> some View {
+        WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(WM.line.opacity(0.14))
+                Rectangle().fill(WM.page).frame(width: 316, height: 94).offset(x: 1, y: 1)
+                WMText("Playarr Server", 16, 700, lh: 24).offset(x: 19, y: 17)
+                WMText(environment.currentUserName ?? "Playarr viewer", 10.56, 400, color: WM.muted, lh: 16).offset(x: 19, y: 44)
+                WMText(environment.serverBaseURL.absoluteString, 10.56, 400, color: WM.muted, lh: 16).offset(x: 19, y: 63)
+                Text("PRIMARY")
+                    .font(WM.mono(10.56, 400)).foregroundStyle(WM.muted)
+                    .frame(width: 67, height: 31)
+                    .overlay(Rectangle().stroke(WM.line.opacity(0.14), lineWidth: 1))
+                    .offset(x: 232, y: 32)
+            }
+            .frame(width: 318, height: 96, alignment: .topLeading)
+            .offset(x: 36, y: 108)
+            panelLabel("Add another server").offset(x: 36, y: 224)
+            WMFieldGroup(height: 191) {
+                ZStack(alignment: .topLeading) {
+                    WMFieldBox { TextField("", text: $serverAddress, prompt: Text.wmPlaceholder("Server address or URL"))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL) }
+                    WMFieldBox { Text(environment.currentUserName ?? "Playarr viewer").foregroundStyle(WM.ink) }.offset(y: 49)
+                    WMFieldBox { SecureField("", text: $serverPassword, prompt: Text.wmPlaceholder("Password")) }.offset(y: 98)
+                    WMPanelButton(label: "Connect", width: 318, height: 44, action: connectServer).offset(y: 147)
+                }
+            }
+            .offset(x: 36, y: 248)
+            WMPara(
+                text: "Credentials and requests go directly from this app to that server.",
+                size: 12.48, weight: 400, lh: 18.5, width: 318, height: 37
+            )
+            .offset(x: 36, y: 439)
+            WMPanelButton(label: "Test connection", primary: false, width: 115, height: 38).offset(x: 36, y: 496)
+            WMPara(
+                text: "\(environment.serverBaseURL.absoluteString) remains the primary server for profile and player preferences.",
+                size: 12.48, weight: 400, lh: 18.5, width: 318, height: 37
+            )
+            .offset(x: 36, y: 554)
+            WMText("\u{25B8} TV app connection details", 11.52, 720, color: WM.inkSoft, lh: 17)
+                .frame(width: 318, alignment: .leading).offset(x: 36, y: 629)
+        }
+    }
+
+    // Profile lock
+
+    private func lockPanel(_ section: Section) -> some View {
+        WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+            panelLabel("New PIN").offset(x: 36, y: 108)
+            WMFieldGroup(height: pinLocked ? 142 : 93) {
+                ZStack(alignment: .topLeading) {
+                    WMFieldBox {
+                        SecureField("", text: $pin, prompt: Text.wmPlaceholder("\u{2022}\u{2022}\u{2022}\u{2022}"))
+                            .keyboardType(.numberPad)
+                            .onChange(of: pin) { _, value in pin = String(value.filter(\.isNumber).prefix(4)) }
+                    }
+                    WMPanelButton(
+                        label: pinLocked ? "Replace PIN" : "Set PIN",
+                        enabled: pin.count == 4 && !busy,
+                        width: 318, height: 44,
+                        action: { savePin(pin) }
+                    )
+                    .offset(y: 49)
+                    if pinLocked {
+                        WMPanelButton(label: "Remove PIN", primary: false, width: 318, height: 44, action: { savePin(nil) })
+                            .offset(y: 98)
+                    }
+                }
+            }
+            .offset(x: 36, y: 132)
+            WMText(pinLocked ? "PIN lock is on." : "PIN lock is off.", 16, 400, color: WM.muted, lh: 24)
+                .offset(x: 36, y: pinLocked ? 300 : 251)
+        }
+    }
+
+    // Invite a friend
+
+    private func invitePanel(_ section: Section) -> some View {
+        WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+            if let inviteLink {
+                WMText("Your invitation is ready.", 16, 400, color: WM.muted, lh: 24).offset(x: 36, y: 108)
+                WMPara(text: inviteLink.absoluteString, size: 12.48, weight: 400, lh: 18.5, width: 318, height: 74)
+                    .offset(x: 36, y: 152)
+                ShareLink(item: inviteLink) { WMPanelButton(label: "Share invitation", width: 318, height: 44).allowsHitTesting(false) }
+                    .offset(x: 36, y: 240)
+            } else if inviteRequest?.status == .approved {
+                WMText("Your request was approved.", 16, 400, color: WM.muted, lh: 24).offset(x: 36, y: 108)
+                WMPanelButton(label: "Generate invitation", enabled: !busy, width: 318, height: 44, action: generateInvite)
+                    .offset(x: 36, y: 152)
+            } else if let request = inviteRequest {
+                WMText("Your invite request is \(request.status.rawValue).", 16, 400, color: WM.muted, lh: 24).offset(x: 36, y: 108)
+            } else {
+                WMText("You have not requested an invite yet.", 16, 400, color: WM.muted, lh: 24).offset(x: 36, y: 108)
+                Text("WHO IS THIS FOR, AND WHAT SHOULD THEY HAVE ACCESS TO? (OPTIONAL)")
+                    .font(WM.font(11.2, 720)).tracking(0.896).foregroundStyle(WM.muted)
+                    .lineSpacing(17 - 11.2 * 1.364)
+                    .frame(width: 318, height: 34, alignment: .topLeading)
+                    .offset(x: 36, y: 152)
+                TextField(
+                    "", text: $inviteMessage,
+                    prompt: Text.wmPlaceholder("For example: For Sam \u{2014} films and television series, please."),
+                    axis: .vertical
+                )
+                .font(WM.font(9.3, 400))
+                .foregroundStyle(WM.ink)
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .frame(width: 318, height: 48, alignment: .topLeading)
+                .overlay(Rectangle().stroke(WM.line.opacity(0.28), lineWidth: 1))
+                .offset(x: 36, y: 186)
+                WMPanelButton(label: "Request invite QR", enabled: !busy, width: 318, height: 44, action: requestInvite)
+                    .offset(x: 36, y: 267)
+            }
+            WMPanelButton(label: "Enable approval notifications", primary: false, width: 187, height: 38)
+                .offset(x: 36, y: 331)
+        }
+    }
+
+    // Phone remote
+
+    private func remotePanel(_ section: Section) -> some View {
+        WMPanelPage(kicker: section.title, subtitle: section.description, height: 844, onBack: { selected = nil }) {
+            panelH3("This device").offset(x: 36, y: 108)
+            RoundedRectangle(cornerRadius: 2.5)
+                .stroke(WM.inkSoft.opacity(0.8), lineWidth: 1.2)
+                .frame(width: 13, height: 13)
+                .offset(x: 40, y: 174.5)
+            WMPara(
+                text: "Allow my other devices to control this one",
+                size: 16, weight: 400, color: WM.ink, lh: 24, width: 292, height: 48
+            )
+            .offset(x: 68, y: 156)
+            WMPara(
+                text: "Devices must be signed in to your account, and you approve every pairing on this screen.",
+                size: 12.48, weight: 400, lh: 18.5, width: 318, height: 37
+            )
+            .offset(x: 36, y: 224)
+            RemoteControllerView(apiClient: environment.apiClient, webStyle: true)
+                .frame(width: 318, alignment: .topLeading)
+                .offset(x: 36, y: 310)
+        }
+    }
+}
+
+/// A `quality-matrix-choice` / `player-default-button` cell: rounded, outlined, tinted when selected.
+private struct WMQualityCell<Content: View>: View {
+    let width: CGFloat
+    var height: CGFloat = 48
+    let selected: Bool
+    var bar = false
+    @ViewBuilder let content: () -> Content
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: bar ? 0 : 10, style: .continuous)
+        ZStack(alignment: .topLeading) {
+            shape.fill(selected ? WM.pink.opacity(0.12) : WM.page)
+            content()
+            if selected && bar {
+                Rectangle().fill(WM.pink).frame(width: 3, height: height)
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .overlay(shape.stroke(selected && !bar ? WM.pink : WM.line.opacity(scheme == .dark ? 0.2 : 0.14), lineWidth: 1))
+        .contentShape(Rectangle())
     }
 }

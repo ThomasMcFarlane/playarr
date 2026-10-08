@@ -1,6 +1,7 @@
 import Observation
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 @MainActor
 @Observable
@@ -49,6 +50,8 @@ struct ProfilesView: View {
     @State private var pinProfile: AvailableProfile?
     @State private var pin = ""
     @State private var selectedProfileID: UUID?
+    @AppStorage("com.playarr.ios.appearance") private var appearance = "system"
+    @AppStorage("com.playarr.ios.language") private var language = "system"
     let onOpenSettings: () -> Void
     let onHome: () -> Void
 
@@ -98,7 +101,224 @@ struct ProfilesView: View {
 
     private var content: some View {
         GeometryReader { proxy in
-            let phone = PlayarrLayout.isPhone(proxy.size)
+            if PlayarrLayout.isPhone(proxy.size) {
+                phoneContent
+            } else {
+                stageContent(proxy: proxy)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private func dropdown<Items: View>(
+        x: CGFloat, icon: String, label: String, @ViewBuilder items: () -> Items
+    ) -> some View {
+        Menu {
+            items()
+        } label: {
+            ZStack {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(WM.muted)
+                    .offset(x: -29)
+                WMText(label, 11.52, 720, lh: 17.28).offset(x: 2)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(WM.muted)
+                    .offset(x: 31)
+            }
+            .frame(width: 112, height: 48)
+            .background(WM.shell)
+            .overlay(Rectangle().stroke(WM.line.opacity(0.28), lineWidth: 1))
+        }
+        .offset(x: x, y: 14)
+    }
+
+    private var themeLabel: String {
+        switch appearance {
+        case "light": "Light"
+        case "dark": "Dark"
+        default: "System"
+        }
+    }
+
+    private var languageLabel: String {
+        Self.languages.first(where: { $0.0 == language })?.1 ?? "Auto"
+    }
+
+    private static let languages: [(String, String)] = [
+        ("system", "Auto"), ("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "German"),
+        ("it", "Italian"), ("pt", "Portuguese"), ("ja", "Japanese"), ("ko", "Korean"), ("zh", "Chinese"),
+        ("hi", "Hindi"), ("ar", "Arabic"), ("th", "Thai"),
+    ]
+
+    /// Web mobile profile picker (numbers from the web layout): theme and language dropdowns,
+    /// a centred heading and the profile avatars with the "Sign in" tile.
+    private var phoneContent: some View {
+        ZStack(alignment: .topLeading) {
+            WM.shell.ignoresSafeArea()
+            RadialGradient(
+                colors: [WM.pink.opacity(0.1), WM.pink.opacity(0)],
+                center: UnitPoint(x: 0.5, y: 0.5),
+                startRadius: 0,
+                endRadius: 300
+            )
+            .frame(width: 600, height: 600)
+            .offset(x: -105, y: 120)
+            .allowsHitTesting(false)
+
+            PlayarrLogo(size: 30).offset(x: 21, y: 20)
+            WMText("PROFILES", 7.36, 820, color: WM.pink, lh: 11.04, ls: 0.9568)
+                .frame(width: 358).offset(x: 0, y: 72)
+            WMText("Who\u{2019}s watching?", 42.9, 500, lh: 40.755, ls: -3.0888)
+                .frame(width: 358).offset(x: 0, y: 90)
+            dropdown(x: 144, icon: "sun.max", label: themeLabel) {
+                Button("System") { appearance = "system" }
+                Button("Light") { appearance = "light" }
+                Button("Dark") { appearance = "dark" }
+            }
+            dropdown(x: 264, icon: "globe", label: languageLabel) {
+                ForEach(Array(Self.languages.enumerated()), id: \.offset) { _, entry in
+                    Button(entry.1) { language = entry.0 }
+                }
+            }
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 19) {
+                    ForEach(Array(viewModel.profiles.enumerated()), id: \.element.id) { index, profile in
+                        phoneProfile(profile)
+                    }
+                    phoneSignIn
+                }
+                .padding(.leading, 24)
+                .padding(.trailing, 24)
+            }
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            .frame(width: 390, height: 300, alignment: .topLeading)
+            .offset(x: 0, y: 169)
+
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(WM.font(11, 650)).foregroundStyle(PlayarrStyle.danger)
+                    .offset(x: 24, y: 470)
+            }
+
+            Button {
+                if let url = URL(string: "/clients", relativeTo: viewModel.environment.serverBaseURL)?.absoluteURL {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    WMText("Clients", 7.68, 720, color: WM.inkSoft, lh: 11.52).fixedSize()
+                    WMText("\u{2192}", 7.68, 720, color: WM.inkSoft, lh: 11.52).fixedSize()
+                }
+                .frame(width: 78, height: 44)
+                .background(WM.chip, in: Capsule())
+                .overlay(Capsule().stroke(WM.line.opacity(0.08), lineWidth: 1))
+                .wmChipShadow()
+            }
+            .buttonStyle(.plain)
+            .offset(x: 290, y: 775)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func phoneProfile(_ profile: AvailableProfile) -> some View {
+        let selected = profile.isCurrent
+        return VStack(spacing: 0) {
+            Button { choose(profile) } label: {
+                ZStack {
+                    PlayarrProfileAvatar(
+                        preference: profile.isCurrent ? viewModel.currentAvatar : nil,
+                        userID: profile.isCurrent ? viewModel.environment.currentUserID : profile.id,
+                        userName: profile.displayName,
+                        size: selected ? 169 : 163
+                    )
+                    .overlay {
+                        if selected {
+                            Circle().stroke(WM.pink.opacity(0.42), lineWidth: 4).padding(-2)
+                        }
+                    }
+                }
+                .frame(width: 163, height: 163)
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.switching)
+            WMText(profile.displayName, 13.12, 680, lh: 19.68)
+                .frame(width: 163).padding(.top, 10)
+            WMText(
+                profile.isCurrent ? "WATCHING NOW" : profile.pinLocked ? "PIN REQUIRED" : "READY",
+                6.72, 690, color: WM.muted, lh: 10.08, ls: 0.3024
+            )
+            .frame(width: 163).padding(.top, 9)
+            if selected {
+                HStack(spacing: 9) {
+                    Button(action: onOpenSettings) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14))
+                            .foregroundStyle(WM.pink)
+                            .frame(width: 44, height: 44)
+                            .background(WM.chip, in: Circle())
+                            .overlay(Circle().stroke(WM.line.opacity(0.08), lineWidth: 1))
+                            .wmChipShadow()
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        Task { try? await viewModel.environment.signOut() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 9)).foregroundStyle(WM.inkSoft)
+                            WMText("Sign out", 7.68, 720, color: WM.inkSoft, lh: 11.52).fixedSize()
+                        }
+                        .frame(width: 92, height: 44)
+                        .background(WM.chip, in: Capsule())
+                        .overlay(Capsule().stroke(WM.line.opacity(0.08), lineWidth: 1))
+                        .wmChipShadow()
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 24).padding(.leading, 9)
+                .frame(width: 163, alignment: .leading)
+            }
+        }
+        .frame(width: 163, alignment: .top)
+    }
+
+    private var phoneSignIn: some View {
+        Button {
+            Task { try? await viewModel.environment.signOut() }
+        } label: {
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [
+                                WM.adaptive(light: (233, 185, 196), dark: (140, 56, 86)),
+                                WM.adaptive(light: (190, 85, 115), dark: (90, 30, 58)),
+                            ],
+                            startPoint: UnitPoint(x: 0.2, y: 0.06),
+                            endPoint: UnitPoint(x: 0.8, y: 0.94)
+                        )
+                    )
+                    Circle().stroke(WM.line.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).padding(5)
+                    WMText("+", 38.4, 300, color: WM.inkSoft, lh: 57.6)
+                }
+                .frame(width: 156, height: 156)
+                WMText("Sign in", 13.12, 680, color: WM.inkSoft, lh: 19.68).frame(width: 156).padding(.top, 9)
+                WMText("ADD ANOTHER PROFILE", 6.72, 690, color: WM.muted, lh: 10.08, ls: 0.3024)
+                    .frame(width: 156).padding(.top, 8)
+            }
+            .frame(width: 156, alignment: .top)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 13)
+    }
+
+    private func stageContent(proxy: GeometryProxy) -> some View {
+        Group {
+            let phone = false
             let avatarSize = phone
                 ? min(160, max(122, proxy.size.width * 0.38))
                 : min(244, max(160, proxy.size.width * 0.13))
@@ -146,7 +366,6 @@ struct ProfilesView: View {
                 selectedProfileID = viewModel.profiles.first(where: \.isCurrent)?.id ?? viewModel.profiles.first?.id
             }
         }
-        .ignoresSafeArea()
     }
 
     private var profileBackground: some View {

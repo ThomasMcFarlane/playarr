@@ -6,12 +6,113 @@ import UniformTypeIdentifiers
 struct YourDataView: View {
     @State private var model: YourDataViewModel
     @State private var pickingFile = false
+    /// Web mobile settings panel layout while nothing is being previewed or imported.
+    var webStyle = false
 
-    init(transport: PlayarrRequestTransport) {
+    init(transport: PlayarrRequestTransport, webStyle: Bool = false) {
+        self.webStyle = webStyle
         _model = State(initialValue: YourDataViewModel(transport: transport))
     }
 
     var body: some View {
+        if webStyle, case .idle = model.importState {
+            webBody
+        } else {
+            cardBody
+        }
+    }
+
+    private var webBody: some View {
+        ZStack(alignment: .topLeading) {
+            WMText("Export my data", 18.72, 700, lh: 28)
+            WMPara(
+                text: "Creates one ZIP with your watch progress, personal playlists (in order) and audio-language preference. Open the CSV files in a spreadsheet, or keep the file to import elsewhere.",
+                size: 16, weight: 400, lh: 24, width: 318, height: 120
+            )
+            .offset(y: 48)
+            WMPara(
+                text: "The file contains only this profile's data. It never contains passwords, tokens, file paths, other people's activity or the media itself.",
+                size: 12.48, weight: 400, lh: 18.5, width: 318, height: 56
+            )
+            .offset(y: 188)
+            exportAction.offset(y: 264)
+            WMText("Import data", 18.72, 700, lh: 28).offset(y: 356)
+            WMPara(
+                text: "Choose a Playarr export. You will see what it would change before anything is saved. Nothing is deleted, and your account, permissions and other profiles are never touched.",
+                size: 16, weight: 400, lh: 24, width: 318, height: 120
+            )
+            .offset(y: 404)
+            fieldLabel("Playarr data file (.zip)").offset(y: 544)
+            Button { pickingFile = true } label: {
+                HStack(spacing: 4) {
+                    Text("Choose File")
+                        .font(WM.font(11, 400)).foregroundStyle(WM.ink)
+                        .padding(.horizontal, 6).frame(height: 16)
+                        .background(WM.artFill)
+                        .overlay(RoundedRectangle(cornerRadius: 2).stroke(WM.muted, lineWidth: 1))
+                    Text("No file chosen").font(WM.font(11, 400)).foregroundStyle(WM.ink)
+                    Spacer()
+                }
+                .padding(.horizontal, 8).padding(.top, 4)
+                .frame(width: 318, height: 48, alignment: .topLeading)
+                .overlay(Rectangle().stroke(WM.line.opacity(0.28), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(y: 561)
+            fieldLabel("If progress already exists").offset(y: 636)
+            Menu {
+                Button("Keep whichever is newer") { model.keepExistingProgress = false }
+                Button("Always keep what is here") { model.keepExistingProgress = true }
+            } label: {
+                HStack {
+                    Text(model.keepExistingProgress ? "Always keep what is here" : "Keep whichever is newer")
+                        .font(WM.font(11, 400)).foregroundStyle(WM.muted)
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.system(size: 9)).foregroundStyle(WM.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(width: 318, height: 48)
+                .overlay(Rectangle().stroke(WM.line.opacity(0.28), lineWidth: 1))
+            }
+            .offset(y: 653)
+            Toggle(isOn: $model.includePreferences) {
+                Text("Also apply my audio-language preference")
+                    .font(WM.font(11.2, 720)).tracking(0.896).foregroundStyle(WM.muted)
+            }
+            .toggleStyle(.switch)
+            .frame(width: 318)
+            .offset(y: 728)
+        }
+        .frame(width: 318, height: 800, alignment: .topLeading)
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.zip]) { result in
+            handlePicked(result)
+        }
+    }
+
+    @ViewBuilder
+    private var exportAction: some View {
+        switch model.exportState {
+        case .idle, .failed:
+            WMPanelButton(label: "Prepare my data", width: 131, height: 44) { Task { await model.startExport() } }
+        case .working(let stage):
+            HStack(spacing: 10) { ProgressView(); Text(stage).font(.subheadline) }
+                .foregroundStyle(PlayarrStyle.inkSoft)
+        case .ready(let url, let counts):
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ready: \(counts.watchProgress) watch records and \(counts.playlists) playlists.")
+                    .font(.subheadline).foregroundStyle(PlayarrStyle.inkSoft)
+                ShareLink(item: url) { Label("Download", systemImage: "square.and.arrow.up") }
+            }
+        }
+    }
+
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(WM.font(11.2, 720)).tracking(0.896).foregroundStyle(WM.muted)
+            .frame(width: 318, height: 17, alignment: .leading)
+    }
+
+    private var cardBody: some View {
         VStack(alignment: .leading, spacing: 22) {
             exportCard
             importCard

@@ -19,6 +19,7 @@ on:
       - scripts/parity/*.mjs
       - scripts/parity/screens.json
       - clients/apple-tv/**
+      - clients/ios/**
   workflow_dispatch:
     inputs:
       platform:
@@ -38,18 +39,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'tvos' }}
+  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'both' }}
   cancel-in-progress: true
 
 env:
-  PLATFORM: ${{ inputs.platform || 'tvos' }}
   PLAYARR_FIXTURE_PORT: "18484"
   CARGO_PROFILE_DEV_DEBUG: "0"
   PLAYARR_FIXTURE_NO_SCOPE: "1"
 
 jobs:
   parity:
-    name: Parity captures (${{ inputs.platform || 'tvos' }})
+    name: Parity captures (${{ matrix.platform }})
+    # Dispatch runs the chosen client; a pull request runs both.
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platform && format('["{0}"]', inputs.platform) || '["tvos","ios"]') }}
+    env:
+      PLATFORM: ${{ matrix.platform }}
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
@@ -122,11 +129,11 @@ jobs:
           if [[ "$PLATFORM" == tvos ]]; then
             echo "screens=scripts/parity/apple/screens.tv.json" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::the ios platform is not wired into this workflow yet"
-            exit 1
+            echo "screens=scripts/parity/apple/screens.mobile.json" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Capture the web reference (layout dump)
+        if: env.PLATFORM == 'tvos'
         env:
           # The runner's Google Chrome plays the H.264 fixture clips the player screens need.
           PARITY_CHROME_CHANNEL: chrome
@@ -134,7 +141,7 @@ jobs:
           # The committed references in docs/parity/web are what the native screens diff against; this fresh capture
           # is kept in the artifact with the per-element layout dump (dom/<id>.json) for fixing the native layout.
           node scripts/parity/capture-web.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
-            --out "$RUNNER_TEMP/parity/web" --layouts tv --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --dump-dom
+            --out "$RUNNER_TEMP/parity/web" --layouts "$([[ "$PLATFORM" == tvos ]] && echo tv || echo mobile)" --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --dump-dom
 
       - name: Capture the web scrolled states
         if: env.PLATFORM == 'tvos'
@@ -145,10 +152,26 @@ jobs:
           node scripts/parity/capture-web-scrolled.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
             --out "$RUNNER_TEMP/parity/web-scrolled" --theme both --cards 4
 
-      - name: Create the simulator (Apple TV at 1080p)
+
+      - name: Create the simulator (iPhone 14 at 390x844 points, or Apple TV at 1080p)
         id: simulator
         run: |
           set -euo pipefail
+          if [[ "$PLATFORM" == ios ]]; then
+            # Only the iPhone 12 to 14 family is 390x844 points (1170x2532 at 3x).
+            type=$(xcrun simctl list devicetypes -j | node -e '
+              let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+                console.log(JSON.parse(s).devicetypes.find((d) => d.name === "iPhone 14").identifier);
+              });')
+            runtime=$(xcrun simctl list runtimes -j | node -e '
+              let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+                const r = JSON.parse(s).runtimes.filter((x) => x.isAvailable && x.identifier.includes(".iOS-"));
+                console.log(r.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))[0].identifier);
+              });')
+            udid=$(xcrun simctl create "Playarr parity" "$type" "$runtime")
+            echo "udid=$udid" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           types=$(xcrun simctl list devicetypes -j)
           type=$(node -e '
             const t = JSON.parse(process.argv[1]).devicetypes.filter((d) => d.identifier.includes("Apple-TV"));
@@ -173,6 +196,85 @@ jobs:
             -destination "platform=tvOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 40 \
             || { echo "::group::compiler errors"; grep -E "error:" "$RUNNER_TEMP/build.txt" | sort -u | head -40; echo "::endgroup::"; exit 1; }
+
+      - name: Prepare the iOS workspace
+        if: env.PLATFORM == 'ios'
+        timeout-minutes: 20
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Build the iOS app
+        if: env.PLATFORM == 'ios'
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -workspace clients/ios/Playarr.xcworkspace -scheme PlayarrApp -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 40
+
+      - name: Capture the iOS screens
+        if: env.PLATFORM == 'ios'
+        run: |
+          set -euo pipefail
+          udid="${{ steps.simulator.outputs.udid }}"
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name '*.app' | head -1)
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" "$app"
+          # A freshly booted simulator shows system banners for a few seconds; let them go first.
+          sleep 25
+          password=$(node -e 'import("./scripts/fixtures/catalog.mjs").then((m) => console.log(m.FIXTURE_PASSWORD))')
+          # Player screens last in every theme: playing a film records progress that would reshape the Home rails.
+          for phase in rest players; do
+            for theme in ${PARITY_THEMES:-dark light}; do
+              xcrun simctl ui "$udid" appearance "$theme"
+              PARITY_THEME="$theme" PARITY_PHASE="$phase" scripts/parity/apple/capture-ios.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
+                "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$password" "$RUNNER_TEMP/parity/$theme/native"
+            done
+          done
+          # Scrolled state (mandatory): Home with the first rail scrolled so its third card is at the leading edge.
+          for theme in ${PARITY_THEMES:-dark light}; do
+            mkdir -p "$RUNNER_TEMP/parity/scrolled-native/mobile/$theme"
+            xcrun simctl ui "$udid" appearance "$theme"
+            xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
+            xcrun simctl launch "$udid" "$bundle" --playarr-parity-server "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
+              --playarr-parity-user fx-viewer --playarr-parity-password "$password" --playarr-parity-route "home-scrolled:2" \
+              --playarr-parity-now "$(node scripts/parity/apple/fixture-clock.mjs)" --playarr-parity-theme "$theme" >/dev/null
+            sleep 14
+            xcrun simctl io "$udid" screenshot --type=png "$RUNNER_TEMP/parity/scrolled-native/mobile/$theme/home-scrolled.png"
+          done
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
+          file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
+
+      - name: Capture the web scrolled states (iOS)
+        if: env.PLATFORM == 'ios'
+        env:
+          PARITY_CHROME_CHANNEL: chrome
+        run: |
+          node scripts/parity/capture-web-scrolled.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
+            --out "$RUNNER_TEMP/parity/web-scrolled" --theme both --layout mobile --cards 2
+
+      - name: Diff the scrolled states (iOS)
+        if: always() && env.PLATFORM == 'ios'
+        run: |
+          echo "### iOS scrolled states (Home rail scrolled to its third card) against the web at the same position" | tee -a "$GITHUB_STEP_SUMMARY"
+          cd scripts/parity && node apple/diff-scrolled.mjs --layout mobile --band 0,410,48,830 --web "$RUNNER_TEMP/parity/web-scrolled" \
+            --native "$RUNNER_TEMP/parity/scrolled-native" --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" \
+            --out "$RUNNER_TEMP/parity/scrolled-diff" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # After the native capture on iOS: the web capture registers a second device on the fixture server, which the
+      # phone remote screen would list (the committed references were captured before any other device existed).
+      - name: Capture the web reference (layout dump, iOS)
+        if: env.PLATFORM == 'ios'
+        env:
+          # The runner's Google Chrome plays the H.264 fixture clips the player screens need.
+          PARITY_CHROME_CHANNEL: chrome
+        run: |
+          # The committed references in docs/parity/web are what the native screens diff against; this fresh capture
+          # is kept in the artifact with the per-element layout dump (dom/<id>.json) for fixing the native layout.
+          node scripts/parity/capture-web.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
+            --out "$RUNNER_TEMP/parity/web" --layouts "$([[ "$PLATFORM" == tvos ]] && echo tv || echo mobile)" --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --dump-dom
 
       - name: Capture the native screens
         if: env.PLATFORM == 'tvos'
@@ -213,6 +315,21 @@ jobs:
       - name: Diff the captures
         if: always()
         run: |
+          themes="$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')"
+          if [[ "$PLATFORM" == ios ]]; then
+            for theme in ${PARITY_THEMES:-dark light}; do
+              [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
+              mkdir -p "$RUNNER_TEMP/parity/cand/mobile/$theme"
+              cp "$RUNNER_TEMP/parity/$theme/native/"*.png "$RUNNER_TEMP/parity/cand/mobile/$theme/" 2>/dev/null || true
+            done
+            echo "### iOS parity against the shared web references (mobile layout)" | tee -a "$GITHUB_STEP_SUMMARY"
+            # The status bar (47 pt) and home indicator (34 pt) are system UI: blanked on both sides. --chrome-only: the
+            # player screens compare the chrome only (the simulator's decoded video is masked on both sides).
+            node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout mobile \
+              --theme "$themes" --chrome-only --mask-rect 0,0,390,47 --mask-rect 0,810,390,34 \
+              --out "$RUNNER_TEMP/parity/shared-diff" | tee -a "$GITHUB_STEP_SUMMARY" || true
+            exit 0
+          fi
           for theme in ${PARITY_THEMES:-dark light}; do
             [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
             # Every screen id is in the shared list, so every native capture diffs against docs/parity/web.
@@ -243,7 +360,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: parity-apple-${{ inputs.platform || 'tvos' }}-attempt-${{ github.run_attempt }}
+          name: parity-apple-${{ matrix.platform }}-attempt-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/parity
             ${{ runner.temp }}/build.txt

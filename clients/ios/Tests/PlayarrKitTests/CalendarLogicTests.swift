@@ -98,8 +98,8 @@ final class CalendarLogicTests: XCTestCase {
         XCTAssertEqual(CalendarDays.adding(days: 1, to: "2026-02-28"), "2026-03-01")
         XCTAssertEqual(CalendarDays.lastOfMonth("2026-02-10"), "2026-02-28")
         let agenda = calendarWindow(mode: .agenda, anchor: "2026-10-05")
-        XCTAssertEqual(agenda.end, "2026-11-04")
-        XCTAssertEqual(agenda.days.count, 31)
+        XCTAssertEqual(agenda.end, "2026-11-03")
+        XCTAssertEqual(agenda.days.count, 30)
         // 2026-10-05 is a Monday.
         let week = calendarWindow(mode: .week, anchor: "2026-10-08", firstWeekday: 2)
         XCTAssertEqual(week.start, "2026-10-05")

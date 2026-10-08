@@ -7,13 +7,16 @@ struct RemoteControllerView: View {
     @State private var viewModel: RemoteControllerViewModel
     @State private var text = ""
     @State private var renaming: (id: String, name: String)?
+    /// Web mobile typography and spacing (the Phone remote panel of the parity screens).
+    var webStyle = false
 
-    init(apiClient: PlayarrAPIClient) {
+    init(apiClient: PlayarrAPIClient, webStyle: Bool = false) {
+        self.webStyle = webStyle
         _viewModel = State(initialValue: RemoteControllerViewModel(apiClient: apiClient))
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: webStyle ? 0 : 18) {
             targetsSection
             if let pairing = viewModel.activePairing, let target = viewModel.selectedTarget {
                 pad(target: target, pairing: pairing)
@@ -30,12 +33,24 @@ struct RemoteControllerView: View {
     }
 
     private var targetsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Control another device").font(.headline).foregroundStyle(PlayarrStyle.ink)
+        VStack(alignment: .leading, spacing: webStyle ? 0 : 10) {
+            if webStyle {
+                WMText("Control another device", 18.72, 700, lh: 28)
+            } else {
+                Text("Control another device").font(.headline).foregroundStyle(PlayarrStyle.ink)
+            }
             if viewModel.otherTargets.isEmpty {
-                Text("No other devices are available. Turn on remote control on the other device first.")
-                    .font(.footnote)
-                    .foregroundStyle(PlayarrStyle.inkSoft)
+                if webStyle {
+                    WMPara(
+                        text: "No other devices are available. Turn on remote control on the other device first.",
+                        size: 16, weight: 400, lh: 24, width: 318, height: 48
+                    )
+                    .padding(.top, 20)
+                } else {
+                    Text("No other devices are available. Turn on remote control on the other device first.")
+                        .font(.footnote)
+                        .foregroundStyle(PlayarrStyle.inkSoft)
+                }
             }
             ForEach(viewModel.otherTargets) { target in
                 let existing = viewModel.activePairing(for: target)
@@ -142,10 +157,18 @@ struct RemoteControllerView: View {
     }
 
     private var pairingsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Paired remotes").font(.headline).foregroundStyle(PlayarrStyle.ink)
+        VStack(alignment: .leading, spacing: webStyle ? 8 : 10) {
+            if webStyle {
+                WMText("Paired remotes", 18.72, 700, lh: 28).padding(.top, 60)
+            } else {
+                Text("Paired remotes").font(.headline).foregroundStyle(PlayarrStyle.ink)
+            }
             if viewModel.livePairings.isEmpty {
-                Text("No remotes are paired.").font(.footnote).foregroundStyle(PlayarrStyle.inkSoft)
+                if webStyle {
+                    WMText("No remotes are paired.", 16, 400, color: WM.muted, lh: 24).padding(.top, 12)
+                } else {
+                    Text("No remotes are paired.").font(.footnote).foregroundStyle(PlayarrStyle.inkSoft)
+                }
             }
             ForEach(viewModel.livePairings) { pairing in
                 VStack(alignment: .leading, spacing: 6) {

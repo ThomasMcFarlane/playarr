@@ -1,5 +1,6 @@
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 private struct PlayarrChromeHiddenKey: PreferenceKey {
     static let defaultValue = false
@@ -16,10 +17,13 @@ struct RootView: View {
     let environment: AppEnvironment
     @State private var updateViewModel: UpdateViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("com.playarr.ios.appearance") private var appearance = "dark"
+    @AppStorage("com.playarr.ios.appearance") private var appearance = "system"
 
     init(environment: AppEnvironment) {
         self.environment = environment
+        #if DEBUG
+        if let theme = ParityLaunch.theme { UserDefaults.standard.set(theme, forKey: "com.playarr.ios.appearance") }
+        #endif
         _updateViewModel = State(initialValue: UpdateViewModel(apiClient: environment.apiClient))
     }
 
@@ -38,6 +42,16 @@ struct RootView: View {
         .preferredColorScheme(preferredColourScheme)
         .updateGate(updateViewModel)
         .task {
+            #if DEBUG
+            if ParityLaunch.isActive, let server = ParityLaunch.server, let user = ParityLaunch.user {
+                try? await environment.signIn(
+                    serverURL: server,
+                    username: user,
+                    password: ParityLaunch.password ?? ""
+                )
+                return
+            }
+            #endif
             await environment.restoreSessionState()
             await updateViewModel.checkForUpdate()
         }
@@ -67,11 +81,14 @@ private struct AuthenticatedPlayarrShell: View {
         case home
         case library(WorkKind)
         case playlists
+        case watchlist
+        case requests
         case calendar
         case profiles
         case settings
         #if DEBUG
         case detail
+        case player
         #endif
 
         var title: String {
@@ -81,11 +98,37 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "Home"
             case .library(let kind): kind.displayName
             case .playlists: "Playlists"
+            case .watchlist: "Watchlist"
+            case .requests: "Requests"
             case .calendar: "Calendar"
             case .profiles: "Profiles"
             case .settings: "Profile"
             #if DEBUG
             case .detail: "Title"
+            case .player: "Player"
+            #endif
+            }
+        }
+
+        var webIcon: WMIcon {
+            switch self {
+            case .downloads: .downloads
+            case .search: .search
+            case .home: .home
+            case .library(let kind):
+                switch kind {
+                case .movie: .movies
+                case .series: .series
+                case .site: .sites
+                case .artist, .author: .music
+                }
+            case .playlists: .playlists
+            case .watchlist, .requests: .watchlist
+            case .calendar: .calendar
+            case .profiles, .settings: .home
+            #if DEBUG
+            case .detail: .movies
+            case .player: .movies
             #endif
             }
         }
@@ -97,11 +140,14 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "house"
             case .library(let kind): kind.symbolName
             case .playlists: "music.note.list"
+            case .watchlist: "bookmark"
+            case .requests: "tray.and.arrow.down"
             case .calendar: "calendar"
             case .profiles: "person.2"
             case .settings: "person.crop.circle"
             #if DEBUG
             case .detail: "play.rectangle"
+            case .player: "play.rectangle"
             #endif
             }
         }
@@ -112,6 +158,7 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
     @State private var chromeHidden = false
+    @State private var household: HouseholdViewModel
     @State private var routeTransitionTitle: String?
     /// App-wide, so "Casting to <device>" stays visible while browsing
     /// anywhere in the app, not only inside `PlayerView` -- the same
@@ -124,12 +171,28 @@ private struct AuthenticatedPlayarrShell: View {
     init(environment: AppEnvironment) {
         self.environment = environment
         _homeViewModel = State(initialValue: HomeViewModel(apiClient: environment.apiClient))
+        _household = State(initialValue: HouseholdViewModel(apiClient: environment.apiClient))
         #if DEBUG
         _demoDetailViewModel = State(initialValue: WorkDetailViewModel(
             apiClient: environment.apiClient,
             workID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         ))
-        if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
+        if let screen = ParityLaunch.screen {
+            switch screen {
+            case "movies": _selected = State(initialValue: .library(.movie))
+            case "series": _selected = State(initialValue: .library(.series))
+            case "search": _selected = State(initialValue: .search)
+            case "calendar": _selected = State(initialValue: .calendar)
+            case "settings": _selected = State(initialValue: .settings)
+            case "downloads": _selected = State(initialValue: .downloads)
+            case "watchlist": _selected = State(initialValue: .watchlist)
+            case "requests": _selected = State(initialValue: .requests)
+            case "profiles": _selected = State(initialValue: .profiles)
+            case "detail-film", "detail-series": _selected = State(initialValue: .detail)
+            case "player", "player-quality": _selected = State(initialValue: .player)
+            default: break
+            }
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
             _selected = State(initialValue: .profiles)
         } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-library") {
             _selected = State(initialValue: .library(.movie))
@@ -146,6 +209,7 @@ private struct AuthenticatedPlayarrShell: View {
     var body: some View {
         ZStack {
             selectedContent
+            householdOverlay
             if !chromeHidden { chrome }
             if castCoordinator.isCasting { castMiniBar }
             if let routeTransitionTitle {
@@ -156,13 +220,51 @@ private struct AuthenticatedPlayarrShell: View {
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
+            #if DEBUG
+            if let title = ParityLaunch.title {
+                let kind: WorkKind = ParityLaunch.screen == "detail-series" ? .series : .movie
+                let page = try? await environment.apiClient.browseCatalog(
+                    kind: kind, genre: nil, tag: nil, sort: nil, limit: 100, offset: nil
+                )
+                if let match = page?.items.first(where: { $0.title == title }) {
+                    demoDetailViewModel = WorkDetailViewModel(apiClient: environment.apiClient, workID: match.id)
+                }
+            }
+            #endif
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
         }
         .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
+        .task { await household.poll() }
+    }
+
+    @ViewBuilder
+    private var householdOverlay: some View {
+        if let block = household.block, selected != .profiles {
+            HouseholdBlockedView(
+                block: block,
+                requestState: household.requestState,
+                onAskGuardian: { Task { await household.askGuardian() } },
+                onSwitchProfile: { select(.profiles) }
+            )
+            .ignoresSafeArea()
+        } else if let minutes = household.remainingMinutes {
+            VStack {
+                HouseholdRemainingBadge(minutes: minutes)
+                Spacer()
+            }
+            .allowsHitTesting(false)
+            .zIndex(14)
+        }
     }
 
     @ViewBuilder
     private var selectedContent: some View {
+        selectedScreen
+            .environment(\.playarrGoHome, { select(.home) })
+    }
+
+    @ViewBuilder
+    private var selectedScreen: some View {
         switch selected {
         case .downloads:
             NavigationStack {
@@ -174,7 +276,7 @@ private struct AuthenticatedPlayarrShell: View {
             }
         case .search:
             NavigationStack {
-                LibraryView(kind: nil, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository, title: "Search")
+                LibraryView(kind: nil, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository, title: "Search", initialQuery: parityQuery)
             }
         case .library(let kind):
             NavigationStack {
@@ -183,6 +285,14 @@ private struct AuthenticatedPlayarrShell: View {
         case .playlists:
             NavigationStack {
                 PlaylistsView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
+            }
+        case .watchlist:
+            NavigationStack {
+                WatchlistView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
+            }
+        case .requests:
+            NavigationStack {
+                RequestsView(apiClient: environment.apiClient)
             }
         case .calendar:
             NavigationStack {
@@ -208,9 +318,20 @@ private struct AuthenticatedPlayarrShell: View {
                     apiClient: environment.apiClient,
                     downloadRepository: environment.downloadRepository
                 )
+                .id(demoDetailViewModel.workID)
             }
+        case .player:
+            ParityPlayerHost(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
         #endif
         }
+    }
+
+    private var parityQuery: String? {
+        #if DEBUG
+        ParityLaunch.query
+        #else
+        nil
+        #endif
     }
 
     private var chrome: some View {
@@ -223,6 +344,7 @@ private struct AuthenticatedPlayarrShell: View {
                 stageChrome(proxy: proxy)
             }
         }
+        .ignoresSafeArea(edges: UIDevice.current.userInterfaceIdiom == .phone ? .all : [])
         .allowsHitTesting(true)
     }
 
@@ -262,11 +384,20 @@ private struct AuthenticatedPlayarrShell: View {
         .allowsHitTesting(true)
     }
 
+    /// Web mobile chrome: round profile button at the top right and the floating
+    /// 58pt nav pill 10pt from each side (`app-nav` and `app-user-identity`).
     private func phoneChrome(proxy: GeometryProxy) -> some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .topLeading) {
             profileButton(size: 42, avatarSize: 32)
-                .padding(4)
-                .offset(x: -16, y: 4)
+                .offset(x: proxy.size.width - 16 - 42, y: WM.topInset)
+            Text("v \(InstalledAppVersion.current)")
+                .font(WM.mono(6.08, 700))
+                .tracking(0.2432)
+                .foregroundStyle(WM.muted)
+                .fixedSize()
+                .frame(width: 42)
+                .offset(x: proxy.size.width - 16 - 42, y: WM.topInset + 45.6)
+                .allowsHitTesting(false)
 
             VStack {
                 Spacer()
@@ -274,16 +405,15 @@ private struct AuthenticatedPlayarrShell: View {
                     HStack(spacing: 2) {
                         ForEach(destinations, id: \.self) { destination in
                             Button { select(destination) } label: {
-                                Image(systemName: destination.icon)
-                                    .font(.system(size: 21, weight: .medium))
-                                    .foregroundStyle(
-                                        selected == destination ? PlayarrStyle.background : PlayarrStyle.muted
-                                    )
-                                    .frame(width: 44, height: 46)
-                                    .background(
-                                        selected == destination ? PlayarrStyle.ink : .clear,
-                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    )
+                                WMIconView(
+                                    icon: destination.webIcon,
+                                    color: selected == destination ? WM.shell : WM.muted
+                                )
+                                .frame(width: 44, height: 46)
+                                .background(
+                                    selected == destination ? WM.ink : .clear,
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(destination.title)
@@ -299,9 +429,10 @@ private struct AuthenticatedPlayarrShell: View {
                 )
                 .shadow(color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(0.2), radius: 20, y: 14)
                 .padding(.horizontal, 10)
-                .padding(.bottom, max(8, proxy.safeAreaInsets.bottom))
+                .padding(.bottom, WM.bottomInset)
             }
         }
+        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
     }
 
     private func stageChrome(proxy: GeometryProxy) -> some View {
@@ -422,6 +553,8 @@ private struct AuthenticatedPlayarrShell: View {
             result.append(.library(kind))
         }
         result.append(.playlists)
+        result.append(.watchlist)
+        result.append(.requests)
         result.append(.calendar)
         return result
     }

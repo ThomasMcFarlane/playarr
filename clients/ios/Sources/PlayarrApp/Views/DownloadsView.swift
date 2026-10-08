@@ -25,20 +25,48 @@ struct DownloadsView: View {
         self.downloadRepository = repository
     }
 
+    @Environment(\.playarrGoHome) private var goHome
+
+    private var isPhone: Bool { PlayarrLayout.isPhone(UIScreen.main.bounds.size) }
+
     var body: some View {
         Group {
-            if viewModel.isEmpty {
+            if viewModel.isEmpty && isPhone {
+                phoneEmpty
+            } else if viewModel.isEmpty {
                 emptyState
             } else {
                 content
             }
         }
         .background(PlayarrStyle.surface)
+        .navigationBarHidden(viewModel.isEmpty && isPhone)
         .navigationTitle("Downloads")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.visible, for: .navigationBar)
         .task { viewModel.refresh() }
         .onAppear { viewModel.refresh() }
+    }
+
+    /// Web mobile Downloads page with nothing downloaded: storage line and bar, then the empty state.
+    private var phoneEmpty: some View {
+        ZStack(alignment: .topLeading) {
+            WM.page.ignoresSafeArea()
+            WMText("\(PlayarrByteFormat.string(viewModel.storageUsedBytes) ?? "0 KB") used on this device", 8, 400, color: WM.muted, lh: 12)
+                .frame(width: 342, alignment: .leading)
+                .offset(x: 24, y: 24)
+            Capsule().fill(WM.artFill).frame(width: 342, height: 4).offset(x: 24, y: 44)
+            WMEmptyStateRow(
+                title: "No downloads yet",
+                description: "Download a title from its detail page to watch it without a connection."
+            )
+            .offset(x: 37, y: 80)
+            WMHeaderCircleButton(width: 44, height: 40, glyph: "\u{2190}", action: goHome)
+                .offset(x: 15, y: WM.topInset + 1)
+            WMText("Downloads", 21.6, 580, lh: 32, ls: -0.972).offset(x: 68, y: WM.topInset + 5)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea()
     }
 
     private var content: some View {

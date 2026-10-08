@@ -27,6 +27,7 @@ struct HomeView: View {
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
     @State private var downloadTarget: Work?
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Group {
@@ -51,7 +52,77 @@ struct HomeView: View {
 
     private var loadedContent: some View {
         GeometryReader { proxy in
-            let phone = PlayarrLayout.isPhone(proxy.size)
+            if PlayarrLayout.isPhone(proxy.size) {
+                phoneContent
+            } else {
+                stageContent(proxy: proxy)
+            }
+        }
+        .background(PlayarrStyle.surface)
+        .ignoresSafeArea(edges: .horizontal)
+        .navigationBarHidden(true)
+    }
+
+    /// Web mobile home: left-aligned horizontal rails under the page gutter,
+    /// 179x101 cards, no featured-title copy (numbers from the web layout dump).
+    private var phoneContent: some View {
+        ZStack(alignment: .topLeading) {
+            WM.page
+            WMKeyArt(
+                work: viewModel.featuredWork, apiClient: apiClient, lightOpacity: 0.41, webMask: true,
+                fadeStops: [(0, 0), (84, 0), (148, 1)]
+            )
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(viewModel.rails.enumerated()), id: \.element.id) { index, rail in
+                        phoneRail(rail, first: index == 0)
+                    }
+                }
+                .padding(.top, 89)
+                .padding(.bottom, 130)
+            }
+            .scrollIndicators(.hidden)
+            .refreshable { await viewModel.load() }
+        }
+        .ignoresSafeArea()
+    }
+
+    /// The card the parity capture scrolls the first rail to (debug builds only).
+    private func scrollTarget(_ rail: HomeViewModel.Rail) -> UUID? {
+        #if DEBUG
+        if let card = ParityLaunch.homeScrollCard, rail.works.indices.contains(card) { return rail.works[card].id }
+        #endif
+        return nil
+    }
+
+    private func phoneRail(_ rail: HomeViewModel.Rail, first: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WMText(rail.title, 16, 610, lh: 24, ls: -0.48).padding(.horizontal, 16)
+            WMFadingRail(scrollTo: first ? scrollTarget(rail) : nil) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(rail.works.enumerated()), id: \.element.id) { index, work in
+                        workLink(work) {
+                            WMRailCard(
+                                work: work,
+                                apiClient: apiClient,
+                                unseen: viewModel.progressByWorkID[work.id] == nil,
+                                focused: first && index == 0
+                            )
+                        }
+                        .id(work.id)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .frame(height: 147)
+            .padding(.top, first ? 21 : 18)
+        }
+        .padding(.bottom, 66)
+    }
+
+    private func stageContent(proxy: GeometryProxy) -> some View {
+        Group {
+            let phone = false
             let backdropHeight = proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
             ZStack(alignment: .topLeading) {
                 stageBackdrop(phone: phone, height: backdropHeight)
@@ -79,9 +150,6 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .background(PlayarrStyle.surface)
-        .ignoresSafeArea(edges: .horizontal)
-        .navigationBarHidden(true)
     }
 
     @ViewBuilder
@@ -256,4 +324,51 @@ struct HomeView: View {
             downloadRepository: DownloadRepository(apiClient: apiClient)
         )
     }
+}
+
+/// A horizontal rail with the web's edge fade: once the track has scrolled, a mask fades the cards that pass the page
+/// gutter (`.tv-media-track-window.can-scroll-left`: transparent at the window's edge to opaque one gutter in). Cards
+/// vanish under it rather than hard-cutting. `scrollTo` moves the track to that card on appear (parity captures).
+struct WMFadingRail<Content: View>: View {
+    var scrollTo: UUID?
+    @ViewBuilder var content: () -> Content
+    @State private var offset: CGFloat = 0
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                content()
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: WMRailOffsetKey.self, value: -geo.frame(in: .named("wm-rail")).minX)
+                    })
+            }
+            .coordinateSpace(name: "wm-rail")
+            .onPreferenceChange(WMRailOffsetKey.self) { offset = $0 }
+            .scrollClipDisabled()
+            .scrollIndicators(.hidden)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: offset > 1 ? .clear : .black, location: 0),
+                        .init(color: .black, location: 16 / 390),
+                        .init(color: .black, location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                // The mask must not clip the focused card's shadow above and below the track.
+                .padding(.vertical, -60)
+            )
+            .task {
+                guard let scrollTo else { return }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                proxy.scrollTo(scrollTo, anchor: .leading)
+            }
+        }
+    }
+}
+
+private struct WMRailOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

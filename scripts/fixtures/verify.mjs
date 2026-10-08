@@ -85,8 +85,18 @@ const manifest = await as.admin.api.raw("GET", pb.url);
 console.log("manifest ->", manifest.status);
 console.log(manifest.text.split("\n").slice(0, 12).join("\n"));
 check(manifest.status === 200 && manifest.text.startsWith("#EXTM3U"), "HLS manifest is served");
-const childA = await as.child.api.get(`/api/v1/playback/${detA.media_file_id}`);
+// One on-demand transcode slot per node: stop the admin session and wait for the slot, which a
+// longer clip (PLAYARR_FIXTURE_CLIP_SECONDS) can hold for a while.
+if (pb.session_id) await as.admin.api.raw("POST", `/api/v1/playback/sessions/${pb.session_id}/events`, { kind: "stop", reason: "user_stopped", position_ms: 0 });
+let childA;
+for (let attempt = 0; attempt < 60; attempt += 1) {
+  const r = await as.child.api.raw("GET", `/api/v1/playback/${detA.media_file_id}`);
+  if (r.status !== 503) { childA = JSON.parse(r.text); break; }
+  await new Promise((done) => setTimeout(done, 2000));
+}
+childA ??= {};
 check(!!childA.url, "child can play the PG film");
+if (childA.session_id) await as.child.api.raw("POST", `/api/v1/playback/sessions/${childA.session_id}/events`, { kind: "stop", reason: "user_stopped", position_ms: 0 });
 
 section("TV fixture (multiple seasons)");
 const s1 = (await detail(as.admin.api, find(adminCat, "Sample Series 1").id)).json.children.Series;

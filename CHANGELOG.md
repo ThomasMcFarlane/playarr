@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - tvOS library hero title wraps over lines like the web heading.
 - Roku: Home rails scroll like the web track (the focused card ends 34 px further right than a whole-card step, and lines up with the track start when moving back), and the first Right press from the first card now moves to the second card every time.
 - Roku: a long title whose on-demand transcode takes about twenty seconds to publish its first playlist now keeps retrying quietly instead of failing on the first 404 and returning to the detail page.
@@ -144,6 +145,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS and Apple TV Home now render the server-computed, localised `/api/v1/home/rails` shelves, falling back to the previous client-built rails on older servers.
+- iOS: Customise Home (show, hide and reorder Home rails, saved on the server), the illustrated profile avatars shared with the web, the web-style profile picker with theme and language menus, and the app version label under the profile button.
+- iOS: embeds the web's design fonts (Nunito Sans and JetBrains Mono, SIL Open Font License 1.1, variable builds) and draws the web-style screens with them at the exact CSS weights.
+- iOS: blocked and remaining-time states for household policies (outside schedule, daily budget used, "Ask a guardian for more time"), with PlayarrKit household client and tests.
+- iOS: Watchlist and Requests screens in the web mobile layout, with their nav destinations on the phone pill and the iPad rail, backed by a PlayarrKit requests client and watchlist presentation helpers (with unit tests).
+- CI: the `parity-apple` workflow gains an `ios` platform that captures the iOS app on an iPhone 14 simulator (390x844 points at 3x) against the web mobile reference; the iOS app gains debug-only launch arguments to sign in and open a screen.
 - Android: the shared page components (page layout, header, ordered header actions, the one action pill, edge fades with scroll containers, loading, empty and error states) now live in `core-designsystem`, with Roborazzi screenshot goldens for television and phone in both themes and unit tests for the action order and icon handling. The existing page scaffold is an adapter over them. No visual change (header bands identical to main on television and phone, light and dark).
 - Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
@@ -276,6 +283,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- iOS and tvOS: the Customise Home button leaves Home; iOS gets a Customise Home panel in Settings.
+- iOS Home rails fade their cards under the page gutter once scrolled, like the web, and the parity run captures and diffs a scrolled Home in both themes.
+- iOS: the phone shell, home, library, search, settings index, title page (film and series) and household blocked screen now follow the web mobile layout; the title page gains the Playback sheet, an availability note, chapters and an Add to watchlist button.
 - Web: Settings renders through the shared page layout: the header shows the section name over its description, phones show the section title, and the panels get the shared scroll-edge fade and the shared loading, empty and error states.
 - Android (phone and TV): every page now renders through the one shared page layout in `core-designsystem`, with a registry id, typed header actions, shared loading, empty and error states that keep the header and Back, the calendar's period navigation as a page action, and on television the shell action column at the right edge. Card focus (lift and soft shadow) values live in the design system.
 - Roku: in the light theme the hero and Library key art use the server's light stage bake (greyscale at the web's contrast, brightness and opacity) instead of the raw colour image.

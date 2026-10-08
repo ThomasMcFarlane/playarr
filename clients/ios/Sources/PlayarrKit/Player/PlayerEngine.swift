@@ -166,6 +166,9 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
     @ObservationIgnored private var likelyToKeepUpObservation: NSKeyValueObservation?
     @ObservationIgnored private var didPlayToEndObserver: NSObjectProtocol?
     @ObservationIgnored private var pictureInPictureController: AVPictureInPictureController?
+    /// `true` between `play()` and `pause()`/`stop()`, so a buffer refill after a
+    /// seek while paused does not report the player as playing.
+    @ObservationIgnored private var wantsToPlay = false
 
     @ObservationIgnored private let stateSubject = PassthroughSubject<PlayerPlaybackState, Never>()
     @ObservationIgnored private let timeSubject = PassthroughSubject<Double, Never>()
@@ -218,17 +221,20 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
     }
 
     public func play() {
+        wantsToPlay = true
         player.play()
         player.rate = rate
         updateState(.playing)
     }
 
     public func pause() {
+        wantsToPlay = false
         player.pause()
         updateState(.paused)
     }
 
     public func stop() {
+        wantsToPlay = false
         player.pause()
         player.replaceCurrentItem(with: nil)
         currentItem = nil
@@ -312,6 +318,7 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
         bufferEmptyObservation = item.observe(\.isPlaybackBufferEmpty, options: [.new]) { [weak self] playerItem, _ in
             guard let self, playerItem.isPlaybackBufferEmpty else { return }
             Task { @MainActor in
+                guard self.wantsToPlay else { return }
                 self.updateState(.buffering)
             }
         }
@@ -320,7 +327,7 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
             guard let self, playerItem.isPlaybackLikelyToKeepUp else { return }
             Task { @MainActor in
                 guard self.state == .buffering else { return }
-                self.updateState(.playing)
+                self.updateState(self.wantsToPlay ? .playing : .paused)
             }
         }
 

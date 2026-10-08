@@ -15,10 +15,14 @@ const base = opt("base", "http://127.0.0.1:18484");
 const out = opt("out", "parity-out");
 const themes = opt("theme", "both") === "both" ? ["light", "dark"] : [opt("theme", "dark")];
 const cards = Number(opt("cards", "4"));
+const layout = opt("layout", "tv"); // tv: focus moves right by <cards>; mobile: the first rail is scrolled so card <cards> is at the leading edge
+const mobile = layout === "mobile";
 const executablePath = process.env.PLAYARR_CHROMIUM ?? `${homedir()}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`;
 const browser = await chromium.launch(process.env.PARITY_CHROME_CHANNEL ? { channel: process.env.PARITY_CHROME_CHANNEL } : { executablePath });
 for (const theme of themes) {
-  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, colorScheme: theme });
+  const ctx = await browser.newContext(mobile
+    ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, reducedMotion: "reduce", colorScheme: theme }
+    : { viewport: { width: 1920, height: 1080 }, colorScheme: theme });
   // Freeze the clock at the fixture instant like capture-web.mjs, so the header clock matches the native capture.
   const fixtureClock = readFileSync(new URL("../fixtures/catalog.mjs", import.meta.url), "utf8").match(/FIXTURE_CLOCK = "([^"]+)"/)[1];
   await ctx.clock.install({ time: new Date(fixtureClock) });
@@ -32,14 +36,17 @@ for (const theme of themes) {
   await page.goto(`${base}/`);
   await page.waitForTimeout(3000);
   // Scroll the first rail the way the remote does: RIGHT moves focus card by card and the track follows.
-  for (let i = 0; i < cards; i++) { await page.keyboard.press("ArrowRight"); await page.waitForTimeout(400); }
+  if (mobile) {
+    await page.addStyleTag({ content: "*{scroll-behavior:auto!important;transition:none!important;animation:none!important}::-webkit-scrollbar{display:none}" });
+    await page.evaluate((k) => { const el = document.querySelector(".tv-media-track-scroll"); const card = el?.children[k]; if (el && card) el.scrollLeft = card.offsetLeft - el.offsetLeft; }, cards);
+  } else for (let i = 0; i < cards; i++) { await page.keyboard.press("ArrowRight"); await page.waitForTimeout(400); }
   await page.waitForTimeout(900);
-  mkdirSync(join(out, "tv", theme), { recursive: true });
+  mkdirSync(join(out, layout, theme), { recursive: true });
   // The track's final scroll offset, so a native capture can be placed at the same position (home-scrolled.json).
   const metrics = await page.evaluate(() =>
     [...document.querySelectorAll(".tv-media-track-scroll")].map((el) => ({ scrollLeft: Math.round(el.scrollLeft), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth })));
-  writeFileSync(join(out, "tv", theme, "home-scrolled.json"), JSON.stringify(metrics, null, 1));
-  await page.screenshot({ path: join(out, "tv", theme, "home-scrolled.png"), animations: "disabled", caret: "hide" });
+  writeFileSync(join(out, layout, theme, "home-scrolled.json"), JSON.stringify(metrics, null, 1));
+  await page.screenshot({ path: join(out, layout, theme, "home-scrolled.png"), animations: "disabled", caret: "hide" });
   await ctx.close();
 }
 await browser.close();

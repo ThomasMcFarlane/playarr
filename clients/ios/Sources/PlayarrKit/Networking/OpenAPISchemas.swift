@@ -1365,6 +1365,13 @@ public struct MediaChapter: Codable, Hashable, Sendable, Identifiable {
         case startMS = "start_ms"
         case endMS = "end_ms"
     }
+
+    public init(index: Int32, startMS: Int64, endMS: Int64? = nil, title: String? = nil) {
+        self.index = index
+        self.startMS = startMS
+        self.endMS = endMS
+        self.title = title
+    }
 }
 
 public struct MediaPlaybackPreference: Codable, Hashable, Sendable {

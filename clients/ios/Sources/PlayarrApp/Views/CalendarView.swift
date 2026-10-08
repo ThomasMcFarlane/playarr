@@ -5,6 +5,7 @@ import SwiftUI
 /// header, a Filters sheet and the iCal subscription sheet. Parity with Web `CalendarPage` and the
 /// Android calendar; all logic is in `PlayarrKit` and `CalendarViewModel`.
 struct CalendarView: View {
+    @Environment(\.playarrGoHome) private var goHome
     @State private var viewModel: CalendarViewModel
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
@@ -15,12 +16,21 @@ struct CalendarView: View {
     init(apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository) {
         self.apiClient = apiClient
         self.downloadRepository = downloadRepository
+        #if DEBUG
+        // The parity capture freezes the web clock; the native calendar follows the same instant.
+        let frozen = ParityLaunch.frozenNow
+        _viewModel = State(initialValue: CalendarViewModel(transport: apiClient, now: { frozen ?? Date() }))
+        #else
         _viewModel = State(initialValue: CalendarViewModel(transport: apiClient))
+        #endif
     }
 
     var body: some View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
+            if phone {
+                phoneBody
+            } else {
             VStack(alignment: .leading, spacing: 12) {
                 header(phone: phone)
                 controls(phone: phone)
@@ -32,6 +42,7 @@ struct CalendarView: View {
             .padding(.top, phone ? 56 : 40)
             .padding(.bottom, phone ? 84 : 24)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            }
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .foregroundStyle(PlayarrStyle.ink)
@@ -55,6 +66,373 @@ struct CalendarView: View {
                 }
             }
             .presentationDetents([.medium, .large])
+        }
+    }
+
+    // MARK: Web mobile layout
+
+    private var phoneRangeLabel: String {
+        let window = viewModel.window
+        guard let start = CalendarDays.displayDate(window.start), let end = CalendarDays.displayDate(window.end) else {
+            return viewModel.windowTitle
+        }
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = utc.timeZone
+        if viewModel.mode == .month, let anchor = CalendarDays.displayDate(viewModel.anchor) {
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: anchor)
+        }
+        let sameYear = utc.component(.year, from: start) == utc.component(.year, from: end)
+        formatter.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
+        let first = formatter.string(from: start)
+        formatter.dateFormat = "d MMM yyyy"
+        return "\(first) \u{2013} \(formatter.string(from: end))"
+    }
+
+    private func roundButton(_ glyph: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            WMText(glyph, 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(WM.page))
+                .overlay(Circle().stroke(WM.line.opacity(0.14), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// Web mobile calendar: header with link and filter buttons, the range picker with
+    /// previous, Today and next controls, then the agenda (numbers from the web layout).
+    private var phoneBody: some View {
+        let top = WM.topInset + 2
+        return ZStack(alignment: .topLeading) {
+            WM.page.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 12) {
+                if !viewModel.unhealthySources.isEmpty { sourceBanner }
+                switch viewModel.loadState {
+                case .loading:
+                    CalendarSkeleton()
+                case .failed(let message):
+                    PlayarrFailureView(title: "Couldn\u{2019}t load the calendar", message: message) {
+                        Task { await viewModel.load() }
+                    }
+                case .loaded:
+                    if viewModel.dayGroups.isEmpty {
+                        phoneEmpty
+                    } else if viewModel.mode == .agenda {
+                        Color.clear.frame(height: 1)
+                    } else {
+                        loaded(phone: true)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 212)
+            .padding(.bottom, 120)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            if case .loaded = viewModel.loadState, !viewModel.dayGroups.isEmpty, viewModel.mode == .agenda {
+                phoneAgenda(groups: viewModel.dayGroups)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+
+            WMHeaderCircleButton(width: 42, height: 38, glyph: "\u{2190}", action: goHome)
+                .offset(x: 16, y: top)
+            WMText("Release Calendar", 17.6, 580, lh: 26.4, ls: -0.792)
+                .frame(height: 38)
+                .offset(x: 68, y: top)
+            Button { showingSubscription = true } label: {
+                Image(systemName: "link")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(WM.inkSoft)
+                    .frame(width: 44, height: 38)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 230, y: top)
+            Button { showingFilters = true } label: {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(WM.inkSoft)
+                    .frame(width: 44, height: 38)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 274, y: top)
+
+            Menu {
+                Picker("View", selection: Binding(
+                    get: { viewModel.mode },
+                    set: { newMode in Task { await viewModel.setMode(newMode) } }
+                )) {
+                    Text("Agenda").tag(CalendarViewMode.agenda)
+                    Text("Week").tag(CalendarViewMode.week)
+                    Text("Month").tag(CalendarViewMode.month)
+                }
+            } label: {
+                ZStack(alignment: .topLeading) {
+                    Text(phoneRangeLabel)
+                        .font(WM.font(16, 640))
+                        .foregroundStyle(WM.ink)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 140, height: 48)
+                        .offset(x: 17, y: 13)
+                    Text("\u{25BE}\u{FE0E}").font(WM.font(11.52, 720)).foregroundStyle(WM.ink)
+                        .frame(width: 7, height: 17).offset(x: 162, y: 28)
+                }
+                .frame(width: 191, height: 74, alignment: .topLeading)
+            }
+            .offset(x: 16, y: 94)
+
+            roundButton("\u{2190}", label: "Previous period") { Task { await viewModel.step(-1) } }
+                .offset(x: 216, y: 89)
+            Button { Task { await viewModel.goToToday() } } label: {
+                WMText("Today", 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                    .frame(width: 78, height: 46)
+                    .background(WM.page, in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+                    // The web draws a 3 px focus ring 2 px outside the button.
+                    .overlay(Capsule().stroke(WM.ink, lineWidth: 3).padding(-3.7))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 260, y: 85)
+            roundButton("\u{2192}", label: "Next period") { Task { await viewModel.step(1) } }
+                .offset(x: 216, y: 138)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func chipLabel(_ text: String, size: CGFloat = 10.4, ls: CGFloat = 1.6, weight: Int = 400) -> some View {
+        WMText(text, size, weight, color: WM.muted, lh: 15.6, ls: ls)
+    }
+
+    private func releaseTypeLabel(_ type: String) -> String {
+        switch type {
+        case "air": "Airs"
+        case "cinema": "In cinemas"
+        case "digital": "Digital release"
+        case "physical": "Physical release"
+        default: "Releases"
+        }
+    }
+
+    private func kindLabel(_ kind: String) -> String {
+        switch kind {
+        case "episode": "Episodes"
+        case "movie": "Movies"
+        case "album": "Albums"
+        case "book": "Books"
+        default: "Releases"
+        }
+    }
+
+    /// Web mobile agenda: the selected release's detail block, then the day groups. Every element sits at
+    /// the box the web layout dump reports (page coordinates, 390 CSS px wide).
+    private func phoneAgenda(groups: [CalendarDayGroup]) -> some View {
+        let item = viewModel.selectedItem ?? groups.first?.items.first
+        return ScrollView(.vertical) {
+            ZStack(alignment: .topLeading) {
+                if let item, let entry = item.entries.first {
+                    Text("\(kindLabel(entry.mediaKind)) \u{00B7} \(releaseTypeLabel(entry.releaseType))".uppercased())
+                        .font(WM.font(9.28, 760)).tracking(1.6704).foregroundStyle(WM.muted)
+                        .lineLimit(1).frame(height: 14, alignment: .leading).offset(x: 16, y: 192)
+                    WMText(item.title, 22.4, 590, lh: 34, ls: -0.896).offset(x: 16, y: 220)
+                    WMText(
+                        [entry.episodeCode, entry.subtitle].compactMap { $0 }.joined(separator: " \u{00B7} "),
+                        16, 400, lh: 24
+                    )
+                    .offset(x: 16, y: 268)
+                    termLabel("RELEASE").offset(x: 16, y: 307)
+                    WMText(
+                        "\(entry.releaseAt.map { Self.releaseFormatter.string(from: $0) } ?? entry.date)",
+                        16, 400, lh: 22
+                    )
+                    .offset(x: 16, y: 325)
+                    termLabel("STATUS").offset(x: 16, y: 358)
+                    statusBadge(statusLabel(entry), size: 16, height: 22).offset(x: 16, y: 376)
+                    termLabel("REPORTED BY").offset(x: 16, y: 408)
+                    if let source = entry.sources.first {
+                        HStack(spacing: 5) {
+                            WMText(source.sourceName, 16, 400, lh: 24).fixedSize()
+                            WMText("(\(source.sourceKind))", 16, 400, color: WM.muted, lh: 24).fixedSize()
+                        }
+                        .offset(x: 16, y: 426)
+                    }
+                    phoneActions(item: item, entry: entry).offset(x: 16, y: 464)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(groups) { group in
+                        WMText(Self.groupFormatter.string(from: CalendarDays.displayDate(group.day) ?? Date()), 14.4, 640, lh: 22)
+                            .padding(.leading, 4)
+                            .padding(.top, group.id == groups.first?.id ? 0 : 14)
+                        ForEach(group.items) { row in
+                            phoneAgendaCard(row, selected: row.id == item?.id).padding(.top, 6)
+                        }
+                    }
+                }
+                .offset(x: 16, y: 537)
+            }
+            .frame(width: 390, height: 1100, alignment: .topLeading)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func termLabel(_ text: String) -> some View {
+        WMText(text, 11.52, 400, color: WM.muted, lh: 17, ls: 1.152)
+    }
+
+    private func statusBadge(_ text: String, size: CGFloat, height: CGFloat) -> some View {
+        WMText(text, size, 640, lh: height)
+            .fixedSize()
+            .padding(.horizontal, size == 16 ? 8 : 6)
+            .background(Color(red: 0.357, green: 0.498, blue: 0.820).opacity(0.24), in: Capsule())
+    }
+
+    private func statusLabel(_ entry: CalendarEntry) -> String {
+        switch entry.libraryState {
+        case .inLibrary: "In library"
+        case .monitored: "Monitored"
+        case .notMonitored: "Not monitored"
+        }
+    }
+
+    private func phoneActions(item: CalendarItem, entry: CalendarEntry) -> some View {
+        HStack(spacing: 9) {
+            if let mediaWork = entry.workID {
+                // The server offers Play only for an entry with a file (unaired episodes show Open series alone).
+                if entry.hasFile {
+                    NavigationLink {
+                        WorkDetailView(
+                            viewModel: WorkDetailViewModel(apiClient: apiClient, workID: mediaWork),
+                            apiClient: apiClient,
+                            downloadRepository: downloadRepository
+                        )
+                    } label: {
+                        WMText("Play", 11.52, 720, color: PlayarrStyle.onAccent, lh: 17)
+                            .frame(width: 66, height: 44)
+                            .background(PlayarrStyle.accent, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                NavigationLink {
+                    WorkDetailView(
+                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: mediaWork),
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
+                } label: {
+                    let primary = !entry.hasFile
+                    WMText(entry.mediaKind == "episode" ? "Open series" : "Open", 11.52, 720,
+                           color: primary ? PlayarrStyle.onAccent : WM.inkSoft, lh: 17)
+                        .frame(width: entry.mediaKind == "episode" ? 106 : 70, height: 44)
+                        .background(primary ? PlayarrStyle.accent : WM.page, in: Capsule())
+                        .overlay(Capsule().stroke(primary ? Color.clear : WM.line.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            HStack(spacing: 10) {
+                WMText("+", 11.52, 720, color: WM.inkSoft, lh: 17).fixedSize()
+                WMText("Add to watchlist", 11.52, 900, color: WM.inkSoft, lh: 17).fixedSize()
+            }
+            .frame(width: 152, height: 44)
+            .background(WM.page, in: Capsule())
+            .overlay(Capsule().stroke(WM.line.opacity(0.2), lineWidth: 1))
+        }
+    }
+
+    private func phoneAgendaCard(_ item: CalendarItem, selected: Bool) -> some View {
+        let entry = item.entries.first
+        return Button {
+            viewModel.select(item)
+        } label: {
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(PlayarrStyle.surfaceStrong)
+                Group {
+                    if let workID = entry?.workID {
+                        WMRemoteImage(
+                            apiClient: apiClient,
+                            sources: [WMRemoteImage.Source(path: "/api/v1/artwork/work/\(workID.uuidString)/poster")]
+                        )
+                    } else {
+                        WM.artFill
+                    }
+                }
+                .frame(width: 40, height: 60)
+                .background(WM.artFill)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .offset(x: 16, y: 15)
+                WMText(item.title, 16, 640, lh: 24).frame(width: 220, alignment: .leading).offset(x: 70, y: 9)
+                if let entry {
+                    WMText(
+                        [entry.episodeCode, entry.subtitle].compactMap { $0 }.joined(separator: " \u{00B7} "),
+                        16, 400, color: WM.inkSoft, lh: 24
+                    )
+                    .frame(width: 220, alignment: .leading)
+                    .offset(x: 70, y: 35)
+                    WMText(calendarTimeLabel24(entry), 12.8, 400, color: WM.muted, lh: 19).fixedSize().offset(x: 70, y: 61)
+                    WMText(releaseTypeLabel(entry.releaseType), 12.8, 400, color: WM.muted, lh: 19).fixedSize().offset(x: 116, y: 61)
+                    WMText(kindLabel(entry.mediaKind), 12.8, 400, color: WM.muted, lh: 19).fixedSize().offset(x: 151, y: 61)
+                    statusBadge(statusLabel(entry), size: 12.8, height: 19).offset(x: 215, y: 61)
+                }
+            }
+            .frame(width: 346, height: 90, alignment: .topLeading)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(selected ? WM.ink : WM.line.opacity(0.14), lineWidth: selected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func calendarTimeLabel24(_ entry: CalendarEntry) -> String {
+        guard let at = entry.releaseAt else { return "" }
+        return Self.timeFormatter.string(from: at)
+    }
+
+    private static let releaseFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEEE, d MMMM yyyy 'at' HH:mm"
+        return formatter
+    }()
+
+    private static let groupFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEEE d MMMM"
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private var phoneEmpty: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WMText(
+                viewModel.filters.isEmpty ? "Nothing scheduled" : "No releases match these filters",
+                16, 700, lh: 24
+            )
+            Text("No releases from your connected sources fall in this period.")
+                .font(WM.font(16))
+                .foregroundStyle(WM.muted)
+                .frame(width: 358, alignment: .topLeading)
+                .padding(.top, 10)
+            Text("Select a release to see its details.")
+                .font(WM.font(16))
+                .foregroundStyle(WM.muted)
+                .frame(width: 358, alignment: .topLeading)
+                .padding(.top, 36)
         }
     }
 
