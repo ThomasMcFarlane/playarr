@@ -2027,6 +2027,27 @@ export function WorkDetailPage() {
               <strong>{t(resumeButtonLabelKey(activeResumePlan))}</strong>
             </button>
           ) : null}
+          {activeResumePlan && activeResumePlan.action !== "start" ? (
+            <button
+              type="button"
+              className="tv-detail-download"
+              data-navigation-focus-key={`detail:${work.id}:resume-ask-again`}
+              aria-label={t("pages.workDetail.resumeAskAgainTitle", { title: work.title })}
+              onClick={() => {
+                client
+                  .clearResumeChoices(work.id)
+                  .then(() => client.getResumePlan(work.id))
+                  .then((plan) => {
+                    setResumePlan(plan);
+                    showToast(t("pages.workDetail.resumeAskAgainDone"));
+                  })
+                  .catch((caught) => showToast(describeApiError(caught)));
+              }}
+            >
+              <span aria-hidden="true">↺</span>
+              <strong>{t("pages.workDetail.resumeAskAgain")}</strong>
+            </button>
+          ) : null}
           <WatchlistToggle
             snapshot={snapshotFromWork(work)}
             className="tv-detail-download"
