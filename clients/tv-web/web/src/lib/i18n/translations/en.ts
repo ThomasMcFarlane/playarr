@@ -13,6 +13,7 @@ export const en = {
   "components.deviceLogin.scanQr": "Scan the QR code, or visit",
   "components.deviceLogin.signInManually": "Sign in manually",
   "components.deviceLogin.title": "Link this TV",
+  "components.states.retry": "Try again",
   "components.deviceLogin.tryAgain": "Try again",
   "components.deviceLogin.waitingApproval": "Waiting for approval…",
   "components.downloadQualityDrawer.afterWatchedHint":

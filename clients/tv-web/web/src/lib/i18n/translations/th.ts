@@ -72,6 +72,7 @@ export const th: Translations = {
   "components.deviceLogin.refreshesIn": "รหัสจะรีเฟรชใน {{time}}",
   "components.deviceLogin.signInManually": "เข้าสู่ระบบด้วยตนเอง",
   "components.deviceLogin.waitingApproval": "กำลังรอการอนุมัติ…",
+  "components.states.retry": "ลองอีกครั้ง",
   "components.deviceLogin.tryAgain": "ลองอีกครั้ง",
   "components.languageDropdown.noResults": "ไม่พบภาษาที่ค้นหา",
   "components.languageDropdown.searchPlaceholder": "ค้นหาภาษา",

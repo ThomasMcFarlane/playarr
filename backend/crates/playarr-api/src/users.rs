@@ -304,7 +304,7 @@ pub struct PlayerPreferencesResponse {
 /// whether to show a "Download" button/nav item at all, only whether the
 /// resulting API call will succeed once clicked. Deliberately just the
 /// capability booleans a Playarr client actually needs to gate its own UI
-/// on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+/// on -- not `library_allow`/`max_rating`, which are either
 /// already enforced per-request server-side (so the client never needs to
 /// duplicate that check) or not relevant to what Playarr's own chrome
 /// renders.
@@ -315,6 +315,10 @@ pub struct SelfCapabilitiesResponse {
     /// (administrators always may; `PLAYARR_REQUESTS_ALLOW_ALL_USERS`
     /// overrides for everyone).
     pub can_request: bool,
+    /// Whether this account is an administrator. Clients use it only to hide
+    /// admin-only surfaces (for example request-latency diagnostics) that
+    /// would otherwise answer 403; the server still enforces every check.
+    pub is_admin: bool,
 }
 
 #[utoipa::path(
@@ -324,7 +328,8 @@ pub struct SelfCapabilitiesResponse {
     responses(
         (status = 200, description = "The signed-in user's own capability grants", body = SelfCapabilitiesResponse, example = json!({
             "can_download": true,
-            "can_request": false
+            "can_request": false,
+            "is_admin": false
         })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access")
@@ -339,6 +344,7 @@ pub async fn get_self_capabilities_handler(
         can_request: streaming.policy.is_admin
             || streaming.policy.can_request
             || state.discovery_requests_allow_all_users,
+        is_admin: streaming.policy.is_admin,
     })
 }
 

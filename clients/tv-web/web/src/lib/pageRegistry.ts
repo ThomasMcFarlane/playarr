@@ -20,7 +20,8 @@ export type PageId =
   | "work-detail"
   | "music-detail"
   | "watchlist"
-  | "requests";
+  | "requests"
+  | "household";
 
 export type PageCoverage =
   | { file: string; mode: "layout"; pageId: PageId; routes: readonly string[]; urls: readonly string[] }
@@ -87,7 +88,8 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
   { file: "Signup.tsx", mode: "exempt", routes: ["signup"], reason: "Pre-auth profile layout.", evidence: "ProfileAuthLayout" },
   { file: "DeviceLink.tsx", mode: "exempt", routes: ["device-link"], reason: "Pre-auth profile layout.", evidence: "ProfileAuthLayout" },
   { file: "Profiles.tsx", mode: "exempt", routes: ["profiles"], reason: "Profile picker chrome (TvStageChrome).", evidence: "TvStageChrome" },
-  { file: "Household.tsx", mode: "exempt", routes: [], reason: "Household gate with its own bare page layout; it gets the standard Back in W7.", evidence: "<h1" },
+  // `/household` sits outside the app shell (a blocked profile still reaches it) but uses the standard page frame.
+  { file: "Household.tsx", mode: "layout", pageId: "household", routes: [], urls: [] },
   { file: "Clients.tsx", mode: "exempt", routes: ["clients"], reason: "Public install landing (TvStageChrome).", evidence: "TvStageChrome" },
   { file: "Legal.tsx", mode: "exempt", routes: [], reason: "Public legal documents with their own article layout.", evidence: "ProfileAuthLayout" },
 ];

@@ -22,7 +22,7 @@ function formatMs(value: number): string {
  * `HttpLatencyState` without standing up an `<ApiClientProvider>` and a real
  * fetch round trip.
  */
-export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
+export function RequestLatencyContent({ state, onRetry }: { state: HttpLatencyState; onRetry?: () => void }) {
   const { t } = useLanguage();
 
   if (state.status === "loading") {
@@ -48,7 +48,17 @@ export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
   if (state.status === "error") {
     return (
       <section className="card settings-card settings-card-wide">
-        <ErrorState graphic="details" title={t("settings.requestLatency.errorTitle")} description={state.message} />
+        {onRetry ? (
+          <ErrorState
+            graphic="details"
+            title={t("settings.requestLatency.errorTitle")}
+            description={state.message}
+            onRetry={onRetry}
+            retryLabel={t("components.states.retry")}
+          />
+        ) : (
+          <ErrorState graphic="details" title={t("settings.requestLatency.errorTitle")} description={state.message} />
+        )}
       </section>
     );
   }
@@ -123,6 +133,7 @@ export function SettingsRequestLatencyPage() {
   useDocumentTitle(t("settings.requestLatency.documentTitle"));
   const client = usePrimaryApiClient();
   const [state, setState] = useState<HttpLatencyState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,11 +157,11 @@ export function SettingsRequestLatencyPage() {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, attempt]);
 
   return (
     <SettingsSectionLayout>
-      <RequestLatencyContent state={state} />
+      <RequestLatencyContent state={state} onRetry={() => setAttempt((value) => value + 1)} />
     </SettingsSectionLayout>
   );
 }

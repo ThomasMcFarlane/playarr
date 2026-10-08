@@ -20,6 +20,7 @@ export function RequestsPage() {
   useDocumentTitle(t("pages.requests.title"));
   const client = useApiClient();
   const [state, setState] = useState<State>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +35,7 @@ export function RequestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, attempt]);
 
   return (
     <PageLayout
@@ -57,7 +58,16 @@ export function RequestsPage() {
           {state.status === "loading" ? (
             <LoadingState size="inline" label={t("pages.requests.loading")} />
           ) : state.status === "error" ? (
-            <ErrorState graphic="details" title={t("pages.requests.errorTitle")} description={state.message} />
+            <ErrorState
+              graphic="details"
+              title={t("pages.requests.errorTitle")}
+              description={state.message}
+              onRetry={() => {
+                setState({ status: "loading" });
+                setAttempt((value) => value + 1);
+              }}
+              retryLabel={t("components.states.retry")}
+            />
           ) : state.items.length === 0 ? (
             <EmptyState
               graphic="details"

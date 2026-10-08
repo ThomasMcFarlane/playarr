@@ -342,6 +342,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(artwork::work_artwork_handler))
         .routes(routes!(artwork::album_artwork_handler))
         .routes(routes!(artwork::episode_artwork_handler))
+        .routes(routes!(artwork::person_artwork_handler))
         .routes(routes!(playback::playback_info_handler))
         .routes(routes!(playback::by_external_ref_playback_info_handler))
         .routes(routes!(playback::peer_playback_info_handler))

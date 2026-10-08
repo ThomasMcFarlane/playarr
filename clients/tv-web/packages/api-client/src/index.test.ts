@@ -508,6 +508,26 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledOnce();
   });
 
+  it("fetches a resized, server-cached person headshot as a blob", async () => {
+    const personId = "5f8b3e2a-1111-4a11-9a11-000000000003";
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe(`/api/v1/artwork/person/${personId}`);
+      expect(url.searchParams.get("w")).toBe("240");
+      expect(request.headers.get("Authorization")).toBe("Bearer access-token");
+      return new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "access-token" });
+
+    const headshot = await client.getPersonArtwork(personId);
+
+    expect(headshot).toBeInstanceOf(Blob);
+    expect(headshot.type).toBe("image/jpeg");
+  });
+
   it("fetches authenticated Playarr Server-cached album artwork as a blob", async () => {
     const artistWorkId = "3f8b3e2a-1111-4a11-9a11-000000000001";
     const albumId = "4f8b3e2a-1111-4a11-9a11-000000000002";

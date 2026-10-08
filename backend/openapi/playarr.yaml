@@ -2671,6 +2671,64 @@ paths:
           description: The metadata-provider artwork could not be safely cached
       security:
       - bearer_auth: []
+  /api/v1/artwork/person/{person_id}:
+    get:
+      tags:
+      - catalog
+      operationId: person_artwork_handler
+      parameters:
+      - name: person_id
+        in: path
+        description: Person id (from a credit)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: style
+        in: query
+        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: w
+        in: query
+        description: Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      - name: v
+        in: query
+        description: 'An opaque version token the client derives from the artwork''s source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      responses:
+        '200':
+          description: Playarr Server-cached, resized headshot
+          content:
+            image/*: {}
+        '304':
+          description: The caller already has the current cached headshot
+        '400':
+          description: Unsupported artwork width
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: Unknown person, or no headshot
+        '502':
+          description: The metadata-provider headshot could not be safely cached
+      security:
+      - bearer_auth: []
   /api/v1/artwork/work/{work_id}/{kind}:
     get:
       tags:
@@ -3735,11 +3793,9 @@ paths:
       summary: |-
         "What else is like this" -- semantic similarity over a locally-cached
         embedding (see `playarr_model::embedding`'s module doc comment), not
-        genre/tag overlap. `404`s both for an unknown work id and for one that
+        genre/tag overlap. `404`s only for an unknown work id; a work that
         hasn't been embedded yet (not yet synced, or this deployment hasn't
-        configured embedding generation) -- `playarr_catalog::CatalogService::
-        similar`'s doc comment covers why those collapse to one status here
-        rather than a distinct "not available" shape. Like `search`, a
+        configured embedding generation) answers `200` with an empty list. Like `search`, a
         restricted caller's results silently omit works outside their
         `CatalogViewer::allowed_libraries` rather than surfacing them.
       operationId: similar_works_handler
@@ -3796,7 +3852,7 @@ paths:
         '403':
           description: Caller has neither Playarr streaming access nor admin access
         '404':
-          description: No work with this id, or it has no cached embedding yet
+          description: No work with this id
       security:
       - bearer_auth: []
   /api/v1/discover:
@@ -7425,6 +7481,7 @@ paths:
               example:
                 can_download: true
                 can_request: false
+                is_admin: false
         '401':
           description: Missing or invalid access token
         '403':
@@ -15183,13 +15240,14 @@ components:
         whether to show a "Download" button/nav item at all, only whether the
         resulting API call will succeed once clicked. Deliberately just the
         capability booleans a Playarr client actually needs to gate its own UI
-        on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+        on -- not `library_allow`/`max_rating`, which are either
         already enforced per-request server-side (so the client never needs to
         duplicate that check) or not relevant to what Playarr's own chrome
         renders.
       required:
       - can_download
       - can_request
+      - is_admin
       properties:
         can_download:
           type: boolean
@@ -15199,6 +15257,12 @@ components:
             Whether this account may request titles that are not in the library
             (administrators always may; `PLAYARR_REQUESTS_ALLOW_ALL_USERS`
             overrides for everyone).
+        is_admin:
+          type: boolean
+          description: |-
+            Whether this account is an administrator. Clients use it only to hide
+            admin-only surfaces (for example request-latency diagnostics) that
+            would otherwise answer 403; the server still enforces every check.
     SelfPeerNodeRequest:
       type: object
       description: Request body for [`update_self_peer_node_handler`].

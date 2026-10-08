@@ -223,6 +223,7 @@ export function PlaylistsPage() {
   const requestedTrackId = searchParams.get("track");
   const returnOrigin = navigationOriginFromState(location.state);
   const [pageState, setPageState] = useState<PageState>({ status: "loading" });
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDirectoryId, setSelectedDirectoryId] = useState<string | null>(
     null
   );
@@ -332,7 +333,7 @@ export function PlaylistsPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, livePlaylistsRevision]);
+  }, [client, livePlaylistsRevision, loadAttempt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -999,7 +1000,7 @@ export function PlaylistsPage() {
         header={{ title: t("pages.playlists.title"), back: { label: t("pages.playlists.backToHome"), to: "/" } }}
         state={
           pageState.status === "error"
-            ? { kind: "error", props: { graphic: "playlist", title: t("pages.playlists.loadErrorTitle"), description: pageState.message } }
+            ? { kind: "error", props: { graphic: "playlist", title: t("pages.playlists.loadErrorTitle"), description: pageState.message, onRetry: () => { setPageState({ status: "loading" }); setLoadAttempt((value) => value + 1); }, retryLabel: t("components.states.retry") } }
             : { kind: "loading", label: t("pages.playlists.preparingLabel") }
         }
       />

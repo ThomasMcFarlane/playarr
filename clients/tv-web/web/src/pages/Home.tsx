@@ -116,7 +116,8 @@ export function HomePage() {
   const client = useApiClient();
   const liveCatalog = useLiveSubscription({ areas: ["catalog"] });
   const liveOnDeckRevision = useLiveRevision({ areas: ["progress", "catalog"] });
-  const railsState = useHomeRails(client, { lang: language }, { subscribe: liveCatalog });
+  const [railsAttempt, setRailsAttempt] = useState(0);
+  const railsState = useHomeRails(client, { lang: language }, { subscribe: liveCatalog, retryKey: railsAttempt });
   const siteState = useCatalogBrowse(client, {
     kind: "site",
     available_only: true,
@@ -363,7 +364,7 @@ export function HomePage() {
           isLoading
             ? { kind: "loading", label: t("pages.home.preparingHome") }
             : error
-              ? { kind: "error", props: { graphic: "home", title: t("pages.home.error.title"), description: error } }
+              ? { kind: "error", props: { graphic: "home", title: t("pages.home.error.title"), description: error, onRetry: () => setRailsAttempt((value) => value + 1), retryLabel: t("components.states.retry") } }
               : {
                   kind: "empty",
                   props: { graphic: "home", title: t("pages.home.empty.title"), description: t("pages.home.empty.description") },

@@ -1240,6 +1240,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/artwork/person/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["person_artwork_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/artwork/work/{work_id}/{kind}": {
         parameters: {
             query?: never;
@@ -1571,11 +1587,9 @@ export interface paths {
         /**
          * "What else is like this" -- semantic similarity over a locally-cached
          *     embedding (see `playarr_model::embedding`'s module doc comment), not
-         *     genre/tag overlap. `404`s both for an unknown work id and for one that
+         *     genre/tag overlap. `404`s only for an unknown work id; a work that
          *     hasn't been embedded yet (not yet synced, or this deployment hasn't
-         *     configured embedding generation) -- `playarr_catalog::CatalogService::
-         *     similar`'s doc comment covers why those collapse to one status here
-         *     rather than a distinct "not available" shape. Like `search`, a
+         *     configured embedding generation) answers `200` with an empty list. Like `search`, a
          *     restricted caller's results silently omit works outside their
          *     `CatalogViewer::allowed_libraries` rather than surfacing them.
          */
@@ -6898,7 +6912,7 @@ export interface components {
          *     whether to show a "Download" button/nav item at all, only whether the
          *     resulting API call will succeed once clicked. Deliberately just the
          *     capability booleans a Playarr client actually needs to gate its own UI
-         *     on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+         *     on -- not `library_allow`/`max_rating`, which are either
          *     already enforced per-request server-side (so the client never needs to
          *     duplicate that check) or not relevant to what Playarr's own chrome
          *     renders.
@@ -6911,6 +6925,12 @@ export interface components {
              *     overrides for everyone).
              */
             can_request: boolean;
+            /**
+             * @description Whether this account is an administrator. Clients use it only to hide
+             *     admin-only surfaces (for example request-latency diagnostics) that
+             *     would otherwise answer 403; the server still enforces every check.
+             */
+            is_admin: boolean;
         };
         /** @description Request body for [`update_self_peer_node_handler`]. */
         SelfPeerNodeRequest: {
@@ -11719,6 +11739,78 @@ export interface operations {
             };
         };
     };
+    person_artwork_handler: {
+        parameters: {
+            query?: {
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
+                style?: string | null;
+                /** @description Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image. */
+                w?: number | null;
+                /** @description An opaque version token the client derives from the artwork's source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable. */
+                v?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Person id (from a credit) */
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Playarr Server-cached, resized headshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description The caller already has the current cached headshot */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported artwork width */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown person, or no headshot */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The metadata-provider headshot could not be safely cached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     work_artwork_handler: {
         parameters: {
             query?: {
@@ -13032,7 +13124,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No work with this id, or it has no cached embedding yet */
+            /** @description No work with this id */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -17963,7 +18055,8 @@ export interface operations {
                     /**
                      * @example {
                      *       "can_download": true,
-                     *       "can_request": false
+                     *       "can_request": false,
+                     *       "is_admin": false
                      *     }
                      */
                     "application/json": components["schemas"]["SelfCapabilitiesResponse"];

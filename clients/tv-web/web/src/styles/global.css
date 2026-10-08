@@ -11741,9 +11741,22 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 .household-pin-input {
   width: 6rem;
   margin-left: 0.5rem;
+  padding: 0.45rem 0.6rem;
   font: inherit;
   letter-spacing: 0.3em;
   text-align: center;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+}
+.household-pin-input:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: 2px;
+}
+.household-page h2 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.1rem;
 }
 .household-page-hint {
   opacity: 0.7;

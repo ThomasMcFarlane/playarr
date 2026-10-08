@@ -50,6 +50,8 @@ export interface UseAsyncDataOptions<T> {
    * off until a signed-in account scope is set, and per account and profile after that).
    */
   cache?: { store: QueryCache; key: string; tags?: readonly QueryTag[] };
+  /** Bump to run the primary fetch again (the page's Retry button): the state returns to loading. */
+  retryKey?: number;
 }
 
 /**
@@ -62,7 +64,7 @@ export function useAsyncData<T>(
   deps: unknown[],
   options: UseAsyncDataOptions<T> = {}
 ): AsyncState<T> {
-  const { enabled = true, isEmpty, subscribe, cache } = options;
+  const { enabled = true, isEmpty, subscribe, cache, retryKey = 0 } = options;
   const stateFor = (data: T): AsyncState<T> => (isEmpty?.(data) ? { status: "empty" } : { status: "ready", data });
   const [state, setState] = useState<AsyncState<T>>(() => {
     if (!enabled) return { status: "idle" };
@@ -114,7 +116,7 @@ export function useAsyncData<T>(
     // `deps` is an intentionally caller-controlled dependency array (ids / stringified params),
     // not `fetcher`/`isEmpty` themselves, so callers don't need to memoize closures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, cache?.key, ...deps]);
+  }, [enabled, cache?.key, retryKey, ...deps]);
 
   useEffect(() => {
     if (!enabled || !subscribe) return;
@@ -152,12 +154,13 @@ function sameAsyncState<T>(a: AsyncState<T>, b: AsyncState<T>): boolean {
 export function useCatalogBrowse(
   client: ApiClient,
   params: BrowseCatalogParams = {},
-  options: Pick<UseAsyncDataOptions<CatalogPage>, "subscribe"> = {}
+  options: Pick<UseAsyncDataOptions<CatalogPage>, "subscribe" | "retryKey"> = {}
 ): AsyncState<CatalogPage> {
   const key = JSON.stringify(params);
   return useAsyncData(() => client.browseCatalog(params), [client, key], {
     isEmpty: (data) => data.items.length === 0,
     subscribe: options.subscribe,
+    retryKey: options.retryKey,
     cache: { store: client.queries, key: `catalog:${key}`, tags: ["catalog"] },
   });
 }
@@ -166,12 +169,13 @@ export function useCatalogBrowse(
 export function useHomeRails(
   client: ApiClient,
   params: { lang?: string; library?: "movie" | "series" | "artist" } = {},
-  options: Pick<UseAsyncDataOptions<HomeRailsResponse>, "subscribe"> = {}
+  options: Pick<UseAsyncDataOptions<HomeRailsResponse>, "subscribe" | "retryKey"> = {}
 ): AsyncState<HomeRailsResponse> {
   const key = JSON.stringify(params);
   return useAsyncData(() => client.getHomeRails(params), [client, key], {
     isEmpty: (data) => data.rails.length === 0,
     subscribe: options.subscribe,
+    retryKey: options.retryKey,
     cache: { store: client.queries, key: `home:${key}`, tags: ["catalog", "progress", "watchlist"] },
   });
 }
@@ -180,11 +184,12 @@ export function useHomeRails(
 export function useWorkDetail(
   client: ApiClient,
   workId: string | undefined,
-  options: Pick<UseAsyncDataOptions<WorkDetail>, "subscribe"> = {}
+  options: Pick<UseAsyncDataOptions<WorkDetail>, "subscribe" | "retryKey"> = {}
 ): AsyncState<WorkDetail> {
   return useAsyncData(() => client.getWork(workId as string), [client, workId], {
     enabled: Boolean(workId),
     subscribe: options.subscribe,
+    retryKey: options.retryKey,
     cache: { store: client.queries, key: `work:${workId}`, tags: ["catalog", "progress", "watchlist"] },
   });
 }

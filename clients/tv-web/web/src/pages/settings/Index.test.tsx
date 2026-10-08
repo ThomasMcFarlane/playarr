@@ -9,6 +9,9 @@ import {
   shouldReturnSettingsFocusToList,
 } from "./Index";
 
+const admin = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/DownloadsProvider", () => ({ useIsAdmin: () => admin.value }));
+
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeAll(() => {
@@ -47,6 +50,18 @@ describe("SettingsIndexPage", () => {
     selectionStart,
     selectionEnd,
     valueLength,
+  });
+
+  it("hides the admin-only Request latency section from non-admins and shows it to admins", () => {
+    admin.value = false;
+    try {
+      const member = renderSettingsRoute("/settings");
+      expect(member).not.toContain("Request latency");
+      expect(member).not.toContain("/settings/request-latency");
+    } finally {
+      admin.value = true;
+    }
+    expect(renderSettingsRoute("/settings")).toContain("/settings/request-latency");
   });
 
   it("renders every settings option in a native vertical list", () => {

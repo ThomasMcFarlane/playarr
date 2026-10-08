@@ -489,6 +489,75 @@ pub async fn episode_artwork_handler(
     .await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/artwork/person/{person_id}",
+    tag = "catalog",
+    params(
+        ("person_id" = Uuid, Path, description = "Person id (from a credit)"),
+        ArtworkQuery
+    ),
+    responses(
+        (status = 200, description = "Playarr Server-cached, resized headshot", content_type = "image/*"),
+        (status = 304, description = "The caller already has the current cached headshot"),
+        (status = 400, description = "Unsupported artwork width"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
+        (status = 404, description = "Unknown person, or no headshot"),
+        (status = 502, description = "The metadata-provider headshot could not be safely cached")
+    )
+)]
+pub async fn person_artwork_handler(
+    State(state): State<AppState>,
+    _viewer: CatalogViewer,
+    Path(person_id): Path<Uuid>,
+    Query(query): Query<ArtworkQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let width = parse_width(query.w)?;
+    let immutable = valid_version(query.v.as_deref());
+    // A person is shared by every work they are credited on, and credits (with the headshot URL) are already
+    // visible to any catalogue viewer, so this needs no per-library check. The client never supplies a URL.
+    let person = state.credit_repo.get_person(person_id).await?;
+    let images = person
+        .headshot_url
+        .map(|url| {
+            vec![ImageAsset {
+                kind: ImageKind::Poster,
+                url,
+                width: None,
+                height: None,
+            }]
+        })
+        .unwrap_or_default();
+    let source = artwork_source_from_images(
+        &state,
+        &images,
+        &format!("person {person_id}"),
+        ImageKind::Poster,
+    )?;
+    let style = ArtworkStyle::Original;
+    let cached = ensure_artwork_cached(person_id, ImageKind::Poster, source, style).await?;
+    let cached = match width {
+        Some(width) => {
+            playarr_artwork::shared()
+                .ensure_resized(cached, width)
+                .await?
+        }
+        None => cached,
+    };
+    artwork_response(
+        &cached.path,
+        cached.content_type,
+        cached.url_hash,
+        style,
+        width,
+        immutable,
+        &headers,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -644,6 +713,42 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn person_artwork_route_requires_catalog_access_and_a_known_person() {
+        let (router, _state) = test_state().await;
+        let unknown = Uuid::new_v4();
+        let anonymous = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/artwork/person/{unknown}?w=240"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn person_artwork_for_an_unknown_person_is_404() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/artwork/person/{}?w=240", Uuid::new_v4()))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

@@ -61,7 +61,7 @@ describe("WatchlistRow", () => {
     expect(html).toContain('href="/player/file-1"');
     expect(html).toContain("Resume");
     expect(html).toContain('href="/movies/work-1"');
-    expect(html).toContain("Recording is not available yet");
+    expect(html).not.toContain("Recording is not available yet");
     expect(html).toContain("Remove from watchlist");
   });
 

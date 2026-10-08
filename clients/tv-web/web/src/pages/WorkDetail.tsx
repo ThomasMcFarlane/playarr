@@ -25,7 +25,7 @@ import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { AvailabilityLagNote } from "../components/AvailabilityLag";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
-import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
+import { CachedArtworkImage, PersonHeadshot, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { DownloadsIcon } from "../components/NavIcons";
 import type { PlayableLeaf } from "../lib/playableLeaves";
@@ -709,18 +709,15 @@ function MoviePeopleTrack({
             aria-label={`${credit.person.name}${subtitle ? `, ${subtitle}` : ""}`}
           >
             <span className="tv-episode-art tv-person-art">
-              {credit.person.headshot_url ? (
-                <img
-                  src={credit.person.headshot_url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                <span className="tv-person-placeholder">
-                  {personInitials(credit.person.name)}
-                </span>
-              )}
+              <PersonHeadshot
+                personId={credit.person.id}
+                hasHeadshot={Boolean(credit.person.headshot_url)}
+                fallback={
+                  <span className="tv-person-placeholder">
+                    {personInitials(credit.person.name)}
+                  </span>
+                }
+              />
             </span>
             <span className="tv-episode-copy tv-person-copy">
               <strong>{credit.person.name}</strong>
@@ -1050,7 +1047,8 @@ export function WorkDetailPage() {
   );
   const liveWork = useLiveSubscription(liveWorkScope);
   const liveProgressRevision = useLiveRevision(liveWorkScope);
-  const state = useWorkDetail(client, workId, { subscribe: liveWork });
+  const [detailAttempt, setDetailAttempt] = useState(0);
+  const state = useWorkDetail(client, workId, { subscribe: liveWork, retryKey: detailAttempt });
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [progressByMedia, setProgressByMedia] = useState<Map<string, WatchProgress>>(new Map());
@@ -1654,7 +1652,7 @@ export function WorkDetailPage() {
         }}
         state={
           state.status === "error"
-            ? { kind: "error", props: { graphic: "details", title: t("pages.workDetail.titleLoadError"), description: state.message } }
+            ? { kind: "error", props: { graphic: "details", title: t("pages.workDetail.titleLoadError"), description: state.message, onRetry: () => setDetailAttempt((value) => value + 1), retryLabel: t("components.states.retry") } }
             : state.status === "empty"
               ? {
                   kind: "empty",

@@ -1592,12 +1592,11 @@ impl CatalogService {
     /// this needs no ANN index, and stays a single, simple code path
     /// rather than a second search infrastructure.
     ///
-    /// Returns [`CatalogError::NotFound`] if `work_id` itself has no
-    /// cached embedding yet (not yet synced, or embedding generation
-    /// hasn't been configured for this deployment via
-    /// [`Self::with_embedding_repo`]) -- distinct from an empty result
-    /// list, which means "embedded, but nothing else in the catalog is
-    /// close."
+    /// Returns an empty list when `work_id` exists and is visible to the
+    /// caller but has no cached embedding yet (not yet synced, or embedding
+    /// generation hasn't been configured for this deployment via
+    /// [`Self::with_embedding_repo`]), and [`CatalogError::NotFound`] only
+    /// for an unknown or hidden work.
     ///
     /// `allowed_source_instance_ids` is the same per-user library access
     /// control ceiling [`Self::search`] and [`Self::get_by_id`] apply --
@@ -1630,13 +1629,30 @@ impl CatalogService {
         access: Access<'_>,
     ) -> Result<Vec<Work>, CatalogError> {
         let allowed_source_instance_ids = access.allowed;
-        let embedding_repo = self.embedding_repo.as_ref().ok_or(CatalogError::NotFound)?;
         let limit = limit.max(0) as usize;
 
-        let target = embedding_repo
-            .get(work_id)
-            .await?
-            .ok_or(CatalogError::NotFound)?;
+        let target = match &self.embedding_repo {
+            Some(repo) => repo.get(work_id).await?,
+            None => None,
+        };
+        let Some(target) = target else {
+            // No embedding yet (or none configured): an existing, visible
+            // work simply has nothing similar to list. Only an unknown or
+            // hidden work is a 404, so detail pages do not log an error.
+            return match self.work_repo.get(work_id).await {
+                Ok(work)
+                    if access.permits(&work)
+                        && self
+                            .is_work_visible(work_id, allowed_source_instance_ids)
+                            .await? =>
+                {
+                    Ok(Vec::new())
+                }
+                Ok(_) | Err(DbError::NotFound) => Err(CatalogError::NotFound),
+                Err(err) => Err(err.into()),
+            };
+        };
+        let embedding_repo = self.embedding_repo.as_ref().ok_or(CatalogError::NotFound)?;
         let all = embedding_repo.list_all().await?;
 
         let mut scored: Vec<(Uuid, f32)> = all
@@ -3272,7 +3288,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn similar_without_a_cached_embedding_is_not_found() {
+    async fn similar_without_a_cached_embedding_is_empty() {
         let pool = test_pool().await;
         let repo = work_repo(pool.clone());
         let target = movie("No Embedding Yet", "No Embedding Yet", &[], 0);
@@ -3280,20 +3296,20 @@ mod tests {
         let embeddings = embedding_repo(pool.clone());
 
         let svc = service(pool, repo).with_embedding_repo(embeddings);
-        let err = svc.similar(target.id, 10, None).await.unwrap_err();
+        assert!(svc.similar(target.id, 10, None).await.unwrap().is_empty());
+        let err = svc.similar(Uuid::new_v4(), 10, None).await.unwrap_err();
         assert!(matches!(err, CatalogError::NotFound));
     }
 
     #[tokio::test]
-    async fn similar_without_embedding_repo_configured_is_not_found() {
+    async fn similar_without_embedding_repo_configured_is_empty() {
         let pool = test_pool().await;
         let repo = work_repo(pool.clone());
         let target = movie("Unconfigured", "Unconfigured", &[], 0);
         repo.upsert(&target).await.unwrap();
 
         let svc = service(pool, repo); // no `.with_embedding_repo(...)`
-        let err = svc.similar(target.id, 10, None).await.unwrap_err();
-        assert!(matches!(err, CatalogError::NotFound));
+        assert!(svc.similar(target.id, 10, None).await.unwrap().is_empty());
     }
 
     /// Mirrors `search_enforces_allowed_source_instance_ids` -- `similar`

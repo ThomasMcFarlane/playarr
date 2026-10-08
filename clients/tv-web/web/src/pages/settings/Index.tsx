@@ -15,6 +15,7 @@ import {
   useNavigationLayer,
 } from "../../lib/navigationLayer";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import { useIsAdmin } from "../../lib/DownloadsProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import { PRODUCT_SETTINGS_SECTIONS } from "../../lib/productSurfaces";
 import { PageLayout, ScrollArea } from "../../components/shell";
@@ -36,8 +37,11 @@ const DETAIL_FOCUSABLE_SELECTOR = [
 ].join(",");
 
 /** Settings hierarchy from productSurfaces (shared with tv-vidaa parity tests). */
-function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
-  return PRODUCT_SETTINGS_SECTIONS.map((section) => ({
+/** Sections only an administrator may open (their data answers 403 for everyone else). */
+const ADMIN_ONLY_SECTIONS: ReadonlySet<string> = new Set(["/settings/request-latency"]);
+
+function buildSettingsSections(t: TFunction, isAdmin: boolean): readonly SettingsSection[] {
+  return PRODUCT_SETTINGS_SECTIONS.filter((section) => isAdmin || !ADMIN_ONLY_SECTIONS.has(section.to)).map((section) => ({
     to: section.to,
     number: section.number,
     title: t(section.titleKey as TranslationKey),
@@ -105,7 +109,8 @@ export function SettingsIndexPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const navigationLayer = useNavigationLayer("settings:index");
-  const settingsSections = buildSettingsSections(t);
+  const isAdmin = useIsAdmin();
+  const settingsSections = buildSettingsSections(t, isAdmin);
   const isSettingsIndex = location.pathname === "/settings";
   const activeSection =
     settingsSections.find((section) => section.to === location.pathname) ??

@@ -29,9 +29,12 @@ export function primaryAction(actions: readonly TitleAction[]): TitleAction | nu
   return null;
 }
 
-/** Disabled actions worth explaining (those with a reason), in priority order. */
+/**
+ * Disabled actions worth explaining (those with a reason), in priority order. Record is never explained: live TV
+ * recording is not a product surface yet, and its server reason is developer text, not something to show a viewer.
+ */
 export function explainedDisabledActions(actions: readonly TitleAction[]): TitleAction[] {
-  return ACTION_PRIORITY.flatMap((kind) =>
+  return ACTION_PRIORITY.filter((kind) => kind !== "record").flatMap((kind) =>
     actions.filter((action) => action.action === kind && !action.enabled && action.reason)
   );
 }

@@ -485,7 +485,8 @@ export function MusicDetailPage() {
   );
   const liveWork = useLiveSubscription(liveWorkScope);
   const liveProgressRevision = useLiveRevision(liveWorkScope);
-  const state = useWorkDetail(client, workId, { subscribe: liveWork });
+  const [detailAttempt, setDetailAttempt] = useState(0);
+  const state = useWorkDetail(client, workId, { subscribe: liveWork, retryKey: detailAttempt });
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const restoredMediaFileIdRef = useRef<string | null>(null);
@@ -778,7 +779,7 @@ export function MusicDetailPage() {
         }}
         state={
           state.status === "error"
-            ? { kind: "error", props: { graphic: "music", title: t("pages.musicDetail.loadErrorTitle"), description: state.message } }
+            ? { kind: "error", props: { graphic: "music", title: t("pages.musicDetail.loadErrorTitle"), description: state.message, onRetry: () => setDetailAttempt((value) => value + 1), retryLabel: t("components.states.retry") } }
             : state.status === "ready" || state.status === "empty"
               ? {
                   kind: "empty",

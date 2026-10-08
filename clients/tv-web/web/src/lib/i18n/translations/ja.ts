@@ -72,6 +72,7 @@ export const ja: Translations = {
   "components.deviceLogin.refreshesIn": "コードの更新まで {{time}}",
   "components.deviceLogin.signInManually": "手動でサインイン",
   "components.deviceLogin.waitingApproval": "承認をお待ちください…",
+  "components.states.retry": "もう一度試す",
   "components.deviceLogin.tryAgain": "もう一度試す",
   "components.languageDropdown.noResults": "言語が見つかりません",
   "components.languageDropdown.searchPlaceholder": "言語を検索",

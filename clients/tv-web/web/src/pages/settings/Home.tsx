@@ -25,6 +25,7 @@ export function SettingsHomePage() {
   const client = useApiClient();
   const [state, setState] = useState<State>({ status: "loading" });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +40,7 @@ export function SettingsHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [client, language]);
+  }, [client, language, attempt]);
 
   const save = useCallback(
     (next: RailPreferenceEntry[]) => {
@@ -67,7 +68,16 @@ export function SettingsHomePage() {
         {state.status === "loading" ? (
           <LoadingState size="inline" label={t("pages.home.customise.loading")} />
         ) : state.status === "error" ? (
-          <ErrorState variant="compact" title={t("pages.home.error.title")} description={state.message} />
+          <ErrorState
+            variant="compact"
+            title={t("pages.home.error.title")}
+            description={state.message}
+            onRetry={() => {
+              setState({ status: "loading" });
+              setAttempt((value) => value + 1);
+            }}
+            retryLabel={t("components.states.retry")}
+          />
         ) : (
           <>
             <p className="tv-discovery-note">{t("pages.home.customise.hint")}</p>

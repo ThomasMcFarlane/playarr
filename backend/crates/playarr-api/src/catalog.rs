@@ -645,11 +645,9 @@ pub struct SimilarQueryParams {
 
 /// "What else is like this" -- semantic similarity over a locally-cached
 /// embedding (see `playarr_model::embedding`'s module doc comment), not
-/// genre/tag overlap. `404`s both for an unknown work id and for one that
+/// genre/tag overlap. `404`s only for an unknown work id; a work that
 /// hasn't been embedded yet (not yet synced, or this deployment hasn't
-/// configured embedding generation) -- `playarr_catalog::CatalogService::
-/// similar`'s doc comment covers why those collapse to one status here
-/// rather than a distinct "not available" shape. Like `search`, a
+/// configured embedding generation) answers `200` with an empty list. Like `search`, a
 /// restricted caller's results silently omit works outside their
 /// `CatalogViewer::allowed_libraries` rather than surfacing them.
 #[utoipa::path(
@@ -680,7 +678,7 @@ pub struct SimilarQueryParams {
         }])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
-        (status = 404, description = "No work with this id, or it has no cached embedding yet")
+        (status = 404, description = "No work with this id")
     )
 )]
 pub async fn similar_works_handler(
@@ -1452,14 +1450,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn similar_without_a_cached_embedding_is_404() {
+    async fn similar_without_a_cached_embedding_is_an_empty_list() {
         let (router, state) = test_state().await;
         let target = seed_movie(&state, "No Embedding").await;
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        seed_admin_user(&state, user_id).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri(format!("/api/v1/catalog/{target}/similar"))
@@ -1469,6 +1468,23 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let results: Vec<Work> = serde_json::from_slice(&bytes).unwrap();
+        assert!(results.is_empty());
+
+        let unknown = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/catalog/{}/similar", Uuid::new_v4()))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -937,6 +937,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
     method: "GET",
   },
   { schemaPath: "/api/v1/artwork/work/{work_id}/{kind}", method: "GET" },
+  { schemaPath: "/api/v1/artwork/person/{person_id}", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/chapters", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/metadata", method: "GET" },
   {
@@ -1825,6 +1826,19 @@ export class ApiClient {
     return this.unwrap(
       await this.raw.GET("/api/v1/artwork/work/{work_id}/{kind}", {
         params: { path: { work_id: workId, kind }, query: { w: size.width, v: size.version } },
+        parseAs: "blob",
+      })
+    ) as Blob;
+  }
+
+  /**
+   * A cast or crew headshot, resized by Playarr Server (the width snaps up to the nearest supported size) and cached
+   * there, so a client never loads the metadata provider's full-size original from a third-party host.
+   */
+  async getPersonArtwork(personId: string, width = 240): Promise<Blob> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/artwork/person/{person_id}", {
+        params: { path: { person_id: personId }, query: { w: width } },
         parseAs: "blob",
       })
     ) as Blob;

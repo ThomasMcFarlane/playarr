@@ -391,6 +391,86 @@ function observeVisibleOnce(anchor: Element, onVisible: () => void): () => void 
   };
 }
 
+function loadPersonArtwork(client: ApiClient, personId: string): ArtworkRecord {
+  const cache = artworkCache(client);
+  const key = `person:${personId}`;
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const record: ArtworkRecord = {
+    promise: client.getPersonArtwork(personId).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      record.url = url;
+      return url;
+    }),
+    // A headshot is a few kilobytes at 240 px and its card holds no reference: keep it for the session.
+    refs: 1,
+  };
+  record.promise.catch(() => {
+    if (cache.get(key) === record) cache.delete(key);
+  });
+  cache.set(key, record);
+  return record;
+}
+
+/**
+ * A cast or crew headshot through the server's resizing image proxy (never the metadata provider's original from a
+ * third-party host). Loads when the card scrolls near the viewport; the fallback (initials) shows until then and when
+ * the person has no headshot.
+ */
+export function PersonHeadshot({
+  personId,
+  hasHeadshot,
+  fallback,
+}: {
+  personId: string;
+  hasHeadshot: boolean;
+  fallback: ReactNode;
+}) {
+  const client = useApiClient();
+  const anchorRef = useRef<HTMLElement>(null);
+  const key = `person:${personId}`;
+  const [url, setUrl] = useState<string | null>(() => artworkCache(client).get(key)?.url ?? null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!hasHeadshot || url || visible) return;
+    const anchor = anchorRef.current;
+    if (!anchor || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    let cancelDeferred = () => {};
+    const stop = observeVisibleOnce(anchor, () => {
+      cancelDeferred = whenNavigationIdle(() => setVisible(true));
+    });
+    return () => {
+      stop();
+      cancelDeferred();
+    };
+  }, [hasHeadshot, url, visible]);
+  useEffect(() => {
+    if (!hasHeadshot || !visible || url) return;
+    let cancelled = false;
+    loadPersonArtwork(client, personId).promise.then(
+      (resolved) => {
+        if (!cancelled) setUrl(resolved);
+      },
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, hasHeadshot, personId, url, visible]);
+  if (url) return <img src={url} alt="" decoding="async" />;
+  return (
+    <>
+      {fallback}
+      {hasHeadshot && !visible ? (
+        <i ref={anchorRef} aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
+      ) : null}
+    </>
+  );
+}
+
 interface CachedArtworkImageProps
   extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   work: Pick<Work, "id" | "images">;

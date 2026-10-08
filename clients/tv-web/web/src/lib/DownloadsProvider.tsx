@@ -164,6 +164,11 @@ interface DownloadsContextValue {
    */
   canDownload: boolean | null;
   /**
+   * Whether this account is an administrator, from the same capabilities request. `null` until known; `false` when
+   * the server does not say. Used only to hide admin-only surfaces (they 403 otherwise).
+   */
+  isAdmin: boolean | null;
+  /**
    * Buffers a watch-progress update in IndexedDB instead of sending it
    * live -- `usePlaybackEngine`'s `persistProgress` calls this when
    * `useOnlineStatus()` is false rather than calling
@@ -238,6 +243,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const [storageSupported, setStorageSupported] = useState<boolean | null>(null);
   const [downloadStorageAvailable, setDownloadStorageAvailable] = useState<boolean | null>(null);
   const [canDownload, setCanDownload] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   const downloadsRef = useRef<DownloadRecord[]>([]);
   downloadsRef.current = downloads;
@@ -570,22 +576,28 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || authFailed) {
       setCanDownload(null);
+      setIsAdmin(null);
       return;
     }
     let cancelled = false;
     setCanDownload(null);
+    setIsAdmin(null);
 
     const fetchCapabilities = () => {
       void client
         .getSelfCapabilities()
         .then((capabilities) => {
-          if (!cancelled) setCanDownload(capabilities.can_download);
+          if (cancelled) return;
+          setCanDownload(capabilities.can_download);
+          setIsAdmin(capabilities.is_admin === true);
         })
         .catch(() => {
           // Transient network/server hiccup, or the account genuinely can't
           // stream (StreamingUser extraction itself 403s) -- either way,
           // fail closed rather than showing download UI on an error.
-          if (!cancelled) setCanDownload(false);
+          if (cancelled) return;
+          setCanDownload(false);
+          setIsAdmin(false);
         });
     };
 
@@ -865,10 +877,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       getLocalPlaybackSource,
       queueWatchMutation,
       canDownload,
+      isAdmin,
     }),
     [
       activeSummary,
       canDownload,
+      isAdmin,
       downloadStorageAvailable,
       downloads,
       enqueue,
@@ -883,6 +897,11 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   );
 
   return <DownloadsContext.Provider value={value}>{children}</DownloadsContext.Provider>;
+}
+
+/** Whether the signed-in account is an administrator: `true` only once the server has said so (also outside a provider: `false`). */
+export function useIsAdmin(): boolean {
+  return useContext(DownloadsContext)?.isAdmin === true;
 }
 
 export function useDownloads(): DownloadsContextValue {

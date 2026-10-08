@@ -34,6 +34,7 @@ export function WatchlistPage() {
   const client = useApiClient();
   const [state, setState] = useState<State>({ status: "loading" });
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const liveRevision = useLiveRevision({ areas: ["watchlist"] });
   useEffect(() => {
@@ -56,7 +57,7 @@ export function WatchlistPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, t, liveRevision]);
+  }, [client, t, liveRevision, attempt]);
 
   const remove = useCallback(
     async (entry: WatchlistEntry) => {
@@ -101,7 +102,16 @@ export function WatchlistPage() {
           {state.status === "loading" ? (
             <LoadingState size="inline" label={t("pages.watchlist.loading")} />
           ) : state.status === "error" ? (
-            <ErrorState graphic="details" title={t("pages.watchlist.errorTitle")} description={state.message} />
+            <ErrorState
+              graphic="details"
+              title={t("pages.watchlist.errorTitle")}
+              description={state.message}
+              onRetry={() => {
+                setState({ status: "loading" });
+                setAttempt((value) => value + 1);
+              }}
+              retryLabel={t("components.states.retry")}
+            />
           ) : state.items.length === 0 ? (
             <EmptyState
               graphic="details"

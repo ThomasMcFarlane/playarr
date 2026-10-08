@@ -259,7 +259,7 @@ export function FoldersPage() {
         rootsState.status === "loading"
           ? { kind: "loading", label: t("pages.folders.loading") }
           : rootsState.status === "error"
-            ? { kind: "error", props: { graphic: "details", title: t("pages.folders.errorTitle"), description: rootsState.message } }
+            ? { kind: "error", props: { graphic: "details", title: t("pages.folders.errorTitle"), description: rootsState.message, onRetry: () => { setRootsState({ status: "loading" }); setRevision((value) => value + 1); }, retryLabel: t("components.states.retry") } }
             : rootsState.roots.length === 0
               ? {
                   kind: "empty",
@@ -315,7 +315,13 @@ export function FoldersPage() {
             {listing.status === "loading" || listing.status === "idle" ? (
               <LoadingState size="inline" label={t("pages.folders.loading")} />
             ) : listing.status === "error" ? (
-              <ErrorState graphic="details" title={t("pages.folders.errorTitle")} description={listing.message} />
+              <ErrorState
+                graphic="details"
+                title={t("pages.folders.errorTitle")}
+                description={listing.message}
+                onRetry={() => setRevision((value) => value + 1)}
+                retryLabel={t("components.states.retry")}
+              />
             ) : listing.status === "missing" ? (
               <>
                 <EmptyState

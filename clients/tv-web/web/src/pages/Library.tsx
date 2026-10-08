@@ -166,6 +166,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [total, setTotal] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [initialError, setInitialError] = useState<string | null>(null);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -297,7 +298,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return () => {
       cancelled = true;
     };
-  }, [client, kind, languageParams, order, sort]);
+  }, [client, kind, languageParams, order, sort, reloadAttempt]);
 
   useEffect(() => {
     if (previousKind.current !== kind) {
@@ -909,6 +910,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                   graphic: emptyGraphic,
                   title: t("pages.library.errorTitle", { plural: plural.toLowerCase() }),
                   description: initialError,
+                  onRetry: () => setReloadAttempt((value) => value + 1),
+                  retryLabel: t("components.states.retry"),
                 },
               }
             : items === null

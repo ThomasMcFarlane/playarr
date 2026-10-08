@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   describeApiError,
   type HouseholdApproval,
@@ -10,6 +9,9 @@ import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { minutesLeft } from "../lib/householdState";
+import { PageLayout, ScrollArea } from "../components/shell";
+import { Button } from "../components/ui";
+import { TvRailSurface } from "../components/tv/TvStage";
 
 function kindLabelKey(kind: HouseholdApproval["kind"]) {
   switch (kind) {
@@ -103,66 +105,75 @@ export function HouseholdPage() {
   const leftMinutes = minutesLeft(status, new Date());
 
   return (
-    <div className="page household-page">
-      <h1>{t("household.page.title")}</h1>
-      {error && <p className="household-blocked-error">{error}</p>}
+    <PageLayout
+      pageId="household"
+      className="tv-library household-frame"
+      ariaLabel={t("household.page.title")}
+      header={{ title: t("household.page.title"), back: { label: t("household.page.back"), to: "/profiles" } }}
+    >
+      <TvRailSurface className="tv-rail-panel tv-library-grid-panel tv-downloads-panel" mode="content" ariaLabel={t("household.page.title")}>
+        <ScrollArea axis="vertical" scrollKey="household:page" className="tv-downloads-content household-page">
+          {error && (
+            <p className="household-blocked-error">{error}</p>
+          )}
 
-      {status?.restricted && (
-        <p className="household-page-summary">
-          {leftMinutes !== null ? t("household.remaining", { minutes: String(leftMinutes) }) : null}
-        </p>
-      )}
+          {status?.restricted && (
+            <p className="household-page-summary">
+              {leftMinutes !== null ? t("household.remaining", { minutes: String(leftMinutes) }) : null}
+            </p>
+          )}
 
-      {toDecide.length > 0 && (
-        <section>
-          <h2>{t("household.page.toApprove")}</h2>
-          <label htmlFor="household-pin">{t("household.page.pinLabel")}</label>
-          <input
-            id="household-pin"
-            className="household-pin-input"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={4}
-            value={pin}
-            onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
-          />
-          <ul className="household-list">
-            {toDecide.map((item) => (
-              <li key={item.id}>
-                <span>
-                  {names[item.profile_user_id] ?? t("household.page.unknownProfile")} {" - "}
-                  {t(kindLabelKey(item.kind))}
-                  {item.note ? ` (${item.note})` : ""}
-                </span>
-                <span className="household-list-actions">
-                  <button disabled={busyId === item.id} onClick={() => void decide(item, true)}>
-                    {t("household.page.approve")}
-                  </button>
-                  <button disabled={busyId === item.id} onClick={() => void decide(item, false)}>
-                    {t("household.page.deny")}
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="household-page-hint">{t("household.page.needsPin")}</p>
-        </section>
-      )}
+          {toDecide.length > 0 && (
+            <section>
+              <h2>{t("household.page.toApprove")}</h2>
+              <label htmlFor="household-pin">{t("household.page.pinLabel")}</label>
+              <input
+                id="household-pin"
+                className="household-pin-input"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={pin}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
+              />
+              <ul className="household-list">
+                {toDecide.map((item) => (
+                  <li key={item.id}>
+                    <span>
+                      {names[item.profile_user_id] ?? t("household.page.unknownProfile")} {" - "}
+                      {t(kindLabelKey(item.kind))}
+                      {item.note ? ` (${item.note})` : ""}
+                    </span>
+                    <span className="household-list-actions">
+                      <Button variant="primary" disabled={busyId === item.id} onClick={() => void decide(item, true)}>
+                        {t("household.page.approve")}
+                      </Button>
+                      <Button variant="secondary" disabled={busyId === item.id} onClick={() => void decide(item, false)}>
+                        {t("household.page.deny")}
+                      </Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="household-page-hint">{t("household.page.needsPin")}</p>
+            </section>
+          )}
 
-      <section>
-        <h2>{t("household.page.requests")}</h2>
-        {approvals !== null && own.length === 0 && <p>{t("household.page.noRequests")}</p>}
-        <ul className="household-list">
-          {own.map((item) => (
-            <li key={item.id}>
-              <span>{t(kindLabelKey(item.kind))}</span>
-              <span>{t(statusLabelKey(item.status))}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <Link to="/profiles">{t("household.page.back")}</Link>
-    </div>
+          <section>
+            <h2>{t("household.page.requests")}</h2>
+            {approvals !== null && own.length === 0 && <p>{t("household.page.noRequests")}</p>}
+            <ul className="household-list">
+              {own.map((item) => (
+                <li key={item.id}>
+                  <span>{t(kindLabelKey(item.kind))}</span>
+                  <span>{t(statusLabelKey(item.status))}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </ScrollArea>
+      </TvRailSurface>
+    </PageLayout>
   );
 }

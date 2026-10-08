@@ -55,10 +55,17 @@ describe("explainedDisabledActions", () => {
   it("lists disabled actions that carry a reason", () => {
     const list = explainedDisabledActions([
       action({ action: "play" }),
+      action({ action: "request", enabled: false, reason: "No request provider is configured" }),
       action({ action: "record", enabled: false, reason: "Recording is not available yet" }),
-      action({ action: "request", enabled: false }),
     ]);
-    expect(list.map((a) => a.action)).toEqual(["record"]);
+    expect(list.map((a) => a.action)).toEqual(["request"]);
+  });
+
+  it("never explains Record (developer text)", () => {
+    const list = explainedDisabledActions([
+      action({ action: "record", enabled: false, reason: "Recording is not available yet" }),
+    ]);
+    expect(list).toEqual([]);
   });
 });
 
