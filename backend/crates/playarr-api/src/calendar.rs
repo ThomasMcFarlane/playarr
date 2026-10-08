@@ -39,16 +39,35 @@ use crate::AppState;
 /// Longest window one request may cover.
 pub const MAX_WINDOW_DAYS: i64 = 92;
 const DEFAULT_WINDOW_DAYS: i64 = 30;
-const SOURCE_TIMEOUT: Duration = Duration::from_secs(10);
+/// A slow *arr instance must not hold the whole calendar hostage: the other
+/// sources are returned as soon as this elapses and the slow one is reported
+/// as unreachable.
+const SOURCE_TIMEOUT: Duration = Duration::from_secs(4);
 const CACHE_TTL: Duration = Duration::from_secs(60);
+/// How long the last good answer of an instance is kept to stand in for it
+/// while it is failing.
+const STALE_TTL: Duration = Duration::from_secs(60 * 60);
+/// After a failure the instance is not asked again for this long, so a dead
+/// source costs one timeout, not one per request.
+const FAILURE_TTL: Duration = Duration::from_secs(30);
 
 type CacheKey = (Uuid, NaiveDate, NaiveDate);
+type SourceFailure = (CalendarSourceState, String);
 
 /// Short-lived cache of raw per-instance answers. User-independent on
 /// purpose: permissions are applied before querying and after merging.
-#[derive(Default)]
 pub struct CalendarCache {
     entries: Mutex<HashMap<CacheKey, (Instant, Vec<CalendarCandidate>)>>,
+    failures: Mutex<HashMap<Uuid, (Instant, SourceFailure)>>,
+    ttl: Duration,
+    stale_ttl: Duration,
+    failure_ttl: Duration,
+}
+
+impl Default for CalendarCache {
+    fn default() -> Self {
+        Self::with_ttls(CACHE_TTL, STALE_TTL, FAILURE_TTL)
+    }
 }
 
 impl CalendarCache {
@@ -56,18 +75,55 @@ impl CalendarCache {
         Self::default()
     }
 
+    fn with_ttls(ttl: Duration, stale_ttl: Duration, failure_ttl: Duration) -> Self {
+        Self {
+            entries: Mutex::default(),
+            failures: Mutex::default(),
+            ttl,
+            stale_ttl,
+            failure_ttl,
+        }
+    }
+
     fn get(&self, key: &CacheKey) -> Option<Vec<CalendarCandidate>> {
         let entries = self.entries.lock().ok()?;
         entries
             .get(key)
-            .filter(|(at, _)| at.elapsed() < CACHE_TTL)
+            .filter(|(at, _)| at.elapsed() < self.ttl)
+            .map(|(_, value)| value.clone())
+    }
+
+    /// The last good answer, however old (within the stale window).
+    fn get_stale(&self, key: &CacheKey) -> Option<Vec<CalendarCandidate>> {
+        let entries = self.entries.lock().ok()?;
+        entries
+            .get(key)
+            .filter(|(at, _)| at.elapsed() < self.stale_ttl)
             .map(|(_, value)| value.clone())
     }
 
     fn put(&self, key: CacheKey, value: Vec<CalendarCandidate>) {
         if let Ok(mut entries) = self.entries.lock() {
-            entries.retain(|_, (at, _)| at.elapsed() < CACHE_TTL);
+            entries.retain(|_, (at, _)| at.elapsed() < self.stale_ttl);
             entries.insert(key, (Instant::now(), value));
+        }
+        if let Ok(mut failures) = self.failures.lock() {
+            failures.remove(&key.0);
+        }
+    }
+
+    fn recent_failure(&self, instance: Uuid) -> Option<SourceFailure> {
+        let failures = self.failures.lock().ok()?;
+        failures
+            .get(&instance)
+            .filter(|(at, _)| at.elapsed() < self.failure_ttl)
+            .map(|(_, failure)| failure.clone())
+    }
+
+    fn note_failure(&self, instance: Uuid, failure: SourceFailure) {
+        if let Ok(mut failures) = self.failures.lock() {
+            failures.retain(|_, (at, _)| at.elapsed() < self.failure_ttl);
+            failures.insert(instance, (Instant::now(), failure));
         }
     }
 }
@@ -461,7 +517,17 @@ pub(crate) async fn build_calendar(
     let results = futures::future::join_all(instances.iter().map(|instance| async move {
         let key = (instance.id, start, end);
         if let Some(hit) = cache.get(&key) {
-            return Ok(hit);
+            return Ok((hit, None));
+        }
+        // Stand-in for a failing source: its last good answer, flagged.
+        let fail = |failure: SourceFailure| -> Result<_, SourceFailure> {
+            match cache.get_stale(&key) {
+                Some(stale) => Ok((stale, Some(failure))),
+                None => Err(failure),
+            }
+        };
+        if let Some(failure) = cache.recent_failure(instance.id) {
+            return fail(failure);
         }
         let fetched = tokio::time::timeout(SOURCE_TIMEOUT, fetch_calendar(instance, start, end))
             .await
@@ -470,10 +536,18 @@ pub(crate) async fn build_calendar(
                     CalendarSourceState::Unreachable,
                     "timed out waiting for the instance".to_string(),
                 )
-            })?
-            .map_err(|e| classify_error(&e))?;
-        cache.put(key, fetched.clone());
-        Ok::<_, (CalendarSourceState, String)>(fetched)
+            })
+            .and_then(|r| r.map_err(|e| classify_error(&e)));
+        match fetched {
+            Ok(fetched) => {
+                cache.put(key, fetched.clone());
+                Ok((fetched, None))
+            }
+            Err(failure) => {
+                cache.note_failure(instance.id, failure.clone());
+                fail(failure)
+            }
+        }
     }))
     .await;
 
@@ -481,14 +555,18 @@ pub(crate) async fn build_calendar(
     let mut candidates = Vec::new();
     for (instance, result) in instances.iter().zip(results) {
         let (status, error, count) = match result {
-            Ok(entries) => {
+            Ok((entries, stale_failure)) => {
                 let kept: Vec<_> = entries
                     .into_iter()
                     .filter(|c| kinds.is_none_or(|k| k.contains(&c.entry.media_kind)))
                     .collect();
                 let count = kept.len() as u32;
                 candidates.extend(kept);
-                (CalendarSourceState::Ok, None, count)
+                match stale_failure {
+                    // Last good entries stand in; the source is still flagged.
+                    Some((state, message)) => (state, Some(message), count),
+                    None => (CalendarSourceState::Ok, None, count),
+                }
             }
             Err((state, message)) => {
                 tracing::warn!(instance = %instance.name, state = ?state, "calendar source failed");
@@ -948,6 +1026,33 @@ mod tests {
     use tower::ServiceExt;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[test]
+    fn failing_source_is_remembered_and_served_from_last_good_answer() {
+        let cache = CalendarCache::with_ttls(
+            Duration::from_millis(20),
+            Duration::from_secs(60),
+            Duration::from_millis(60),
+        );
+        let id = Uuid::new_v4();
+        let day = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let key = (id, day, day);
+        assert!(cache.recent_failure(id).is_none());
+        cache.put(key, Vec::new());
+        assert!(cache.get(&key).is_some());
+        cache.note_failure(id, (CalendarSourceState::Unreachable, "timed out".into()));
+        assert!(cache.recent_failure(id).is_some());
+        std::thread::sleep(Duration::from_millis(30));
+        // Past the fresh TTL the last good answer is still there as a stand-in.
+        assert!(cache.get(&key).is_none());
+        assert!(cache.get_stale(&key).is_some());
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(cache.recent_failure(id).is_none());
+        // A success clears the failure memory.
+        cache.note_failure(id, (CalendarSourceState::Unreachable, "x".into()));
+        cache.put(key, Vec::new());
+        assert!(cache.recent_failure(id).is_none());
+    }
 
     fn instance(kind: SourceKind, name: &str, url: String) -> SourceInstance {
         SourceInstance {
