@@ -1,3 +1,4 @@
+import { createProgressQueueFlusher } from "./offlineProgressQueue";
 import {
   createContext,
   useCallback,
@@ -757,24 +758,19 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     if (!userId || !online || authFailed) return;
     let cancelled = false;
 
-    const flush = async () => {
-      const mutations = await listQueuedWatchMutations(userId);
-      for (const mutation of mutations) {
-        if (cancelled || mutation.serverUrl !== apiBaseUrl) continue;
-        try {
-          await client.updateWatchProgress(mutation.mediaFileId, {
-            positionMs: mutation.positionMs,
-            durationMs: mutation.durationMs,
-            completed: mutation.completed,
-            occurredAt: mutation.occurredAt,
-          });
-          await deleteQueuedWatchMutation(mutation.id);
-        } catch {
-          // Still offline in practice, or a transient server error -- left
-          // queued for the next flush attempt.
-        }
-      }
-    };
+    const flush = createProgressQueueFlusher({
+      list: () => listQueuedWatchMutations(userId),
+      send: (mutation) =>
+        client.updateWatchProgress(mutation.mediaFileId, {
+          positionMs: mutation.positionMs,
+          durationMs: mutation.durationMs,
+          completed: mutation.completed,
+          occurredAt: mutation.occurredAt,
+        }),
+      remove: deleteQueuedWatchMutation,
+      serverUrl: apiBaseUrl,
+      isCancelled: () => cancelled,
+    });
 
     void flush();
     const interval = window.setInterval(() => void flush(), 15_000);
@@ -833,8 +829,20 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       refreshStorageUsage();
     };
 
-    void sweep();
-    const interval = window.setInterval(() => void sweep(), EXPIRY_SWEEP_MS);
+    let sweeping = false;
+    const guardedSweep = async () => {
+      if (sweeping) return;
+      sweeping = true;
+      try {
+        await sweep();
+      } catch {
+        // Storage unavailable: try again on the next tick.
+      } finally {
+        sweeping = false;
+      }
+    };
+    void guardedSweep();
+    const interval = window.setInterval(() => void guardedSweep(), EXPIRY_SWEEP_MS);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

@@ -4,6 +4,25 @@ import {
   installMediaSessionActionHandlers,
 } from "./useGlobalMediaControls";
 
+describe("Space and K on interactive targets", () => {
+  it("leaves Space and K to a focused button, option or dialog", () => {
+    expect(
+      globalMediaControlActionForKeystroke({ key: " ", interactiveTarget: true })
+    ).toBeNull();
+    expect(
+      globalMediaControlActionForKeystroke({ key: "k", interactiveTarget: true })
+    ).toBeNull();
+  });
+  it("keeps hardware media keys global", () => {
+    expect(
+      globalMediaControlActionForKeystroke({
+        key: "MediaPlayPause",
+        interactiveTarget: true,
+      })
+    ).toBe("toggle-playback");
+  });
+});
+
 describe("globalMediaControlActionForKeystroke", () => {
   it.each([
     ["MediaPlay", "play"],

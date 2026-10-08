@@ -18,6 +18,8 @@ interface MediaControlKeystroke {
   ctrlKey?: boolean;
   altKey?: boolean;
   typingTarget?: boolean;
+  /** Focus is on something that handles Space itself (button, link, option, dialog). */
+  interactiveTarget?: boolean;
 }
 
 export function globalMediaControlActionForKeystroke({
@@ -28,6 +30,7 @@ export function globalMediaControlActionForKeystroke({
   ctrlKey = false,
   altKey = false,
   typingTarget = false,
+  interactiveTarget = false,
 }: MediaControlKeystroke): GlobalMediaControlAction | null {
   if (repeat || defaultPrevented) return null;
 
@@ -52,7 +55,7 @@ export function globalMediaControlActionForKeystroke({
       break;
   }
 
-  if (metaKey || ctrlKey || altKey || typingTarget) return null;
+  if (metaKey || ctrlKey || altKey || typingTarget || interactiveTarget) return null;
   return key === "k" || key === " " ? "toggle-playback" : null;
 }
 
@@ -109,6 +112,20 @@ export function installMediaSessionActionHandlers(
       setMediaSessionHandler(mediaSession, action, null)
     );
   };
+}
+
+/**
+ * Space and K must not steal activation from a focused control. Sliders (the
+ * scrubber) stay global: SELECT on the scrubber toggles playback.
+ */
+export function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest('[role="slider"]')) return false;
+  return (
+    target.closest(
+      'button, a[href], summary, select, [role="button"], [role="option"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], [role="dialog"], [role="alertdialog"], dialog'
+    ) !== null
+  );
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -179,7 +196,8 @@ export function useGlobalMediaControls({
   onPrevious,
   onNext,
   playbackState,
-}: GlobalMediaControlCallbacks & { playbackState: string }) {
+  keyboardShortcuts = true,
+}: GlobalMediaControlCallbacks & { playbackState: string; keyboardShortcuts?: boolean }) {
   const callbacksRef = useRef<GlobalMediaControlCallbacks>({
     onPlay,
     onPause,
@@ -201,11 +219,15 @@ export function useGlobalMediaControls({
     onNext,
   };
 
+  const keyboardShortcutsRef = useRef(keyboardShortcuts);
+  keyboardShortcutsRef.current = keyboardShortcuts;
+
   const canPrevious = Boolean(onPrevious);
   const canNext = Boolean(onNext);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!keyboardShortcutsRef.current && !event.key.startsWith("Media")) return;
       const action = globalMediaControlActionForKeystroke({
         key: event.key,
         repeat: event.repeat,
@@ -214,6 +236,7 @@ export function useGlobalMediaControls({
         ctrlKey: event.ctrlKey,
         altKey: event.altKey,
         typingTarget: isTypingTarget(event.target),
+        interactiveTarget: isInteractiveShortcutTarget(event.target),
       });
       if (!action || !runMediaControlAction(action, callbacksRef.current)) return;
 

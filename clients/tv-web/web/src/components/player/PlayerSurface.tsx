@@ -867,6 +867,7 @@ export function PlayerSurface({
     onPrevious,
     onNext,
     playbackState: engineState.state,
+    keyboardShortcuts: !minimised,
   });
 
   // Player-only keyboard shortcuts remain available on the video surface: Enter

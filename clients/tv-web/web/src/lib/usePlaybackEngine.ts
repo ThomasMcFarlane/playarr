@@ -1,5 +1,6 @@
 import { shouldKeepEngineAttached } from "./playerMounting";
 import { sourceAudioTracksFromInfo } from "./sourceAudioTracks";
+import { createProgressGate, safePlay } from "./playbackProgress";
 import {
   useCallback,
   useEffect,
@@ -259,7 +260,8 @@ export function usePlaybackEngine(
     state: IDLE_ENGINE_STATE.state,
   });
   const previousPlaybackStateRef = useRef(IDLE_ENGINE_STATE.state);
-  const lastProgressWriteAtRef = useRef(0);
+  const progressGateRef = useRef(createProgressGate());
+  const engineStateRef = useRef<PlaybackEngineState>(IDLE_ENGINE_STATE);
   const qualitySwitchRequestRef = useRef(0);
   const sourceSwitchBarrierRef = useRef<Promise<void>>(Promise.resolve());
   const latestUserSeekRef = useRef<number | null>(null);
@@ -294,6 +296,7 @@ export function usePlaybackEngine(
   const [negotiation, setNegotiation] = useState<NegotiationState>({ kind: "loading" });
   const [retryCount, setRetryCount] = useState(0);
   const [engineState, setEngineState] = useState<PlaybackEngineState>(IDLE_ENGINE_STATE);
+  engineStateRef.current = engineState;
   const [qualityOptions, setQualityOptions] = useState<PlaybackQualityOption[]>([]);
   const [activeQualityId, setActiveQualityId] = useState("original");
   const [qualitySwitching, setQualitySwitching] = useState(false);
@@ -573,7 +576,14 @@ export function usePlaybackEngine(
   useEffect(() => {
     const preferredQualityId = initialSettings?.qualityId ?? playerDefaults.qualityId;
     loadedForUrl.current = null;
-    lastProgressWriteAtRef.current = 0;
+    // The engine still reports the previous item until it emits a fresh state:
+    // block progress writes for that stale state and forget its position.
+    progressGateRef.current.reset(engineStateRef.current, IDLE_ENGINE_STATE.state);
+    latestPlaybackRef.current = {
+      positionMs: 0,
+      durationMs: 0,
+      state: IDLE_ENGINE_STATE.state,
+    };
     previousPlaybackStateRef.current = IDLE_ENGINE_STATE.state;
     qualitySwitchRequestRef.current += 1;
     sourceSwitchBarrierRef.current = Promise.resolve();
@@ -1049,18 +1059,18 @@ export function usePlaybackEngine(
   }, [negotiation, client, loadSourceSubtitleTrack, startPositionSeconds]);
 
   const persistProgress = useCallback(
-    (completed: boolean) => {
-      if (!mediaFileId) return;
+    (completed: boolean, targetMediaFileId: string | undefined = mediaFileId) => {
+      if (!targetMediaFileId) return;
       const { positionMs, durationMs } = latestPlaybackRef.current;
-      if (positionMs <= 0 && !completed) return;
-      lastProgressWriteAtRef.current = Date.now();
+      if (positionMs <= 0) return;
+      progressGateRef.current.markWritten(Date.now());
       // Offline (a downloaded item keeps playing): buffer this update in
       // IndexedDB instead of a doomed network call -- `DownloadsProvider`'s
       // flush loop replays it once back online, timestamped via
       // `occurred_at` for when it actually happened.
       if (!online) {
         void downloads
-          .queueWatchMutation({ mediaFileId, positionMs, durationMs, completed })
+          .queueWatchMutation({ mediaFileId: targetMediaFileId, positionMs, durationMs, completed })
           .catch(() => {
             // Best-effort -- a lost buffered update is no worse than the
             // pre-offline-support behaviour of not persisting it at all.
@@ -1068,7 +1078,7 @@ export function usePlaybackEngine(
         return;
       }
       void client
-        .updateWatchProgress(mediaFileId, {
+        .updateWatchProgress(targetMediaFileId, {
           positionMs,
           durationMs,
           completed,
@@ -1090,6 +1100,9 @@ export function usePlaybackEngine(
   // pause/end/error. Ten seconds is frequent enough for useful resume
   // behaviour without turning every video timeupdate into an API write.
   useEffect(() => {
+    // Right after a media file change the engine still reports the previous
+    // item; ignore it entirely until a fresh state arrives.
+    if (progressGateRef.current.isStale(engineState)) return;
     const positionMs = Math.max(
       0,
       Math.round(
@@ -1101,18 +1114,16 @@ export function usePlaybackEngine(
 
     const previousState = previousPlaybackStateRef.current;
     previousPlaybackStateRef.current = engineState.state;
-    const stateChanged = previousState !== engineState.state;
-    const completed =
-      engineState.state === "ended" ||
-      (durationMs > 0 && positionMs * 10 >= durationMs * 9);
-    const shouldFlushTransition =
-      stateChanged && ["paused", "ended", "error"].includes(engineState.state);
-    const shouldHeartbeat =
-      ["playing", "buffering"].includes(engineState.state) &&
-      Date.now() - lastProgressWriteAtRef.current >= 10_000;
+    const plan = progressGateRef.current.plan({
+      engineStateToken: engineState,
+      state: engineState.state,
+      positionMs,
+      durationMs,
+      nowMs: Date.now(),
+    });
 
-    if (shouldFlushTransition || shouldHeartbeat) {
-      persistProgress(completed);
+    if (plan.persist) {
+      persistProgress(plan.completed);
       const sessionId = activeSessionIdRef.current;
       if (sessionId) void recordHeartbeat(sessionId);
     }
@@ -1134,17 +1145,27 @@ export function usePlaybackEngine(
 
   // Route changes/unmounts are a playback stop even when the engine never
   // emitted a pause event. Flush the last known position before teardown.
-  useEffect(
-    () => () => {
+  // Keyed on the media file only: an online/offline flip or a rebuilt client
+  // must not flush progress or close the live session mid-playback. The
+  // callbacks are read through refs so the cleanup stays current.
+  const persistProgressRef = useRef(persistProgress);
+  persistProgressRef.current = persistProgress;
+  const stopActiveSessionRef = useRef(stopActiveSession);
+  stopActiveSessionRef.current = stopActiveSession;
+  useEffect(() => {
+    const flushedMediaFileId = mediaFileId;
+    return () => {
       const { positionMs, durationMs } = latestPlaybackRef.current;
-      persistProgress(durationMs > 0 && positionMs * 10 >= durationMs * 9);
-      void stopActiveSession("user_stopped");
-    },
-    [persistProgress, stopActiveSession]
-  );
+      persistProgressRef.current(
+        durationMs > 0 && positionMs * 10 >= durationMs * 9,
+        flushedMediaFileId
+      );
+      void stopActiveSessionRef.current("user_stopped");
+    };
+  }, [mediaFileId]);
 
   const play = useCallback(() => {
-    void engineRef.current?.play();
+    safePlay(engineRef.current?.play());
   }, []);
   const pause = useCallback(() => {
     void engineRef.current?.pause();
@@ -1154,7 +1175,7 @@ export function usePlaybackEngine(
     if (current === "playing" || current === "buffering") {
       void engineRef.current?.pause();
     } else {
-      void engineRef.current?.play();
+      safePlay(engineRef.current?.play());
     }
   }, []);
   const seek = useCallback(
