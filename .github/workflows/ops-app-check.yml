@@ -1,7 +1,7 @@
 # Manual check of the per-owner Ops App credentials used by release.yml and backend-release.yml to
 # notify the cluster release gate. Mints a token asking for contents: write on the cluster repository
 # only (the level the dispatch needs; the mint fails if the App installation does not grant it), reads
-# the repository and reports the permission levels the token holds. It dispatches nothing and changes
+# the repository. It dispatches nothing and changes
 # nothing, and never prints the token.
 name: Ops App credentials check
 
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   check:
-    name: Mint an Ops App token and report its permissions
+    name: Mint an Ops App token
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -30,5 +30,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY_OWNER}/.cluster" \
-            --jq '"readable: " + .name, "token permissions on the cluster repository: " + (.permissions | to_entries | map(.key + "=" + (.value | tostring)) | join(", ")), "contents write granted: " + (.permissions.push | tostring)'
+          gh api "repos/${GITHUB_REPOSITORY_OWNER}/.cluster" --jq '"readable: " + .name'
+          # GitHub refuses to mint a token for a permission the installation does not hold, so reaching
+          # this line proves contents: write is granted. (The repository "permissions" field describes
+          # a user, not an installation token, so it is not reported.)
+          echo "contents write granted: true (token minted with permission-contents: write)"
