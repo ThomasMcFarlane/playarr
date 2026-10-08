@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ActionPill, ShellActionColumnProvider } from "../src/components/shell";
-import { focusOn } from "./fixtures";
 
 /** The shell-owned right-hand column: pages register their panel buttons, they never position them. */
 function Column({ open }: { open?: boolean }) {
@@ -17,10 +16,8 @@ function Column({ open }: { open?: boolean }) {
   );
 }
 
-const meta = { title: "Components/Shell action column", component: Column, tags: ["autodocs"] } satisfies Meta<typeof Column>;
+const meta = { title: "Components/Shell action column", component: Column, tags: ["autodocs"], args: { open: false }, argTypes: { open: { control: "boolean" } } } satisfies Meta<typeof Column>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn(".action-pill") };
-export const Open: Story = { args: { open: true } };
+export const Playground: Story = {};

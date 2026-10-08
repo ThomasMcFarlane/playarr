@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { EmptyState, ErrorState, SkeletonState } from "../src/components/shell";
-import { Caption, focusOn } from "./fixtures";
+import { Caption } from "./fixtures";
 
 function States({ kind }: { kind: "empty" | "error" | "loading" | "retry" }) {
   return (
@@ -35,12 +35,8 @@ function States({ kind }: { kind: "empty" | "error" | "loading" | "retry" }) {
   );
 }
 
-const meta = { title: "Components/Empty and error states", component: States, tags: ["autodocs"] } satisfies Meta<typeof States>;
+const meta = { title: "Components/Empty and error states", component: States, tags: ["autodocs"], args: { kind: "empty" }, argTypes: { kind: { control: "inline-radio", options: ["empty", "error", "retry", "loading"] } } } satisfies Meta<typeof States>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Empty: Story = { args: { kind: "empty" } };
-export const ErrorState_: Story = { name: "Error", args: { kind: "error" } };
-export const ErrorWithRetry: Story = { args: { kind: "retry" } };
-export const FocusRetry: Story = { args: { kind: "retry" }, parameters: focusOn(".error-state button") };
-export const Loading: Story = { args: { kind: "loading" } };
+export const Playground: Story = {};

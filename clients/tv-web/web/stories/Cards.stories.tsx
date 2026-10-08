@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Link } from "react-router-dom";
 import { SkeletonBlock } from "../src/components/shell";
-import { Art, Caption, FIXTURE_TITLES, focusOn, hoverOn } from "./fixtures";
+import { Art, Caption, FIXTURE_TITLES } from "./fixtures";
 
 type Mode = "default" | "selected" | "loading";
 
@@ -134,15 +134,9 @@ function Cards({ mode }: { mode: Mode }) {
   );
 }
 
-const meta = { title: "Components/Cards", component: Cards, tags: ["autodocs"], args: { mode: "default" } } satisfies Meta<typeof Cards>;
+const meta = { title: "Components/Cards", component: Cards, tags: ["autodocs"], args: { mode: "default" }, argTypes: { mode: { control: "inline-radio", options: ["default", "selected", "loading"] } } } satisfies Meta<typeof Cards>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const CARD = ".tv-home-card, .tv-title-card, .tv-episode-card";
-
-export const Default: Story = {};
-/** Owner rule: media cards show a soft shadow plus a lift on focus, never a ring or fill. */
-export const Focus: Story = { parameters: focusOn(CARD) };
-export const Hover: Story = { parameters: hoverOn(CARD) };
-export const Selected: Story = { args: { mode: "selected" } };
-export const Loading: Story = { args: { mode: "loading" } };
+/** Owner rule: media cards show a soft shadow plus a lift on focus, never a ring or fill (use the Pseudo states toolbar). */
+export const Playground: Story = {};

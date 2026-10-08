@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PageHeader, ShellActionColumnProvider, type PageAction } from "../src/components/shell";
-import { focusOn } from "./fixtures";
 
 const noop = () => undefined;
 
@@ -26,11 +25,16 @@ function Header({ variant, withActions, open }: { variant: "page" | "detail"; wi
   );
 }
 
-const meta = { title: "Components/Header", component: Header, tags: ["autodocs"], args: { variant: "page", withActions: true } } satisfies Meta<typeof Header>;
+const meta = {
+  title: "Components/Header",
+  component: Header,
+  tags: ["autodocs"],
+  args: { variant: "page", withActions: true, open: false },
+  argTypes: { variant: { control: "inline-radio", options: ["page", "detail"] }, withActions: { control: "boolean" }, open: { control: "boolean" } },
+} satisfies Meta<typeof Header>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Playground: Story = {};
+/** A detail header differs in structure (no actions), so it keeps its own story. */
 export const Detail: Story = { args: { variant: "detail", withActions: false } };
-export const Focus: Story = { parameters: focusOn(".tv-page-back, .action-pill") };
-export const Open: Story = { args: { open: true } };

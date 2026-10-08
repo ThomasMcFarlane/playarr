@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Link } from "react-router-dom";
-import { PageLayout, ShellActionColumnProvider, SkeletonBlock, type PageAction, type PageLayoutState } from "../src/components/shell";
-import { TvMediaTrack } from "../src/components/tv/TvStage";
-import { Art, FIXTURE_TITLES } from "./fixtures";
+import { PageLayout, ShellActionColumnProvider, SkeletonBlock, type PageAction, type PageLayoutState } from "../../src/components/shell";
+import { TvMediaTrack } from "../../src/components/tv/TvStage";
+import { Art, FIXTURE_TITLES } from "../fixtures";
 
 const noop = () => undefined;
 const ACTIONS: PageAction[] = [{ kind: "filters", label: "Filters", open: false, onToggle: noop, controls: "sb-filters", activeCount: 0 }];
@@ -66,12 +66,8 @@ function LibraryPage({ mode }: { mode: Mode }) {
   );
 }
 
-const meta = { title: "Pages/Library composition", component: LibraryPage, args: { mode: "default" } } satisfies Meta<typeof LibraryPage>;
+const meta = { title: "Pages/Library", component: LibraryPage, args: { mode: "default" }, argTypes: { mode: { control: "inline-radio", options: ["default", "loading", "empty", "error", "retry"] } } } satisfies Meta<typeof LibraryPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Loading: Story = { args: { mode: "loading" } };
-export const Empty: Story = { args: { mode: "empty" } };
-export const ErrorState: Story = { name: "Error", args: { mode: "error" } };
-export const ErrorWithRetry: Story = { args: { mode: "retry" } };
+export const Playground: Story = {};

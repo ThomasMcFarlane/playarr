@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, SkeletonBlock } from "../src/components/shell";
 import { TvMediaTrack } from "../src/components/tv/TvStage";
-import { Art, FIXTURE_TITLES, focusOn } from "./fixtures";
+import { Art, FIXTURE_TITLES } from "./fixtures";
 
 type Mode = "default" | "loading" | "empty" | "error";
 
@@ -37,13 +37,9 @@ function Rail({ mode, count = 12 }: { mode: Mode; count?: number }) {
   );
 }
 
-const meta = { title: "Components/Rail", component: Rail, tags: ["autodocs"], args: { mode: "default" } } satisfies Meta<typeof Rail>;
+const meta = { title: "Components/Rail", component: Rail, tags: ["autodocs"], args: { mode: "default", count: 12 }, argTypes: { mode: { control: "inline-radio", options: ["default", "loading", "empty", "error"] }, count: { control: { type: "number", min: 1, max: 40 } } } } satisfies Meta<typeof Rail>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** The right edge shows the single soft fade because the content continues off screen. */
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn(".tv-home-card") };
-export const Loading: Story = { args: { mode: "loading" } };
-export const Empty: Story = { args: { mode: "empty" } };
-export const ErrorState_: Story = { name: "Error", args: { mode: "error" } };
+export const Playground: Story = {};

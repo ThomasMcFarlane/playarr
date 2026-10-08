@@ -1,0 +1,1 @@
+- Storybook: one interactive story per component with Controls for props and states; hover, focus-visible, active and focus-within come from the Pseudo states toolbar item (applied to the whole page, portals included).

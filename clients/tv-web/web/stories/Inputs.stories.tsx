@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { MultiSelect, ViewToggle } from "../src/components/shell";
-import { Caption, focusOn, hoverOn } from "./fixtures";
+import { Caption } from "./fixtures";
 
 const OPTIONS = [
   { value: "action", label: "Action" },
@@ -70,13 +70,14 @@ function Inputs({ disabled, value = "", error }: { disabled?: boolean; value?: s
   );
 }
 
-const meta = { title: "Components/Inputs", component: Inputs, tags: ["autodocs"] } satisfies Meta<typeof Inputs>;
+const meta = {
+  title: "Components/Inputs",
+  component: Inputs,
+  tags: ["autodocs"],
+  args: { disabled: false, value: "", error: false },
+  argTypes: { disabled: { control: "boolean" }, value: { control: "text", description: "Filled value" }, error: { control: "boolean" } },
+} satisfies Meta<typeof Inputs>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn("input, select, .tv-filter-choice-grid button") };
-export const Hover: Story = { parameters: hoverOn("input, select, .tv-filter-choice-grid button") };
-export const Filled: Story = { args: { value: "sample" } };
-export const Disabled: Story = { args: { disabled: true, value: "sample" } };
-export const ErrorState: Story = { name: "Error", args: { error: true, value: "sample" } };
+export const Playground: Story = {};
