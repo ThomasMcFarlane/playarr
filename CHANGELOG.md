@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: right-side panels (Filters, Calendar link, Create playlist, playback settings, download quality, context menus) now close with the exact reverse of their opening animation (same duration, mirrored easing, slide out to the right) on every close path, and focus returns to the launcher afterwards. Reduced-motion users get an immediate close.
 - Web: a focused card's soft shadow and lift are no longer clipped to a box by the Home, detail and search rails; the rails keep their positions, edge fades and horizontal scrolling.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - tvOS library hero title wraps over lines like the web heading.
@@ -2468,6 +2469,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: `scripts/drawer-close.mjs` (Playwright, run in CI) samples the drawer opening and closing animations and asserts they mirror in the TV, desktop and mobile layouts and both themes; unit tests cover the closing state.
 - Roku parity capture: a cold start moves the picker focus back to the first profile before pressing Select, so a remembered bottom-row focus can no longer sign the test device out.
 - Roku parity capture: the Preferences screens press Left before Select so the gear, not Sign out, is focused when the profile picker remembers the bottom row.
 - Roku: a contract test pins the household blocked states (outside schedule, budget used) and how the blocked page opens and closes; the parity README records why the screen cannot be captured on the real device.

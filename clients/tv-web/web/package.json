@@ -25,7 +25,8 @@
     "smoke:calendar-layout": "node scripts/calendar-layout.mjs",
     "smoke:calendar-nav": "node scripts/calendar-nav.mjs",
     "smoke:tablet-layout": "node scripts/tablet-layout.mjs",
-    "smoke:tv-viewport": "node scripts/tv-viewport.mjs"
+    "smoke:tv-viewport": "node scripts/tv-viewport.mjs",
+    "smoke:drawer-close": "node scripts/drawer-close.mjs"
   },
   "dependencies": {
     "@playarr-tv/api-client": "workspace:*",

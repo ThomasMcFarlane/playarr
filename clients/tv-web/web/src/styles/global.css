@@ -12486,3 +12486,31 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 :root[data-theme="dark"] .calendar-edge-window-x.can-scroll-right::after {
   opacity: var(--edge-scrim-opacity);
 }
+
+/* Drawer closing: the exact reverse of the opening animation (`tv-filter-drawer-in` and
+   `media-context-enter`: translateX(100%) and opacity 0 to rest). The duration is inherited from the
+   opening rules, including the TV override, so open and close always last the same; the easing is the
+   opening cubic-bezier(0.16, 1, 0.3, 1) mirrored (1 - x2, 1 - y2, 1 - x1, 1 - y1). The element is the
+   frozen copy that components/shell/drawerClose.ts places over the page when a drawer unmounts. */
+.tv-filter-drawer.is-closing {
+  animation-name: drawer-out;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  animation-fill-mode: both;
+  pointer-events: none;
+}
+
+@keyframes drawer-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+[data-drawer-ghost] {
+  pointer-events: none;
+}

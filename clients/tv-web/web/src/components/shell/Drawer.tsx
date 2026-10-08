@@ -1,5 +1,6 @@
-import { useEffect, useRef, type HTMLAttributes, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, type HTMLAttributes, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
 import { Button } from "../ui";
+import { browserDrawerCloseEnv, playDrawerClose, restoreOpenerFocus, snapshotDrawer } from "./drawerClose";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -23,24 +24,11 @@ function isBack(event: KeyboardEvent): boolean {
  * `usePanelParam`. `drawerAudit.test.ts` fails on ad-hoc drawer or close-button
  * markup outside this component.
  */
-export function Drawer({
-  id,
-  open = true,
-  title,
-  kicker,
-  ariaLabel,
-  closeLabel,
-  onClose,
-  children,
-  footer,
-  className,
-  drawerRef,
-  titleId,
-  modal = true,
-  initialFocus = "close",
-  onKeyDown,
-  containerProps,
-}: {
+export function Drawer({ open = true, ...props }: DrawerProps) {
+  return open ? <DrawerPanel {...props} /> : null;
+}
+
+type DrawerProps = {
   id?: string;
   open?: boolean;
   title: ReactNode;
@@ -66,16 +54,57 @@ export function Drawer({
   onKeyDown?: KeyboardEventHandler<HTMLElement>;
   /** Extra attributes for the dialog element (TV scroll-container data attributes, click guards). */
   containerProps?: HTMLAttributes<HTMLElement> & { [key: `data-${string}`]: string | undefined };
-}) {
+};
+
+/** The mounted drawer. Unmounting it (for any reason) plays the closing animation, see `drawerClose.ts`. */
+function DrawerPanel({
+  id,
+  title,
+  kicker,
+  ariaLabel,
+  closeLabel,
+  onClose,
+  children,
+  footer,
+  className,
+  drawerRef,
+  titleId,
+  modal = true,
+  initialFocus = "close",
+  onKeyDown,
+  containerProps,
+}: Omit<DrawerProps, "open">) {
   const localRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const mountedRef = useRef(false);
   const customKeys = onKeyDown !== undefined;
 
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  // Closing: whatever removes the drawer (Close button, Back or Escape, the scrim, the launcher toggle, a
+  // route change), a frozen copy slides back out; focus returns to the launcher when it has gone.
+  useLayoutEffect(() => {
+    const node = localRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (!node) return;
+      const env = browserDrawerCloseEnv();
+      const snapshot = snapshotDrawer(node);
+      const opener = openerRef.current;
+      // React StrictMode re-runs effects on mount; only a drawer that really went away animates out.
+      queueMicrotask(() => {
+        if (mountedRef.current) return;
+        playDrawerClose(snapshot, env, () => restoreOpenerFocus(opener, env.document));
+      });
+    };
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
+    openerRef.current = opener;
     let frame = 0;
     if (initialFocus === "close") {
       frame = window.requestAnimationFrame(() => closeRef.current?.focus({ preventScroll: true }));
@@ -91,12 +120,9 @@ export function Drawer({
       window.cancelAnimationFrame(frame);
       if (!customKeys) {
         window.removeEventListener("keydown", handleBack, true);
-        if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
       }
     };
-  }, [open, initialFocus, customKeys]);
-
-  if (!open) return null;
+  }, [initialFocus, customKeys]);
 
   function trapTab(event: React.KeyboardEvent<HTMLElement>) {
     if (event.key !== "Tab") return;

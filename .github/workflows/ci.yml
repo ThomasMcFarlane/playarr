@@ -522,6 +522,10 @@ jobs:
         working-directory: clients/tv-web/web
         run: node scripts/layout-parity.mjs --out "$RUNNER_TEMP/layout-parity"
 
+      - name: Drawer close mirrors drawer open
+        working-directory: clients/tv-web/web
+        run: node scripts/drawer-close.mjs
+
       - name: Upload the diff images
         if: failure()
         uses: actions/upload-artifact@v4
