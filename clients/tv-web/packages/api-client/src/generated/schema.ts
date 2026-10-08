@@ -11465,7 +11465,7 @@ export interface operations {
     album_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
             };
             header?: never;
@@ -11544,7 +11544,7 @@ export interface operations {
     episode_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
             };
             header?: never;
@@ -11623,7 +11623,7 @@ export interface operations {
     work_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
             };
             header?: never;

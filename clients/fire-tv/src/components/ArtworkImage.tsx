@@ -36,7 +36,7 @@
  * through without this component needing its own opinion on where a token
  * comes from.
  */
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Image, StyleSheet, View, type ImageResizeMode, type ImageStyle, type StyleProp} from 'react-native';
 import {CAPABILITIES} from '../platform';
 import {colour} from '../theme/tokens';
@@ -52,6 +52,8 @@ export interface ArtworkImageProps {
   accessibilityLabel?: string;
   /** Rendered in place of the image while there is no `uri`, or after the image (in either strategy) fails to load -- typically a plain tinted `<View>` or a small glyph, never left as a blank rectangle. */
   fallback?: React.ReactNode;
+  /** Called once when the image could not be loaded (a missing artwork, a refused style, a network failure). */
+  onFailed?: () => void;
 }
 
 const styles = StyleSheet.create({
@@ -81,8 +83,13 @@ async function fetchAsDataUri(uri: string, accessToken: string | undefined): Pro
 }
 
 export function ArtworkImage(props: ArtworkImageProps): React.ReactElement {
-  const {uri, accessToken, style, resizeMode = 'cover', accessibilityLabel, fallback} = props;
+  const {uri, accessToken, style, resizeMode = 'cover', accessibilityLabel, fallback, onFailed} = props;
   const [failed, setFailed] = useState(false);
+  const onFailedRef = useRef(onFailed);
+  onFailedRef.current = onFailed;
+  useEffect(() => {
+    if (failed) onFailedRef.current?.();
+  }, [failed]);
   // Only meaningful under the `dataUri` strategy -- `undefined` while a fetch
   // is in flight (or before one has started), the resolved `data:` URI once
   // it completes.

@@ -283,6 +283,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Server: the artwork `style` query accepts `stage-grey` and `stage-grey-light`, the key-art greyscale as an opaque JPEG (about a twentieth of the PNG looks' size) for clients that apply the opacity and edge fade themselves. The Fire TV client uses it for the stage art, with the PNG look and then the colour original as fallbacks.
 - iOS and tvOS: the Customise Home button leaves Home; iOS gets a Customise Home panel in Settings.
 - iOS Home rails fade their cards under the page gutter once scrolled, like the web, and the parity run captures and diffs a scrolled Home in both themes.
 - iOS: the phone shell, home, library, search, settings index, title page (film and series) and household blocked screen now follow the web mobile layout; the title page gains the Playback sheet, an availability note, chapters and an Add to watchlist button.

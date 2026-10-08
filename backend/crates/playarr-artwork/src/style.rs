@@ -30,6 +30,12 @@ pub enum ArtworkStyle {
     /// Light-theme TV stage key-art: greyscale, contrast 0.88, brightness 1.1,
     /// opacity 0.4 baked into alpha, with the same right-edge fade as `Stage`.
     StageLight,
+    /// `Stage`'s greyscale, contrast and brightness only: an opaque JPEG at most 1920 x 1080, with no baked opacity or
+    /// edge fade. For clients that crop the picture to a box and apply the opacity and fade themselves; about a
+    /// twentieth of the bytes of the PNG.
+    StageGrey,
+    /// `StageLight`'s numbers in the same opaque JPEG form as `StageGrey`.
+    StageGreyLight,
 }
 
 impl ArtworkStyle {
@@ -38,6 +44,8 @@ impl ArtworkStyle {
             Self::Original => "original",
             Self::Stage => "stage",
             Self::StageLight => "stage-light",
+            Self::StageGrey => "stage-grey",
+            Self::StageGreyLight => "stage-grey-light",
         }
     }
 
@@ -47,6 +55,8 @@ impl ArtworkStyle {
             Self::Original => None,
             Self::Stage => Some("stage"),
             Self::StageLight => Some("stage-light"),
+            Self::StageGrey => Some("stage-grey"),
+            Self::StageGreyLight => Some("stage-grey-light"),
         }
     }
 
@@ -55,6 +65,7 @@ impl ArtworkStyle {
         match self {
             Self::Original => None,
             Self::Stage | Self::StageLight => Some("image/png"),
+            Self::StageGrey | Self::StageGreyLight => Some("image/jpeg"),
         }
     }
 }
@@ -73,6 +84,10 @@ impl FromStr for ArtworkStyle {
             "" | "original" | "raw" | "source" => Ok(Self::Original),
             "stage" | "stage_hero" | "tv-stage" | "tv_stage" => Ok(Self::Stage),
             "stage-light" | "stage_light" => Ok(Self::StageLight),
+            "stage-grey" | "stage_grey" | "stage-gray" => Ok(Self::StageGrey),
+            "stage-grey-light" | "stage_grey_light" | "stage-gray-light" => {
+                Ok(Self::StageGreyLight)
+            }
             _ => Err(()),
         }
     }
@@ -100,7 +115,38 @@ pub fn apply_artwork_style(
         )),
         ArtworkStyle::Stage => encode_stage(source, STAGE_DARK),
         ArtworkStyle::StageLight => encode_stage(source, STAGE_LIGHT),
+        ArtworkStyle::StageGrey => encode_stage_grey(source, STAGE_DARK),
+        ArtworkStyle::StageGreyLight => encode_stage_grey(source, STAGE_LIGHT),
     }
+}
+
+/// The opaque form: the same greyscale, contrast and brightness as `encode_stage`, JPEG, no alpha.
+fn encode_stage_grey(
+    source: &[u8],
+    look: StageLook,
+) -> Result<(Vec<u8>, &'static str), ArtworkStyleError> {
+    let image = image::load_from_memory(source)
+        .map_err(|error| ArtworkStyleError::Decode(error.to_string()))?;
+    let image = {
+        let (w, h) = image.dimensions();
+        if w > 1920 || h > 1080 {
+            image.resize(1920, 1080, FilterType::Triangle)
+        } else {
+            image
+        }
+    };
+    let mut grey = image.grayscale().to_luma8();
+    for pixel in grey.pixels_mut() {
+        let mut v = pixel[0] as f32 / 255.0;
+        v = (v - 0.5) * look.contrast + 0.5;
+        v *= look.brightness;
+        pixel[0] = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    }
+    let mut out = Cursor::new(Vec::new());
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 84)
+        .encode_image(&grey)
+        .map_err(|error| ArtworkStyleError::Encode(error.to_string()))?;
+    Ok((out.into_inner(), "image/jpeg"))
 }
 
 /// The CSS filter numbers of one theme's `.tv-key-art img`.
@@ -243,6 +289,29 @@ mod tests {
         assert!(l[0] > d[0], "light {} dark {}", l[0], d[0]);
         assert!(l[3] < d[3], "light alpha {} dark alpha {}", l[3], d[3]);
         assert!((90..=115).contains(&l[3]), "alpha={}", l[3]);
+    }
+
+    #[test]
+    fn stage_grey_is_an_opaque_grey_jpeg() {
+        assert_eq!(
+            "stage-grey".parse::<ArtworkStyle>().unwrap(),
+            ArtworkStyle::StageGrey
+        );
+        let jpeg = sample_jpeg();
+        let (bytes, content_type) = apply_artwork_style(&jpeg, ArtworkStyle::StageGrey).unwrap();
+        assert_eq!(content_type, "image/jpeg");
+        let img = image::load_from_memory(&bytes).unwrap().to_luma8();
+        let (dark_px, _) = (img.get_pixel(4, 12)[0], ());
+        let (light_bytes, _) = apply_artwork_style(&jpeg, ArtworkStyle::StageGreyLight).unwrap();
+        let light = image::load_from_memory(&light_bytes).unwrap().to_luma8();
+        assert!(
+            light.get_pixel(4, 12)[0] > dark_px,
+            "light must be brighter"
+        );
+        // No fade: the right edge keeps its value.
+        let edge = img.get_pixel(img.width() - 1, 12)[0];
+        let mid = img.get_pixel(img.width() - 3, 12)[0];
+        assert!(edge.abs_diff(mid) < 40);
     }
 
     #[test]

@@ -2551,7 +2551,7 @@ paths:
           type: string
       - name: style
         in: query
-        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend).'
+        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).'
         required: false
         schema:
           type:
@@ -2606,7 +2606,7 @@ paths:
           type: string
       - name: style
         in: query
-        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend).'
+        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).'
         required: false
         schema:
           type:
@@ -2654,7 +2654,7 @@ paths:
           type: string
       - name: style
         in: query
-        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend).'
+        description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).'
         required: false
         schema:
           type:

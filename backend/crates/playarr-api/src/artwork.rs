@@ -79,7 +79,7 @@ impl From<ArtworkCacheError> for ApiError {
 /// pass `original` for the raw cached source bytes.
 #[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
 pub struct ArtworkQuery {
-    /// Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend).
+    /// Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).
     #[serde(default)]
     pub style: Option<String>,
 }
@@ -90,7 +90,7 @@ fn parse_artwork_style(raw: Option<&str>) -> Result<ArtworkStyle, ApiError> {
     };
     raw.parse::<ArtworkStyle>().map_err(|_| {
         ApiError::bad_request(format!(
-            "unsupported artwork style {raw:?}; expected original, stage or stage-light"
+            "unsupported artwork style {raw:?}; expected original, stage, stage-light, stage-grey or stage-grey-light"
         ))
     })
 }

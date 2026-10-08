@@ -7,7 +7,7 @@
  * bakes exactly that into a PNG (`?style=stage` or `stage-light`), so the device draws it as is. A server without the style
  * answers with an error and the art falls back to the colour original under a veil.
  */
-import React from 'react';
+import React, {useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import LinearGradient from '@amazon-devices/react-linear-gradient';
 import {ArtworkImage} from '../components/ArtworkImage';
@@ -25,9 +25,14 @@ function clear(colour: string): string {
   return mix(colour, 0);
 }
 
-/** The server-baked key art look for the theme. */
-export function styledArtUri(uri: string, dark: boolean): string {
-  return `${uri}${uri.includes('?') ? '&' : '?'}style=${dark ? 'stage' : 'stage-light'}`;
+/**
+ * The server-baked key art look for the theme. `stage-grey` is an opaque greyscale JPEG (the web's greyscale, contrast and
+ * brightness; the opacity and the edge fade are applied here); `stage` and `stage-light` are the older PNGs with opacity and a
+ * fade baked in, about twenty times larger.
+ */
+export function styledArtUri(uri: string, dark: boolean, style: 'grey' | 'png' = 'grey'): string {
+  const name = style === 'grey' ? (dark ? 'stage-grey' : 'stage-grey-light') : dark ? 'stage' : 'stage-light';
+  return `${uri}${uri.includes('?') ? '&' : '?'}style=${name}`;
 }
 
 /** A server that does not know the style: the original colour art with a veil and an edge gradient, as before. */
@@ -49,21 +54,42 @@ function LegacyArt({uri, accessToken, dark, surface}: {uri: string; accessToken?
   );
 }
 
+/** What the server could do the last time the key art was asked for: remembered, so a server without `stage-grey` is not asked again. */
+type ArtTier = 'grey' | 'png' | 'legacy';
+let artTier: ArtTier = 'grey';
+
 export function Stage({artUri, accessToken, children}: StageProps): React.ReactElement {
   const {colour, scheme} = useTheme();
   const dark = scheme === 'dark';
   const surface = colour.surface;
+  const [tier, setTierState] = useState<ArtTier>(artTier);
+  const setTier = (next: ArtTier): void => {
+    artTier = next;
+    setTierState(next);
+  };
   return (
     <View style={[StyleSheet.absoluteFill, {backgroundColor: surface, overflow: 'hidden'}]}>
       {artUri ? (
         <Box x={-20} y={-22.9} w={1038.3} h={1190.6} style={{overflow: 'hidden'}}>
-          {/* The server bakes the web's greyscale, contrast, brightness, opacity and right-edge fade (`style=stage`). */}
-          <ArtworkImage
-            uri={styledArtUri(artUri, dark)}
-            accessToken={accessToken}
-            style={{width: '100%', height: '100%'}}
-            resizeMode="cover"
-            fallback={<LegacyArt uri={artUri} accessToken={accessToken} dark={dark} surface={surface} />}
+          {/* The server bakes the web's greyscale, contrast and brightness (`stage-grey`); the opacity and the edge mask are applied
+              here. A server that predates it answers with the PNG look, and one that knows neither gets the colour original. */}
+          {tier === 'grey' ? (
+            <View style={[StyleSheet.absoluteFill, {opacity: dark ? 0.72 : 0.4}]}>
+              <ArtworkImage uri={styledArtUri(artUri, dark)} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" onFailed={() => setTier('png')} />
+            </View>
+          ) : tier === 'png' ? (
+            <ArtworkImage uri={styledArtUri(artUri, dark, 'png')} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" onFailed={() => setTier('legacy')} />
+          ) : (
+            <LegacyArt uri={artUri} accessToken={accessToken} dark={dark} surface={surface} />
+          )}
+          {/* The web masks the cropped image box: solid to 72% of its width, then to transparent. */}
+          <LinearGradient
+            style={StyleSheet.absoluteFill}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 0}}
+            colors={[clear(surface), clear(surface), surface]}
+            locations={[0, 0.72, 1]}
+            pointerEvents="none"
           />
         </Box>
       ) : null}
