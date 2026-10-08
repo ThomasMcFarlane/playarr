@@ -5,7 +5,7 @@ import type {
   CalendarMediaKind,
   CalendarResponse,
 } from "@playarr-tv/api-client";
-import { useAsyncData } from "@playarr-tv/api-client/react";
+import { CALENDAR_QUERY_TAGS, calendarCacheKey, prefetchCalendar, useAsyncData } from "@playarr-tv/api-client/react";
 import { CalendarLink } from "../components/CalendarLink";
 import {
   DateRangeField,
@@ -38,6 +38,7 @@ import {
   itemAvailability,
   entryLocalDay,
   episodeCode,
+  adjacentFetchWindows,
   fetchWindow,
   formatHumanDuration,
   groupByLocalDay,
@@ -159,6 +160,8 @@ const STATE_KEYS = {
 } as const satisfies Record<string, TranslationKey>;
 
 const FOCUS_URL_DEBOUNCE_MS = 250;
+/** Quiet time after a period paints before its neighbours are loaded. */
+const ADJACENT_PREFETCH_DELAY_MS = 400;
 
 function utcFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
@@ -821,8 +824,20 @@ export function CalendarPage() {
   const state = useAsyncData<CalendarResponse>(
     () => client.getCalendar({ start: fetchRange.start, end: fetchRange.end }),
     [client, fetchRange.start, fetchRange.end, reloadNonce],
-    { subscribe: liveCalendar }
+    {
+      subscribe: liveCalendar,
+      cache: { store: client.queries, key: calendarCacheKey(fetchRange.start, fetchRange.end), tags: CALENDAR_QUERY_TAGS },
+    }
   );
+  // Once this period has painted, load the previous and next ones so a step renders at once.
+  const ready = state.status === "ready";
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => {
+      for (const window_ of adjacentFetchWindows(view, anchor, firstDay)) prefetchCalendar(client, window_);
+    }, ADJACENT_PREFETCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [ready, client, view, anchor, firstDay]);
 
   const data = state.status === "ready" ? state.data : null;
   const loading = state.status !== "ready" && state.status !== "error";

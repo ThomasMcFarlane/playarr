@@ -219,6 +219,29 @@ export function prefetchHomeRails(client: ApiClient, params: { lang?: string; li
     .catch(() => undefined);
 }
 
+/** What the calendar shows depends on the library, the viewer's progress and watchlist, and releases. */
+export const CALENDAR_QUERY_TAGS = ["calendar", "catalog", "progress", "watchlist"] as const;
+
+/** The query-cache key of one calendar fetch window (shared by the screen and the prefetch). */
+export function calendarCacheKey(start: string, end: string): string {
+  return `calendar:${start}:${end}`;
+}
+
+/**
+ * Warms the query cache with a calendar window (the neighbouring period) so stepping to it paints
+ * from the stored copy. A no-op while the cache is off and when one is stored or already loading.
+ */
+export function prefetchCalendar(client: ApiClient, window: { start: string; end: string }): void {
+  const { queries } = client;
+  if (!queries.enabled) return;
+  void queries
+    .fetch(calendarCacheKey(window.start, window.end), () => client.getCalendar(window), {
+      tags: CALENDAR_QUERY_TAGS,
+      ttlMs: 60_000,
+    })
+    .catch(() => undefined);
+}
+
 export interface PlaybackCapabilities {
   containers?: string;
   videoCodecs?: string;

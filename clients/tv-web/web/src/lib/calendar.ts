@@ -129,6 +129,17 @@ export function fetchWindow(range: DayRange): { start: Day; end: Day } {
   return { start: addDays(range.start, -1), end: addDays(range.end, 1) };
 }
 
+/** The fetch windows of the previous and next period, to load ahead of a step. */
+export function adjacentFetchWindows(
+  view: CalendarView,
+  anchor: Day,
+  firstDay: number
+): { start: Day; end: Day }[] {
+  return ([-1, 1] as const).map((direction) =>
+    fetchWindow(visibleRange(view, shiftAnchor(view, anchor, direction), firstDay))
+  );
+}
+
 /** Moves the anchor one page backwards (-1) or forwards (1). */
 export function shiftAnchor(view: CalendarView, anchor: Day, direction: -1 | 1): Day {
   switch (view) {

@@ -27,6 +27,7 @@ import {
   groupByLocalDay,
   humanDuration,
   localDayOf,
+  adjacentFetchWindows,
   shiftAnchor,
   sizedPosterUrl,
   startOfWeek,
@@ -382,5 +383,15 @@ describe("createFocusSelection (K1)", () => {
     vi.advanceTimersByTime(1000);
     expect(commit).toHaveBeenCalledTimes(1);
     expect(commit).toHaveBeenCalledWith("b");
+  });
+});
+
+describe("adjacentFetchWindows", () => {
+  it("returns the fetch windows of the previous and next period", () => {
+    for (const view of ["month", "week", "agenda"] as const) {
+      const [prev, next] = adjacentFetchWindows(view, "2026-10-15", 1);
+      expect(prev).toEqual(fetchWindow(visibleRange(view, shiftAnchor(view, "2026-10-15", -1), 1)));
+      expect(next).toEqual(fetchWindow(visibleRange(view, shiftAnchor(view, "2026-10-15", 1), 1)));
+    }
   });
 });
