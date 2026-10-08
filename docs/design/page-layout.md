@@ -552,7 +552,7 @@ Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
 2. **No direct scroll writes.** `scrollTop =`, `scrollLeft =`, native `scrollIntoView`, `scrollTo`, `scrollBy` and `behavior: "instant"` are forbidden outside the engine (`scrollMotionAudit.test.ts`). Restoring a saved position or opening a list at its selection uses the engine's instant helpers.
 3. **Remote nav stays lag-free.** Key to focus is unchanged; the engine writes once per frame inside rAF and never reads layout straight after a write. `scripts/nav-perf.mjs` (now also reporting frame pacing) is the check, at 1280x720 with 4x and 6x CPU throttling.
 4. **Reduced motion**: `prefers-reduced-motion: reduce` makes every move instant.
-5. **Route transitions**: one short fade-and-rise of the page body only; the shell, nav rail and header stay put; Back reverses it; skeletons appear inside it. Landed in a follow-up PR.
+5. **Route transitions**: one short fade-and-rise of the page body only; the shell, nav rail and header stay put; Back reverses it; skeletons appear inside it. The incoming body fades and rises 10px over 220 ms (`cubic-bezier(0.2, 0.8, 0.2, 1)`, opacity and transform only); Back settles downwards instead. It is set by `lib/routeMotion.ts` as `data-route-motion` on `.app-main` and styled in `page-layout.css`. Settings panels, the player and first paint do not animate. The Android TV and VIDAA page entrances that used to run on `.page`, `.tv-rail-panel`, `.tv-library-grid-panel` and `.tv-rail-surface` are gone, so there is one transition.
 6. Native clients follow the same timings when parity resumes (200 to 300 ms ease-out, retarget on repeat, reduced motion respected).
 
 ## Appendix A: audit inventory

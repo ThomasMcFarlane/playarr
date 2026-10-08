@@ -289,6 +289,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: route changes play one short fade-and-rise of the page body (about 220 ms) with the shell, nav rail and page header staying put; Back settles the other way, skeletons ride the same transition, and reduced motion makes it instant. The separate Android TV and VIDAA page entrance animations are removed in its favour.
 - Web: all focus-driven scrolling (page between rails, rails, library and search grids, lists, calendar, settings, detail seasons and episodes, player lists) now glides through one shared, cancelable, retargeting scroll engine instead of snapping. Held arrow keys keep up without a backlog, and reduced motion is respected.
 - Web: Home renders through the shared page layout (no header and no action button); its loading, error and empty states sit inside the page.
 - iOS: the calendar header uses the shared action tiles (bell and sliders) at the web's phone positions, the range label wraps like the web, and the film detail chapter frames match the browser's colours in the parity capture.

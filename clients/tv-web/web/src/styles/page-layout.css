@@ -749,3 +749,33 @@ body[data-input-mode="remote"] .tv-page-back {
     border-left: 0;
   }
 }
+
+/* ---- Route transition (owner ruling, 8 October 2026; docs/design/page-layout.md 10a) ---- */
+/*
+ * Route transitions (owner ruling, 8 October 2026; docs/design/page-layout.md 10a).
+ * The incoming page BODY fades and rises 10px over 220 ms; Back settles downwards instead. The shell, nav rail, action
+ * column and each page's header stay put, and skeletons (rendered inside the body) ride the same animation.
+ * Compositor-only (opacity, transform). `lib/routeMotion.ts` sets `data-route-motion` on `.app-main`; the a/b suffix
+ * flips per navigation so the animation restarts without remounting. Reduced motion: the global reduce rule makes it instant.
+ */
+@keyframes route-enter-forward-a { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes route-enter-forward-b { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes route-enter-back-a { from { opacity: 0; transform: translate3d(0, -10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes route-enter-back-b { from { opacity: 0; transform: translate3d(0, -10px, 0); } to { opacity: 1; transform: none; } }
+
+/* Layout pages: everything but the header and the backdrop. Other pages: the page as a whole. */
+.app-main[data-route-motion] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
+.app-main[data-route-motion] > :not([data-page-id]) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: backwards;
+}
+
+.app-main[data-route-motion="forward-a"] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
+.app-main[data-route-motion="forward-a"] > :not([data-page-id]) { animation-name: route-enter-forward-a; }
+.app-main[data-route-motion="forward-b"] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
+.app-main[data-route-motion="forward-b"] > :not([data-page-id]) { animation-name: route-enter-forward-b; }
+.app-main[data-route-motion="back-a"] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
+.app-main[data-route-motion="back-a"] > :not([data-page-id]) { animation-name: route-enter-back-a; }
+.app-main[data-route-motion="back-b"] > [data-page-id] > :not(.page-header, .tv-key-art, .tv-stage-wash),
+.app-main[data-route-motion="back-b"] > :not([data-page-id]) { animation-name: route-enter-back-b; }

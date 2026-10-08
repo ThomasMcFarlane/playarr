@@ -1,3 +1,4 @@
+import { useRouteMotion } from "./lib/routeMotion";
 import {
   useCallback,
   useEffect,
@@ -240,6 +241,7 @@ function AppShell() {
   const [hasFolderRoots, setHasFolderRoots] = useState(false);
   const appUpdate = useAppUpdate(client, PLAYARR_CLIENT_PLATFORM);
   const location = useLocation();
+  const routeMotion = useRouteMotion();
   const navigate = useNavigate();
   const now = useMinuteClock();
   const online = useOnlineStatus();
@@ -470,7 +472,7 @@ function AppShell() {
           />
         </div>
       ) : (
-        <PageScrollRoot scrollKey={`page:${location.pathname}`}>
+        <PageScrollRoot scrollKey={`page:${location.pathname}`} routeMotion={routeMotion}>
           <Outlet
             context={{
               availableWorkKinds,

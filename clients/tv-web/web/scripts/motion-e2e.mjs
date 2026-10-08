@@ -141,6 +141,69 @@ const verdict = (label, r) => check(label, r?.ok === true, r ? `${r.hit.name} ${
   await context.close();
 }
 
+{ // Route transitions: the page body fades and rises in; the header and shell stay put; Back reverses it.
+  const { context, page } = await open("/movies");
+  await page.waitForSelector("[data-library-index]");
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(500);
+  const watch = () => page.evaluate(() => {
+    window.__route = { frames: [], headerOpacity: [], navMoved: false, done: false };
+    const nav = document.querySelector(".app-nav");
+    const navTop = nav?.getBoundingClientRect().top;
+    const start = performance.now();
+    const tick = () => {
+      const running = document.getAnimations().find((a) => a.animationName?.startsWith("route-enter"));
+      if (running) {
+        const target = running.effect.target;
+        const cs = getComputedStyle(target);
+        const matrix = cs.transform === "none" ? 0 : Number(cs.transform.match(/matrix.*\((.*)\)/)[1].split(",")[5]);
+        window.__route.frames.push({ name: running.animationName, opacity: Number(cs.opacity), y: matrix });
+      }
+      const header = document.querySelector(".app-main .page-header");
+      if (header) window.__route.headerOpacity.push(Number(getComputedStyle(header).opacity));
+      if (nav && Math.abs(nav.getBoundingClientRect().top - navTop) > 0.5) window.__route.navMoved = true;
+      if (performance.now() - start < 700) requestAnimationFrame(tick); else window.__route.done = true;
+    };
+    requestAnimationFrame(tick);
+  });
+  const result = () => page.evaluate(async () => { while (!window.__route.done) await new Promise((r) => setTimeout(r, 20)); return window.__route; });
+  await watch();
+  await page.keyboard.press("Enter");
+  const forward = await result();
+  const fo = forward.frames.map((f) => f.opacity);
+  check("route: forward transition animates the page body (>= 4 distinct opacity steps, rising)", new Set(fo.map((v) => v.toFixed(2))).size >= 4 && fo.every((v, i) => i === 0 || v >= fo[i - 1] - 0.001), JSON.stringify(fo.map((v) => +v.toFixed(2))));
+  check("route: forward rises (starts below, ends at rest)", forward.frames.length > 0 && forward.frames[0].y > 0 && forward.frames[0].name.includes("forward"), JSON.stringify(forward.frames[0]));
+  check("route: header never fades and the nav rail never moves", forward.headerOpacity.every((v) => v === 1) && !forward.navMoved, JSON.stringify({ header: [...new Set(forward.headerOpacity)], nav: forward.navMoved }));
+  await page.waitForTimeout(300);
+  await watch();
+  await page.goBack();
+  const back = await result();
+  const bo = back.frames.map((f) => f.opacity);
+  check("route: Back plays the reverse direction (settles downwards)", back.frames.length > 0 && back.frames[0].y < 0 && back.frames[0].name.includes("back"), JSON.stringify(back.frames[0]));
+  check("route: Back also eases (>= 4 distinct opacity steps)", new Set(bo.map((v) => v.toFixed(2))).size >= 4, JSON.stringify(bo.map((v) => +v.toFixed(2))));
+  await context.close();
+}
+{ // Reduced motion: route change is instant.
+  const { context, page } = await open("/movies", { reducedMotion: "reduce" });
+  await page.waitForSelector("[data-library-index]");
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(500);
+  await page.keyboard.press("Enter");
+  const seen = await page.evaluate(() => new Promise((resolve) => {
+    const opacities = new Set();
+    const start = performance.now();
+    const tick = () => {
+      for (const a of document.getAnimations()) if (a.animationName?.startsWith("route-enter")) opacities.add(getComputedStyle(a.effect.target).opacity);
+      if (performance.now() - start < 400) requestAnimationFrame(tick); else resolve([...opacities]);
+    };
+    requestAnimationFrame(tick);
+  }));
+  check("route: reduced motion shows no mid-fade frames", seen.every((v) => Number(v) < 0.05 || Number(v) > 0.9), JSON.stringify(seen));
+  await context.close();
+}
+
 await browser.close();
 server.close?.();
 console.log(failed ? `${failed} FAILED` : "all passed");

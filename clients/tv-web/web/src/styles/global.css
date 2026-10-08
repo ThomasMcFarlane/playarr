@@ -11164,9 +11164,8 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 }
 
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .page {
-  animation: android-tv-rise-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+/* Page entrances (.page, .tv-rail-panel, .tv-library-grid-panel, .tv-rail-surface) are owned by the one route
+ * transition, styles/page-layout.css (owner ruling, 8 October 2026). */
 
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-key-art {
   animation: android-tv-stage-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -11175,12 +11174,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-key-art {
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .home-feature-art,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-library-preview {
   animation: android-tv-rise-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-rail-panel,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-library-grid-panel,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-rail-surface {
-  animation: android-tv-panel-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-title-panel,
