@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.data.model.RailPreferenceEntry
+import io.playarr.shared.data.model.RailPreferencesRequest
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
@@ -2766,6 +2768,36 @@ internal class ParitySettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow<ParityLoad<SettingsSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
     private val _message = MutableStateFlow<SettingsNotice?>(null)
+    private val _homeRails = MutableStateFlow<List<RailPreferenceEntry>?>(null)
+    /** The signed-in user's Home rails in order, with hidden flags (null until loaded). */
+    val homeRails = _homeRails.asStateFlow()
+
+    fun loadHomeRails(language: String) {
+        viewModelScope.launch { _homeRails.value = runCatching { api.railPreferences(language).rails }.getOrNull() }
+    }
+
+    /** Saves the full order and hidden set; Home picks it up the next time it loads. */
+    fun saveHomeRails(rails: List<RailPreferenceEntry>) {
+        viewModelScope.launch {
+            val saved = runCatching {
+                api.saveRailPreferences(
+                    RailPreferencesRequest(
+                        order = rails.map(RailPreferenceEntry::id),
+                        hidden = rails.filter(RailPreferenceEntry::hidden).map(RailPreferenceEntry::id),
+                    ),
+                )
+            }.getOrNull()
+            if (saved != null) _homeRails.value = saved.rails
+        }
+    }
+
+    fun resetHomeRails(language: String) {
+        viewModelScope.launch {
+            if (runCatching { api.resetRailPreferences() }.isSuccess) {
+                _homeRails.value = runCatching { api.railPreferences(language).rails }.getOrNull()
+            }
+        }
+    }
     val message = _message.asStateFlow()
     private val _invite = MutableStateFlow<PlayarrGeneratedInvite?>(null)
     val invite = _invite.asStateFlow()
@@ -3071,6 +3103,8 @@ private enum class SettingsSection(val label: PlayarrString) {
     Remote(PlayarrString.SettingsRemote),
     YourData(PlayarrString.SettingsYourData),
     Legal(PlayarrString.SettingsLegal),
+    /** Customise Home moved here from Home (owner ruling 8 October): the same rail controls, saved on every change. */
+    Home(PlayarrString.HomeCustomise),
     /** Web lists it for everyone; the phone has no latency view, so it points to Playarr Web. */
     RequestLatency(PlayarrString.SettingsRequestLatency),
 }
@@ -3087,6 +3121,7 @@ private val phoneSettingsIndex = listOf(
     SettingsSection.RequestLatency to PlayarrString.SettingsIndexRequestLatencyDescription,
     SettingsSection.Remote to PlayarrString.SettingsIndexRemoteDescription,
     SettingsSection.YourData to PlayarrString.SettingsYourDataDescription,
+    SettingsSection.Home to PlayarrString.HomeCustomiseDescription,
 )
 
 /** Two-digit section number as web `PRODUCT_SETTINGS_SECTIONS` prints it (01 ... 09, 10). */
@@ -3263,6 +3298,7 @@ private fun SettingsSectionContent(
         SettingsSection.Remote -> playarrString(PlayarrString.RemoteDescription)
         SettingsSection.YourData -> playarrString(PlayarrString.SettingsYourDataDescription)
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
+        SettingsSection.Home -> playarrString(PlayarrString.HomeCustomiseDescription)
         else -> null
     }
     if (isTelevision && section == SettingsSection.Appearance) {
@@ -3661,6 +3697,7 @@ private fun SettingsSectionContent(
             } else Text(playarrString(PlayarrString.SettingsRequestLatencyOnWeb), color = WebInkMuted)
             SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
+            SettingsSection.Home -> PlayarrCustomiseHomePanel(viewModel, isTelevision)
             SettingsSection.Legal -> {
                 PlayarrButton(
                     onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },
@@ -4135,7 +4172,8 @@ private fun TvSettingsBody(
             modifier = Modifier.offset(x = 227.dp, y = 142.7.dp).widthIn(max = 760.dp),
         )
         LazyColumn(
-            Modifier.offset(x = 154.dp, y = 162.dp).width(480.dp).fillMaxHeight(),
+            // Padding, not offset: the list must end at the screen edge so rows past it (11 sections) scroll into view.
+            Modifier.padding(start = 154.dp, top = 162.dp).width(480.dp).fillMaxHeight(),
         ) {
             itemsIndexed(entries.map { it.first }) { index, candidate ->
                 var focused by remember { mutableStateOf(false) }
@@ -4624,6 +4662,59 @@ private fun PhoneSettingsIndex(onOpen: (SettingsSection) -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Per-user Home customisation as a Settings panel: show or hide each rail, move it up or down, or reset to the admin's order. */
+@Composable
+private fun PlayarrCustomiseHomePanel(viewModel: ParitySettingsViewModel, isTelevision: Boolean) {
+    val language = LocalPlayarrLanguage.current.resolved.code
+    LaunchedEffect(language) { viewModel.loadHomeRails(language) }
+    val rails by viewModel.homeRails.collectAsState()
+    val list = rails
+    if (list == null) {
+        CircularProgressIndicator()
+        return
+    }
+    // On television the panel is a fixed canvas (not inside a scrolling list): bound it to the screen and scroll it, so the
+    // rails past the bottom edge and Reset stay reachable with the D-pad (focus scrolls into view).
+    Column(
+        (if (isTelevision) Modifier.heightIn(max = 820.dp).verticalScroll(rememberScrollState()) else Modifier),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        list.forEachIndexed { index, rail ->
+            // The title takes the full width (rail names are long); the controls sit on their own line.
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    rail.title,
+                    color = if (rail.hidden) WebInkMuted else WebInk,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PlayarrButton(
+                        variant = PlayarrButtonVariant.Ghost,
+                        enabled = index > 0,
+                        onClick = { viewModel.saveHomeRails(moveRail(list, index, -1)) },
+                    ) { Text(playarrString(PlayarrString.HomeCustomiseUp)) }
+                    PlayarrButton(
+                        variant = PlayarrButtonVariant.Ghost,
+                        enabled = index < list.lastIndex,
+                        onClick = { viewModel.saveHomeRails(moveRail(list, index, 1)) },
+                    ) { Text(playarrString(PlayarrString.HomeCustomiseDown)) }
+                    PlayarrButton(
+                        variant = PlayarrButtonVariant.Secondary,
+                        onClick = { viewModel.saveHomeRails(list.toMutableList().also { it[index] = rail.copy(hidden = !rail.hidden) }) },
+                    ) {
+                        Text(playarrString(if (rail.hidden) PlayarrString.HomeCustomiseShow else PlayarrString.HomeCustomiseHide))
+                    }
+                }
+            }
+        }
+        PlayarrButton(onClick = { viewModel.resetHomeRails(language) }, variant = PlayarrButtonVariant.Ghost) {
+            Text(playarrString(PlayarrString.HomeCustomiseReset))
         }
     }
 }
