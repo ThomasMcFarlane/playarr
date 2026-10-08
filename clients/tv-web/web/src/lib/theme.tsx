@@ -20,7 +20,7 @@ interface ThemeContextValue {
   toggleTheme: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
+export const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function storedPreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
