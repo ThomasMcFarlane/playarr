@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
 import io.playarr.shared.designsystem.page.PlayarrLoadingState
@@ -468,6 +469,7 @@ internal fun ExperienceWatchlistScreen(
         viewModel::refreshWatchlist,
     )
     PlayarrPageScaffold(
+        pageId = PlayarrPageId.Watchlist,
         title = playarrString(PlayarrString.WatchlistTitle),
         onBack = onBack,
         isTelevision = isTelevision,

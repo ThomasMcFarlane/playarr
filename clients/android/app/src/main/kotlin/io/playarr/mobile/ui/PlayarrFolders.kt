@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
 import io.playarr.shared.designsystem.page.PlayarrLoadingState
@@ -90,6 +91,7 @@ internal fun ExperienceFoldersScreen(
         else -> null
     }
     PlayarrPageScaffold(
+        pageId = PlayarrPageId.Folders,
         title = playarrString(PlayarrString.FoldersTitle),
         subtitle = detail,
         onBack = { if (!holder.up(rootCount)) onBack() },

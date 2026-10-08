@@ -68,7 +68,7 @@ class PlayarrPageChromeGuardTest {
         listOf(
             Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Library,\n            title = plural", 1200),
             Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Detail,\n            title = \"\"", 1200),
-            Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageScaffold(\n            title = \"\"", 1200),
+            Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.PlaylistDetail,\n            title = \"\"", 1200),
         ).forEach { (file, marker, length) ->
             val text = body(file, marker, length)
             assertTrue("$file $marker: loading and failure are states inside the scaffold", Regex("""PlayarrPageScaffold\(""").findAll(text).count() >= 2)
@@ -91,5 +91,15 @@ class PlayarrPageChromeGuardTest {
         val calls = Regex("""PlayarrPageScaffold\(\s*pageId = PlayarrPageId\.(\w+)""").findAll(text).map { it.groupValues[1] }.toList()
         assertTrue("Library, Search and Detail ids present: $calls", calls.containsAll(listOf("Library", "Search", "Detail")))
         assertEquals("every Experience scaffold call names its page", 0, Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(text).count())
+    }
+
+    /** List pages register with the page package too; only the calendar is still on the legacy id (A6). */
+    @Test
+    fun `no legacy page ids outside the calendar`() {
+        val allowed = setOf("PlayarrCalendar.kt", "PlayarrPageScaffold.kt")
+        val offenders = uiFiles().filter { it.name !in allowed }.flatMap { f ->
+            Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(f.readText()).map { "${f.name}@${it.range.first}" }.toList()
+        }
+        assertEquals("pass pageId = PlayarrPageId.<page>", emptyList<String>(), offenders)
     }
 }
