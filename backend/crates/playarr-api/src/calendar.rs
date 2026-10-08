@@ -446,6 +446,7 @@ pub(crate) async fn build_calendar(
         candidates.extend(kept);
     }
 
+    let timer = std::time::Instant::now();
     let mut merged = merge_candidates(candidates);
     let mut resolved: HashMap<(String, String), Option<Uuid>> = HashMap::new();
     let mut lags: HashMap<(String, String), Option<i64>> = HashMap::new();
@@ -485,12 +486,19 @@ pub(crate) async fn build_calendar(
         }
     }
 
+    let enrich_ms = timer.elapsed().as_millis();
     if options.group_series_day {
         merged = group_series_day(merged);
     }
     if let Some(viewer) = options.viewer {
         attach_actions(state, viewer, &mut merged).await;
     }
+    tracing::info!(
+        entries = merged.len(),
+        enrich_ms,
+        total_ms = timer.elapsed().as_millis(),
+        "calendar built"
+    );
 
     CalendarResponse {
         start,
