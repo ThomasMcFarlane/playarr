@@ -1027,6 +1027,9 @@ fn thumbnail_permits() -> &'static tokio::sync::Semaphore {
     })
 }
 
+/// Error code for a media file that has nothing to extract a thumbnail from.
+const THUMBNAIL_UNAVAILABLE: &str = "thumbnail_unavailable";
+
 async fn ensure_media_thumbnail(
     media_file_id: Uuid,
     source_path: &FsPath,
@@ -1165,6 +1168,18 @@ async fn ensure_media_thumbnail_at(
     if !output.status.success() || !tokio::fs::try_exists(&temp_path).await.unwrap_or(false) {
         let _ = tokio::fs::remove_file(&temp_path).await;
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // An audio file without embedded cover art (or any file with no video
+        // stream) has nothing to extract. That is an expected miss, not a
+        // server fault: clients fall back to their own placeholder.
+        if stderr.contains("matches no streams") {
+            return Err(ApiError::new(
+                axum::http::StatusCode::NOT_FOUND,
+                THUMBNAIL_UNAVAILABLE,
+                format!(
+                    "media file {media_file_id} has no video frame or cover art to use as a thumbnail"
+                ),
+            ));
+        }
         return Err(ApiError::internal(format!(
             "ffmpeg thumbnail extraction failed: {}",
             stderr.trim()
@@ -2823,6 +2838,7 @@ pub async fn media_subtitle_handler(
         (status = 200, description = "A real JPEG frame extracted from the source media file", content_type = "image/jpeg"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
+        (status = 204, description = "The file has no video frame or cover art to extract; use a placeholder"),
         (status = 404, description = "Unknown media_file_id"),
         (status = 503, description = "The source media path is not reachable on this Playarr Server node"),
         (status = 500, description = "The source file could not be decoded")
@@ -2843,7 +2859,21 @@ pub async fn media_thumbnail_handler(
     crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let position_ms = thumbnail_position_ms(query.position_ms);
-    let thumbnail_path = ensure_media_thumbnail(media_file_id, &resolved_path, position_ms).await?;
+    let thumbnail_path =
+        match ensure_media_thumbnail(media_file_id, &resolved_path, position_ms).await {
+            Ok(path) => path,
+            // Expected miss (audio without cover art): 204 so browsers do not log a failed
+            // resource load for every track. The result is stable, so let clients cache it.
+            Err(error) if error.body.error == THUMBNAIL_UNAVAILABLE => {
+                let mut response = axum::http::StatusCode::NO_CONTENT.into_response();
+                response.headers_mut().insert(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("private, max-age=3600"),
+                );
+                return Ok(response);
+            }
+            Err(error) => return Err(error),
+        };
     let mut response = serve_file(&thumbnail_path, request).await?;
     response.headers_mut().insert(
         axum::http::header::CACHE_CONTROL,
@@ -3705,6 +3735,39 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(cached, generated);
+
+        std::fs::remove_dir_all(&test_root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn thumbnail_of_a_file_without_a_video_stream_is_an_expected_miss_not_a_500() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let test_root =
+            std::env::temp_dir().join(format!("playarr-thumbnail-test-{}", Uuid::new_v4()));
+        let source_path = test_root.join("track.flac");
+        let fake_ffmpeg = test_root.join("fake-ffmpeg.sh");
+        std::fs::create_dir_all(&test_root).unwrap();
+        std::fs::write(&source_path, b"source bytes").unwrap();
+        std::fs::write(
+            &fake_ffmpeg,
+            b"#!/bin/sh\necho \"Stream map '' matches no streams.\" >&2\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake_ffmpeg, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let error = ensure_media_thumbnail_at(
+            Uuid::new_v4(),
+            &source_path,
+            test_root.join("cache").join("track.jpg"),
+            fake_ffmpeg.to_str().unwrap(),
+            0,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.body.error, THUMBNAIL_UNAVAILABLE);
+        assert_ne!(error.status, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
 
         std::fs::remove_dir_all(&test_root).unwrap();
     }

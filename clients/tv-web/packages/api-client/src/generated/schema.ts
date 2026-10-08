@@ -14820,6 +14820,13 @@ export interface operations {
                     "image/jpeg": unknown;
                 };
             };
+            /** @description The file has no video frame or cover art to extract; use a placeholder */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Missing or invalid access token */
             401: {
                 headers: {

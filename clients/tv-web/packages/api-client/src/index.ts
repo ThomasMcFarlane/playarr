@@ -2765,18 +2765,19 @@ export class ApiClient {
   /**
    * A real frame extracted from the media file. Returned as a Blob so web
    * clients can create a short-lived object URL without putting bearer
-   * credentials in an image URL.
+   * credentials in an image URL. `null` means the file has nothing to extract
+   * (for example audio without cover art): an expected miss, not an error.
    */
-  async getMediaThumbnail(mediaFileId: string, positionMs?: number): Promise<Blob> {
-    return this.unwrap(
-      await this.raw.GET("/api/v1/media/{media_file_id}/thumbnail", {
-        params: {
-          path: { media_file_id: mediaFileId },
-          query: { position_ms: positionMs },
-        },
-        parseAs: "blob",
-      })
-    ) as Blob;
+  async getMediaThumbnail(mediaFileId: string, positionMs?: number): Promise<Blob | null> {
+    const result = await this.raw.GET("/api/v1/media/{media_file_id}/thumbnail", {
+      params: {
+        path: { media_file_id: mediaFileId },
+        query: { position_ms: positionMs },
+      },
+      parseAs: "blob",
+    });
+    if (result.response.status === 204) return null;
+    return this.unwrap(result) as Blob;
   }
 
   /** Every durable progress row for the signed-in viewer, newest first. */

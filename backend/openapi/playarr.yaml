@@ -5068,6 +5068,8 @@ paths:
           description: A real JPEG frame extracted from the source media file
           content:
             image/jpeg: {}
+        '204':
+          description: The file has no video frame or cover art to extract; use a placeholder
         '401':
           description: Missing or invalid access token
         '403':

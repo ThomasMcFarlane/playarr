@@ -19,8 +19,10 @@ interface MediaThumbnailArtworkProps {
 }
 
 interface MediaThumbnailRecord {
-  promise: Promise<string>;
+  /** Resolves to `null` when the server has no frame for this file (an expected miss, not an error). */
+  promise: Promise<string | null>;
   url?: string;
+  missing?: boolean;
 }
 
 const mediaThumbnailsByClient = new WeakMap<
@@ -84,6 +86,10 @@ function loadMediaThumbnail(
 
   const record: MediaThumbnailRecord = {
     promise: client.getMediaThumbnail(mediaFileId, positionMs).then((blob) => {
+      if (blob === null) {
+        record.missing = true;
+        return null;
+      }
       if (blob.size === 0) throw new Error("The thumbnail response was empty.");
       const url = URL.createObjectURL(blob);
       record.url = url;
@@ -228,9 +234,10 @@ export function MediaThumbnailArtwork({
         setSource(record.url);
         return;
       }
+      if (record.missing) return;
       record.promise
         .then((url) => {
-          if (!cancelled) setSource(url);
+          if (!cancelled && url) setSource(url);
         })
         .catch((error: unknown) => {
           if (cancelled) return;

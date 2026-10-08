@@ -1185,10 +1185,17 @@ describe("ApiClient", () => {
     const thumbnail = await client.getMediaThumbnail("media-file-1", 65_432);
 
     expect(thumbnail).toBeInstanceOf(Blob);
-    expect(thumbnail.type).toBe("image/jpeg");
-    expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()))).toEqual(
+    expect(thumbnail!.type).toBe("image/jpeg");
+    expect(Array.from(new Uint8Array(await thumbnail!.arrayBuffer()))).toEqual(
       Array.from(jpegBytes)
     );
+  });
+
+  it("treats a 204 thumbnail response as an expected miss, not an error", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "viewer-token" });
+
+    await expect(client.getMediaThumbnail("media-file-1", 0)).resolves.toBeNull();
   });
 
   it("gets and persists authenticated per-media playback choices", async () => {
