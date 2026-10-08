@@ -46,6 +46,25 @@ pub trait WorkRepo: Send + Sync {
         provider: &ExternalProvider,
         external_id: &str,
     ) -> Result<Option<Work>, DbError>;
+
+    /// [`Self::find_by_external_ref`] for many refs at once, keyed by the
+    /// ref. Refs with no work are absent. The default asks one by one; the
+    /// SQL repo answers in a few queries.
+    async fn find_by_external_refs(
+        &self,
+        refs: &[ExternalRef],
+    ) -> Result<std::collections::HashMap<ExternalRef, Work>, DbError> {
+        let mut out = std::collections::HashMap::new();
+        for r in refs {
+            if let Some(work) = self
+                .find_by_external_ref(&r.provider, &r.external_id)
+                .await?
+            {
+                out.insert(r.clone(), work);
+            }
+        }
+        Ok(out)
+    }
 }
 
 pub struct SqlxWorkRepo {
@@ -293,6 +312,52 @@ impl WorkRepo for SqlxWorkRepo {
             None => Ok(None),
         }
     }
+
+    async fn find_by_external_refs(
+        &self,
+        refs: &[ExternalRef],
+    ) -> Result<std::collections::HashMap<ExternalRef, Work>, DbError> {
+        let mut out = std::collections::HashMap::new();
+        for chunk in refs.chunks(200) {
+            let clause = vec!["(r.provider = ? AND r.external_id = ?)"; chunk.len()].join(" OR ");
+            let sql = format!(
+                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
+                 w.tags, w.added_at, w.release_date, w.end_date, w.monitored, w.availability, \
+                 r.provider AS hit_provider, r.external_id AS hit_external_id \
+                 FROM works w JOIN work_external_refs r ON r.work_id = w.id WHERE {clause}"
+            );
+            let mut query = sqlx::query(&sql);
+            for r in chunk {
+                query = query
+                    .bind(provider_to_str(&r.provider))
+                    .bind(r.external_id.clone());
+            }
+            let rows = query.fetch_all(&self.pool).await?;
+            let ids: Vec<String> = rows
+                .iter()
+                .map(|row| row.try_get::<String, _>("id"))
+                .collect::<Result<_, _>>()?;
+            let mut all_refs = self.load_external_refs_batch(&ids).await?;
+            for row in rows {
+                let id: String = row.try_get("id")?;
+                let provider: String = row.try_get("hit_provider")?;
+                let external_id: String = row.try_get("hit_external_id")?;
+                let key = ExternalRef {
+                    provider: provider_from_str(&provider),
+                    external_id,
+                };
+                // A ref held by several works resolves to one, as the
+                // single lookup (`LIMIT 1`) does.
+                if out.contains_key(&key) {
+                    continue;
+                }
+                let refs_of = all_refs.get(&id).cloned().unwrap_or_default();
+                out.insert(key, Self::build_work(&row, refs_of)?);
+            }
+            all_refs.clear();
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -458,6 +523,40 @@ mod tests {
             .await
             .unwrap();
         assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn find_by_external_refs_matches_the_single_lookup() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxWorkRepo::new(pool);
+        let work = sample_work(WorkKind::Movie, "Found Me");
+        repo.upsert(&work).await.unwrap();
+        let hit = ExternalRef {
+            provider: ExternalProvider::Tmdb,
+            external_id: "123".to_string(),
+        };
+        let other_hit = ExternalRef {
+            provider: ExternalProvider::Other("anidb".to_string()),
+            external_id: "abc".to_string(),
+        };
+        let miss = ExternalRef {
+            provider: ExternalProvider::Tmdb,
+            external_id: "does-not-exist".to_string(),
+        };
+        let found = repo
+            .find_by_external_refs(&[hit.clone(), other_hit.clone(), miss.clone()])
+            .await
+            .unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(!found.contains_key(&miss));
+        let single = repo
+            .find_by_external_ref(&hit.provider, &hit.external_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found[&hit], single);
+        assert_eq!(found[&other_hit].id, work.id);
+        assert!(repo.find_by_external_refs(&[]).await.unwrap().is_empty());
     }
 
     #[tokio::test]

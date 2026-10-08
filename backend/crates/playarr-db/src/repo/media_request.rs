@@ -21,6 +21,24 @@ use crate::codec::{
 use crate::error::DbError;
 use crate::pool::DbPool;
 
+/// The first of `rows` (oldest first) sharing a TMDB, TVDB or IMDb id.
+pub fn match_request(
+    rows: impl IntoIterator<Item = MediaRequest>,
+    tmdb_id: Option<i64>,
+    tvdb_id: Option<i64>,
+    imdb_id: Option<&str>,
+) -> Option<MediaRequest> {
+    rows.into_iter().find(|r| {
+        (tmdb_id.is_some() && r.tmdb_id == tmdb_id)
+            || (tvdb_id.is_some() && r.tvdb_id == tvdb_id)
+            || imdb_id.is_some_and(|i| {
+                r.imdb_id
+                    .as_deref()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(i))
+            })
+    })
+}
+
 #[async_trait]
 pub trait MediaRequestRepo: Send + Sync {
     /// Newest first.
@@ -28,6 +46,19 @@ pub trait MediaRequestRepo: Send + Sync {
     async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<MediaRequest>, DbError>;
     async fn get(&self, id: Uuid) -> Result<Option<MediaRequest>, DbError>;
     async fn find_by_title_key(&self, title_key: &str) -> Result<Option<MediaRequest>, DbError>;
+    /// Every request of `kind`, oldest first: the rows `find_match` searches.
+    /// Callers resolving many titles read this once and use
+    /// [`match_request`] instead of one `find_match` per title.
+    async fn list_for_kind(&self, kind: DiscoveryKind) -> Result<Vec<MediaRequest>, DbError> {
+        let mut rows: Vec<_> = self
+            .list()
+            .await?
+            .into_iter()
+            .filter(|r| r.kind == kind)
+            .collect();
+        rows.sort_by_key(|r| (r.created_at, r.id));
+        Ok(rows)
+    }
     /// A row for the same title: any shared TMDB/TVDB/IMDb id of the same kind.
     async fn find_match(
         &self,
@@ -195,15 +226,7 @@ impl MediaRequestRepo for SqlxMediaRequestRepo {
                 &[Some(kind.as_str().to_string())],
             )
             .await?;
-        Ok(rows.into_iter().find(|r| {
-            (tmdb_id.is_some() && r.tmdb_id == tmdb_id)
-                || (tvdb_id.is_some() && r.tvdb_id == tvdb_id)
-                || imdb_id.is_some_and(|i| {
-                    r.imdb_id
-                        .as_deref()
-                        .is_some_and(|x| x.eq_ignore_ascii_case(i))
-                })
-        }))
+        Ok(match_request(rows, tmdb_id, tvdb_id, imdb_id))
     }
 
     async fn find_by_external(
@@ -490,6 +513,39 @@ mod tests {
         assert_eq!(got.seasons, vec![1, 2]);
         assert!(repo.delete(r.id).await.unwrap());
         assert!(!repo.delete(r.id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn list_for_kind_and_match_request_agree_with_find_match() {
+        let repo = SqlxMediaRequestRepo::new(test_sqlite_pool().await);
+        let first = sample("movie:a", Some(800787));
+        let mut second = sample("movie:b", Some(5));
+        second.created_at = first.created_at + chrono::Duration::seconds(1);
+        repo.upsert(&second).await.unwrap();
+        repo.upsert(&first).await.unwrap();
+        let rows = repo.list_for_kind(DiscoveryKind::Movie).await.unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.id).collect::<Vec<_>>(),
+            vec![first.id, second.id]
+        );
+        assert!(repo
+            .list_for_kind(DiscoveryKind::Series)
+            .await
+            .unwrap()
+            .is_empty());
+        for (tmdb, imdb) in [
+            (Some(800787), None),
+            (None, Some("TT14153080")),
+            (Some(5), None),
+            (Some(9), None),
+        ] {
+            let one = repo
+                .find_match(DiscoveryKind::Movie, tmdb, None, imdb)
+                .await
+                .unwrap();
+            let batched = match_request(rows.clone(), tmdb, None, imdb);
+            assert_eq!(one.map(|r| r.id), batched.map(|r| r.id));
+        }
     }
 
     #[tokio::test]

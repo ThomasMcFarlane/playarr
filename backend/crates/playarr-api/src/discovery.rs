@@ -544,6 +544,18 @@ pub(crate) struct ResolveMemo {
     /// Work details read this request. The viewer's access does not change
     /// within a request, so a title's detail is loaded (and its cached JSON
     /// decoded) once however many steps need it.
+    /// Works found by external ref this request (`None`: no such work).
+    works_by_ref:
+        tokio::sync::Mutex<std::collections::HashMap<playarr_model::ExternalRef, Option<Work>>>,
+    /// The viewer's watchlist keys, read once.
+    watchlist: tokio::sync::OnceCell<std::collections::HashSet<String>>,
+    /// Requests per kind (oldest first), read once.
+    requests_by_kind: tokio::sync::Mutex<
+        std::collections::HashMap<
+            DiscoveryKind,
+            std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>,
+        >,
+    >,
     details: tokio::sync::Mutex<
         std::collections::HashMap<Uuid, Option<std::sync::Arc<playarr_catalog::WorkDetail>>>,
     >,
@@ -564,6 +576,91 @@ impl ResolveMemo {
             })
             .await
             .clone()
+    }
+
+    /// Looks up every ref of `snapshots` in a few queries, so the per-title
+    /// steps that follow find them in memory.
+    pub(crate) async fn prime<'a>(
+        &self,
+        state: &AppState,
+        snapshots: impl IntoIterator<Item = &'a TitleSnapshot>,
+    ) {
+        let mut wanted: Vec<playarr_model::ExternalRef> = Vec::new();
+        {
+            let known = self.works_by_ref.lock().await;
+            for r in snapshots.into_iter().flat_map(|s| s.external_refs.iter()) {
+                if !known.contains_key(r) && !wanted.contains(r) {
+                    wanted.push(r.clone());
+                }
+            }
+        }
+        if wanted.is_empty() {
+            return;
+        }
+        // On failure leave the map unfilled: each ref is then looked up singly.
+        if let Ok(mut found) = state.work_repo.find_by_external_refs(&wanted).await {
+            let mut known = self.works_by_ref.lock().await;
+            for r in wanted {
+                let work = found.remove(&r);
+                known.insert(r, work);
+            }
+        }
+    }
+
+    async fn work_by_ref(&self, state: &AppState, r: &playarr_model::ExternalRef) -> Option<Work> {
+        if let Some(found) = self.works_by_ref.lock().await.get(r) {
+            return found.clone();
+        }
+        let found = state
+            .work_repo
+            .find_by_external_ref(&r.provider, &r.external_id)
+            .await
+            .ok()
+            .flatten();
+        self.works_by_ref
+            .lock()
+            .await
+            .insert(r.clone(), found.clone());
+        found
+    }
+
+    async fn on_watchlist(
+        &self,
+        state: &AppState,
+        viewer: &CatalogViewer,
+        key: &str,
+    ) -> Result<bool, ApiError> {
+        let keys = self
+            .watchlist
+            .get_or_try_init(|| async {
+                Ok::<_, ApiError>(
+                    state
+                        .watchlist_repo
+                        .list(viewer.user_id)
+                        .await?
+                        .into_iter()
+                        .map(|i| i.title_key)
+                        .collect(),
+                )
+            })
+            .await?;
+        Ok(keys.contains(key))
+    }
+
+    async fn requests_of(
+        &self,
+        state: &AppState,
+        kind: DiscoveryKind,
+    ) -> Option<std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>> {
+        if let Some(found) = self.requests_by_kind.lock().await.get(&kind) {
+            return Some(found.clone());
+        }
+        let rows = std::sync::Arc::new(state.request_sync.requests.list_for_kind(kind).await.ok()?);
+        self.requests_by_kind
+            .lock()
+            .await
+            .insert(kind, rows.clone());
+        Some(rows)
     }
 
     pub(crate) async fn detail(
@@ -618,11 +715,7 @@ async fn find_library_work(
 ) -> Result<Option<Work>, ApiError> {
     let mut ids: Vec<Uuid> = snap.work_id.into_iter().collect();
     for r in &snap.external_refs {
-        if let Ok(Some(work)) = state
-            .work_repo
-            .find_by_external_ref(&r.provider, &r.external_id)
-            .await
-        {
+        if let Some(work) = memo.work_by_ref(state, r).await {
             if DiscoveryKind::from(work.kind) == snap.kind && !ids.contains(&work.id) {
                 ids.push(work.id);
             }
@@ -647,20 +740,16 @@ async fn request_overlay(
     state: &AppState,
     viewer: &CatalogViewer,
     snap: &TitleSnapshot,
+    memo: &ResolveMemo,
 ) -> Option<RequestOverlay> {
     let num = |p| ref_id(snap, p).and_then(|v| v.parse::<i64>().ok());
-    let row = state
-        .request_sync
-        .requests
-        .find_match(
-            snap.kind,
-            num(ExternalProvider::Tmdb),
-            num(ExternalProvider::Tvdb),
-            ref_id(snap, ExternalProvider::Imdb).as_deref(),
-        )
-        .await
-        .ok()
-        .flatten()?;
+    let rows = memo.requests_of(state, snap.kind).await?;
+    let row = playarr_db::match_request(
+        rows.iter().cloned(),
+        num(ExternalProvider::Tmdb),
+        num(ExternalProvider::Tvdb),
+        ref_id(snap, ExternalProvider::Imdb).as_deref(),
+    )?;
     let mine = row.requester_user_id == Some(viewer.user_id);
     Some(RequestOverlay {
         request_id: row.id,
@@ -831,19 +920,14 @@ pub(crate) async fn resolve_snapshot_with(
         keys.dedup();
         let mut found = false;
         for k in keys {
-            if state
-                .watchlist_repo
-                .get(viewer.user_id, &k)
-                .await?
-                .is_some()
-            {
+            if memo.on_watchlist(state, viewer, &k).await? {
                 found = true;
                 break;
             }
         }
         found
     };
-    let request = request_overlay(state, viewer, snap).await;
+    let request = request_overlay(state, viewer, snap, memo).await;
     if let Some(r) = &request {
         if r.status != playarr_model::requests::RequestStatus::Declined
             && r.status != playarr_model::requests::RequestStatus::Failed

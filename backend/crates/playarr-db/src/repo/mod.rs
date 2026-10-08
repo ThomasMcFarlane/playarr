@@ -86,7 +86,8 @@ pub use media_language::{
     SOURCE_PROBE, SOURCE_SIDECAR,
 };
 pub use media_request::{
-    MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo, SqlxRequestIntegrationRepo,
+    match_request, MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo,
+    SqlxRequestIntegrationRepo,
 };
 pub use node_identity::{NodeIdentityRepo, SqlxNodeIdentityRepo};
 pub use peer_group::{PeerGroupRepo, SqlxPeerGroupRepo};

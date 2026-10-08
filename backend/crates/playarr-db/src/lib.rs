@@ -36,7 +36,8 @@ pub use repo::{
 };
 
 pub use repo::{
-    MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo, SqlxRequestIntegrationRepo,
+    match_request, MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo,
+    SqlxRequestIntegrationRepo,
 };
 
 pub use repo::{

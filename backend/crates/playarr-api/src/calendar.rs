@@ -340,6 +340,7 @@ async fn attach_actions(
     let phase = std::time::Instant::now();
     let memo = crate::discovery::ResolveMemo::default();
     let memo = &memo;
+    memo.prime(state, distinct.values()).await;
     let resolved: HashMap<String, ResolvedTitle> = futures::stream::iter(distinct)
         .map(|(key, snapshot)| async move {
             match crate::discovery::resolve_snapshot_with(state, viewer, &snapshot, memo).await {
