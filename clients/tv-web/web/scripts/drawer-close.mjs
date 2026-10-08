@@ -4,7 +4,7 @@
 // For each layout (TV 1920x1080, desktop 1280x720, mobile 390x844) and theme, and for each panel (library Filters,
 // calendar Filters, calendar link), it opens the panel and closes it by each path (Close button, Escape, the launcher
 // toggle, a route change), and for the context-menu drawer by clicking its scrim. Per run it checks:
-//   1. Mirror. The opening animation and the closing animation are paused and sampled at 13 points of their timeline
+//   1. Path. The opening animation and the closing animation are paused and sampled at 13 points of their timeline
 //      through the Web Animations API (deterministic, no frame jitter): the closing panel's translateX and opacity at
 //      time t equal the opening panel's at T - t, within a small tolerance, and the durations are equal.
 //   2. Real time. Unpaused, the panel is still on screen right after the close is triggered, has gone after the
@@ -130,13 +130,13 @@ async function triggerClose(page, how, spec) {
 function compareMirror(label, open, close) {
   if (!open || !close) return check(`${label}: both animations sampled`, false, `open=${Boolean(open)} close=${Boolean(close)}`);
   check(`${label}: same duration`, open.duration === close.duration, `${open.duration} vs ${close.duration}`);
-  let worst = 0;
-  for (let i = 0; i < SAMPLES; i += 1) {
-    const o = open.rows[SAMPLES - 1 - i];
-    const c = close.rows[i];
-    worst = Math.max(worst, Math.abs(o.x - c.x), Math.abs(o.opacity - c.opacity));
-  }
-  check(`${label}: closing at t equals opening at T - t`, worst <= TOLERANCE, `worst delta ${worst.toFixed(3)}`);
+  // The close travels the opening path backwards. Its easing is not the opening curve mirrored (that is a dash
+  // after a pause); it must move at once, advance steadily and never take a large step between samples.
+  const xs = close.rows.map((r) => r.x);
+  const monotonic = xs.every((x, i) => i === 0 || x >= xs[i - 1] - 1e-6);
+  const biggestStep = Math.max(...xs.map((x, i) => (i === 0 ? 0 : x - xs[i - 1])));
+  check(`${label}: closing moves at once (>= 20% of the way after a quarter of the time)`, xs[Math.round((SAMPLES - 1) / 4)] >= 0.2, JSON.stringify(xs.map((x) => +x.toFixed(2))));
+  check(`${label}: closing is monotonic with no big step (<= 25% of the width per sample)`, monotonic && biggestStep <= 0.25, `max step ${biggestStep.toFixed(2)}`);
   const start = close.rows[0];
   const end = close.rows[SAMPLES - 1];
   check(`${label}: slides out to the right and fades`, start.x === 0 && end.x >= 0.99 && start.opacity === 1 && end.opacity === 0, JSON.stringify({ start, end }));

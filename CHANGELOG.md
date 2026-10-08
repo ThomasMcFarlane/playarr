@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: closing a side drawer (Filters and the others) now eases out smoothly. The reversed expo curve sat still for half the time and then dashed away, which read as a jump; the close now starts moving at once over the same path and duration as the opening, and a per-frame e2e checks the drawn close.
+- Web: the library's left preview (title, year line, description) now follows the remote within a frame instead of after about 600 ms, never blanks, and the backdrop art cross-fades once the next image has loaded.
 - Web calendar: the source-error banner that shifted the grid is gone; the "today" marker follows midnight; rapid Previous/Next presses no longer drop steps; date-only releases stay on their own day in every time zone; moving through the agenda no longer rewrites the URL and regroups the list on each key.
 - Web: the Watchlist no longer shows the developer "Recording is not available yet" line; `/household` uses the standard page frame; Request latency is hidden from non-administrators; every page error state has a Retry that D-pad focus lands on; cast and crew photos come through the server as 240 px thumbnails instead of the provider's original.
 - Server: `GET /api/v1/catalog/{id}/similar` answers 200 with an empty list for a title without an embedding (404 only for an unknown title); `GET /api/v1/users/me/capabilities` reports `is_admin`; new `GET /api/v1/artwork/person/{person_id}` serves resized, cached headshots.
@@ -2504,6 +2506,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: a per-frame keyboard e2e asserts that opening and closing the library Filters drawer does not move the grid, header or preview (Movies and Series, both themes, 1920x1080 and 1280x720).
 - Web: a Playwright check (`scripts/edge-fade-e2e.mjs`, in the web layout parity job) asserts the edge fade has no hard edge, is present at first paint, adds no box over content and leaves the focused card's shadow unclipped, in both themes.
 - Web: `focusStyle.test.ts` pins the ring token and the card-focus values and fails on a focusable card without `media-card`, a ringed or filled card, or a control with a fill, glow or scale on focus; `scripts/focus-style-e2e.mjs` (`pnpm run smoke:focus`) checks real keyboard focus in both themes at 1920x1080 and 1280x720.
 - Web: unit tests for the scroll engine, an audit that forbids direct scroll writes outside it, a Playwright motion check (`scripts/motion-e2e.mjs`), and frame-pacing numbers in the nav-perf harness.

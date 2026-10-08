@@ -52,6 +52,8 @@ import {
 } from "../lib/languageFilters";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useDwellPrefetch } from "../lib/prefetch";
+import { createPreviewStore } from "../lib/previewStore";
+import { CrossfadeArt, LibraryPreview } from "../components/LibraryPreview";
 import {
   applyLibraryView,
   parseLibraryView,
@@ -73,6 +75,8 @@ import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../compone
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
 const INITIAL_MOUNTED = 48;
+/** Idle time after the last remote move before the page's selection (backdrop art, prefetch) settles. */
+const SELECT_SETTLE_MS = 140;
 
 /** Rows kept mounted ahead of the settled selection (filled while idle). */
 const PREMOUNT_AHEAD_ROWS = 70;
@@ -216,6 +220,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const generationRef = useRef(0);
   const loadedKindRef = useRef(kind);
   const selectTimerRef = useRef(0);
+  const previewStore = useMemo(() => createPreviewStore<Work>(), []);
   const pendingSelectIdRef = useRef<string | null>(null);
   const gridMetricsRef = useRef({ cols: 3, rowHeight: 180 });
   const mountedEndRef = useRef(mountedEnd);
@@ -249,11 +254,15 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       setItems(orderedItems);
       setTotal(totalRef.current);
       setSelectedId(orderedItems[0]?.id ?? null);
+      previewStore.set(null);
       setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
     } else {
       if (!hasVisibleItems) setItems(null);
       setTotal(null);
-      if (!hasVisibleItems) setSelectedId(null);
+      if (!hasVisibleItems) {
+        setSelectedId(null);
+        previewStore.set(null);
+      }
       if (!hasVisibleItems) setActiveLetter("#");
     }
     setInitialError(null);
@@ -280,6 +289,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         setTotal(totalRef.current);
         if (!stored) {
           setSelectedId(orderedItems[0]?.id ?? null);
+          previewStore.set(null);
           setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
         }
         setRefreshing(false);
@@ -298,7 +308,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return () => {
       cancelled = true;
     };
-  }, [client, kind, languageParams, order, sort, reloadAttempt]);
+  }, [client, kind, languageParams, order, previewStore, sort, reloadAttempt]);
 
   useEffect(() => {
     if (previousKind.current !== kind) {
@@ -450,6 +460,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     itemsRef.current = reordered;
     setItems(reordered);
     setSelectedId((current) => current ?? reordered[0]?.id ?? null);
+    previewStore.set(null);
     updateView({ order: nextOrder });
   }
 
@@ -860,6 +871,25 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // per-render closures, so `LibraryTitleCard` can be memoised.
   const focusStateRef = useRef({ items, hasMore, view, appendNextPage });
   focusStateRef.current = { items, hasMore, view, appendNextPage };
+  /**
+   * The remote (or a pointer) is now on `work`. The preview text follows at once from the list data; only the
+   * heavier selection (backdrop art, prefetch, card chrome) waits for a short idle so holds stay lag-free.
+   */
+  const focusWork = useCallback(
+    (work: Work, remote: boolean) => {
+      previewStore.set(work);
+      pendingSelectIdRef.current = work.id;
+      window.clearTimeout(selectTimerRef.current);
+      selectTimerRef.current = window.setTimeout(() => {
+        const id = pendingSelectIdRef.current;
+        if (!id) return;
+        startTransition(() => {
+          setSelectedId(id);
+        });
+      }, remote ? SELECT_SETTLE_MS : 0);
+    },
+    [previewStore]
+  );
   const handleGridFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
     const card = (event.target as Element | null)?.closest<HTMLElement>(
       ".tv-title-card"
@@ -869,18 +899,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     const state = focusStateRef.current;
     const work = state.items?.[index];
     if (!work) return;
-    const remote = document.body.dataset.inputMode === "remote";
-    // Remote: debounce stage React work so holds stay lag-free.
-    // Card chrome uses :focus-visible; preview settles after idle.
-    pendingSelectIdRef.current = work.id;
-    window.clearTimeout(selectTimerRef.current);
-    selectTimerRef.current = window.setTimeout(() => {
-      const id = pendingSelectIdRef.current;
-      if (!id) return;
-      startTransition(() => {
-        setSelectedId(id);
-      });
-    }, remote ? 280 : 0);
+    focusWork(work, document.body.dataset.inputMode === "remote");
     if (state.view === "cover-flow" && !isNavigationLayerRestoring()) {
       const grid = gridRef.current;
       if (grid) {
@@ -892,7 +911,25 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     if (state.items && index >= state.items.length - 12 && state.hasMore) {
       void state.appendNextPage().catch(() => undefined);
     }
-  }, []);
+  }, [focusWork]);
+
+  // In remote mode real DOM focus trails the virtual focus marker by its settle time, so the preview follows the
+  // marker itself: the card carrying `data-remote-active` is the one the user is looking at.
+  const hasGrid = items !== null && items.length > 0;
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        const card = record.target as HTMLElement;
+        if (!card.hasAttribute("data-remote-active")) continue;
+        const work = focusStateRef.current.items?.[Number.parseInt(card.dataset.libraryIndex ?? "", 10)];
+        if (work) focusWork(work, true);
+      }
+    });
+    observer.observe(grid, { subtree: true, attributes: true, attributeFilter: ["data-remote-active"] });
+    return () => observer.disconnect();
+  }, [focusWork, hasGrid]);
 
   if (items === null || initialError || !items.length || !selected) {
     // The header and Back stay up while the library loads, fails or is empty.
@@ -941,15 +978,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
       ariaLabel={t("pages.library.stageAriaLabel", { plural })}
       backdrop={{
-        artKey: selected.id,
-        art: (
-          <CachedArtworkImage
-            work={selected}
-            kinds={["backdrop", "poster"]}
-            alt=""
-            fallback={<span>{selected.title}</span>}
-          />
-        ),
+        artKey: "library-art",
+        art: <CrossfadeArt work={selected} kinds={["backdrop", "poster"]} />,
       }}
       header={{
         title: plural,
@@ -967,17 +997,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         ],
       }}
     >
-      <aside className="tv-library-preview" key={`preview-${selected.id}`}>
-        <p className="tv-provider">{selected.genres[0] ?? singular}</p>
-        <h2>{selected.title}</h2>
-        <p className="tv-preview-meta">
-          {releaseYear(selected) !== null ? <span>{releaseYear(selected)}</span> : null}
-          <span>{selected.genres.slice(0, 2).join(" · ") || singular}</span>
-        </p>
-        <p className="tv-preview-overview">
-          {selected.overview ?? t("pages.library.noSynopsis")}
-        </p>
-      </aside>
+      <LibraryPreview store={previewStore} fallback={selected} singular={singular} />
 
       <TvRailSurface
         className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}`}

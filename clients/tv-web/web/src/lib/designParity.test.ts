@@ -75,13 +75,16 @@ describe("design parity with origin/main", () => {
     expect(library).toContain("data-library-index");
     expect(library).toContain("data-library-count");
     expect(library).toContain("<PageLayout");
-    expect(library).toContain("tv-library-preview");
+    expect(library).toContain("<LibraryPreview");
+    expect(readSrc("components/LibraryPreview.tsx")).toContain("tv-library-preview");
     expect(library).toContain("tv-title-grid-content");
     // Expand-only mount is allowed; bottom spacer only (never paddingTop assigns).
     expect(library).not.toMatch(/paddingTop:\s*`/);
     expect(library).not.toMatch(/paddingTop:\s*Math/);
-    // Remote selection must be debounced (stage re-render is the TV lag source).
-    expect(library).toMatch(/remote \? 280 : 0/);
+    // The page's selection (backdrop art, prefetch) is debounced for remote holds (stage re-render is the TV lag
+    // source); the preview text itself follows focus at once through its own store.
+    expect(library).toMatch(/remote \? SELECT_SETTLE_MS : 0/);
+    expect(library).toContain("previewStore.set(work)");
   });
 
   it("useScrollEdges writes the fade attributes without React state and measures before first paint", () => {

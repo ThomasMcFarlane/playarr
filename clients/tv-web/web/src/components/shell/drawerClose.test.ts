@@ -207,18 +207,30 @@ describe("drawer focus return", () => {
 describe("drawer closing styles", () => {
   const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8");
 
-  it("closing is the opening keyframes reversed with the easing mirrored", () => {
+  it("closing is the opening keyframes reversed, with an ease that moves at once (not the mirrored expo)", () => {
     const opening = /@keyframes tv-filter-drawer-in\s*\{[^}]*from\s*\{([^}]*)\}\s*to\s*\{([^}]*)\}/.exec(css)!;
     const closing = /@keyframes drawer-out\s*\{[^}]*from\s*\{([^}]*)\}\s*to\s*\{([^}]*)\}/.exec(css)!;
     const norm = (value: string) => value.replace(/\s+/g, " ").trim();
     expect(norm(closing[1]!)).toBe(norm(opening[2]!));
     expect(norm(closing[2]!)).toBe(norm(opening[1]!));
 
-    const open = /\.tv-filter-drawer \{[^}]*animation: tv-filter-drawer-in (\d+)ms cubic-bezier\(([^)]+)\)/.exec(css)!;
-    const [x1, y1, x2, y2] = open[2]!.split(",").map(Number) as [number, number, number, number];
-    const mirrored = [1 - x2, 1 - y2, 1 - x1, 1 - y1].map((n) => Number(n.toFixed(2))).join(", ");
     const close = /\.tv-filter-drawer\.is-closing \{[^}]*animation-timing-function: cubic-bezier\(([^)]+)\)/.exec(css)!;
-    expect(close[1]).toBe(mirrored);
+    const [x1, y1, x2, y2] = close[1]!.split(",").map(Number) as [number, number, number, number];
+    const bez = (a: number, b: number, u: number) => 3 * a * (1 - u) ** 2 * u + 3 * b * (1 - u) * u ** 2 + u ** 3;
+    const progressAt = (time: number) => {
+      let lo = 0;
+      let hi = 1;
+      for (let i = 0; i < 40; i += 1) {
+        const mid = (lo + hi) / 2;
+        if (bez(x1, x2, mid) < time) lo = mid;
+        else hi = mid;
+      }
+      return bez(y1, y2, lo);
+    };
+    // A time-reversed expo-out is still at about 1% after a quarter of the time, then dashes: a visible jump.
+    expect(progressAt(0.25)).toBeGreaterThan(0.2);
+    expect(progressAt(0.5)).toBeGreaterThan(0.5);
+    expect(progressAt(0.5)).toBeLessThan(0.95);
   });
 
   it("closing does not set its own duration, so it always matches the opening one", () => {
