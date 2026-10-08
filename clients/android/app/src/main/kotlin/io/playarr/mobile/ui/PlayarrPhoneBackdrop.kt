@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import androidx.compose.ui.layout.layout
+import io.playarr.shared.designsystem.page.PlayarrCardShadows
+import io.playarr.shared.designsystem.page.PlayarrCardShadowLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -120,33 +123,28 @@ internal fun phonePanelBrush(fadeFraction: Float? = null): Brush {
 internal class WebShadow(val dy: Dp, val blur: Dp, val color: Color)
 
 internal val WarmShadow = Color(0xFF382621)
-private val RoseShadow = Color(0xFF1F0E14)
+
+/** The design system's card shadow layers as this file's [WebShadow]s (the values live in `PlayarrCardShadows`). */
+internal fun List<PlayarrCardShadowLayer>.toWebShadows(): List<WebShadow> = map { WebShadow(it.offsetY, it.blur, it.color) }
 
 /** `.tv-home-card-art`, `.tv-title-card-art` and `.tv-search-result-art` shadows (the same in both themes). */
 internal fun webCardShadows(selected: Boolean, home: Boolean, search: Boolean): List<WebShadow> = when {
-    search -> if (selected) listOf(WebShadow(22.dp, 52.dp, RoseShadow.copy(alpha = 0.28f)))
-    else listOf(WebShadow(12.dp, 34.dp, RoseShadow.copy(alpha = 0.16f)))
-    home -> if (selected) listOf(WebShadow(26.dp, 52.dp, WarmShadow.copy(alpha = 0.32f)), WebShadow(11.dp, 22.dp, WarmShadow.copy(alpha = 0.22f)))
-    else listOf(WebShadow(10.dp, 22.dp, WarmShadow.copy(alpha = 0.16f)), WebShadow(3.dp, 9.dp, WarmShadow.copy(alpha = 0.10f)))
-    else -> if (selected) listOf(WebShadow(24.dp, 48.dp, WarmShadow.copy(alpha = 0.30f)), WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.20f)))
-    else listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
+    search -> (if (selected) PlayarrCardShadows.FocusedSearch else PlayarrCardShadows.SearchRest).toWebShadows()
+    home -> (if (selected) PlayarrCardShadows.FocusedHome else PlayarrCardShadows.HomeRest).toWebShadows()
+    else -> (if (selected) PlayarrCardShadows.Focused else PlayarrCardShadows.Rest).toWebShadows()
 }
 
 /** Remote-mode focused card art (`body[data-input-mode="remote"] .tv-home-card[data-remote-active] ...`): a deeper pair of shadows. */
-internal val webRemoteFocusShadows: List<WebShadow> get() =
-    listOf(WebShadow(26.dp, 52.dp, WarmShadow.copy(alpha = 0.32f)), WebShadow(11.dp, 22.dp, WarmShadow.copy(alpha = 0.22f)))
+internal val webRemoteFocusShadows: List<WebShadow> get() = PlayarrCardShadows.FocusedHome.toWebShadows()
 
 /** Focused art shadow of cards other than Home and Search: `0 24px 48px .30, 0 10px 20px .20`. */
-internal val webCardFocusShadows: List<WebShadow> get() =
-    listOf(WebShadow(24.dp, 48.dp, WarmShadow.copy(alpha = 0.30f)), WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.20f)))
+internal val webCardFocusShadows: List<WebShadow> get() = PlayarrCardShadows.Focused.toWebShadows()
 
 /** Focused search result art: `0 22px 52px rgba(31,14,20,.28)`. */
-internal val webSearchFocusShadows: List<WebShadow> get() =
-    listOf(WebShadow(22.dp, 52.dp, Color(0xFF1F0E14).copy(alpha = 0.28f)))
+internal val webSearchFocusShadows: List<WebShadow> get() = PlayarrCardShadows.FocusedSearch.toWebShadows()
 
 /** Resting card art shadow: `0 10px 20px .14, 0 3px 8px .10`. */
-internal val webCardRestShadows: List<WebShadow> get() =
-    listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
+internal val webCardRestShadows: List<WebShadow> get() = PlayarrCardShadows.Rest.toWebShadows()
 
 /**
  * A box with CSS-style blurred drop shadows behind it, clipped content in front. The blur is a RenderEffect (API 31+);
@@ -166,13 +164,24 @@ internal fun WebShadowedBox(
     Box(modifier) {
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             shadows.forEach { shadow ->
+                // A blur is clipped to its layer, so the layer is grown by the blur radius on every side (the shape is
+                // drawn inset by the same amount) and the blur can spread past the card as a CSS box-shadow does.
+                val grow = shadow.blur
                 Box(
-                    Modifier.matchParentSize().graphicsLayer {
-                        translationY = shadow.dy.toPx()
-                        val sigma = shadow.blur.toPx() / 2f
-                        renderEffect = androidx.compose.ui.graphics.BlurEffect(sigma, sigma, androidx.compose.ui.graphics.TileMode.Decal)
-                    }.background(shadow.color, shape),
-                )
+                    Modifier.matchParentSize().layout { measurable, constraints ->
+                        val g = grow.roundToPx()
+                        val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth + 2 * g, constraints.maxHeight + 2 * g))
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            placeable.placeWithLayer(-g, -g) {
+                                translationY = shadow.dy.toPx()
+                                val sigma = shadow.blur.toPx() / 2f
+                                renderEffect = androidx.compose.ui.graphics.BlurEffect(sigma, sigma, androidx.compose.ui.graphics.TileMode.Decal)
+                            }
+                        }
+                    },
+                ) {
+                    Box(Modifier.fillMaxSize().padding(grow).background(shadow.color, shape))
+                }
             }
         }
         Box((if (innerFill) Modifier.matchParentSize() else if (innerWidthFill) Modifier.fillMaxWidth() else Modifier).clip(shape).then(innerModifier), content = content)
@@ -228,7 +237,7 @@ internal fun PhoneEpisodeArt(
     art: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     WebShadowedBox(
-        shadows = listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f))),
+        shadows = webCardRestShadows,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         modifier = modifier.fillMaxWidth().androidx_aspect16x9(),
         innerModifier = Modifier.background(WebSurfaceSoft),
