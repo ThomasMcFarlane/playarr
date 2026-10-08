@@ -2,6 +2,10 @@ package io.playarr.mobile.ui
 
 import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.RailPreferencesRequest
+import io.playarr.shared.designsystem.page.PlayarrPageState
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import io.playarr.shared.designsystem.page.PlayarrActionIcon
 import io.playarr.shared.designsystem.page.PlayarrPageAction
 import io.playarr.shared.designsystem.component.PlayarrButton
@@ -441,8 +445,8 @@ internal fun ExperiencePlaylistsScreen(
             ),
         ) {
             when (val current = state) {
-                ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsPreparing))
-                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.PlaylistsPreparing))
+                is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
                 is ParityLoad.Ready -> {
                     val visible = visibleRootPlaylists(current.value, visibility, order, language.locale)
                     Text(
@@ -454,7 +458,7 @@ internal fun ExperiencePlaylistsScreen(
                         fontSize = 11.sp,
                     )
                     if (visible.isEmpty()) {
-                        ExperienceEmpty(
+                        PlayarrEmptyState(
                             playarrString(
                                 if (current.value.playlists.isEmpty()) {
                                     PlayarrString.PlaylistsNoneYetTitle
@@ -940,8 +944,18 @@ internal fun ExperiencePlaylistDetailScreen(
     val liveInterest = remember(playlistId) { setOf(LiveTarget(LiveArea.Playlist, playlistId), LiveTarget(LiveArea.Work)) }
     LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refreshInPlace)
     when (val current = state) {
-        ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsLoading))
-        is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }
+        ParityLoad.Loading -> PlayarrPageScaffold(
+            title = "",
+            onBack = onBack,
+            isTelevision = isTelevision,
+            state = PlayarrPageState.Loading(playarrString(PlayarrString.PlaylistsLoading)),
+        ) {}
+        is ParityLoad.Failed -> PlayarrPageScaffold(
+            title = "",
+            onBack = onBack,
+            isTelevision = isTelevision,
+            state = playarrErrorState(current.message) { viewModel.load(playlistId) },
+        ) {}
         is ParityLoad.Ready -> {
             val value = current.value
             PlayarrPageScaffold(
@@ -1710,8 +1724,8 @@ internal fun ExperienceProfilesScreen(
                 ),
         )
         when (val current = state) {
-            ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.ProfilesLoading))
-            is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+            ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.ProfilesLoading))
+            is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
             is ParityLoad.Ready -> {
                 val profiles = current.value.profiles.map { profile ->
                     if (profile.displayName.isBlank()) {
@@ -3217,7 +3231,7 @@ internal fun ExperienceParitySettingsScreen(
                 item {
                     when (val current = state) {
                         ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
-                        is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                        is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
                         is ParityLoad.Ready -> SettingsSectionContent(
                             section = section,
                             snapshot = current.value,
@@ -4216,7 +4230,7 @@ private fun TvSettingsBody(
         ) {
             when (val current = state) {
                 ParityLoad.Loading -> CircularProgressIndicator(color = WebAccent)
-                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
                 is ParityLoad.Ready -> androidx.compose.runtime.CompositionLocalProvider(LocalSettingsPlainPanel provides true) {
                     SettingsSectionContent(
                         section = section,
@@ -4533,30 +4547,8 @@ private fun <T> SettingChoiceOptions(
     }
 }
 
-@Composable
-internal fun ParityLoading(label: String) {
-    Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            CircularProgressIndicator(color = WebAccent)
-            Text(label, color = WebInkMuted)
-        }
-    }
-}
 
-@Composable
-internal fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(playarrText(message), color = MaterialTheme.colorScheme.error)
-        PlayarrButton(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {
-            Text(playarrString(PlayarrString.CommonTryAgain))
-        }
-    }
-}
 
-@Composable
-private fun ParityEmpty(message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(message, color = WebInkMuted) }
-}
 
 /**
  * The message for a failed profile PIN check, or `null` to fall back to the

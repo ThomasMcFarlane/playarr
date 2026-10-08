@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
@@ -274,7 +275,7 @@ internal fun ExperienceDownloadsScreen(
             trackColor = WebSurfaceSoft,
         )
         if (downloads.isEmpty()) {
-            ExperienceEmpty(
+            PlayarrEmptyState(
                 playarrString(PlayarrString.DownloadsEmptyTitle),
                 playarrString(PlayarrString.DownloadsEmptyDescription),
             )

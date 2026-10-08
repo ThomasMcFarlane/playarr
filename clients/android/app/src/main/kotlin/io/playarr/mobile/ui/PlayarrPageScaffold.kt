@@ -2,7 +2,12 @@ package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.page.LegacyPlacement
 import io.playarr.shared.designsystem.page.PlayarrBack
+import io.playarr.shared.designsystem.page.PlayarrEmptySpec
+import io.playarr.shared.designsystem.page.PlayarrErrorSpec
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
 import io.playarr.shared.designsystem.page.PlayarrPageAction
+import io.playarr.shared.designsystem.page.PlayarrPageState
 import io.playarr.shared.designsystem.page.PlayarrPageBody
 import io.playarr.shared.designsystem.page.PlayarrPageHeaderSpec
 import io.playarr.shared.designsystem.page.PlayarrPageId
@@ -112,6 +117,8 @@ internal fun PlayarrPageScaffold(
      * draws its own insets and padding, while the shared header (back, title, breadcrumb, actions) floats above.
      */
     padBody: Boolean = true,
+    /** Loading, empty or failed: replaces [content] inside the frame, so the header and Back stay up (owner decision Q4). */
+    state: PlayarrPageState? = null,
     /** Web phone: the 21.6 px header title used by Search and the detail pages (library headers use 17.6 px). */
     largeTitle: Boolean = false,
     /** Web phone: draw the back button in its focused (inverted, 1.055x) state, as the settings index does. */
@@ -137,6 +144,7 @@ internal fun PlayarrPageScaffold(
                 largeTitle = largeTitle,
             ),
             body = if (padBody) PlayarrPageBody.Panel else PlayarrPageBody.Bleed,
+            state = state,
         ) {
             content()
         }
@@ -392,3 +400,14 @@ internal fun playarrToday(zone: java.time.ZoneId = java.time.ZoneId.systemDefaul
 @androidx.compose.runtime.Composable
 internal fun webPhoneBodyInsets(): WindowInsets =
     if (parityNoInsets) WindowInsets(top = 24.dp) else WindowInsets.safeDrawing.union(WindowInsets(top = 24.dp))
+
+/** The error state for a failed load: the message in the danger colour and the shared "Try again" action. */
+@Composable
+internal fun PlayarrErrorState(message: PlayarrMessage, onRetry: () -> Unit) {
+    PlayarrErrorState(PlayarrErrorSpec(playarrText(message), playarrString(PlayarrString.CommonTryAgain)), onRetry)
+}
+
+/** The page state for a failed load, for [PlayarrPageScaffold]'s `state`. */
+@Composable
+internal fun playarrErrorState(message: PlayarrMessage, onRetry: () -> Unit): PlayarrPageState =
+    PlayarrPageState.Error(PlayarrErrorSpec(playarrText(message), playarrString(PlayarrString.CommonTryAgain)), onRetry)
