@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: a focused card's soft shadow and lift are no longer clipped to a box by the Home, detail and search rails; the rails keep their positions, edge fades and horizontal scrolling.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - tvOS library hero title wraps over lines like the web heading.
 - Roku: Home rails scroll like the web track (the focused card ends 34 px further right than a whole-card step, and lines up with the track start when moving back), and the first Right press from the first card now moves to the second card every time.
@@ -2467,6 +2468,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Roku parity capture: a cold start moves the picker focus back to the first profile before pressing Select, so a remembered bottom-row focus can no longer sign the test device out.
 - Roku parity capture: the Preferences screens press Left before Select so the gear, not Sign out, is focused when the profile picker remembers the bottom row.
 - Roku: a contract test pins the household blocked states (outside schedule, budget used) and how the blocked page opens and closes; the parity README records why the screen cannot be captured on the real device.
 - Web parity captures are reproducible: backdrop blur, the browser storage estimate, the player focus ring and the paused video frame are pinned, and all references are recaptured from current main on a fresh fixture.
