@@ -1,6 +1,8 @@
 # Manual check of the per-owner Ops App credentials used by release.yml and backend-release.yml to
-# notify the cluster release gate. Mints a token limited to read access on the cluster repository and
-# reads its name. It dispatches nothing and changes nothing.
+# notify the cluster release gate. Mints a token asking for contents: write on the cluster repository
+# only (the level the dispatch needs; the mint fails if the App installation does not grant it), reads
+# the repository and reports the permission levels the token holds. It dispatches nothing and changes
+# nothing, and never prints the token.
 name: Ops App credentials check
 
 on:
@@ -11,7 +13,7 @@ permissions:
 
 jobs:
   check:
-    name: Mint a read-only Ops App token
+    name: Mint an Ops App token and report its permissions
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -23,9 +25,10 @@ jobs:
           private-key: ${{ secrets.OPS_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: .cluster
-          permission-contents: read
+          permission-contents: write
       - name: Read the cluster repository
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY_OWNER}/.cluster" --jq '"readable: " + .name'
+          gh api "repos/${GITHUB_REPOSITORY_OWNER}/.cluster" \
+            --jq '"readable: " + .name, "token permissions on the cluster repository: " + (.permissions | to_entries | map(.key + "=" + (.value | tostring)) | join(", ")), "contents write granted: " + (.permissions.push | tostring)'
