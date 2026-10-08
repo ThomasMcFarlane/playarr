@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- tvOS library hero title wraps over lines like the web heading.
 - Roku: Home rails scroll like the web track (the focused card ends 34 px further right than a whole-card step, and lines up with the track start when moving back), and the first Right press from the first card now moves to the second card every time.
 - Roku: a long title whose on-demand transcode takes about twenty seconds to publish its first playlist now keeps retrying quietly instead of failing on the first 404 and returning to the detail page.
 - tvOS series page: the focused episode is no longer scaled twice.

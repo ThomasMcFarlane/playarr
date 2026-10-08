@@ -1271,13 +1271,8 @@ struct TVLibraryKindView: View {
             // tracking -0.072em, max-width 9ch. DemiBold (semibold) matches
             // white-pixel mass better than Medium (full109 title thr200:
             // native 3479 vs SPA 4996).
-            Text(work.title)
-                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
-                .tracking(-5.0)
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+            // Wraps like the web heading (max-width 9ch), one 62.2 pt line box per line.
+            TVHeroTitle(title: work.title)
                 .padding(.top, 16)
             // SPA `.tv-preview-meta`: year then genres with soft separator.
             previewMeta(work)
