@@ -1761,6 +1761,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Web: Calendar posters ask the image provider for a tile-sized width instead of the 1 to 2 MB original.
 - Web: a per-account, per-profile query cache with stale-while-revalidate and request de-duplication (Back, revisits and Home paint from the stored copy and revalidate in the background; any write or live event drops what it makes stale), prefetching of a card's detail and hero art after a 200 ms focus dwell and of a page when its nav item is focused or hovered, card-sized artwork requests with version tokens, a memory cap on decoded artwork, and static asset caching headers (`/assets/*` immutable, entry points revalidated).
 - Web: Home no longer fetches the artwork of every title in every rail up front, Search asks the server to filter to playable titles instead of walking the whole catalogue first, and Library scroll handlers use row arithmetic instead of reading the geometry of every card.
 - Server: JSON responses are gzip or brotli compressed; API GET responses carry a strong `ETag` and answer `If-None-Match` with `304 Not Modified`, `Cache-Control: private` and `Vary: Authorization` (library lists briefly reusable and stale-while-revalidate, watch-state and other per-user data always revalidated). Artwork accepts `w` (snapped width, cached derivative, never upscaled) and `v` (version token that makes the response `immutable`).
