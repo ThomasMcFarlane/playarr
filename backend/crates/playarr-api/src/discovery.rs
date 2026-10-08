@@ -33,6 +33,7 @@ use playarr_model::requests::{IntegrationKind, RequestBackend};
 
 use crate::auth_extractor::CatalogViewer;
 use crate::error::ApiError;
+use crate::source_cache::{Fetched, SwrCache};
 use crate::AppState;
 
 const MAX_QUERY_LEN: usize = 200;
@@ -156,6 +157,43 @@ fn stub_provider_statuses() -> Vec<ProviderStatus> {
 }
 
 const REQUEST_LOOKUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// How long a search waits for a request catalogue that has not answered this
+/// term before. The lookup carries on in the background and the next search of
+/// the term is served from the cache.
+const SEARCH_LOOKUP_DEADLINE: std::time::Duration = std::time::Duration::from_millis(2500);
+
+/// Search lookups per request instance and term: fresh for ten minutes, served
+/// stale (and refreshed in the background) for a day.
+static SEARCH_LOOKUPS: SwrCache<(Uuid, String), Vec<LookupTitle>> = SwrCache::new(
+    std::time::Duration::from_secs(10 * 60),
+    std::time::Duration::from_secs(24 * 60 * 60),
+    512,
+);
+
+/// Cached lookup for the search path. Never reports a source failure.
+async fn cached_search_lookup(instance: &SourceInstance, term: &str) -> Option<Vec<LookupTitle>> {
+    let key = (instance.id, term.trim().to_lowercase());
+    let instance = instance.clone();
+    let term = term.to_string();
+    SEARCH_LOOKUPS
+        .get(key, SEARCH_LOOKUP_DEADLINE, move || async move {
+            let Some(client) = RequestLookup::for_instance(&instance) else {
+                return Fetched::Failed;
+            };
+            match tokio::time::timeout(REQUEST_LOOKUP_TIMEOUT, client.lookup(&term)).await {
+                Ok(Ok(hits)) => Fetched::Ok(hits),
+                Ok(Err(err)) => {
+                    tracing::warn!(instance = %instance.name, %err, "discovery: search lookup failed");
+                    Fetched::Failed
+                }
+                Err(_) => {
+                    tracing::warn!(instance = %instance.name, "discovery: search lookup timed out");
+                    Fetched::Failed
+                }
+            }
+        })
+        .await
+}
 const NO_REQUEST_PROVIDER: &str = "No request provider is configured";
 
 /// Radarr (movies) and Sonarr (series) instances, lowest priority value first.
@@ -292,46 +330,31 @@ async fn request_provider_search(
         );
     }
     let lookups = instances.iter().map(|(kind, instance)| async move {
-        let Some(client) = RequestLookup::for_instance(instance) else {
-            return (instance, *kind, None);
-        };
-        let result = tokio::time::timeout(REQUEST_LOOKUP_TIMEOUT, client.lookup(q)).await;
-        (instance, *kind, result.ok().and_then(Result::ok))
+        (instance, *kind, cached_search_lookup(instance, q).await)
     });
     let mut candidates = Vec::new();
-    let mut failed: Vec<String> = Vec::new();
     for (instance, kind, hits) in futures::future::join_all(lookups).await {
-        match hits {
-            Some(hits) => {
-                candidates.extend(hits.iter().map(|h| {
-                    let mut candidate = lookup_candidate(instance, kind, h);
-                    // Clients show a Request action only for `requestable`
-                    // sources, so a viewer without the grant must not get one.
-                    if !may_request
-                        && candidate.source.availability == SourceAvailability::Requestable
-                    {
-                        candidate.source.availability = SourceAvailability::Unavailable;
-                        candidate.source.reason =
-                            Some("Your account is not allowed to request titles".into());
-                    }
-                    candidate
-                }))
-            }
-            None => failed.push(instance.name.clone()),
+        // Not answered yet or the source is down: users never see a source
+        // error. The lookup finishes in the background; health is admin-only.
+        if let Some(hits) = hits {
+            candidates.extend(hits.iter().map(|h| {
+                let mut candidate = lookup_candidate(instance, kind, h);
+                // Clients show a Request action only for `requestable`
+                // sources, so a viewer without the grant must not get one.
+                if !may_request && candidate.source.availability == SourceAvailability::Requestable
+                {
+                    candidate.source.availability = SourceAvailability::Unavailable;
+                    candidate.source.reason =
+                        Some("Your account is not allowed to request titles".into());
+                }
+                candidate
+            }))
         }
     }
-    let status = if failed.is_empty() {
-        ProviderStatus {
-            provider: SourceKindTag::Request,
-            state: ProviderState::Ok,
-            reason: None,
-        }
-    } else {
-        ProviderStatus {
-            provider: SourceKindTag::Request,
-            state: ProviderState::Unavailable,
-            reason: Some(format!("Could not reach {}", failed.join(", "))),
-        }
+    let status = ProviderStatus {
+        provider: SourceKindTag::Request,
+        state: ProviderState::Ok,
+        reason: None,
     };
     (candidates, status)
 }
@@ -1112,6 +1135,8 @@ pub async fn request_title_handler(
         tracing::warn!(%err, "discovery: request add failed");
         ApiError::bad_gateway("the request provider did not accept the request")
     })?;
+    // The title now exists in the provider: cached search hits are out of date.
+    SEARCH_LOOKUPS.clear();
     let row = state
         .request_sync
         .record_direct(&new_title, instance.id)
@@ -1626,8 +1651,79 @@ mod tests {
             .iter()
             .find(|p| p.provider == SourceKindTag::Request)
             .unwrap();
-        assert_eq!(status.state, ProviderState::Unavailable);
-        assert!(status.reason.as_deref().unwrap().contains("Radarr 4K"));
+        // Users never see a source error: the failure is logged, health is admin-only.
+        assert_eq!(status.state, ProviderState::Ok);
+        assert!(status.reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn repeated_search_is_served_from_the_cache_without_asking_the_source() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/lookup"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!([{"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0}]),
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        for _ in 0..2 {
+            let response = router
+                .clone()
+                .oneshot(get("/api/v1/discover?q=cache-me", &token))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+        // The first search may have answered before the lookup finished only if
+        // it was slow; either way the source is asked once for the term.
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn slow_request_provider_does_not_hold_the_search() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/lookup"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(std::time::Duration::from_secs(4))
+                    .set_body_json(serde_json::json!([{"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0}])),
+            )
+            .mount(&server)
+            .await;
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        let started = std::time::Instant::now();
+        let response = router
+            .oneshot(get("/api/v1/discover?q=slow-one", &token))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(started.elapsed() < std::time::Duration::from_millis(3500));
+        let body: DiscoverResponse = json_body(response).await;
+        let status = body
+            .providers
+            .iter()
+            .find(|p| p.provider == SourceKindTag::Request)
+            .unwrap();
+        assert!(status.reason.is_none());
     }
 
     async fn grant_can_request(state: &TestState, user: Uuid) {

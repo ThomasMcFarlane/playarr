@@ -69,6 +69,7 @@ pub mod requests;
 pub mod resume;
 pub mod routing;
 mod sidecar_subtitles;
+mod source_cache;
 pub mod source_registry;
 pub mod system_capabilities;
 pub mod system_settings;

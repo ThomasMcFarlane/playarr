@@ -13,16 +13,19 @@
 //! and playback continues with the source audio only.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use playarr_arr_client::{DubarrClient, DubarrTrack};
 use playarr_model::{SourceInstance, SourceKind};
 use uuid::Uuid;
 
+use crate::source_cache::{Fetched, SwrCache};
 use crate::SourceInstanceRegistry;
 
 const CACHE_TTL: Duration = Duration::from_secs(60);
+const STALE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// How long playback waits for an uncached lookup.
+const MISS_DEADLINE: Duration = Duration::from_millis(1500);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 const DUB_STREAM_INDEX_BASE: u32 = 10_000;
@@ -48,15 +51,12 @@ impl DubTrack {
     }
 }
 
-type CacheEntry = (Instant, Vec<DubTrack>);
-static CACHE: LazyLock<Mutex<HashMap<String, CacheEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Fresh for a minute, then served stale (and refreshed in the background) for a day.
+static CACHE: SwrCache<String, Vec<DubTrack>> = SwrCache::new(CACHE_TTL, STALE_TTL, 4096);
 
 /// Drops every cached lookup (called when a Dubarr instance reports changes).
 pub fn invalidate_cache() {
-    if let Ok(mut cache) = CACHE.lock() {
-        cache.clear();
-    }
+    CACHE.clear();
 }
 
 pub(crate) fn stable_index(track_id: &str) -> u32 {
@@ -70,10 +70,25 @@ pub(crate) fn stable_index(track_id: &str) -> u32 {
 }
 
 /// Dub tracks for a media file, from all configured Dubarr instances.
+///
+/// Never waits on Dubarr for long: a cached answer (even a stale one) is
+/// returned at once and refreshed in the background; with nothing cached, the
+/// live lookup gets [`MISS_DEADLINE`] and playback carries on with the source
+/// audio if Dubarr is slower (the lookup finishes in the background, so the
+/// next playback of the file has the dubs).
 pub(crate) async fn lookup(
     instances: &SourceInstanceRegistry,
     media_path: &str,
     resolved_path: &str,
+) -> Vec<DubTrack> {
+    lookup_with_deadline(instances, media_path, resolved_path, MISS_DEADLINE).await
+}
+
+async fn lookup_with_deadline(
+    instances: &SourceInstanceRegistry,
+    media_path: &str,
+    resolved_path: &str,
+    deadline: Duration,
 ) -> Vec<DubTrack> {
     let dubarrs: Vec<SourceInstance> = instances
         .all()
@@ -83,24 +98,35 @@ pub(crate) async fn lookup(
     if dubarrs.is_empty() {
         return Vec::new();
     }
-    if let Ok(cache) = CACHE.lock() {
-        if let Some((at, tracks)) = cache.get(media_path) {
-            if at.elapsed() < CACHE_TTL {
-                return tracks.clone();
-            }
-        }
-    }
+    let media = media_path.to_string();
+    let resolved = resolved_path.to_string();
+    CACHE
+        .get(media.clone(), deadline, move || {
+            fetch_tracks(dubarrs, media, resolved)
+        })
+        .await
+        .unwrap_or_default()
+}
+
+async fn fetch_tracks(
+    dubarrs: Vec<SourceInstance>,
+    media_path: String,
+    resolved_path: String,
+) -> Fetched<Vec<DubTrack>> {
     let mut out: Vec<DubTrack> = Vec::new();
+    let mut failures = 0usize;
+    let mut requests = 0usize;
     for instance in dubarrs {
         let client = DubarrClient::new(
             instance.base_url.clone(),
             instance.api_key_encrypted.expose_secret().clone(),
         );
-        let mut paths = vec![media_path];
+        let mut paths = vec![media_path.as_str()];
         if resolved_path != media_path {
-            paths.push(resolved_path);
+            paths.push(resolved_path.as_str());
         }
         for path in paths {
+            requests += 1;
             match tokio::time::timeout(REQUEST_TIMEOUT, client.tracks_for_path(path)).await {
                 Ok(Ok(tracks)) => {
                     for track in tracks {
@@ -116,21 +142,24 @@ pub(crate) async fn lookup(
                     }
                 }
                 Ok(Err(error)) => {
+                    failures += 1;
                     tracing::warn!(instance = %instance.name, error = %error, "dubarr track lookup failed")
                 }
                 Err(_) => {
+                    failures += 1;
                     tracing::warn!(instance = %instance.name, "dubarr track lookup timed out")
                 }
             }
         }
     }
+    if requests > 0 && failures == requests {
+        // Every request failed: keep whatever was cached and back off.
+        return Fetched::Failed;
+    }
     out.sort_by(|a, b| {
         (&a.track.language, &a.track.vendor).cmp(&(&b.track.language, &b.track.vendor))
     });
-    if let Ok(mut cache) = CACHE.lock() {
-        cache.insert(media_path.to_string(), (Instant::now(), out.clone()));
-    }
-    out
+    Fetched::Ok(out)
 }
 
 /// Polls every Dubarr instance's change feed and clears the lookup cache when
@@ -227,5 +256,42 @@ mod tests {
         assert!(lookup(&down, "/movies/Other/O.mkv", "/movies/Other/O.mkv")
             .await
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn slow_dubarr_never_holds_playback_and_fills_the_cache_afterwards() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/tracks"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(700))
+                    .set_body_json(json!([{
+                    "id": "t-slow", "language": "en", "vendor": "v", "codec": "aac", "channels": 2,
+                    "title": "EN dub", "downloadUrl": "/api/v1/tracks/t-slow/download"}])),
+            )
+            .mount(&server)
+            .await;
+        let registry = SourceInstanceRegistry::new();
+        registry.upsert(instance(server.uri()));
+        let started = std::time::Instant::now();
+        let first = lookup_with_deadline(
+            &registry,
+            "/movies/Slow/S.mkv",
+            "/movies/Slow/S.mkv",
+            Duration::from_millis(100),
+        )
+        .await;
+        assert!(first.is_empty());
+        assert!(started.elapsed() < Duration::from_millis(500));
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        let second = lookup_with_deadline(
+            &registry,
+            "/movies/Slow/S.mkv",
+            "/movies/Slow/S.mkv",
+            Duration::from_millis(100),
+        )
+        .await;
+        assert_eq!(second.len(), 1);
     }
 }
