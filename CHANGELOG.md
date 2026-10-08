@@ -284,6 +284,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: work and music detail pages render through the shared page layout with a single page heading; Library, Playlists and the detail pages keep their header and Back visible while loading, empty or failed, with the state centred in the page body.
 - Server: the artwork `style` query accepts `stage-grey` and `stage-grey-light`, the key-art greyscale as an opaque JPEG (about a twentieth of the PNG looks' size) for clients that apply the opacity and edge fade themselves. The Fire TV client uses it for the stage art, with the PNG look and then the colour original as fallbacks.
 - iOS and tvOS: the Customise Home button leaves Home; iOS gets a Customise Home panel in Settings.
 - iOS Home rails fade their cards under the page gutter once scrolled, like the web, and the parity run captures and diffs a scrolled Home in both themes.

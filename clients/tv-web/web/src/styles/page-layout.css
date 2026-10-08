@@ -541,7 +541,8 @@ body[data-input-mode="remote"] .tv-page-back {
  * rail-panel glow, on each side where content continues. Vertical areas fade top and bottom, horizontal areas
  * left and right.
  */
-.scroll-area {
+/* :where() keeps the defaults at zero specificity, so a page's layout class on the window (a negative margin, a width) wins. */
+:where(.scroll-area) {
   position: relative;
   isolation: isolate;
   flex: 1 1 auto;

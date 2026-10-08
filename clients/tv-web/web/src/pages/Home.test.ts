@@ -28,7 +28,7 @@ describe("Home layout", () => {
       /\.tv-home-feature,\s*\.tv-library-preview,\s*\.tv-detail-copy\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
     const sharedTitleRule = css.match(
-      /\.tv-home-feature h2,\s*\.tv-library-preview h2,\s*\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*)\}/
+      /\.tv-home-feature h2,\s*\.tv-library-preview h2,\s*\.tv-detail > \.tv-detail-copy \.tv-detail-title\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
     const sharedSynopsisRule = css.match(
       /\.tv-home-feature > p:not\(\.tv-provider\),\s*\.tv-preview-overview,\s*\.tv-detail-synopsis\s*\{(?<declarations>[^}]*)\}/
@@ -37,7 +37,7 @@ describe("Home layout", () => {
       /\.tv-detail-copy\s*\{(?<declarations>[^}]*--mobile-top-inset[^}]*)\}/
     )?.groups?.declarations;
     const mobileDetailTitleRule = css.match(
-      /\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*calc\(10 \* var\(--vw\)\)[^}]*)\}/
+      /\.tv-detail > \.tv-detail-copy \.tv-detail-title\s*\{(?<declarations>[^}]*calc\(10 \* var\(--vw\)\)[^}]*)\}/
     )?.groups?.declarations;
     const mobileDetailSynopsisRule = css.match(
       /\.tv-detail-synopsis\s*\{(?<declarations>[^}]*0\.72rem[^}]*)\}/

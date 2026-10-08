@@ -1,4 +1,4 @@
-import { Drawer } from "../components/shell";
+import { Drawer, PageLayout } from "../components/shell";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { snapshotFromWork } from "../lib/discovery";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -64,12 +64,7 @@ import {
   type JoinedWorkSource,
 } from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import {
-  TvDetailHeading,
-  TvMediaTrack,
-  TvRailSurface,
-  TvStageShell,
-} from "../components/tv/TvStage";
+import { TvMediaTrack, TvRailSurface } from "../components/tv/TvStage";
 
 interface MoviePlaybackDraft {
   quality_id: string;
@@ -132,6 +127,56 @@ function workKindLabel(work: Work, t: TFunc): string {
     : work.kind === "series"
       ? t("pages.workDetail.kindSeries")
       : t("pages.workDetail.kindMovie");
+}
+
+/**
+ * Where Back goes from a title page, and what it is called. Known before the title has loaded, so the header (and Back)
+ * stays up while the page loads or fails.
+ */
+function resolveDetailBack({
+  routeBase,
+  requestedBackTo,
+  pathname,
+  search,
+  t,
+}: {
+  routeBase: string;
+  requestedBackTo: unknown;
+  pathname: string;
+  search: string;
+  t: TFunc;
+}): { backTo: string; backLabel: string } {
+  const searchBackTo =
+    typeof requestedBackTo === "string" && /^\/search(?:\?.*)?$/.test(requestedBackTo)
+      ? requestedBackTo
+      : pathname.startsWith("/search/")
+        ? `/search${search}`
+        : null;
+  const playlistBackTo =
+    typeof requestedBackTo === "string" &&
+    /^\/playlists(?:\?playlist=[^&]+(?:&.*)?)?$/.test(requestedBackTo)
+      ? requestedBackTo
+      : null;
+  const backTo =
+    requestedBackTo === "/" ||
+    requestedBackTo === "/series" ||
+    requestedBackTo === "/movies" ||
+    requestedBackTo === "/sites"
+      ? requestedBackTo
+      : playlistBackTo ?? searchBackTo ?? routeBase;
+  const backLabel =
+    backTo === "/"
+      ? t("pages.workDetail.backHome")
+      : backTo === "/series"
+        ? t("pages.workDetail.kindSeries")
+        : backTo === "/sites"
+          ? t("pages.workDetail.backSites")
+          : backTo.startsWith("/playlists")
+            ? t("pages.workDetail.backPlaylists")
+            : backTo.startsWith("/search")
+              ? t("pages.workDetail.backSearch")
+              : t("pages.workDetail.backMovies");
+  return { backTo, backLabel };
 }
 
 function playbackDraft(
@@ -1575,47 +1620,60 @@ export function WorkDetailPage() {
     };
   }, [client, detailWork, detailWorkGenres, detailWorkId]);
 
-  if (state.status === "loading" || state.status === "idle") {
+  if (state.status !== "ready") {
+    // The header and Back stay up while the title loads, fails or is unavailable.
+    const pendingBase = location.pathname.startsWith("/series")
+      ? "/series"
+      : location.pathname.startsWith("/sites")
+        ? "/sites"
+        : "/movies";
+    const pendingBack = resolveDetailBack({
+      routeBase: pendingBase,
+      requestedBackTo: detailNavigationState?.backTo,
+      pathname: location.pathname,
+      search: location.search,
+      t,
+    });
+    const pendingSection = location.pathname.startsWith("/search/")
+      ? t("shell.nav.search")
+      : location.pathname.startsWith("/playlists/")
+        ? t("shell.nav.playlists")
+        : pendingBase === "/series"
+          ? t("shell.nav.series")
+          : pendingBase === "/sites"
+            ? t("shell.nav.sites")
+            : t("shell.nav.movies");
     return (
-      <div
-        className="tv-detail tv-detail-loading"
-        aria-label={t("pages.workDetail.loadingTitleDetailsAriaLabel")}
-        role="status"
-      >
-        <span className="tv-detail-loader" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <p>{t("pages.workDetail.loadingDetails")}</p>
-      </div>
-    );
-  }
-
-  if (state.status === "error") {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="details"
-          tone="error"
-          variant="page"
-          title={t("pages.workDetail.titleLoadError")}
-          description={state.message}
-        />
-      </div>
-    );
-  }
-
-  if (state.status === "empty") {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          variant="page"
-          graphic="details"
-          title={t("pages.workDetail.titleDetailsUnavailable")}
-          description={t("pages.workDetail.titleDetailsUnavailableDescription")}
-        />
-      </div>
+      <PageLayout
+        pageId="work-detail"
+        className="tv-detail"
+        ariaLabel={t("pages.workDetail.loadingTitleDetailsAriaLabel")}
+        header={{
+          variant: "detail",
+          title: pendingSection,
+          back: {
+            label: t("pages.workDetail.backTo", { destination: pendingBack.backLabel }),
+            onBack: () => {
+              if (parentNavigationOrigin) navigate(-1);
+              else navigate(pendingBack.backTo);
+            },
+          },
+        }}
+        state={
+          state.status === "error"
+            ? { kind: "error", props: { graphic: "details", title: t("pages.workDetail.titleLoadError"), description: state.message } }
+            : state.status === "empty"
+              ? {
+                  kind: "empty",
+                  props: {
+                    graphic: "details",
+                    title: t("pages.workDetail.titleDetailsUnavailable"),
+                    description: t("pages.workDetail.titleDetailsUnavailableDescription"),
+                  },
+                }
+              : { kind: "loading", label: t("pages.workDetail.loadingDetails") }
+        }
+      />
     );
   }
 
@@ -1623,37 +1681,13 @@ export function WorkDetailPage() {
   const backdrop = cachedBackdrop;
   const routeBase = detailRouteBase(work);
   const episodic = isEpisodicKind(work.kind);
-  const requestedBackTo = detailNavigationState?.backTo;
-  const searchBackTo =
-    typeof requestedBackTo === "string" && /^\/search(?:\?.*)?$/.test(requestedBackTo)
-      ? requestedBackTo
-      : location.pathname.startsWith("/search/")
-        ? `/search${location.search}`
-        : null;
-  const playlistBackTo =
-    typeof requestedBackTo === "string" &&
-    /^\/playlists(?:\?playlist=[^&]+(?:&.*)?)?$/.test(requestedBackTo)
-      ? requestedBackTo
-      : null;
-  const backTo =
-    requestedBackTo === "/" ||
-    requestedBackTo === "/series" ||
-    requestedBackTo === "/movies" ||
-    requestedBackTo === "/sites"
-      ? requestedBackTo
-      : playlistBackTo ?? searchBackTo ?? routeBase;
-  const backLabel =
-    backTo === "/"
-      ? t("pages.workDetail.backHome")
-      : backTo === "/series"
-        ? t("pages.workDetail.kindSeries")
-        : backTo === "/sites"
-          ? t("pages.workDetail.backSites")
-          : backTo.startsWith("/playlists")
-            ? t("pages.workDetail.backPlaylists")
-            : backTo.startsWith("/search")
-              ? t("pages.workDetail.backSearch")
-              : t("pages.workDetail.backMovies");
+  const { backTo, backLabel } = resolveDetailBack({
+    routeBase,
+    requestedBackTo: detailNavigationState?.backTo,
+    pathname: location.pathname,
+    search: location.search,
+    t,
+  });
   const detailRoute =
     location.pathname.startsWith("/search/") ||
     location.pathname.startsWith("/playlists/")
@@ -1795,33 +1829,37 @@ export function WorkDetailPage() {
         : workKindLabel(work, t);
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="work-detail"
       className="tv-detail"
       ariaLabel={work.title}
-      artworkKey={work.id}
-      artwork={
-        <CachedArtworkImage
-          work={work}
-          kinds={["backdrop", "poster"]}
-          alt=""
-          fallback={<span>{work.title}</span>}
-        />
-      }
+      backdrop={{
+        artKey: work.id,
+        art: (
+          <CachedArtworkImage
+            work={work}
+            kinds={["backdrop", "poster"]}
+            alt=""
+            fallback={<span>{work.title}</span>}
+          />
+        ),
+      }}
+      header={{
+        variant: "detail",
+        title: detailCollectionLabel,
+        detail: work.title,
+        back: {
+          label: t("pages.workDetail.backTo", { destination: backLabel }),
+          onBack: () => {
+            if (parentNavigationOrigin) {
+              navigate(-1);
+            } else {
+              navigate(backTo);
+            }
+          },
+        },
+      }}
     >
-
-      <TvDetailHeading
-        backLabel={t("pages.workDetail.backTo", { destination: backLabel })}
-        sectionTitle={detailCollectionLabel}
-        itemTitle={work.title}
-        onBack={() => {
-          if (parentNavigationOrigin) {
-            navigate(-1);
-          } else {
-            navigate(backTo);
-          }
-        }}
-      />
-
       <aside className="tv-detail-copy" key={`copy-${work.id}`}>
         <p className="tv-detail-kicker">
           {episodic && selectedEpisode ? (
@@ -1834,7 +1872,7 @@ export function WorkDetailPage() {
             work.genres[0] ?? workKindLabel(work, t)
           )}
         </p>
-        <h1>{work.title}</h1>
+        <h2 className="tv-detail-title">{work.title}</h2>
         {episodic && selectedEpisode && selectedEpisodeLabel ? (
           <h2>{selectedEpisodeLabel}</h2>
         ) : null}
@@ -2221,6 +2259,6 @@ export function WorkDetailPage() {
         <i />
         <span>{work.genres.slice(0, 2).join(" · ") || t("pages.workDetail.yourLibrary")}</span>
       </div>
-    </TvStageShell>
+    </PageLayout>
   );
 }

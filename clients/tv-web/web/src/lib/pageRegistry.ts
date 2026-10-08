@@ -41,7 +41,7 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
   // COMPLETE_CLIENT_SHELL_ROUTES yet.
   { file: "Folders.tsx", mode: "layout", pageId: "folders", routes: [], urls: ["/folders"] },
   { file: "Library.tsx", mode: "layout", pageId: "library", routes: ["series", "movies", "sites", "music"], urls: ["/movies", "/series"] },
-  { file: "MusicDetail.tsx", mode: "unmigrated", pageId: "music-detail", routes: ["music-detail"], urls: [], step: "W6" },
+  { file: "MusicDetail.tsx", mode: "layout", pageId: "music-detail", routes: ["music-detail"], urls: [] },
   { file: "Playlists.tsx", mode: "layout", pageId: "playlists", routes: ["playlists"], urls: ["/playlists"] },
   { file: "Requests.tsx", mode: "layout", pageId: "requests", routes: ["requests"], urls: ["/requests"] },
   { file: "Search.tsx", mode: "layout", pageId: "search", routes: ["search"], urls: ["/search"] },
@@ -49,11 +49,10 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
   { file: "Watchlist.tsx", mode: "layout", pageId: "watchlist", routes: ["watchlist"], urls: ["/watchlist"] },
   {
     file: "WorkDetail.tsx",
-    mode: "unmigrated",
+    mode: "layout",
     pageId: "work-detail",
     routes: ["series-detail", "movies-detail", "sites-detail", "search-detail", "playlists-detail"],
     urls: [],
-    step: "W6",
   },
   {
     file: "Home.tsx",
@@ -100,4 +99,4 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
 ];
 
 /** The ratchet: a literal, lowered by the PR that migrates a page; the test fails when more pages are listed than this. */
-export const MAX_UNMIGRATED = 2;
+export const MAX_UNMIGRATED = 0;

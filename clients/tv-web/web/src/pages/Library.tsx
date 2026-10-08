@@ -62,7 +62,6 @@ import {
 } from "../lib/libraryView";
 import { usePanelParam } from "../lib/usePanelParam";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
 const INITIAL_MOUNTED = 48;
@@ -877,34 +876,36 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     }
   }, []);
 
-  if (items === null && !initialError) {
-    return <CompactLibraryLoader label={plural} />;
-  }
-
-  if (initialError) {
+  if (items === null || initialError || !items.length || !selected) {
+    // The header and Back stay up while the library loads, fails or is empty.
     return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic={emptyGraphic}
-          tone="error"
-          variant="page"
-          title={t("pages.library.errorTitle", { plural: plural.toLowerCase() })}
-          description={initialError}
-        />
-      </div>
-    );
-  }
-
-  if (!items?.length || !selected) {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic={emptyGraphic}
-          variant="page"
-          title={t("pages.library.emptyTitle", { plural: plural.toLowerCase() })}
-          description={t("pages.library.emptyDescription", { collectionNoun })}
-        />
-      </div>
+      <PageLayout
+        pageId="library"
+        className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
+        ariaLabel={t("pages.library.stageAriaLabel", { plural })}
+        header={{ title: plural, back: { label: t("pages.library.backToHome"), to: "/" } }}
+        state={
+          initialError
+            ? {
+                kind: "error",
+                props: {
+                  graphic: emptyGraphic,
+                  title: t("pages.library.errorTitle", { plural: plural.toLowerCase() }),
+                  description: initialError,
+                },
+              }
+            : items === null
+              ? { kind: "loading", label: t("pages.library.preparingLabel", { label: plural.toLowerCase() }) }
+              : {
+                  kind: "empty",
+                  props: {
+                    graphic: emptyGraphic,
+                    title: t("pages.library.emptyTitle", { plural: plural.toLowerCase() }),
+                    description: t("pages.library.emptyDescription", { collectionNoun }),
+                  },
+                }
+        }
+      />
     );
   }
 
@@ -1428,20 +1429,3 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
   );
 });
 
-function CompactLibraryLoader({ label }: { label: string }) {
-  const { t } = useLanguage();
-  return (
-    <div
-      className="tv-library tv-compact-loading"
-      aria-label={t("pages.library.loadingLabel", { label })}
-      role="status"
-    >
-      <div className="tv-orbit-loader" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-      <p>{t("pages.library.preparingLabel", { label: label.toLowerCase() })}</p>
-    </div>
-  );
-}

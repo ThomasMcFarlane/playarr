@@ -982,34 +982,20 @@ export function PlaylistsPage() {
     setSearchParams(params);
   }
 
-  if (pageState.status === "loading") {
+  if (pageState.status !== "ready") {
+    // The header and Back stay up while the playlists load or fail.
     return (
-      <div
-        className="tv-home tv-compact-loading"
-        aria-label={t("pages.playlists.loadingLabel")}
-        role="status"
-      >
-        <div className="tv-orbit-loader" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <p>{t("pages.playlists.preparingLabel")}</p>
-      </div>
-    );
-  }
-
-  if (pageState.status === "error") {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="playlist"
-          tone="error"
-          variant="page"
-          title={t("pages.playlists.loadErrorTitle")}
-          description={pageState.message}
-        />
-      </div>
+      <PageLayout
+        pageId="playlists"
+        className="tv-home tv-playlists is-playlist-directory"
+        ariaLabel={t("pages.playlists.title")}
+        header={{ title: t("pages.playlists.title"), back: { label: t("pages.playlists.backToHome"), to: "/" } }}
+        state={
+          pageState.status === "error"
+            ? { kind: "error", props: { graphic: "playlist", title: t("pages.playlists.loadErrorTitle"), description: pageState.message } }
+            : { kind: "loading", label: t("pages.playlists.preparingLabel") }
+        }
+      />
     );
   }
 

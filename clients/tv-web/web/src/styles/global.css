@@ -6046,7 +6046,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 
 .tv-home-feature h2,
 .tv-library-preview h2,
-.tv-detail > .tv-detail-copy h1 {
+.tv-detail > .tv-detail-copy .tv-detail-title {
   max-width: 9ch;
   font-size: clamp(2.2rem, calc(3.6 * var(--vw)), 5rem);
   font-weight: 560;
@@ -7507,7 +7507,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-.tv-detail-copy h2 {
+.tv-detail-copy h2:not(.tv-detail-title) {
   max-width: 24ch;
   margin-top: clamp(14px, calc(1.8 * var(--viewport-unit)), 24px);
   color: var(--ink-soft);
@@ -10201,7 +10201,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     font-size: 0.66rem;
   }
 
-  .tv-detail > .tv-detail-copy h1 {
+  .tv-detail > .tv-detail-copy .tv-detail-title {
     max-width: 12ch;
     font-size: clamp(2rem, calc(10 * var(--vw)), 3.5rem);
     line-height: 0.94;
@@ -10493,7 +10493,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     padding-top: calc(var(--mobile-top-inset) + 64px);
   }
 
-  .tv-detail-copy h2 {
+  .tv-detail-copy h2:not(.tv-detail-title) {
     max-width: 28ch;
     margin-top: 8px;
     font-size: 0.9rem;
@@ -10544,10 +10544,6 @@ html.is-native-scroll-root .profile-auth-scroll {
     overscroll-behavior: auto;
     scroll-padding-block: 0;
     touch-action: pan-y;
-  }
-
-  .tv-music-heading {
-    right: 66px;
   }
 
   .tv-music-browser.is-content {
@@ -11119,7 +11115,7 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   .tv-home-feature h2,
-  .tv-detail > .tv-detail-copy h1,
+  .tv-detail > .tv-detail-copy .tv-detail-title,
   .tv-search-copy > h1 {
     font-size: 2.25rem;
   }

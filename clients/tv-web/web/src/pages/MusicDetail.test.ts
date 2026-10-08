@@ -89,14 +89,14 @@ describe("MusicDetail track list", () => {
     const workSource = readFileSync(new URL("./WorkDetail.tsx", import.meta.url), "utf8");
 
     expect(musicSource).not.toContain("tv-music-track-list-heading");
-    expect(musicSource).toContain("<h1>{selectedAlbum?.album.title ?? work.title}</h1>");
+    expect(musicSource).toContain('<h2 className="tv-detail-title">{selectedAlbum?.album.title ?? work.title}</h2>');
     expect(musicSource).toContain("<span>{work.title}</span>");
-    expect(musicSource).toContain('sectionTitle={t("shell.nav.music")}');
-    expect(musicSource).toContain("itemTitle={work.title}");
+    expect(musicSource).toContain('title: t("shell.nav.music")');
+    expect(musicSource).toContain("detail: work.title");
     expect(workSource).toContain('t("shell.nav.movies")');
     expect(workSource).toContain('t("shell.nav.series")');
-    expect(workSource).toContain("sectionTitle={detailCollectionLabel}");
-    expect(workSource).toContain("itemTitle={work.title}");
+    expect(workSource).toContain("title: detailCollectionLabel");
+    expect(workSource).toContain("detail: work.title");
   });
 
   it("centres persistent inline controls beneath Cover Flow", () => {

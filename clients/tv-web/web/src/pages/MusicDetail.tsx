@@ -30,11 +30,8 @@ import {
   type PlayerPlaylistItem,
 } from "../components/player/PlayerSurface";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import {
-  TvDetailHeading,
-  TvRailSurface,
-  TvStageShell,
-} from "../components/tv/TvStage";
+import { PageLayout, ScrollArea } from "../components/shell";
+import { TvRailSurface } from "../components/tv/TvStage";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
@@ -47,7 +44,6 @@ import {
   type NavigationOrigin,
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { useScrollEdges } from "../lib/useScrollEdges";
 import { horizontalSwipeStep, type TouchPoint } from "../lib/touchGestures";
 import {
   getJoinedWorkSources,
@@ -373,11 +369,6 @@ function AlbumTrackList({
   const { t } = useLanguage();
   const tracks = playableTracks(album);
   const trackListRef = useRef<HTMLDivElement>(null);
-  const scrollEdges = useScrollEdges(
-    trackListRef,
-    "vertical",
-    `${album.album.id}:${tracks.length}`
-  );
   const mediaContext = useMediaContextMenu({ onProgressChanged });
 
   return (
@@ -385,101 +376,96 @@ function AlbumTrackList({
       className="tv-music-track-list"
       aria-label={t("pages.musicDetail.albumTracksAriaLabel", { title: album.album.title })}
     >
-      <div
-        className={`tv-scroll-edge-window tv-music-track-list-window${
-          scrollEdges.start ? " can-scroll-up" : ""
-        }${scrollEdges.end ? " can-scroll-down" : ""}`}
+      <ScrollArea
+        axis="vertical"
+        scrollKey={`music:${artistId}:album:${album.album.id}`}
+        windowClassName="tv-music-track-list-window"
+        className="tv-music-track-list-scroll"
+        scrollRef={trackListRef}
+        refreshKey={`${album.album.id}:${tracks.length}`}
       >
-        <div
-          ref={trackListRef}
-          className="tv-music-track-list-scroll"
-          data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
-          data-navigation-scroll-key={`music:${artistId}:album:${album.album.id}`}
-        >
-          {tracks.map((track, index) => {
-            const mediaFileId = track.media_file_id;
-            if (!mediaFileId) return null;
-            const progress = progressByMedia.get(mediaFileId);
-            const contextProps = mediaContext.itemProps({
-              workId: artistId,
-              title: track.track.title,
-              detailRoute,
-              parentRoute: detailParentBackTo,
-              progress,
-              preferredMediaFileId: mediaFileId,
-              playlistTrackId: track.track.id,
-              leaves: [
-                {
-                  mediaFileId,
-                  runtimeMs:
-                    track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
-                  title: track.track.title,
-                  seriesTitle: artistTitle,
-                  albumTitle: album.album.title,
-                  workKind: "artist",
-                },
-              ],
-              activateOrigin: true,
-              onPlay: () => onPlay(album, track),
-            });
-            return (
-              <Link
-                key={track.track.id}
-                id={`music-track-${track.track.id}`}
-                to={`/player/${mediaFileId}`}
-                state={{
-                  title: track.track.title,
-                  backTo: detailRoute,
-                  detailParentBackTo,
-                  mediaFileId,
-                  playlistItems,
-                  navigationOrigin,
-                  detailNavigationOrigin,
-                }}
-                className={`tv-music-track-row${
-                  selectedTrackId === track.track.id ? " is-selected" : ""
-                }`}
-                data-navigation-focus-key={`music:${artistId}:track:${track.track.id}`}
-                data-tv-edge-target-up={
-                  index === 0 ? "#inline-music-playback-control" : undefined
+        {tracks.map((track, index) => {
+          const mediaFileId = track.media_file_id;
+          if (!mediaFileId) return null;
+          const progress = progressByMedia.get(mediaFileId);
+          const contextProps = mediaContext.itemProps({
+            workId: artistId,
+            title: track.track.title,
+            detailRoute,
+            parentRoute: detailParentBackTo,
+            progress,
+            preferredMediaFileId: mediaFileId,
+            playlistTrackId: track.track.id,
+            leaves: [
+              {
+                mediaFileId,
+                runtimeMs:
+                  track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
+                title: track.track.title,
+                seriesTitle: artistTitle,
+                albumTitle: album.album.title,
+                workKind: "artist",
+              },
+            ],
+            activateOrigin: true,
+            onPlay: () => onPlay(album, track),
+          });
+          return (
+            <Link
+              key={track.track.id}
+              id={`music-track-${track.track.id}`}
+              to={`/player/${mediaFileId}`}
+              state={{
+                title: track.track.title,
+                backTo: detailRoute,
+                detailParentBackTo,
+                mediaFileId,
+                playlistItems,
+                navigationOrigin,
+                detailNavigationOrigin,
+              }}
+              className={`tv-music-track-row${
+                selectedTrackId === track.track.id ? " is-selected" : ""
+              }`}
+              data-navigation-focus-key={`music:${artistId}:track:${track.track.id}`}
+              data-tv-edge-target-up={
+                index === 0 ? "#inline-music-playback-control" : undefined
+              }
+              onFocus={() => onSelect(album.album.id, track.track.id)}
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigate(event);
+                onPlay(album, track);
+              }}
+              aria-label={t("pages.musicDetail.play", { title: track.track.title })}
+              {...contextProps}
+              onKeyDown={(event) => {
+                contextProps.onKeyDown(event);
+                if (event.defaultPrevented || event.key !== "ArrowUp" || index !== 0) {
+                  return;
                 }
-                onFocus={() => onSelect(album.album.id, track.track.id)}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onNavigate(event);
-                  onPlay(album, track);
-                }}
-                aria-label={t("pages.musicDetail.play", { title: track.track.title })}
-                {...contextProps}
-                onKeyDown={(event) => {
-                  contextProps.onKeyDown(event);
-                  if (event.defaultPrevented || event.key !== "ArrowUp" || index !== 0) {
-                    return;
-                  }
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const previousTarget =
-                    document.getElementById("inline-music-playback-control") ??
-                    document.querySelector<HTMLElement>(
-                      ".tv-music-album-card.is-selected"
-                    );
-                  previousTarget?.focus({ preventScroll: true });
-                }}
-              >
-                <span className="tv-music-track-row-number" aria-hidden="true">
-                  {String(track.track.track_number).padStart(2, "0")}
-                </span>
-                <strong>{track.track.title}</strong>
-                <span className="tv-music-track-row-duration">
-                  {formatDuration(track.track.duration_seconds, t)}
-                </span>
-                <WatchStateOverlay progress={progress} showUnwatched />
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+                event.preventDefault();
+                event.stopPropagation();
+                const previousTarget =
+                  document.getElementById("inline-music-playback-control") ??
+                  document.querySelector<HTMLElement>(
+                    ".tv-music-album-card.is-selected"
+                  );
+                previousTarget?.focus({ preventScroll: true });
+              }}
+            >
+              <span className="tv-music-track-row-number" aria-hidden="true">
+                {String(track.track.track_number).padStart(2, "0")}
+              </span>
+              <strong>{track.track.title}</strong>
+              <span className="tv-music-track-row-duration">
+                {formatDuration(track.track.duration_seconds, t)}
+              </span>
+              <WatchStateOverlay progress={progress} showUnwatched />
+            </Link>
+          );
+        })}
+      </ScrollArea>
       {mediaContext.contextMenu}
     </section>
   );
@@ -772,46 +758,39 @@ export function MusicDetailPage() {
     []
   );
 
-  if (state.status === "loading" || state.status === "idle") {
+  if (state.status !== "ready" || state.data.work.kind !== "artist") {
+    // The header and Back stay up while the artist loads, fails or is unavailable.
     return (
-      <div
-        className="tv-detail tv-detail-loading"
-        aria-label={t("pages.musicDetail.loadingArtistDetails")}
-      >
-        <span className="tv-detail-loader" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <p>{t("pages.musicDetail.loadingMusic")}</p>
-      </div>
-    );
-  }
-
-  if (state.status === "error") {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="music"
-          tone="error"
-          variant="page"
-          title={t("pages.musicDetail.loadErrorTitle")}
-          description={state.message}
-        />
-      </div>
-    );
-  }
-
-  if (state.status === "empty" || state.data.work.kind !== "artist") {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="music"
-          variant="page"
-          title={t("pages.musicDetail.unavailableTitle")}
-          description={t("pages.musicDetail.unavailableDescription")}
-        />
-      </div>
+      <PageLayout
+        pageId="music-detail"
+        className="tv-detail tv-music-detail"
+        ariaLabel={t("pages.musicDetail.loadingArtistDetails")}
+        header={{
+          variant: "detail",
+          title: t("shell.nav.music"),
+          back: {
+            label: t("pages.musicDetail.backToMusic"),
+            onBack: () => {
+              if (parentNavigationOrigin) navigate(-1);
+              else navigate(backTo);
+            },
+          },
+        }}
+        state={
+          state.status === "error"
+            ? { kind: "error", props: { graphic: "music", title: t("pages.musicDetail.loadErrorTitle"), description: state.message } }
+            : state.status === "ready" || state.status === "empty"
+              ? {
+                  kind: "empty",
+                  props: {
+                    graphic: "music",
+                    title: t("pages.musicDetail.unavailableTitle"),
+                    description: t("pages.musicDetail.unavailableDescription"),
+                  },
+                }
+              : { kind: "loading", label: t("pages.musicDetail.loadingMusic") }
+        }
+      />
     );
   }
 
@@ -840,38 +819,42 @@ export function MusicDetailPage() {
   ) : null;
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="music-detail"
       className="tv-detail tv-music-detail"
       ariaLabel={work.title}
-      artworkKey={hasArtistBackdrop ? `${work.id}:backdrop` : selectedAlbum?.album.id ?? work.id}
-      artwork={
-        <CachedArtworkImage
-          work={work}
-          kinds={["backdrop"]}
-          alt=""
-          className="tv-music-detail-backdrop"
-          fallback={albumBackdrop}
-        />
-      }
+      backdrop={{
+        artKey: hasArtistBackdrop ? `${work.id}:backdrop` : selectedAlbum?.album.id ?? work.id,
+        art: (
+          <CachedArtworkImage
+            work={work}
+            kinds={["backdrop"]}
+            alt=""
+            className="tv-music-detail-backdrop"
+            fallback={albumBackdrop}
+          />
+        ),
+      }}
+      header={{
+        variant: "detail",
+        title: t("shell.nav.music"),
+        detail: work.title,
+        back: {
+          label: t("pages.musicDetail.backToMusic"),
+          onBack: () => {
+            if (parentNavigationOrigin) navigate(-1);
+            else navigate(backTo);
+          },
+        },
+      }}
     >
-      <TvDetailHeading
-        backLabel={t("pages.musicDetail.backToMusic")}
-        className="tv-music-heading"
-        sectionTitle={t("shell.nav.music")}
-        itemTitle={work.title}
-        onBack={() => {
-          if (parentNavigationOrigin) navigate(-1);
-          else navigate(backTo);
-        }}
-      />
-
       <aside className="tv-detail-copy" key={`music-copy-${selectedTrack?.track.id ?? work.id}`}>
         <p className="tv-detail-kicker">
           {selectedAlbum
             ? selectedAlbum.album.album_type.replace(/_/g, " ")
             : work.genres[0] ?? t("pages.musicDetail.artist")}
         </p>
-        <h1>{selectedAlbum?.album.title ?? work.title}</h1>
+        <h2 className="tv-detail-title">{selectedAlbum?.album.title ?? work.title}</h2>
         <div className="tv-detail-meta">
           <span>{work.title}</span>
           {selectedAlbum ? <span>{albumLabel(selectedAlbum)}</span> : null}
@@ -972,6 +955,6 @@ export function MusicDetailPage() {
           {work.genres.slice(0, 2).join(" · ") || t("pages.musicDetail.yourLibrary")}
         </span>
       </div>
-    </TvStageShell>
+    </PageLayout>
   );
 }

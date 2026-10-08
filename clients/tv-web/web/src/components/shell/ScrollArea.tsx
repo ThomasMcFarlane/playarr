@@ -9,6 +9,8 @@ export interface ScrollAreaProps {
   scrollKey: string;
   /** Layout only (a grid template, padding). `pageLayoutCss.test.ts` keeps colour and fade rules out of page CSS. */
   className?: string;
+  /** Layout only, on the outer window (negative margins, flex sizing). Never colour or fade rules. */
+  windowClassName?: string;
   /** Re-measure the edges when this changes (the list's identity). Defaults to the scroll key. */
   refreshKey?: string | number;
   /** The scrolling element, for pages that need to read or set its scroll position. */
@@ -28,7 +30,7 @@ export interface ScrollAreaProps {
  * The one scroll container: a real native scroller with the edge fades built in. One fade on every axis, the
  * rail-panel glow (`page-layout.css`). It sets `data-tv-scroll-container` and the axis itself, so pages never do.
  */
-export function ScrollArea({ axis, scrollKey, className, refreshKey, scrollRef, onScroll, viewportProps, children }: ScrollAreaProps) {
+export function ScrollArea({ axis, scrollKey, className, windowClassName, refreshKey, scrollRef, onScroll, viewportProps, children }: ScrollAreaProps) {
   const innerRef = useRef<HTMLDivElement | null>(null);
   const edges = useScrollEdges(innerRef, axis, refreshKey ?? scrollKey);
   const setRef = (node: HTMLDivElement | null) => {
@@ -38,7 +40,7 @@ export function ScrollArea({ axis, scrollKey, className, refreshKey, scrollRef, 
   };
   return (
     <div
-      className={`scroll-area is-${axis}${edges.start ? " can-scroll-start" : ""}${edges.end ? " can-scroll-end" : ""}`}
+      className={`scroll-area is-${axis}${edges.start ? " can-scroll-start" : ""}${edges.end ? " can-scroll-end" : ""}${windowClassName ? ` ${windowClassName}` : ""}`}
       data-scroll-area={scrollKey}
     >
       <div
