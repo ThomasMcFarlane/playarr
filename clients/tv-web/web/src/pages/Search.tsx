@@ -32,7 +32,7 @@ import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
-import { labelWithYear, releaseYear } from "../lib/workYear";
+import { labelWithYear, releaseYear, yearRangeLabel } from "../lib/workYear";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useNavigationLayer } from "../lib/navigationLayer";
@@ -761,7 +761,7 @@ export function SearchPage() {
             <p>{labelWithYear(workTypeLabel(selectedWork, t), selectedWork)}</p>
             <h2>{selectedWork.title}</h2>
             <div>
-              {releaseYear(selectedWork) !== null ? <span>{releaseYear(selectedWork)}</span> : null}
+              {releaseYear(selectedWork) !== null ? <span>{yearRangeLabel(selectedWork)}</span> : null}
               <span>
                 {selectedWork.genres.slice(0, 2).join(" · ") ||
                   t("pages.search.availableToPlay")}

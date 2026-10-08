@@ -148,6 +148,7 @@ fn work(title: &str, kind: WorkKind, year: i32, refs: &[(ExternalProvider, &str)
         tags: vec![],
         added_at: Utc::now(),
         release_date: Some(Utc.with_ymd_and_hms(year, 6, 1, 0, 0, 0).unwrap()),
+        end_date: None,
         monitored: true,
         availability: Availability::Available,
     }

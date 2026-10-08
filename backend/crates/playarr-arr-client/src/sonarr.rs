@@ -37,6 +37,13 @@ pub struct SonarrSeries {
     /// `playarr_arr_sync::arr_client::map_sonarr`.
     #[serde(default, rename = "firstAired")]
     pub first_aired: Option<DateTime<Utc>>,
+    /// When the last episode aired (Sonarr v4 `lastAired`). Absent on older
+    /// builds; `previous_airing` is the fallback.
+    #[serde(default, rename = "lastAired")]
+    pub last_aired: Option<DateTime<Utc>>,
+    /// Air date of the most recent episode (Sonarr `previousAiring`).
+    #[serde(default, rename = "previousAiring")]
+    pub previous_airing: Option<DateTime<Utc>>,
     /// When the *arr app itself added this entry. Lenient: absent, null or
     /// unparseable becomes `None`. Seeds `Work::added_at`.
     #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]

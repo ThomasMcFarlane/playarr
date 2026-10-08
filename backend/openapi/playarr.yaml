@@ -16823,6 +16823,17 @@ components:
           format: date-time
         availability:
           $ref: '#/components/schemas/Availability'
+        end_date:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            When an ended `Series` last aired, per Sonarr (`lastAired`, else
+            `previousAiring`, only while Sonarr reports the series as ended). `None`
+            for movies, running series and anything without a known last-aired date.
+            Clients show it as the end of the year range ("Series · 2011-2019").
+            See `backend/migrations/sqlite/0080_work_end_date.sql`.
         external_refs:
           type: array
           items:

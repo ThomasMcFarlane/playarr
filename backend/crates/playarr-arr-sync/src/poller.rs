@@ -871,6 +871,7 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
         // Arr-owned, like `overview`/`images`/`genres` above -- see
         // `RemoteWork::release_date`'s doc comment.
         release_date: remote.release_date,
+        end_date: remote.end_date,
         monitored: remote.monitored,
         availability: remote.availability.unwrap_or(Availability::Unknown),
     }
@@ -896,6 +897,7 @@ fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
     merged.images = remote.images.clone();
     merged.genres = remote.genres.clone();
     merged.release_date = remote.release_date;
+    merged.end_date = remote.end_date;
     merged.tags = arr_owned_tags(&existing.tags, remote);
     // `added_at` only ever moves earlier. A stored value newer than the
     // source's own `added` can only have come from a first-sync `now()`
@@ -1079,6 +1081,7 @@ mod tests {
             tags: vec!["kids".to_string()],
             added_at: Utc::now(),
             release_date: None,
+            end_date: None,
             monitored,
             availability,
         }
@@ -1102,6 +1105,7 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             release_date: None,
+            end_date: None,
             added: None,
         }
     }
@@ -1801,6 +1805,36 @@ mod tests {
         let merged = merge_work(&existing, WorkKind::Movie, &remote_entity);
 
         assert_eq!(merged.release_date, Some(release_date));
+    }
+
+    #[test]
+    fn merge_work_applies_and_clears_end_date_from_remote() {
+        let mut existing = work_with_ref(
+            WorkKind::Series,
+            ExternalProvider::Tvdb,
+            "1",
+            "Old",
+            true,
+            Availability::Available,
+        );
+        assert_eq!(existing.end_date, None);
+        let end_date = "2019-05-19T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let mut remote_entity = remote("1", "Old", true);
+        remote_entity.end_date = Some(end_date);
+
+        existing = merge_work(&existing, WorkKind::Series, &remote_entity);
+        assert_eq!(existing.end_date, Some(end_date));
+        assert_eq!(
+            new_work(WorkKind::Series, ExternalProvider::Tvdb, &remote_entity).end_date,
+            Some(end_date)
+        );
+
+        // A series that resumes is no longer ended: the closing date clears.
+        remote_entity.end_date = None;
+        existing = merge_work(&existing, WorkKind::Series, &remote_entity);
+        assert_eq!(existing.end_date, None);
     }
 
     #[test]

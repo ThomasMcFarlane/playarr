@@ -168,6 +168,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Ended series show their year range ("Series · 2011–2019") on tiles, previews, search and the title page. The server stores `end_date` on each work (Sonarr `lastAired`, else `previousAiring`, only while Sonarr reports the series as ended), exposed in the Work API and OpenAPI.
 - Release: after each iOS and tvOS TestFlight upload the pipeline now adds the build to the external TestFlight groups listed in the `TESTFLIGHT_EXTERNAL_GROUP_IDS` repository variable, sets export compliance and "What to Test" notes, and submits it for beta app review; failures show in the release summary without failing the upload.
 - Web: Storybook gains dialog, toast, avatar, watch-state, period picker, master-detail and player-control stories; the watch-state overlay marks now have role=img.
 - Web: a public Storybook at `/storybook` shows the real components and styles in light and dark, at TV, desktop and mobile layouts, with focus, hover, open, disabled, loading, empty and error states. CI builds it and runs a render and accessibility smoke over every story.

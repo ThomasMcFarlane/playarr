@@ -70,7 +70,7 @@ import {
   type SortOrder,
 } from "../lib/libraryView";
 import { usePanelParam } from "../lib/usePanelParam";
-import { releaseYear } from "../lib/workYear";
+import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
@@ -1451,7 +1451,7 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
           {releaseYear(work) !== null ? (
             <>
               <i aria-hidden="true" />
-              {releaseYear(work)}
+              {yearRangeLabel(work)}
             </>
           ) : null}
         </span>

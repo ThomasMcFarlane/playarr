@@ -2366,6 +2366,7 @@ mod sync_endpoint_tests {
             tags: vec![],
             added_at: Utc::now(),
             release_date: Some("1999-03-31T00:00:00Z".parse().unwrap()),
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         };

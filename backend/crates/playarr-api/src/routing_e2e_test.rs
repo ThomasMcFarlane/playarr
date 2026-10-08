@@ -187,6 +187,7 @@ fn sample_work(external_id: &str) -> playarr_model::Work {
         tags: vec![],
         added_at: chrono::Utc::now(),
         release_date: None,
+        end_date: None,
         monitored: true,
         availability: Availability::Available,
     }

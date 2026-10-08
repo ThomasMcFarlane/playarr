@@ -3,7 +3,7 @@ import type { ImageKind, Work } from "@playarr-tv/api-client";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { PreviewStore } from "../lib/previewStore";
-import { releaseYear } from "../lib/workYear";
+import { yearRangeLabel } from "../lib/workYear";
 
 /**
  * The left preview of a library page. It shows the work the remote is on right now (the store), or the page's
@@ -22,7 +22,7 @@ export function LibraryPreview({
 }) {
   const { t } = useLanguage();
   const work = useSyncExternalStore(store.subscribe, store.get, store.get) ?? fallback;
-  const year = releaseYear(work);
+  const year = yearRangeLabel(work);
   return (
     <aside className="tv-library-preview">
       <p className="tv-provider">{work.genres[0] ?? singular}</p>

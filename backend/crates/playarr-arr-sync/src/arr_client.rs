@@ -153,6 +153,9 @@ pub struct RemoteWork {
     /// Readarr -- see `map_lidarr`/`map_readarr`) or a Movie/Series entry
     /// the source app itself hasn't backfilled one for yet.
     pub release_date: Option<DateTime<Utc>>,
+    /// When an ended series last aired (Sonarr only, and only while Sonarr
+    /// reports the series as `ended`). Mapped onto `Work::end_date`.
+    pub end_date: Option<DateTime<Utc>>,
     /// When the source *arr app itself added this entry (Radarr movie
     /// `added`, Sonarr/Whisparr series `added`, Lidarr artist `added`),
     /// already vetted by [`usable_added`]. Seeds `Work::added_at` so "Recently
@@ -227,6 +230,16 @@ fn radarr_arr_tags(movie: &RadarrMovie) -> Vec<String> {
     tags
 }
 
+/// The date an ended series last aired: Sonarr's `lastAired`, else
+/// `previousAiring`. Only while Sonarr reports the series as ended, so a
+/// running series never gets a closing year.
+fn sonarr_end_date(series: &SonarrSeries) -> Option<DateTime<Utc>> {
+    if !series.status.eq_ignore_ascii_case("ended") {
+        return None;
+    }
+    series.last_aired.or(series.previous_airing)
+}
+
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
     RemoteWork {
         file_count: series.statistics.as_ref().map(|s| s.episode_file_count),
@@ -244,6 +257,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
         genres: series.genres.clone(),
         images: sonarr_images(&series.images),
         release_date: series.first_aired,
+        end_date: sonarr_end_date(series),
         added: usable_added(series.added),
         certification: normalise_certification(series.certification.as_deref()),
         arr_tags: sonarr_arr_tags(series),
@@ -269,6 +283,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         genres: movie.genres.clone(),
         images: radarr_images(&movie.images),
         release_date: radarr_release_date(movie),
+        end_date: None,
         added: usable_added(movie.added),
         certification: normalise_certification(movie.certification.as_deref()),
         arr_tags: radarr_arr_tags(movie),
@@ -325,6 +340,7 @@ fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
         // An artist (unlike a single album) has no one release date of its
         // own -- see `Work::release_date`'s doc comment.
         release_date: None,
+        end_date: None,
         added: usable_added(artist.added),
     }
 }
@@ -371,6 +387,7 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
         images: Vec::new(),
         // An author, like an artist, has no one release date of its own.
         release_date: None,
+        end_date: None,
         added: usable_added(author.added),
     }
 }
@@ -394,6 +411,7 @@ fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
         genres: series.genres.clone(),
         images: whisparr_images(&series.images),
         release_date: series.first_aired,
+        end_date: None,
         added: usable_added(series.added),
     }
 }
@@ -623,6 +641,8 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             first_aired: None,
+            last_aired: None,
+            previous_airing: None,
             added: None,
             certification: None,
             ratings: None,
@@ -805,6 +825,32 @@ mod tests {
         let series = sonarr_series(42, "Example Show", 12345, true);
         let remote = map_sonarr(&series);
         assert_eq!(remote.release_date, None);
+    }
+
+    #[test]
+    fn sonarr_end_date_is_the_last_aired_date_of_an_ended_series() {
+        let mut series = sonarr_series(42, "Example Show", 12345, true);
+        series.status = "ended".to_string();
+        let last = "2019-05-19T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        series.last_aired = Some(last);
+        assert_eq!(map_sonarr(&series).end_date, Some(last));
+    }
+
+    #[test]
+    fn sonarr_end_date_falls_back_to_previous_airing() {
+        let mut series = sonarr_series(42, "Example Show", 12345, true);
+        series.status = "ended".to_string();
+        let previous = "2018-03-04T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        series.previous_airing = Some(previous);
+        assert_eq!(map_sonarr(&series).end_date, Some(previous));
+    }
+
+    #[test]
+    fn sonarr_end_date_is_none_while_the_series_is_still_running() {
+        let mut series = sonarr_series(42, "Example Show", 12345, true);
+        series.last_aired = Some("2024-01-01T00:00:00Z".parse().unwrap());
+        series.previous_airing = Some("2024-01-01T00:00:00Z".parse().unwrap());
+        assert_eq!(map_sonarr(&series).end_date, None);
     }
 
     #[test]

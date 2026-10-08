@@ -246,6 +246,7 @@ mod tests {
             tags: Vec::new(),
             added_at: chrono::Utc::now(),
             release_date: None,
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         })

@@ -1,6 +1,6 @@
 import { setScrollInstant, settledScrollOffset, smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
 import { Drawer, PageLayout } from "../components/shell";
-import { releaseYear } from "../lib/workYear";
+import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { snapshotFromWork } from "../lib/discovery";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1743,7 +1743,7 @@ export function WorkDetailPage() {
       ? selectedEpisode?.episode.air_date ?? work.release_date
       : work.release_date ?? work.added_at;
   const detailDate = detailDateValue ? formatDetailDate(detailDateValue) : null;
-  const detailYear = releaseYear(work);
+  const detailYear = yearRangeLabel(work);
   const detailDateLabel =
     episodic && selectedEpisode?.episode.air_date
       ? t("pages.workDetail.dateAired")

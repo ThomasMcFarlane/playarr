@@ -2219,6 +2219,7 @@ mod tests {
                 tags,
                 added_at,
                 release_date,
+                end_date: None,
                 monitored,
                 availability,
             })
@@ -2484,6 +2485,7 @@ mod tests {
             // `BrowseSort::ReleaseDateDescending`/`release_window_days` set
             // this explicitly via struct-update syntax over this fixture.
             release_date: None,
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         }
@@ -4113,6 +4115,7 @@ mod real_work_repo_integration {
             tags: vec![],
             added_at: Utc::now(),
             release_date: Some(Utc::now() - chrono::Duration::days(30)),
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         };

@@ -7674,6 +7674,15 @@ export interface components {
             /** Format: date-time */
             added_at: string;
             availability: components["schemas"]["Availability"];
+            /**
+             * Format: date-time
+             * @description When an ended `Series` last aired, per Sonarr (`lastAired`, else
+             *     `previousAiring`, only while Sonarr reports the series as ended). `None`
+             *     for movies, running series and anything without a known last-aired date.
+             *     Clients show it as the end of the year range ("Series · 2011-2019").
+             *     See `backend/migrations/sqlite/0080_work_end_date.sql`.
+             */
+            end_date?: string | null;
             external_refs: components["schemas"]["ExternalRef"][];
             genres: string[];
             /** Format: uuid */

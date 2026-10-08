@@ -1246,6 +1246,7 @@ mod tests {
             tags: vec![],
             added_at: Utc::now(),
             release_date: None,
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         };

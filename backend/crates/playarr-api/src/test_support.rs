@@ -824,6 +824,7 @@ pub async fn seed_movie(state: &TestState, title: &str) -> Uuid {
         tags: vec![],
         added_at: Utc::now(),
         release_date: None,
+        end_date: None,
         monitored: true,
         availability: Availability::Available,
     };
@@ -849,6 +850,7 @@ pub async fn seed_series_with_tvdb(state: &TestState, title: &str, tvdb_id: &str
         tags: vec![],
         added_at: Utc::now(),
         release_date: None,
+        end_date: None,
         monitored: true,
         availability: Availability::Pending,
     };
@@ -990,6 +992,7 @@ pub async fn seed_movie_with_tags(state: &TestState, title: &str, tags: &[&str])
         tags: tags.iter().map(|t| t.to_string()).collect(),
         added_at: Utc::now(),
         release_date: None,
+        end_date: None,
         monitored: true,
         availability: Availability::Available,
     };

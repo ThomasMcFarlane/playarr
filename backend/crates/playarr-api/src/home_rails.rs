@@ -1197,6 +1197,7 @@ mod tests {
             tags: vec![],
             added_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
             release_date: None,
+            end_date: None,
             monitored: true,
             availability: Availability::Available,
         }

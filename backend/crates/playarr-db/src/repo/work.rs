@@ -133,6 +133,7 @@ impl SqlxWorkRepo {
         let tags: String = row.try_get("tags")?;
         let added_at: String = row.try_get("added_at")?;
         let release_date: Option<String> = row.try_get("release_date")?;
+        let end_date: Option<String> = row.try_get("end_date")?;
         let monitored: i64 = row.try_get("monitored")?;
         let availability: String = row.try_get("availability")?;
 
@@ -150,6 +151,7 @@ impl SqlxWorkRepo {
             tags: serde_json::from_str(&tags)?,
             added_at: parse_datetime(&added_at)?,
             release_date: release_date.map(|raw| parse_datetime(&raw)).transpose()?,
+            end_date: end_date.map(|raw| parse_datetime(&raw)).transpose()?,
             monitored: bool_from_i64(monitored),
             availability: availability_from_str(&availability)?,
         })
@@ -160,7 +162,7 @@ impl SqlxWorkRepo {
 impl WorkRepo for SqlxWorkRepo {
     async fn get(&self, id: Uuid) -> Result<Work, DbError> {
         let sql = "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, release_date, monitored, availability FROM works WHERE id = ?";
+                 added_at, release_date, end_date, monitored, availability FROM works WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -179,7 +181,7 @@ impl WorkRepo for SqlxWorkRepo {
         // `playarr_model::folder`) never appear in catalogue enumeration;
         // they stay reachable by id for playback and detail lookups.
         let sql = "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.release_date, w.monitored, w.availability FROM works w \
+                 w.tags, w.added_at, w.release_date, w.end_date, w.monitored, w.availability FROM works w \
                  WHERE w.kind = ? \
                  AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
                                  WHERE r.work_id = w.id AND r.provider = ?) \
@@ -213,12 +215,12 @@ impl WorkRepo for SqlxWorkRepo {
         let mut tx = self.pool.begin().await?;
 
         let upsert_sql = "INSERT INTO works \
-                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, end_date, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
                  overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
-                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, \
+                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, end_date = excluded.end_date, \
                  monitored = excluded.monitored, availability = excluded.availability";
         sqlx::query(upsert_sql)
             .bind(work.id.to_string())
@@ -231,6 +233,7 @@ impl WorkRepo for SqlxWorkRepo {
             .bind(tags)
             .bind(format_datetime(work.added_at))
             .bind(work.release_date.map(format_datetime))
+            .bind(work.end_date.map(format_datetime))
             .bind(bool_to_i64(work.monitored))
             .bind(availability_to_str(work.availability))
             .execute(&mut *tx)
@@ -275,7 +278,7 @@ impl WorkRepo for SqlxWorkRepo {
         external_id: &str,
     ) -> Result<Option<Work>, DbError> {
         let sql = "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.release_date, w.monitored, w.availability \
+                 w.tags, w.added_at, w.release_date, w.end_date, w.monitored, w.availability \
                  FROM works w \
                  JOIN work_external_refs r ON r.work_id = w.id \
                  WHERE r.provider = ? AND r.external_id = ? LIMIT 1";
@@ -332,6 +335,7 @@ mod tests {
             // `Utc::now()`.
             added_at: Utc::now().trunc_subsecs(3),
             release_date: Some(Utc::now().trunc_subsecs(3) - chrono::Duration::days(14)),
+            end_date: Some(Utc::now().trunc_subsecs(3) - chrono::Duration::days(7)),
             monitored: true,
             availability: Availability::Available,
         }

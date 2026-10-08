@@ -128,6 +128,13 @@ pub struct Work {
     /// so this stays `None` for those kinds. See
     /// `backend/migrations/sqlite/00{11,14}_work_release_date.sql`.
     pub release_date: Option<DateTime<Utc>>,
+    /// When an ended `Series` last aired, per Sonarr (`lastAired`, else
+    /// `previousAiring`, only while Sonarr reports the series as ended). `None`
+    /// for movies, running series and anything without a known last-aired date.
+    /// Clients show it as the end of the year range ("Series · 2011-2019").
+    /// See `backend/migrations/sqlite/0080_work_end_date.sql`.
+    #[serde(default)]
+    pub end_date: Option<DateTime<Utc>>,
     /// Whether Playarr Server should actively track/request missing children of
     /// this work (mirrors the *arr "monitored" concept).
     pub monitored: bool,

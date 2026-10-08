@@ -12,11 +12,24 @@ export function releaseYear(work: Pick<Work, "release_date">): number | null {
   return yearOfDate(work.release_date);
 }
 
-/** "Movie · 2019" style label; falls back to the bare kind label when no year is known. */
+/**
+ * "2011" for a title with a release year, "2011–2019" for an ended series that closed in a later year
+ * (`end_date` is only set by the server once the source reports the series as ended). Null without a release year.
+ */
+export function yearRangeLabel(
+  work: Pick<Work, "release_date"> & { end_date?: string | null },
+): string | null {
+  const start = releaseYear(work);
+  if (start === null) return null;
+  const end = yearOfDate(work.end_date);
+  return end !== null && end > start ? `${start}\u2013${end}` : String(start);
+}
+
+/** "Movie · 2019" (or "Series · 2011–2019") label; falls back to the bare kind label when no year is known. */
 export function labelWithYear(
   label: string,
-  work: Pick<Work, "release_date">,
+  work: Pick<Work, "release_date"> & { end_date?: string | null },
 ): string {
-  const year = releaseYear(work);
-  return year === null ? label : `${label} · ${year}`;
+  const years = yearRangeLabel(work);
+  return years === null ? label : `${label} · ${years}`;
 }
