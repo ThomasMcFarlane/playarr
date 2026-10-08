@@ -343,9 +343,11 @@ async fn attach_actions(
         }
         keys.push(key);
     }
+    let memo = crate::discovery::ResolveMemo::default();
+    let memo = &memo;
     let resolved: HashMap<String, ResolvedTitle> = futures::stream::iter(distinct)
         .map(|(key, snapshot)| async move {
-            match crate::discovery::resolve_snapshot(state, viewer, &snapshot).await {
+            match crate::discovery::resolve_snapshot_with(state, viewer, &snapshot, memo).await {
                 Ok(resolved) => Some((key, resolved)),
                 Err(error) => {
                     tracing::warn!(?error, "calendar action resolution failed");

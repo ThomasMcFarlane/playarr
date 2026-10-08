@@ -509,16 +509,62 @@ pub async fn discover_handler(
 
 /// The library work (visible to the caller) matching a snapshot, by id first
 /// and then by any external ref.
+/// Per-request memo for resolving many snapshots for one viewer (the
+/// calendar resolves hundreds): the viewer's household gate, the request
+/// backend and the viewer's watch progress do not change within a request, so
+/// they are read once instead of once per title.
+#[derive(Default)]
+pub(crate) struct ResolveMemo {
+    gate: tokio::sync::OnceCell<Option<std::sync::Arc<crate::household::HouseholdGate>>>,
+    backend: tokio::sync::OnceCell<RequestBackend>,
+    progress: tokio::sync::OnceCell<Vec<playarr_model::WatchProgress>>,
+}
+
+impl ResolveMemo {
+    async fn gate(
+        &self,
+        state: &AppState,
+        viewer: &CatalogViewer,
+    ) -> Option<std::sync::Arc<crate::household::HouseholdGate>> {
+        self.gate
+            .get_or_init(|| async {
+                state
+                    .household
+                    .gate_for(&viewer.policy, viewer.user_id)
+                    .await
+            })
+            .await
+            .clone()
+    }
+
+    async fn backend(&self, state: &AppState) -> RequestBackend {
+        *self
+            .backend
+            .get_or_init(|| async { state.request_sync.backend().await })
+            .await
+    }
+
+    async fn progress(
+        &self,
+        state: &AppState,
+        viewer: &CatalogViewer,
+    ) -> Result<&Vec<playarr_model::WatchProgress>, ApiError> {
+        self.progress
+            .get_or_try_init(|| async {
+                Ok(state.watch_progress.list_for_user(viewer.user_id).await?)
+            })
+            .await
+    }
+}
+
 async fn find_library_work(
     state: &AppState,
     viewer: &CatalogViewer,
     snap: &TitleSnapshot,
+    memo: &ResolveMemo,
 ) -> Result<Option<Work>, ApiError> {
     let allowed = viewer.allowed_libraries();
-    let gate = state
-        .household
-        .gate_for(&viewer.policy, viewer.user_id)
-        .await;
+    let gate = memo.gate(state, viewer).await;
     let mut ids: Vec<Uuid> = snap.work_id.into_iter().collect();
     for r in &snap.external_refs {
         if let Ok(Some(work)) = state
@@ -587,9 +633,13 @@ async fn request_overlay(
 
 /// The request provider a viewer's request goes to: the Ombi/Seerr
 /// integration when the backend mode selects one, else the first Radarr/Sonarr.
-async fn request_provider(state: &AppState, kind: DiscoveryKind) -> Option<(Uuid, String)> {
-    use playarr_model::requests::{IntegrationKind, RequestBackend};
-    let wanted = match state.request_sync.backend().await {
+async fn request_provider(
+    state: &AppState,
+    kind: DiscoveryKind,
+    memo: &ResolveMemo,
+) -> Option<(Uuid, String)> {
+    use playarr_model::requests::IntegrationKind;
+    let wanted = match memo.backend(state).await {
         RequestBackend::Ombi => Some(IntegrationKind::Ombi),
         RequestBackend::Seerr => Some(IntegrationKind::Seerr),
         _ => None,
@@ -612,17 +662,20 @@ async fn build_action_context(
     viewer: &CatalogViewer,
     snap: &TitleSnapshot,
     work: Option<&Work>,
+    memo: &ResolveMemo,
 ) -> Result<ActionContext, ApiError> {
     let mut ctx = ActionContext {
         kind: Some(snap.kind),
         can_request: can_request(state, viewer),
-        request_instance_id: request_provider(state, snap.kind).await.map(|(id, _)| id),
+        request_instance_id: request_provider(state, snap.kind, memo)
+            .await
+            .map(|(id, _)| id),
         request_unavailable_reason: Some(NO_REQUEST_PROVIDER.into()),
         ..Default::default()
     };
     if ctx.request_instance_id.is_none()
         && !request_instances(state, snap.kind).is_empty()
-        && state.request_sync.backend().await == playarr_model::requests::RequestBackend::Direct
+        && memo.backend(state).await == playarr_model::requests::RequestBackend::Direct
     {
         ctx.request_unavailable_reason =
             Some("The request provider has no default root folder or quality profile".into());
@@ -632,10 +685,7 @@ async fn build_action_context(
     };
     ctx.library_work_id = Some(work.id);
     let allowed = viewer.allowed_libraries();
-    let gate = state
-        .household
-        .gate_for(&viewer.policy, viewer.user_id)
-        .await;
+    let gate = memo.gate(state, viewer).await;
     let detail = state
         .catalog
         .get_by_id_with(
@@ -644,7 +694,7 @@ async fn build_action_context(
         )
         .await
         .ok();
-    let progress = state.watch_progress.list_for_user(viewer.user_id).await?;
+    let progress = memo.progress(state, viewer).await?;
     let for_work: Vec<_> = progress.iter().filter(|p| p.work_id == work.id).collect();
     // list_for_user is newest first.
     ctx.resume = for_work
@@ -679,11 +729,21 @@ pub(crate) async fn resolve_snapshot(
     viewer: &CatalogViewer,
     snap: &TitleSnapshot,
 ) -> Result<ResolvedTitle, ApiError> {
-    let work = find_library_work(state, viewer, snap).await?;
+    resolve_snapshot_with(state, viewer, snap, &ResolveMemo::default()).await
+}
+
+/// [`resolve_snapshot`] sharing a [`ResolveMemo`] across many titles.
+pub(crate) async fn resolve_snapshot_with(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    snap: &TitleSnapshot,
+    memo: &ResolveMemo,
+) -> Result<ResolvedTitle, ApiError> {
+    let work = find_library_work(state, viewer, snap, memo).await?;
     let mut candidates = Vec::new();
     // The snapshot itself is the carrier of identity when nothing else is
     // known, so a title that is not in any library still resolves.
-    let request_instance = request_provider(state, snap.kind).await;
+    let request_instance = request_provider(state, snap.kind, memo).await;
     candidates.push(DiscoveryCandidate {
         kind: snap.kind,
         title: snap.title.clone(),
@@ -726,7 +786,7 @@ pub(crate) async fn resolve_snapshot(
     }
     let mut merged = merge_candidates(candidates);
     let title = merged.remove(0);
-    let ctx = build_action_context(state, viewer, snap, work.as_ref()).await?;
+    let ctx = build_action_context(state, viewer, snap, work.as_ref(), memo).await?;
     let mut actions = compute_actions(&ctx);
     let in_watchlist = {
         let mut keys = vec![
@@ -851,7 +911,7 @@ pub async fn add_watchlist_handler(
         return Err(ApiError::bad_request("title must not be empty"));
     }
     // Only keep a work id the caller may actually see.
-    let work = find_library_work(&state, &viewer, &snap).await?;
+    let work = find_library_work(&state, &viewer, &snap, &ResolveMemo::default()).await?;
     let mut refs = snap.external_refs.clone();
     if let Some(w) = &work {
         for r in &w.external_refs {
@@ -976,7 +1036,10 @@ pub async fn request_title_handler(
             "Your account is not allowed to request titles",
         ));
     }
-    if find_library_work(&state, &viewer, &snap).await?.is_some() {
+    if find_library_work(&state, &viewer, &snap, &ResolveMemo::default())
+        .await?
+        .is_some()
+    {
         return Err(ApiError::conflict("this title is already in the library"));
     }
     let unprocessable =
