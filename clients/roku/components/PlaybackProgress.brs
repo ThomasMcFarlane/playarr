@@ -66,7 +66,9 @@ sub ProgressApplyResume(data as Object)
     if m.resumeSeconds <> invalid then seekTo = m.resumeSeconds - m.sourceOffsetSeconds
     m.resumeSeconds = invalid
     m.startRetriesLeft = 0
-    if m.sourceOffsetSeconds > 0 then m.startRetriesLeft = 15
+    ' An on-demand transcode answers 404 until its first playlist exists (about 20 s for a long film), whether or not it starts at a
+    ' resume point: keep retrying every 3 s for 45 s, as the web player does.
+    if m.sourceOffsetSeconds > 0 or data.mode = "hls" then m.startRetriesLeft = 15
     if seekTo <> invalid and seekTo >= 1 then m.video.seek = seekTo
 end sub
 

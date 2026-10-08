@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: a long title whose on-demand transcode takes about twenty seconds to publish its first playlist now keeps retrying quietly instead of failing on the first 404 and returning to the detail page.
 - tvOS series page: the focused episode is no longer scaled twice.
 - Web: the remote no longer dead-ends in the shell action column (Filters, Create, Calendar link): DOWN past the last button and LEFT reach the nearest content item (the alphabet first on Library pages), UP past the first button reaches the header, RIGHT stays put.
 - Android TV: playlist, album and similar-title tiles focus with the media-card shadow and a draw-only lift (no ring, no scale), and the profile picker's lift no longer shifts layout bounds.

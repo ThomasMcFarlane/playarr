@@ -5548,6 +5548,9 @@ sub onVideoStateChanged()
         sendPlaybackEvent({ kind: "pause", position_ms: positionMs })
     else if state = "playing" and m.lastVideoState = "paused"
         sendPlaybackEvent({ kind: "resume", position_ms: positionMs })
+    else if state = "finished" and m.playbackStarted <> true and m.video.errorCode <> 0 and ProgressRetryStart()
+        ' The Video node reports "finished" right after a start error; nothing has played, so this is a failed start, not an end.
+        m.playerSpinner.control = "start"
     else if state = "finished"
         showEndOfPlayback()
     else if state = "error" and ProgressRetryStart()

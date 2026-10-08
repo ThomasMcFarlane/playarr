@@ -84,6 +84,7 @@ class ProgressWiringTests(unittest.TestCase):
         self.assertIn('state = "error" and ProgressRetryStart()', MAIN)
         self.assertIn("if m.playbackStarted = true or m.playbackEnded then return false", PROGRESS)
         self.assertIn("m.startRetriesLeft = 15", PROGRESS)
+        self.assertIn('data.mode = "hls"', PROGRESS)
 
     def test_exit_flush_does_not_use_the_shared_queue(self) -> None:
         body = re.search(r"sub persistPlaybackProgress.*?\nend sub", PROGRESS, re.S).group(0)
