@@ -4,7 +4,7 @@ import type { AvailabilityLag, CalendarSourceStatus } from "@playarr-tv/api-clie
 import { describe, expect, it } from "vitest";
 import { availabilityLagLines } from "../components/AvailabilityLag";
 import { translations } from "../lib/i18n/translations";
-import { CalendarSourceBanner, formatRangeLabel } from "./Calendar";
+import { formatRangeLabel } from "./Calendar";
 
 const en = translations.en;
 const t = (key: keyof typeof en, params?: Record<string, string | number>) =>
@@ -15,20 +15,6 @@ const sources: CalendarSourceStatus[] = [
   { source_instance_id: "2", name: "4K Radarr", kind: "radarr", status: "unreachable", error: "timed out", entry_count: 0 },
   { source_instance_id: "3", name: "Music", kind: "lidarr", status: "rejected", entry_count: 0 },
 ];
-
-describe("CalendarSourceBanner", () => {
-  it("names every failing source with its reason and omits healthy ones", () => {
-    const markup = renderToStaticMarkup(<CalendarSourceBanner sources={sources} t={t} />);
-    expect(markup).toContain('role="alert"');
-    expect(markup).toContain("4K Radarr: unreachable (timed out)");
-    expect(markup).toContain("Music: rejected the request");
-    expect(markup).not.toContain("Main Sonarr");
-  });
-
-  it("renders nothing when every source is healthy", () => {
-    expect(renderToStaticMarkup(<CalendarSourceBanner sources={[sources[0]!]} t={t} />)).toBe("");
-  });
-});
 
 describe("formatRangeLabel", () => {
   it("renders the month and the week range with Intl", () => {

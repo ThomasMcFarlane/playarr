@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   CalendarEntry,
   CalendarMediaKind,
   CalendarResponse,
-  CalendarSourceStatus,
 } from "@playarr-tv/api-client";
 import { useAsyncData } from "@playarr-tv/api-client/react";
 import { CalendarLink } from "../components/CalendarLink";
@@ -24,10 +23,14 @@ import { PeriodPicker } from "../components/shell";
 import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useToday } from "../lib/useToday";
 import {
   CALENDAR_VIEWS,
   anchorForView,
   addDays,
+  createAnchorStepper,
+  createFocusSelection,
+  releaseInstant,
   buildMonthGrid,
   buildWeekDays,
   defaultCalendarView,
@@ -35,14 +38,12 @@ import {
   itemAvailability,
   entryLocalDay,
   episodeCode,
-  failedSources,
   fetchWindow,
   formatHumanDuration,
   groupByLocalDay,
   groupSeriesEpisodes,
   localDayOf,
   parseDay,
-  shiftAnchor,
   sizedPosterUrl,
   visibleRange,
   weekStartsOn,
@@ -157,11 +158,7 @@ const STATE_KEYS = {
   notMonitored: "pages.calendar.stateNotMonitored",
 } as const satisfies Record<string, TranslationKey>;
 
-const SOURCE_STATUS_KEYS: Record<Exclude<CalendarSourceStatus["status"], "ok">, TranslationKey> = {
-  unreachable: "pages.calendar.sourceUnreachable",
-  rejected: "pages.calendar.sourceRejected",
-  error: "pages.calendar.sourceError",
-};
+const FOCUS_URL_DEBOUNCE_MS = 250;
 
 function utcFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
@@ -182,9 +179,17 @@ export function formatRangeLabel(view: CalendarView, anchor: Day, firstDay: numb
 }
 
 function entryTime(entry: CalendarEntry): Date | null {
-  if (!entry.release_at) return null;
-  const date = new Date(entry.release_at);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return releaseInstant(entry);
+}
+
+const timeFormatters = new Map<string, Intl.DateTimeFormat>();
+function formatEntryTime(locale: string, time: Date): string {
+  let formatter = timeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { timeStyle: "short" });
+    timeFormatters.set(locale, formatter);
+  }
+  return formatter.format(time);
 }
 
 function entrySubtitle(entry: CalendarEntry): string | null {
@@ -192,35 +197,6 @@ function entrySubtitle(entry: CalendarEntry): string | null {
     (part): part is string => Boolean(part)
   );
   return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function sourceReason(source: CalendarSourceStatus, t: TFunction): string {
-  const label = t(SOURCE_STATUS_KEYS[source.status as Exclude<CalendarSourceStatus["status"], "ok">]);
-  return source.error ? `${label} (${source.error})` : label;
-}
-
-/** Visible banner for sources that did not answer cleanly; never collapsed away. */
-export function CalendarSourceBanner({
-  sources,
-  t,
-}: {
-  sources: readonly CalendarSourceStatus[];
-  t: TFunction;
-}) {
-  const failed = failedSources(sources);
-  if (failed.length === 0) return null;
-  return (
-    <div className="calendar-banner" role="alert">
-      <strong>{t("pages.calendar.sourcesBannerTitle", { count: failed.length })}</strong>
-      <ul>
-        {failed.map((source) => (
-          <li key={source.source_instance_id}>
-            {t("pages.calendar.sourceLine", { name: source.name, reason: sourceReason(source, t) })}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 function StateBadge({ entry, t }: { entry: CalendarEntry; t: TFunction }) {
@@ -236,7 +212,8 @@ interface SelectHandlers {
   /** Agenda: moving focus onto an entry selects it, so the details panel follows the remote. */
   selectOnFocus?: boolean;
   selectedKey: string | null;
-  onSelect: (item: CalendarItem, target: HTMLElement) => void;
+  /** `source: "focus"` marks a selection that only followed D-pad focus. */
+  onSelect: (item: CalendarItem, target: HTMLElement, source?: "focus") => void;
 }
 
 function groupState(group: SeriesGroup): "inLibrary" | "monitored" | "notMonitored" {
@@ -273,14 +250,21 @@ function Poster({ entry }: { entry: CalendarEntry }) {
   );
 }
 
-function ItemRow({
+const ItemRow = memo(function ItemRow({
   item,
   t,
   locale,
-  selectedKey,
+  selected,
   onSelect,
   selectOnFocus,
-}: { item: CalendarItem; t: TFunction; locale: string } & SelectHandlers) {
+}: {
+  item: CalendarItem;
+  t: TFunction;
+  locale: string;
+  selected: boolean;
+  onSelect: SelectHandlers["onSelect"];
+  selectOnFocus?: boolean;
+}) {
   const first = itemEntry(item);
   const time = entryTime(first);
   const isGroup = item.kind === "series";
@@ -288,7 +272,6 @@ function ItemRow({
     ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
     : entrySubtitle(item.entry);
   const state = isGroup ? groupState(item) : entryState(first);
-  const selected = selectedKey === item.key;
   return (
     <li>
       <button
@@ -297,7 +280,7 @@ function ItemRow({
         data-navigation-focus-key={`calendar:${item.key}`}
         aria-pressed={selected}
         onClick={(event) => onSelect(item, event.currentTarget)}
-        onFocus={selectOnFocus && !selected ? (event) => onSelect(item, event.currentTarget) : undefined}
+        onFocus={selectOnFocus && !selected ? (event) => onSelect(item, event.currentTarget, "focus") : undefined}
       >
         <Poster entry={first} />
         <span className="calendar-entry-body">
@@ -305,9 +288,7 @@ function ItemRow({
           {subtitle ? <span className="calendar-entry-subtitle">{subtitle}</span> : null}
           <span className="calendar-entry-meta">
             <span>
-              {time
-                ? new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(time)
-                : t("pages.calendar.allDay")}
+              {time ? formatEntryTime(locale, time) : t("pages.calendar.allDay")}
             </span>
             <span>{t(RELEASE_KEYS[first.release_type])}</span>
             {isGroup ? null : <span>{t(KIND_KEYS[first.media_kind])}</span>}
@@ -317,7 +298,7 @@ function ItemRow({
       </button>
     </li>
   );
-}
+});
 
 function SkeletonRow() {
   return (
@@ -350,6 +331,10 @@ function DaySections({
   showEmpty: boolean;
   loading?: boolean;
 } & SelectHandlers) {
+  const dayItems = useMemo(
+    () => new Map(days.map((group) => [group.day, groupSeriesEpisodes(group.entries)] as const)),
+    [days]
+  );
   return (
     <div className={`calendar-days calendar-days-${showEmpty ? "week" : "agenda"}`}>
       {days
@@ -374,13 +359,13 @@ function DaySections({
                 </ul>
               ) : group.entries.length > 0 ? (
                 <ul>
-                  {groupSeriesEpisodes(group.entries).map((item) => (
+                  {(dayItems.get(group.day) ?? []).map((item) => (
                     <ItemRow
                       key={item.key}
                       item={item}
                       t={t}
                       locale={locale}
-                      selectedKey={selectedKey}
+                      selected={selectedKey === item.key}
                       onSelect={onSelect}
                       selectOnFocus={selectOnFocus}
                     />
@@ -777,7 +762,7 @@ export function CalendarPage() {
   useDocumentTitle(t("pages.calendar.title"));
 
   const firstDay = useMemo(() => weekStartsOn(locale), [locale]);
-  const [today] = useState<Day>(() => localDayOf(new Date()));
+  const today = useToday();
   const [defaultView] = useState<CalendarView>(() =>
     defaultCalendarView({
       isTv: IS_TV,
@@ -789,10 +774,20 @@ export function CalendarPage() {
   );
 
   const searchKey = searchParams.toString();
-  const filters = useMemo(() => parseCalendarFilters(new URLSearchParams(searchKey)), [searchKey]);
+  // Filters depend only on the filter params: moving the selection must not
+  // produce a new filters object and re-group the whole list.
+  const filterKey = useMemo(() => {
+    const params = new URLSearchParams(searchKey);
+    for (const key of ["selected", "panel", "view", "date"]) params.delete(key);
+    return params.toString();
+  }, [searchKey]);
+  const filters = useMemo(() => parseCalendarFilters(new URLSearchParams(filterKey)), [filterKey]);
   const urlState = useMemo(() => parseCalendarUrl(new URLSearchParams(searchKey)), [searchKey]);
   const view: CalendarView = urlState.view ?? defaultView;
   const anchor: Day = anchorForView(view, urlState.date ?? filters.from ?? today);
+  const stepperRef = useRef<ReturnType<typeof createAnchorStepper> | null>(null);
+  stepperRef.current ??= createAnchorStepper();
+  const stepAnchor = (direction: -1 | 1) => setAnchor(stepperRef.current!.step(view, anchor, direction));
   const panel = urlState.panel;
 
   const updateParams = useCallback(
@@ -808,6 +803,17 @@ export function CalendarPage() {
 
   const [reloadNonce, setReloadNonce] = useState(0);
   const openerRef = useRef<HTMLElement | null>(null);
+  const [focusSelected, setFocusSelected] = useState<string | null>(null);
+  const focusSelectionRef = useRef(
+    createFocusSelection(FOCUS_URL_DEBOUNCE_MS, (key) => {
+      commitSelectedRef.current(key);
+    })
+  );
+  const commitSelectedRef = useRef<(key: string | null) => void>(() => undefined);
+  commitSelectedRef.current = (key) => {
+    updateParams((params) => writeCalendarUrl(params, { selected: key }));
+    setFocusSelected(null);
+  };
 
   const range = visibleRange(view, anchor, firstDay);
   const fetchRange = fetchWindow(range);
@@ -831,30 +837,57 @@ export function CalendarPage() {
     [data]
   );
 
-  const selectedItem = items.find((item) => item.key === urlState.selected) ?? null;
+  const selectedKey = focusSelected ?? urlState.selected;
+  const selectedItem = items.find((item) => item.key === selectedKey) ?? null;
   // Agenda is master-detail: with nothing explicitly selected the first item is previewed.
   const detailItem = view === "agenda" ? (selectedItem ?? items[0] ?? null) : selectedItem;
 
-  function select(item: CalendarItem, target: HTMLElement) {
+  function select(item: CalendarItem, target: HTMLElement, source?: "focus") {
     openerRef.current = target;
-    updateParams((params) => writeCalendarUrl(params, { selected: item.key }));
+    if (source !== "focus") {
+      setFocusSelected(null);
+      focusSelectionRef.current.commitNow(item.key);
+      return;
+    }
+    // D-pad focus moves the details panel at once; the URL follows once the
+    // focus settles, so key repeat does not run a router navigation per press.
+    setFocusSelected(item.key);
+    focusSelectionRef.current.focus(item.key);
   }
+  const selectRef = useRef(select);
+  selectRef.current = select;
+  const stableSelect = useCallback(
+    (item: CalendarItem, target: HTMLElement, source?: "focus") => selectRef.current(item, target, source),
+    []
+  );
+  useEffect(() => {
+    const selection = focusSelectionRef.current;
+    return () => selection.cancel();
+  }, []);
+  /** The search string with any selection still waiting to be written to the URL. */
+  const currentSearch = () => {
+    const pending = focusSelectionRef.current.pending();
+    if (pending === null) return location.search;
+    const next = writeCalendarUrl(new URLSearchParams(location.search), { selected: pending }).toString();
+    return next ? `?${next}` : "";
+  };
 
   function clearSelection() {
-    updateParams((params) => writeCalendarUrl(params, { selected: null }));
+    setFocusSelected(null);
+    focusSelectionRef.current.commitNow(null);
     openerRef.current?.focus({ preventScroll: true });
   }
   const clearSelectionCb = useCallback(clearSelection, [updateParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openRoute(route: string) {
     const origin = captureNavigationLayer(location.pathname, location.key, openerRef.current);
-    navigate(route, { state: { backTo: `/calendar${location.search}`, navigationOrigin: origin } });
+    navigate(route, { state: { backTo: `/calendar${currentSearch()}`, navigationOrigin: origin } });
   }
 
   function playFile(mediaFileId: string, title: string) {
     const origin = captureNavigationLayer(location.pathname, location.key, openerRef.current);
     navigate(`/player/${mediaFileId}`, {
-      state: { title, backTo: `/calendar${location.search}`, mediaFileId, navigationOrigin: origin },
+      state: { title, backTo: `/calendar${currentSearch()}`, mediaFileId, navigationOrigin: origin },
     });
   }
 
@@ -867,9 +900,8 @@ export function CalendarPage() {
 
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
-  const sources = data?.sources ?? [];
   const activeCount = activeFilterCount(filters);
-  const selectProps: SelectHandlers = { selectedKey: view === "agenda" ? (detailItem?.key ?? null) : (selectedItem?.key ?? null), onSelect: select };
+  const selectProps: SelectHandlers = { selectedKey: view === "agenda" ? (detailItem?.key ?? null) : (selectedItem?.key ?? null), onSelect: stableSelect };
 
   const stateMessage =
     state.status === "error" ? (
@@ -964,7 +996,7 @@ export function CalendarPage() {
 
   const navButtons = (
     <>
-      <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => setAnchor(shiftAnchor(view, anchor, -1))}>
+      <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
         <span aria-hidden="true">←</span>
       </Button>
       <Button
@@ -974,7 +1006,7 @@ export function CalendarPage() {
       >
         {t("pages.calendar.today")}
       </Button>
-      <Button variant="icon" aria-label={t("pages.calendar.next")} onClick={() => setAnchor(shiftAnchor(view, anchor, 1))}>
+      <Button variant="icon" aria-label={t("pages.calendar.next")} onClick={() => stepAnchor(1)}>
         <span aria-hidden="true">→</span>
       </Button>
     </>
@@ -996,14 +1028,14 @@ export function CalendarPage() {
             label: t("pages.calendar.navigationLabel"),
             hideOnPhone: true,
             items: [
-              { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => setAnchor(shiftAnchor(view, anchor, -1)) },
+              { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => stepAnchor(-1) },
               {
                 id: "today",
                 label: t("pages.calendar.today"),
                 onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
                 buttonProps: { "data-tv-focus-default": true },
               },
-              { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => setAnchor(shiftAnchor(view, anchor, 1)) },
+              { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => stepAnchor(1) },
             ],
           },
           {
@@ -1042,7 +1074,6 @@ export function CalendarPage() {
         </div>
       </div>
 
-      <CalendarSourceBanner sources={sources} t={t} />
       {stateMessage}
       <div
         className={`calendar-scroll${view === "agenda" ? " is-master-detail" : ""}${stateMessage ? " is-hidden" : ""}`}

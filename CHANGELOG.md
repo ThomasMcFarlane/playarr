@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web calendar: the source-error banner that shifted the grid is gone; the "today" marker follows midnight; rapid Previous/Next presses no longer drop steps; date-only releases stay on their own day in every time zone; moving through the agenda no longer rewrites the URL and regroups the list on each key.
 - Web: the Watchlist no longer shows the developer "Recording is not available yet" line; `/household` uses the standard page frame; Request latency is hidden from non-administrators; every page error state has a Retry that D-pad focus lands on; cast and crew photos come through the server as 240 px thumbnails instead of the provider's original.
 - Server: `GET /api/v1/catalog/{id}/similar` answers 200 with an empty list for a title without an embedding (404 only for an unknown title); `GET /api/v1/users/me/capabilities` reports `is_admin`; new `GET /api/v1/artwork/person/{person_id}` serves resized, cached headshots.
 - Web: on the music artist page the mini player no longer overlaps the left edge of the track list (1920x1080 and 1280x720, both themes).

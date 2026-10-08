@@ -1,10 +1,15 @@
 import type { CalendarEntry, CalendarSourceStatus } from "@playarr-tv/api-client";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AGENDA_DAYS,
   MAX_RANGE_DAYS,
   addDays,
   addMonths,
+  createAnchorStepper,
+  createFocusSelection,
+  msUntilNextLocalMidnight,
+  releaseInstant,
+  watchLocalDay,
   anchorForView,
   buildMonthGrid,
   buildWeekDays,
@@ -267,5 +272,115 @@ describe("sizedPosterUrl", () => {
     expect(sizedPosterUrl("https://image.tmdb.org/t/p/w500/abc.jpg")).toBe("https://image.tmdb.org/t/p/w500/abc.jpg");
     expect(sizedPosterUrl("https://example.com/t/p/original/abc.jpg")).toBe("https://example.com/t/p/original/abc.jpg");
     expect(sizedPosterUrl("not a url")).toBe("not a url");
+  });
+});
+
+const entryAt = (release_at: string | null, date = "2026-10-08"): CalendarEntry =>
+  ({ id: "e", title: "T", date, release_at, media_kind: "movie", release_type: "digital" }) as unknown as CalendarEntry;
+
+describe("date-only releases stored at midnight UTC (K22)", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it.each(["America/Los_Angeles", "America/Sao_Paulo", "UTC", "Pacific/Auckland"])(
+    "keeps the release's own date in %s",
+    (tz) => {
+      process.env.TZ = tz;
+      const entry = entryAt("2026-10-08T00:00:00Z");
+      expect(releaseInstant(entry)).toBeNull();
+      expect(entryLocalDay(entry)).toBe("2026-10-08");
+    }
+  );
+
+  it("still places a real instant on the viewer's local day", () => {
+    process.env.TZ = "America/Los_Angeles";
+    const entry = entryAt("2026-10-08T02:00:00Z");
+    expect(entryLocalDay(entry)).toBe("2026-10-07");
+  });
+});
+
+describe("createAnchorStepper (K5)", () => {
+  it("builds rapid presses on the previous target, not the stale render", () => {
+    let t = 0;
+    const stepper = createAnchorStepper(400, () => t);
+    expect(stepper.step("week", "2026-10-05", 1)).toBe("2026-10-12");
+    t += 20;
+    expect(stepper.step("week", "2026-10-05", 1)).toBe("2026-10-19");
+    t += 20;
+    expect(stepper.step("week", "2026-10-05", -1)).toBe("2026-10-12");
+  });
+  it("re-reads the rendered anchor once presses settle", () => {
+    let t = 0;
+    const stepper = createAnchorStepper(400, () => t);
+    stepper.step("month", "2026-10-01", 1);
+    t += 1000;
+    expect(stepper.step("month", "2026-03-01", 1)).toBe("2026-04-01");
+  });
+});
+
+describe("local day rollover (K4)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("computes the time to the next local midnight", () => {
+    expect(msUntilNextLocalMidnight(new Date(2026, 9, 8, 23, 59, 0))).toBe(60_000);
+  });
+
+  it("reports the new day after midnight passes", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 8, 23, 59, 30));
+    const seen: string[] = [];
+    const watcher = watchLocalDay((day) => seen.push(day));
+    vi.advanceTimersByTime(29_000);
+    expect(seen).toEqual([]);
+    vi.advanceTimersByTime(2_000);
+    expect(seen).toEqual(["2026-10-09"]);
+    vi.advanceTimersByTime(24 * 3600 * 1000);
+    expect(seen).toEqual(["2026-10-09", "2026-10-10"]);
+    watcher.cancel();
+  });
+
+  it("refresh catches a rollover the timer missed while suspended", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 8, 12, 0, 0));
+    const seen: string[] = [];
+    const watcher = watchLocalDay((day) => seen.push(day));
+    vi.setSystemTime(new Date(2026, 9, 9, 8, 0, 0));
+    watcher.refresh();
+    expect(seen).toEqual(["2026-10-09"]);
+    watcher.cancel();
+  });
+});
+
+describe("createFocusSelection (K1)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("writes the URL once after a burst of focus moves", () => {
+    vi.useFakeTimers();
+    const commit = vi.fn();
+    const selection = createFocusSelection(250, commit);
+    for (const key of ["a", "b", "c", "d"]) {
+      selection.focus(key);
+      vi.advanceTimersByTime(60);
+    }
+    expect(commit).not.toHaveBeenCalled();
+    expect(selection.pending()).toBe("d");
+    vi.advanceTimersByTime(250);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith("d");
+    expect(selection.pending()).toBeNull();
+  });
+
+  it("an explicit choice commits immediately and cancels the pending one", () => {
+    vi.useFakeTimers();
+    const commit = vi.fn();
+    const selection = createFocusSelection(250, commit);
+    selection.focus("a");
+    selection.commitNow("b");
+    vi.advanceTimersByTime(1000);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith("b");
   });
 });
