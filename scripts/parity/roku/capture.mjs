@@ -72,7 +72,7 @@ const screens = {
   "player-controls": async () => { await toHome(); await presses(["Select", "Select"], 25); await press("play", 2); await press("Down", 2); },
   "player-quality-menu": async () => { await toHome(); await presses(["Select", "Select"], 25); await press("play", 2); await press("Up", 2); },
   // Scrolled states (owner rule): a Home rail several cards in, a library grid several rows down, a long settings panel.
-  "home-scrolled": async () => { await toHome(); await press("Down", 2); await presses(Array(7).fill("Right"), 0.8); await sleep(2); },
+  "home-scrolled": async () => { await toHome(); await press("Down", 2); await presses(Array(7).fill("Right"), 1.4); await sleep(3); },
   "movies-scrolled": async () => { await toHome(); await dock(3, 14); await presses(Array(7).fill("Down"), 0.8); await sleep(3); },
   "settings-player-scrolled": async () => { await settings(3); await press("Right", 1); await presses(Array(11).fill("Down"), 0.7); await sleep(1); },
   settings: async () => { await settings(0); },

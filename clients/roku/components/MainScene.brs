@@ -3822,7 +3822,7 @@ sub finishHomeLoad()
         isActiveRail = false
         if railIndex = 0 then isActiveRail = true
         buildRailContent(rail.row, rail.works, isActiveRail)
-        m.visibleRails.Push({ row: rail.row, works: rail.works, first: 0, col: 0, last: 0, jumping: -1 })
+        m.visibleRails.Push({ row: rail.row, works: rail.works, first: 0, col: 0, last: 0, jumping: -1, rightAligned: false })
         ' Rails sit 319 px apart (web .tv-home-rail rhythm).
         y += 319
         railIndex = railIndex + 1
@@ -3927,13 +3927,28 @@ sub homeRailTrack(row as Object, idx as Integer)
             else
                 d = idx - rail.last
                 while d > 0
-                    if rail.col < 3 then rail.col = rail.col + 1 else rail.first = rail.first + 1
+                    if rail.col < 3
+                        rail.col = rail.col + 1
+                    else
+                        rail.first = rail.first + 1
+                        rail.rightAligned = true
+                    end if
                     d = d - 1
                 end while
                 while d < 0
-                    if rail.col > 0 then rail.col = rail.col - 1 else rail.first = rail.first - 1
+                    if rail.col > 0
+                        rail.col = rail.col - 1
+                    else
+                        rail.first = rail.first - 1
+                        rail.rightAligned = false
+                    end if
                     d = d + 1
                 end while
+                ' Web scrolls a track by the least amount that keeps the focused card inside it: moving right the card ends 33.9 px
+                ' further right than the whole-card step the RowList takes, moving left it lines up with the track start.
+                shift = 0.0
+                if rail.rightAligned = true and rail.first > 0 then shift = 33.9
+                rail.row.translation = [-96 + shift, 64.9]
             end if
             rail.last = idx
             return
@@ -6312,11 +6327,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' From the leftmost proxy, Right returns into the focused rail and
         ' moves on to the second card (the proxy only exists so Left can reach
         ' the dock, so one Right press must still move the hero selection).
-        focusCurrentHomeRail()
         idx = m.homeFocusIndex
         if idx >= 0 and idx < m.visibleRails.Count()
             if m.visibleRails[idx].works.Count() > 1 then m.visibleRails[idx].row.jumpToRowItem = [0, 1]
         end if
+        focusCurrentHomeRail()
         return true
     else if state = "home" and key = "OK" and m.homeLeftProxy <> invalid and m.homeLeftProxy.IsInFocusChain()
         ' Select the leftmost card of the focused rail.
