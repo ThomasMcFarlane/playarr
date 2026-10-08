@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrCardMotions
+import io.playarr.shared.designsystem.page.mediaCardLift
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
@@ -3038,7 +3040,7 @@ internal fun ExperienceLandscapeCard(
             ),
     ) {
     // The lift is applied here, inside the focus target, so focus search keeps the unlifted bounds.
-    Column(Modifier.fillMaxWidth().then(if (webTvStyle) Modifier.mediaCardLift(focused, TvCardMotions.Home) else Modifier)) {
+    Column(Modifier.fillMaxWidth().then(if (webTvStyle) Modifier.mediaCardLift(focused, PlayarrCardMotions.Home) else Modifier)) {
         WebShadowedBox(
             shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) (if (focused) webRemoteFocusShadows else webCardShadows(false, !webTvLibrary, false)) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
@@ -3344,7 +3346,7 @@ private fun LibraryCoverCard(
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
     // Focused media card: soft shadow plus a draw-only lift on the content inside the focus target, no ring.
-    Column(Modifier.fillMaxWidth().mediaCardLift(focused, TvCardMotions.Library)) {
+    Column(Modifier.fillMaxWidth().mediaCardLift(focused, PlayarrCardMotions.Library)) {
         Box {
             WebShadowedBox(
                 shadows = if (focused) webCardFocusShadows else webCardRestShadows,
@@ -4381,7 +4383,7 @@ private fun WebSearchResultCard(
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
             .combinedClickable(onClick = { onSelected(); onClick() }, onLongClick = onContext),
     ) {
-    Column(Modifier.fillMaxWidth().mediaCardLift(focused, TvCardMotions.Search)) {
+    Column(Modifier.fillMaxWidth().mediaCardLift(focused, PlayarrCardMotions.Search)) {
         WebShadowedBox(
             shadows = if (focused) webSearchFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.48.dp),
