@@ -1,0 +1,1 @@
+- Web: a focused card's soft shadow and lift are no longer clipped to a box by the Home and detail rails, and the rails keep their edge fades exactly where they were (a visual check pins the right-edge fade in both themes).

@@ -7369,6 +7369,9 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
    */
   padding: 44px clamp(22px, calc(2.4 * var(--vw)), 46px) 80px 36px;
   margin: -26px 0 -80px -36px;
+  /* The extra left room must not move the right edge, where the card runs under the fade. */
+  width: calc(100% + 28px);
+  max-width: calc(100% + 28px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
@@ -7967,6 +7970,8 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   padding: 44px clamp(22px, calc(2.4 * var(--vw)), 46px) 80px
     calc(var(--tv-track-left-fade) + 36px);
   margin: -26px 0 -80px -36px;
+  width: calc(100% + 28px);
+  max-width: calc(100% + 28px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;

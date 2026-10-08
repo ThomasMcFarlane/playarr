@@ -50,6 +50,7 @@ const LAYOUTS = {
 const layoutIds = opt("layouts", "tv,desktop,mobile").split(",");
 const themes = opt("themes", "light,dark").split(",");
 const update = args.includes("--update");
+const railEdgeOnly = args.includes("--rail-edge-only");
 const referenceFrom = opt("reference-from", "");
 const outDir = resolve(opt("out", join(tmpdir(), "layout-parity")));
 const PINS = join(repo, "docs/parity/web/layout");
@@ -268,6 +269,49 @@ if (referenceFrom) {
 }
 
 // --- checks --------------------------------------------------------------------------------------------------------
+// --- rail edge fade ------------------------------------------------------------------------------------------------
+// A rail that runs off screen fades into the gutter on its right edge, with no hard edge and no box over the card. The
+// pin is the geometry before the focused-card shadow room was added (#286 broke it and was reverted), so a change to the
+// rail's padding or margins that moves the fade or clips the card fails here, in both themes.
+const RAIL_EDGE_CLIP = { x: 1500, y: 330, width: 420, height: 670 };
+const RAIL_EDGE_TOLERANCE = 400;
+async function railEdgeShot(theme) {
+  const page = await newPage("tv", theme);
+  await page.goto(`${base}/`, { waitUntil: "load" });
+  await page.addStyleTag({ content: FREEZE });
+  await page.waitForSelector(".tv-home-card", { timeout: 20000 });
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const png = decode(await page.screenshot({ clip: RAIL_EDGE_CLIP, animations: "disabled", caret: "hide" }));
+  await page.context().close();
+  return png;
+}
+for (const theme of themes) {
+  const png = await railEdgeShot(theme);
+  const pinPath = join(PINS, "rail-edge", `${theme}.png`);
+  if (update) {
+    mkdirSync(dirname(pinPath), { recursive: true });
+    writeFileSync(pinPath, PNG.sync.write(png));
+    notes.push(`wrote ${pinPath.replace(`${repo}/`, "")}`);
+  } else {
+    const expected = read(pinPath);
+    if (!expected) fail(`${theme} rail edge fade: pin is missing (run with --update)`);
+    else {
+      const result = diffImages(expected, png, `${theme}-rail-edge`);
+      if (result.bad > RAIL_EDGE_TOLERANCE) fail(`${theme} rail edge fade differs from the pin by ${result.bad} pixels`);
+      else console.log(`ok    ${theme} rail edge fade`);
+    }
+  }
+}
+if (railEdgeOnly) {
+  await browser.close();
+  await server.close();
+  for (const note of notes) console.log(`note  ${note}`);
+  console.log(`rail edge fade checked; ${failures.length} failure(s)`);
+  process.exit(failures.length ? 1 : 0);
+}
+
 const pages = registry();
 let pillsChecked = 0;
 let bandsChecked = 0;
