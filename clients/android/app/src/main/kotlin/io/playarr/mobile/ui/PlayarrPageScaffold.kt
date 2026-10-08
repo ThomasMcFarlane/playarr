@@ -103,6 +103,8 @@ internal fun PlayarrPageScaffold(
     onBack: () -> Unit,
     isTelevision: Boolean,
     modifier: Modifier = Modifier,
+    /** The page's registry id; pages not yet migrated pass nothing and stay [PlayarrPageId.Legacy]. */
+    pageId: PlayarrPageId = PlayarrPageId.Legacy,
     subtitle: String? = null,
     /** The page's Filters action; drawn by the one shared page header so every page matches. */
     filters: PlayarrFilterAction? = null,
@@ -134,7 +136,7 @@ internal fun PlayarrPageScaffold(
     }
     Box(modifier) {
         PlayarrPageLayout(
-            pageId = PlayarrPageId.Legacy,
+            pageId = pageId,
             header = PlayarrPageHeaderSpec(
                 title = title,
                 detail = subtitle,

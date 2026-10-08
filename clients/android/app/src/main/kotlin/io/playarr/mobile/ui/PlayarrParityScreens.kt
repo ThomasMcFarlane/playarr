@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.RailPreferencesRequest
 import io.playarr.shared.designsystem.page.PlayarrPageState
@@ -4179,7 +4180,7 @@ private fun TvSettingsBody(
         )
         LazyColumn(
             // Padding, not offset: the list must end at the screen edge so rows past it (11 sections) scroll into view.
-            Modifier.padding(start = 154.dp, top = 162.dp).width(480.dp).fillMaxHeight(),
+            Modifier.padding(start = playarrPageMetrics(true).start, top = 162.dp).width(480.dp).fillMaxHeight(),
         ) {
             itemsIndexed(entries.map { it.first }) { index, candidate ->
                 var focused by remember { mutableStateOf(false) }

@@ -66,13 +66,30 @@ class PlayarrPageChromeGuardTest {
             return text.substring(text.indexOf(marker), minOf(text.length, text.indexOf(marker) + length))
         }
         listOf(
-            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            title = plural", 1200),
-            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            title = \"\"", 1200),
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Library,\n            title = plural", 1200),
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Detail,\n            title = \"\"", 1200),
             Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageScaffold(\n            title = \"\"", 1200),
         ).forEach { (file, marker, length) ->
             val text = body(file, marker, length)
             assertTrue("$file $marker: loading and failure are states inside the scaffold", Regex("""PlayarrPageScaffold\(""").findAll(text).count() >= 2)
             assertEquals("$file $marker", true, text.contains("PlayarrPageState.Loading(") && text.contains("playarrErrorState("))
         }
+    }
+
+    /** The page start gutter is a token (`playarrPageMetrics(...).start`); the allow-list shrinks as pages migrate (A5, A6). */
+    @Test
+    fun `no page start literals in screens`() {
+        val allowed = setOf("PlayarrCalendar.kt") // moves with the calendar in A6
+        val offenders = uiFiles().filter { it.name !in allowed }.filter { Regex("""\b154\.dp\b""").containsMatchIn(it.readText()) }.map { it.name }
+        assertEquals("read the gutter from playarrPageMetrics()", emptyList<String>(), offenders)
+    }
+
+    /** Hero pages name their registry id instead of the legacy placeholder. */
+    @Test
+    fun `library search and detail pages are registered`() {
+        val text = File(uiDir(), "PlayarrExperience.kt").readText()
+        val calls = Regex("""PlayarrPageScaffold\(\s*pageId = PlayarrPageId\.(\w+)""").findAll(text).map { it.groupValues[1] }.toList()
+        assertTrue("Library, Search and Detail ids present: $calls", calls.containsAll(listOf("Library", "Search", "Detail")))
+        assertEquals("every Experience scaffold call names its page", 0, Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(text).count())
     }
 }
