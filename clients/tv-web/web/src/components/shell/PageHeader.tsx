@@ -77,12 +77,20 @@ export function PageHeader({
   const [wrapped, setWrapped] = useState(false);
 
   // Measure against the real clock and actions so the detail never renders
-  // beneath them; wrap it under the title when it does not fit.
+  // beneath them; wrap it under the title when it does not fit. The measuring (forced layout) runs
+  // when the header's content changes or its box is resized, never merely because the page
+  // re-rendered (Library, Home and Search re-render on every selection change).
+  const measureRef = useRef<() => void>(() => undefined);
+  const lastSignatureRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     const header = headerRef.current;
     const detailEl = detailRef.current;
-    if (!header || !detailEl) return;
-    const measure = () => {
+    if (!header || !detailEl) {
+      measureRef.current = () => undefined;
+      lastSignatureRef.current = null;
+      return;
+    }
+    measureRef.current = () => {
       const style = getComputedStyle(header);
       const gap = parseFloat(style.columnGap) || 0;
       const clock = document.querySelector<HTMLElement>(".app-clock");
@@ -103,17 +111,32 @@ export function PageHeader({
       });
       setWrapped(!fits);
     };
-    measure();
+    const signature = `${header.textContent ?? ""}|${pageActions.length}|${isDetail}`;
+    if (lastSignatureRef.current !== signature) {
+      lastSignatureRef.current = signature;
+      measureRef.current();
+    }
+  });
+
+  // One long-lived observer and resize listener for the life of the header.
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    let cancelled = false;
+    const measure = () => {
+      if (!cancelled) measureRef.current();
+    };
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(header);
     observer?.observe(document.body);
     window.addEventListener("resize", measure);
     void document.fonts?.ready.then(measure);
     return () => {
+      cancelled = true;
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  });
+  }, []);
 
   const hasActions = Boolean(pageActions.some((action) => action.kind === "navigation" || action.kind === "status"));
   const classes = [
