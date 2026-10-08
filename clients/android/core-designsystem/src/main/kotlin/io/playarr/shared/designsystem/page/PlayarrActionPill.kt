@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -63,14 +62,18 @@ fun PlayarrActionPill(
     val focusScale = if (focused) 1.06f else 1f
     val tile = RoundedCornerShape(metrics.pillRadius)
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        // The web tile's soft drop shadow (`0 14px 36px rgba(56,38,33,.08)`) scales with the tile on focus.
+        PlayarrBlurShadow(
+            shadows = PlayarrCardShadows.ActionTile,
+            shape = tile,
+            modifier = modifier.graphicsLayer { scaleX = focusScale; scaleY = focusScale },
+        ) {
         Surface(
             onClick = onClick,
             interactionSource = source,
-            modifier = modifier
+            modifier = Modifier
                 .then(if (tv) Modifier.widthIn(min = metrics.pillWidth).height(metrics.pillHeight) else Modifier.size(metrics.pillWidth, metrics.pillHeight))
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-                .shadow(14.dp, tile, clip = false, ambientColor = Color(0x14382621), spotColor = Color(0x14382621))
                 .then(if (focused) Modifier.playarrFocusRing(PlayarrRingShape.Rounded(metrics.pillRadius)) else Modifier)
                 .semantics { contentDescription = label },
             shape = tile,
@@ -105,6 +108,7 @@ fun PlayarrActionPill(
                     if (vector != null) Icon(vector, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             }
+        }
         }
     }
 }
