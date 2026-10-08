@@ -127,15 +127,15 @@ try {
     }
     check("week: focus moved down a tall day stays scrolled into view", ok, JSON.stringify(last));
     const fade = await page.evaluate((index) => {
-      const win = document.querySelectorAll(".calendar-day-window")[index];
-      return { cls: win.className, up: getComputedStyle(win, "::before").opacity, down: getComputedStyle(win, "::after").opacity };
+      const el = document.querySelectorAll(".calendar-day-window")[index].querySelector(".calendar-edge-scroller");
+      return { start: el.dataset.fadeStart !== undefined, end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage !== "none" };
     }, tall);
-    check("week: a day column scrolled to its end shows the top fade only", /can-scroll-up/.test(fade.cls) && Number(fade.up) > 0.5 && !/can-scroll-down/.test(fade.cls), JSON.stringify(fade));
+    check("week: a day column scrolled to its end shows the top fade only", fade.start && !fade.end && fade.mask, JSON.stringify(fade));
     const track = await page.evaluate(() => {
-      const win = document.querySelector(".calendar-edge-window-x");
-      return { cls: win.className, right: getComputedStyle(win, "::after").opacity };
+      const el = document.querySelector("[data-fade-axis='x']");
+      return { end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage !== "none" };
     });
-    check("week: the day track fades where more days continue", /can-scroll-right/.test(track.cls) && Number(track.right) > 0.5, JSON.stringify(track));
+    check("week: the day track fades where more days continue", track.end && track.mask, JSON.stringify(track));
     await context.close();
   }
 
@@ -161,10 +161,10 @@ try {
     const { context, page } = await open("month", { width: 600, height: 800 });
     await page.waitForTimeout(500);
     const fade = await page.evaluate(() => {
-      const win = document.querySelector(".calendar-edge-window-x");
-      return { cls: win.className, right: getComputedStyle(win, "::after").opacity };
+      const el = document.querySelector("[data-fade-axis='x']");
+      return { end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage !== "none" };
     });
-    check("month: a sideways-scrolling grid shows the right fade", /can-scroll-right/.test(fade.cls) && Number(fade.right) > 0.5, JSON.stringify(fade));
+    check("month: a sideways-scrolling grid shows the right fade", fade.end && fade.mask, JSON.stringify(fade));
     await context.close();
   }
 
@@ -191,38 +191,32 @@ try {
     check("agenda: DOWN changes the selected item and the details panel without SELECT", changed && ok, JSON.stringify({ first, now: await title(), selected: await selected(), info }));
     check("agenda: the focused entry stays scrolled into view", info?.inView === true, JSON.stringify(info));
     const fades = await page.evaluate(() => {
-      const list = document.querySelector(".calendar-list-scroll").closest(".tv-scroll-edge-window");
-      const pane = document.querySelector(".master-detail-pane-window");
-      return {
-        listCls: list.className, listUp: getComputedStyle(list, "::before").opacity, listDown: getComputedStyle(list, "::after").opacity,
-        paneCls: pane.className,
-      };
+      const list = document.querySelector(".calendar-list-scroll");
+      return { start: list.dataset.fadeStart !== undefined, end: list.dataset.fadeEnd !== undefined, mask: getComputedStyle(list).webkitMaskImage !== "none" };
     });
-    check("agenda: the list shows the bottom fade where it continues and the top fade once scrolled", /can-scroll-up/.test(fades.listCls) && /can-scroll-down/.test(fades.listCls) && Number(fades.listDown) > 0.5 && Number(fades.listUp) > 0.5, JSON.stringify(fades));
+    check("agenda: the list shows the bottom fade where it continues and the top fade once scrolled", fades.start && fades.end && fades.mask, JSON.stringify(fades));
     await context.close();
   }
   // Details panel: a short viewport makes the details pane scroll, so it must fade too.
   {
     const { context, page } = await open("agenda", { width: 1920, height: 260 });
     const pane = await page.evaluate(() => {
-      const win = document.querySelector(".master-detail-pane-window");
-      const el = win.querySelector(".master-detail-pane");
-      return { scrolls: el.scrollHeight > el.clientHeight, cls: win.className, down: getComputedStyle(win, "::after").opacity };
+      const el = document.querySelector(".master-detail-pane");
+      return { scrolls: el.scrollHeight > el.clientHeight, end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage !== "none" };
     });
-    check("agenda: the details panel fades at the bottom where it continues", pane.scrolls && /can-scroll-down/.test(pane.cls) && Number(pane.down) > 0.5, JSON.stringify(pane));
+    check("agenda: the details panel fades at the bottom where it continues", pane.scrolls && pane.end && pane.mask, JSON.stringify(pane));
     await context.close();
   }
 
-  // ---- Dark theme: the edge fade is a real scrim in the page background, clearly visible ----
+  // ---- Dark theme: the same single mask, visible (content dims to the page background) ----
   {
     const { context, page } = await open("agenda", { width: 1920, height: 500 }, "dark");
     await page.waitForTimeout(500);
     const dark = await page.evaluate(() => {
-      const win = document.querySelector(".calendar-list-scroll").closest(".tv-scroll-edge-window");
-      const after = getComputedStyle(win, "::after");
-      return { cls: win.className, opacity: Number(after.opacity), image: after.backgroundImage, height: parseFloat(after.height) };
+      const el = document.querySelector(".calendar-list-scroll");
+      return { end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage };
     });
-    check("dark: the bottom edge scrim is a background gradient at high opacity and at least 56px tall", /can-scroll-down/.test(dark.cls) && dark.opacity >= 0.9 && /linear-gradient/.test(dark.image) && dark.height >= 56, JSON.stringify(dark));
+    check("dark: the bottom edge is the shared mask gradient", dark.end && /linear-gradient/.test(dark.mask), JSON.stringify(dark));
     await context.close();
   }
 

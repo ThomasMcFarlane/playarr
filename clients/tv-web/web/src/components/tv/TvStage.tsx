@@ -110,7 +110,7 @@ export function TvMediaTrack({
   children: ReactNode;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
-  const scrollEdges = useScrollEdges(railRef, "horizontal", itemsKey);
+  useScrollEdges(railRef, "horizontal", itemsKey);
 
   return (
     <section
@@ -128,11 +128,7 @@ export function TvMediaTrack({
         </div>
         {headingAction}
       </header>
-      <div
-        className={`tv-media-track-window${
-          scrollEdges.start ? " can-scroll-left" : ""
-        }${scrollEdges.end ? " can-scroll-right" : ""}`}
-      >
+      <div className="tv-media-track-window">
         <div
           ref={railRef}
           className="tv-media-track-scroll tv-episode-rail"

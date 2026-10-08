@@ -539,7 +539,7 @@ export function PlaylistsPage() {
     pageState.status === "ready",
     pageState.status === "ready"
   );
-  const gridEdges = useScrollEdges(
+  useScrollEdges(
     gridRef,
     "vertical",
     rootTracks.map((track) => track.playlist.id).join(":")
@@ -1244,9 +1244,7 @@ export function PlaylistsPage() {
         </TvRailSurface>
       ) : (
         <TvRailSurface
-          className={`tv-rail-panel tv-library-grid-panel is-screen artwork-medium tv-playlist-directory-panel${
-            gridEdges.start ? " can-scroll-up" : ""
-          }${gridEdges.end ? " can-scroll-down" : ""}`}
+          className={`tv-rail-panel tv-library-grid-panel is-screen artwork-medium tv-playlist-directory-panel`}
           mode="content"
           ariaLabel={t("pages.playlists.directoryAriaLabel")}
         >

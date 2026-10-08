@@ -301,6 +301,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: every scroller (rails, grids, lists, panels, dialogs, the calendar views) now shares one edge fade, a mask on the scroller itself. It is present from the first paint, soft on the right so content is still seen going off screen, visible in both themes, and shown only where content continues. The focused card's lift and soft shadow are no longer clipped on rails. The overlay boxes, the per-area scrims and the dark-only override are removed.
 - Web: the shell clock and the right-hand column sit exactly where Home puts them on Movies, Series, Music, Playlists, Downloads, Watchlist and Requests (one shared stage split), instead of the clock shifting right on library pages.
 - Calendar: the API now answers from a persisted cache that is refreshed in the background (on a schedule, on webhooks and on "Sync now") with per-call timeouts and backoff, so it never waits on a source and keeps serving the last good data when one is down. Source errors are no longer shown to users; admins see each source's last successful calendar sync under Tasks.
 - Web: the legacy page frame is gone: every routed page renders through the shared page layout, and the old frame components, button aliases and dead header and fade CSS are removed.
@@ -2498,6 +2499,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: a Playwright check (`scripts/edge-fade-e2e.mjs`, in the web layout parity job) asserts the edge fade has no hard edge, is present at first paint, adds no box over content and leaves the focused card's shadow unclipped, in both themes.
 - Web: `focusStyle.test.ts` pins the ring token and the card-focus values and fails on a focusable card without `media-card`, a ringed or filled card, or a control with a fill, glow or scale on focus; `scripts/focus-style-e2e.mjs` (`pnpm run smoke:focus`) checks real keyboard focus in both themes at 1920x1080 and 1280x720.
 - Web: unit tests for the scroll engine, an audit that forbids direct scroll writes outside it, a Playwright motion check (`scripts/motion-e2e.mjs`), and frame-pacing numbers in the nav-perf harness.
 - Web: `scripts/drawer-close.mjs` (Playwright, run in CI) samples the drawer opening and closing animations and asserts they mirror in the TV, desktop and mobile layouts and both themes; unit tests cover the closing state.

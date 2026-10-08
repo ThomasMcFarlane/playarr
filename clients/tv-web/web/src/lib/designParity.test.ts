@@ -84,9 +84,11 @@ describe("design parity with origin/main", () => {
     expect(library).toMatch(/remote \? 280 : 0/);
   });
 
-  it("useScrollEdges skips remote mid-hold setState", () => {
+  it("useScrollEdges writes the fade attributes without React state and measures before first paint", () => {
     const current = readSrc("lib/useScrollEdges.ts");
-    expect(current).toContain('inputMode === "remote"');
+    expect(current).not.toContain("useState");
+    expect(current).toContain("useLayoutEffect");
+    expect(current).toContain("attachScrollEdges");
   });
 
   it("global.css does not kill remote focus transforms (only transitions)", () => {

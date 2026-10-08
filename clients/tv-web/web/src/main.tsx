@@ -17,6 +17,7 @@ import {
   PLAYARR_CLIENT_PLATFORM,
 } from "./lib/clientPlatform";
 import { installTvStageScale } from "./lib/tvStageScale";
+import { installScrollEdgeFades } from "./lib/scrollEdgeFade";
 import {
   bootstrapParityMode,
   installParityApplyHook,
@@ -54,6 +55,9 @@ if (!container) {
 }
 
 document.documentElement.dataset.platform = PLAYARR_CLIENT_PLATFORM;
+
+// One edge fade for every scroll container no component manages (drawers, dialogs, menus, panels).
+installScrollEdgeFades();
 
 // Smart-TV browsers report assorted viewports and cannot scroll: fit the 1920x1080 TV stage to them.
 if (IS_VIDAA || IS_WEBOS || IS_TIZEN) {

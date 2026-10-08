@@ -57,12 +57,11 @@
   --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2);
   /* The scroll-edge fade (the rail-panel glow). */
   --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
-  --page-edge-fade-opacity: 0.62;
+  --page-edge-fade-floor: 0.3;
 }
 
 :root[data-theme="dark"] {
   --focus-ring-color: #ffffff;
-  --page-edge-fade-opacity: 0.54;
 }
 
 /* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */
@@ -619,81 +618,88 @@ body[data-input-mode="remote"] .tv-page-back {
   display: none;
 }
 
-.scroll-area::before,
-.scroll-area::after {
-  content: "";
-  position: absolute;
-  z-index: 12;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
+/*
+ * Scroll edge fade: the ONE fade for every scroller (rails, grids, lists, panels, dialogs, the calendar views).
+ * `useScrollEdges` tags the scroller with data-fade-axis (x or y) and data-fade-start / data-fade-end on the sides
+ * where content continues. The fade is a mask on the scroller itself, so there is no overlay box: the content
+ * dims toward the edge but stays visible going off screen (the --page-edge-fade-floor alpha), it works the same
+ * in both themes, and nothing is painted over neighbouring content. A scroller may override its start side
+ * with --edge-fade-start-size / --edge-fade-start-floor (the rails use a clear left gutter).
+ */
+[data-fade-axis] {
+  --fade-start-size: 0px;
+  --fade-end-size: 0px;
+  --fade-start-floor: 1;
+  --fade-end-floor: 1;
 }
 
-.scroll-area.is-vertical::before,
-.scroll-area.is-vertical::after {
-  right: 0;
-  left: 0;
-  height: var(--page-edge-fade-size);
+[data-fade-axis][data-fade-start] {
+  --fade-start-size: var(--edge-fade-start-size, var(--page-edge-fade-size));
+  --fade-start-floor: var(--edge-fade-start-floor, var(--page-edge-fade-floor));
 }
 
-.scroll-area.is-vertical::before {
-  top: 0;
-  border-radius: 0 0 48% 48%;
-  background: radial-gradient(
-    ellipse 92% 100% at 50% -28%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
+[data-fade-axis][data-fade-end] {
+  --fade-end-size: var(--edge-fade-end-size, var(--page-edge-fade-size));
+  --fade-end-floor: var(--edge-fade-end-floor, var(--page-edge-fade-floor));
+}
+
+/* Eased (smoothstep) ramps, so the fade has no visible start line. -webkit- first: Chrome 111 (VIDAA) only has the prefixed mask. */
+[data-fade-axis="x"]:is([data-fade-start], [data-fade-end]) {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, var(--fade-start-floor)) 0,
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.156)) calc(100% - var(--fade-end-size) * 0.25),
+    rgba(0, 0, 0, var(--fade-end-floor)) 100%
   );
-  box-shadow: inset 0 18px 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.scroll-area.is-vertical::after {
-  bottom: 0;
-  border-radius: 48% 48% 0 0;
-  background: radial-gradient(
-    ellipse 92% 100% at 50% 128%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
+  mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, var(--fade-start-floor)) 0,
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.156)) calc(100% - var(--fade-end-size) * 0.25),
+    rgba(0, 0, 0, var(--fade-end-floor)) 100%
   );
-  box-shadow: inset 0 -18px 24px -22px rgba(31, 14, 20, 0.72);
 }
 
-.scroll-area.is-horizontal::before,
-.scroll-area.is-horizontal::after {
-  top: 0;
-  bottom: 0;
-  width: var(--page-edge-fade-size);
-}
-
-.scroll-area.is-horizontal::before {
-  left: 0;
-  border-radius: 0 48% 48% 0;
-  background: radial-gradient(
-    ellipse 100% 92% at -28% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
+[data-fade-axis="y"]:is([data-fade-start], [data-fade-end]) {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, var(--fade-start-floor)) 0,
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.156)) calc(100% - var(--fade-end-size) * 0.25),
+    rgba(0, 0, 0, var(--fade-end-floor)) 100%
   );
-  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.scroll-area.is-horizontal::after {
-  right: 0;
-  border-radius: 48% 0 0 48%;
-  background: radial-gradient(
-    ellipse 100% 92% at 128% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
+  mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, var(--fade-start-floor)) 0,
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.156)) calc(100% - var(--fade-end-size) * 0.25),
+    rgba(0, 0, 0, var(--fade-end-floor)) 100%
   );
-  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.scroll-area.can-scroll-start::before,
-.scroll-area.can-scroll-end::after {
-  opacity: var(--page-edge-fade-opacity);
 }
 
 /* States render inside the page body, below the header (which stays up). */

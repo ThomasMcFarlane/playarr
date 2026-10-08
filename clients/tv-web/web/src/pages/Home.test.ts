@@ -18,7 +18,7 @@ describe("Home layout", () => {
       /\.tv-media-track-window\s*\{[^}]*width:\s*calc\(100% \+ var\(--tv-track-left-fade\)\)[^}]*margin-left:\s*calc\(-1 \* var\(--tv-track-left-fade\)\)/s
     );
     expect(css).toMatch(
-      /\.tv-media-track-window\.can-scroll-left \.tv-media-track-scroll\s*\{[^}]*mask-image:\s*linear-gradient\([^}]*var\(--tv-track-left-fade\)/s
+      /\.tv-media-track-scroll\s*\{[^}]*--edge-fade-start-size:\s*var\(--tv-track-left-fade\)[^}]*--edge-fade-start-floor:\s*0/s
     );
   });
 

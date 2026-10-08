@@ -53,12 +53,7 @@ Gaps:
 
    Library and detail pages replace the whole page, header included, while loading.
 6. **Error colour is split.** Pages use `.error-text` (`--danger`) or `.tv-watchlist-error` (hard-coded `#cf3157`), among others.
-7. **Edge fades have three implementations:**
-   - The panel glow, `.tv-library-grid-panel.can-scroll-*`.
-   - `.tv-scroll-edge-window`.
-   - The `.tv-media-track-window` mask and glow.
-
-   `.tv-home-rail-window` is dead CSS. Calendar, Folders, Downloads, Watchlist, Requests, Customise Home and Settings have no fades. On Settings, the panel never gets `can-scroll-*`.
+7. **Edge fades (resolved, row 9601).** There was one implementation per area (panel glow, `.tv-scroll-edge-window`, the media-track mask and glow, the calendar copy, a dark-only scrim). There is now one: a mask on the scroller, `[data-fade-axis]` in `page-layout.css`, driven by `useScrollEdges` (`data-fade-start` / `data-fade-end` on the sides where content continues, measured before first paint). The end side keeps content visible (`--page-edge-fade-floor`), the rails keep a clear left gutter (`--edge-fade-start-size`, `--edge-fade-start-floor`), and the focused card's lift and shadow have vertical headroom inside the scroller (`--tv-track-shadow-top/bottom`). Chrome 111 (VIDAA) only has the prefixed `-webkit-mask-image`, which is declared first.
 8. **Dead or contradictory hooks:**
    - `.page-header-stack` has no CSS rule.
    - `.page-header-actions.is-stacked` is dead.
@@ -270,8 +265,8 @@ export function ScrollArea(props: {
   className?: string;                   // layout only (grid template); guard forbids colour/fade rules on it
   children: ReactNode;
 }): JSX.Element;
-// Sets data-tv-scroll-container, data-tv-scroll-axis, overflow, and can-scroll-{start,end} from useScrollEdges.
-// One fade on every axis (Q6): the rail-panel glow. The media-track mask and glow and .tv-scroll-edge-window are retired.
+// Sets data-tv-scroll-container, data-tv-scroll-axis and overflow; useScrollEdges tags the viewport with data-fade-axis and data-fade-start/end.
+// One fade on every axis (Q6): the shared mask in page-layout.css. The panel glow, the media-track mask and glow and .tv-scroll-edge-window are retired.
 
 // States.tsx
 export function LoadingState(props: { label: string; size?: "page" | "inline" }): JSX.Element; // role=status

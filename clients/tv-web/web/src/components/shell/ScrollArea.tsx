@@ -27,12 +27,12 @@ export interface ScrollAreaProps {
 }
 
 /**
- * The one scroll container: a real native scroller with the edge fades built in. One fade on every axis, the
- * rail-panel glow (`page-layout.css`). It sets `data-tv-scroll-container` and the axis itself, so pages never do.
+ * The one scroll container: a real native scroller with the edge fade built in: the one shared mask
+ * (`page-layout.css`, driven by `useScrollEdges`). It sets `data-tv-scroll-container` and the axis itself, so pages never do.
  */
 export function ScrollArea({ axis, scrollKey, className, windowClassName, refreshKey, scrollRef, onScroll, viewportProps, children }: ScrollAreaProps) {
   const innerRef = useRef<HTMLDivElement | null>(null);
-  const edges = useScrollEdges(innerRef, axis, refreshKey ?? scrollKey);
+  useScrollEdges(innerRef, axis, refreshKey ?? scrollKey);
   const setRef = (node: HTMLDivElement | null) => {
     innerRef.current = node;
     if (typeof scrollRef === "function") scrollRef(node);
@@ -40,7 +40,7 @@ export function ScrollArea({ axis, scrollKey, className, windowClassName, refres
   };
   return (
     <div
-      className={`scroll-area is-${axis}${edges.start ? " can-scroll-start" : ""}${edges.end ? " can-scroll-end" : ""}${windowClassName ? ` ${windowClassName}` : ""}`}
+      className={`scroll-area is-${axis}${windowClassName ? ` ${windowClassName}` : ""}`}
       data-scroll-area={scrollKey}
     >
       <div

@@ -6074,102 +6074,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   height: 16px;
 }
 
-.tv-library-grid-panel::before,
-.tv-library-grid-panel::after {
-  content: "";
-  position: absolute;
-  z-index: 12;
-  right: var(--library-rail-right);
-  left: var(--library-rail-left);
-  height: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.tv-library-grid-panel::before {
-  top: 0;
-  border-radius: 0 0 48% 48%;
-  background: radial-gradient(
-    ellipse 92% 100% at 50% -28%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset 0 18px 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-library-grid-panel::after {
-  bottom: 0;
-  border-radius: 48% 48% 0 0;
-  background: radial-gradient(
-    ellipse 92% 100% at 50% 128%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset 0 -18px 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-:root[data-theme="dark"] .tv-library-grid-panel::before,
-:root[data-theme="dark"] .tv-library-grid-panel::after {
-  opacity: 0;
-}
-
-.tv-library-grid-panel.can-scroll-up::before,
-.tv-library-grid-panel.can-scroll-down::after {
-  opacity: 0.62;
-}
-
-:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-up::before,
-:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-down::after {
-  opacity: 0.54;
-}
-
-.tv-library-grid-panel.is-cover-flow::before,
-.tv-library-grid-panel.is-cover-flow::after {
-  top: var(--library-rail-top);
-  bottom: var(--library-rail-bottom);
-  width: clamp(38px, calc(4.5 * var(--vw)), 76px);
-  height: auto;
-  border-radius: 0;
-  opacity: 0;
-}
-
-.tv-library-grid-panel.is-cover-flow::before {
-  right: auto;
-  left: 0;
-  background: radial-gradient(
-    ellipse 100% 88% at -24% 50%,
-    rgba(31, 14, 20, 0.52),
-    rgba(31, 14, 20, 0.18) 48%,
-    transparent 80%
-  );
-  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-library-grid-panel.is-cover-flow::after {
-  right: var(--library-rail-right);
-  left: auto;
-  background: radial-gradient(
-    ellipse 100% 88% at 124% 50%,
-    rgba(31, 14, 20, 0.52),
-    rgba(31, 14, 20, 0.18) 48%,
-    transparent 80%
-  );
-  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-library-grid-panel.is-cover-flow.can-scroll-left::before,
-.tv-library-grid-panel.is-cover-flow.can-scroll-right::after {
-  opacity: 0.62;
-}
-
-:root[data-theme="dark"] .tv-library-grid-panel.is-cover-flow.can-scroll-left::before,
-:root[data-theme="dark"] .tv-library-grid-panel.is-cover-flow.can-scroll-right::after {
-  opacity: 0.54;
-}
-
 .tv-title-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -7630,60 +7534,17 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   flex-direction: column;
 }
 
-.tv-scroll-edge-window {
-  position: relative;
-  isolation: isolate;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.tv-scroll-edge-window::before,
-.tv-scroll-edge-window::after {
-  content: "";
-  position: absolute;
-  z-index: 8;
-  right: 0;
-  left: 0;
-  height: clamp(28px, calc(4 * var(--viewport-unit)), 54px);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.tv-scroll-edge-window::before {
-  top: 0;
-  border-radius: 0 0 50% 50%;
-  background: radial-gradient(
-    ellipse 82% 100% at 50% -25%,
-    rgba(31, 14, 20, 0.42),
-    rgba(31, 14, 20, 0.12) 48%,
-    transparent 78%
-  );
-}
-
-.tv-scroll-edge-window::after {
-  bottom: 0;
-  border-radius: 50% 50% 0 0;
-  background: radial-gradient(
-    ellipse 82% 100% at 50% 125%,
-    rgba(31, 14, 20, 0.42),
-    rgba(31, 14, 20, 0.12) 48%,
-    transparent 78%
-  );
-}
-
-.tv-scroll-edge-window.can-scroll-up::before,
-.tv-scroll-edge-window.can-scroll-down::after {
-  opacity: 0.58;
-}
-
 .tv-rail-surface::-webkit-scrollbar {
   display: none;
 }
 
 .tv-media-track {
   --tv-track-left-fade: clamp(88px, calc(8.8 * var(--vw)), 152px);
+  /* Room inside the scroller for the focused card's lift (top) and its soft shadow (bottom, sides). Padding with an
+     equal negative margin, so the layout is unchanged and only the horizontal axis is clipped by the fade mask. */
+  --tv-track-shadow-top: 24px;
+  --tv-track-shadow-bottom: 80px;
+  --tv-track-shadow-end: clamp(48px, calc(3.4 * var(--vw)), 72px);
   width: 100%;
   min-width: 0;
   padding-left: var(--tv-track-left-fade);
@@ -7700,6 +7561,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-media-track-heading {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -7756,61 +7619,14 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   font-size: clamp(0.46rem, calc(0.52 * var(--vw)), 0.64rem);
 }
 
+/* No overflow clip on the window: the scroller carries its own vertical headroom (below), so the focused card's lift
+   and soft shadow are never cut. The edge fade is the shared mask on the scroller (page-layout.css). */
 .tv-media-track-window {
   position: relative;
-  isolation: isolate;
   width: calc(100% + var(--tv-track-left-fade));
   min-width: 0;
   max-width: none;
   margin-left: calc(-1 * var(--tv-track-left-fade));
-  overflow: hidden;
-}
-
-.tv-media-track-window::after {
-  content: "";
-  position: absolute;
-  z-index: 8;
-  top: 0;
-  bottom: 0;
-  width: clamp(32px, calc(3.6 * var(--vw)), 58px);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.tv-media-track-window::after {
-  right: 0;
-  border-radius: 48% 0 0 48%;
-  background: radial-gradient(
-    ellipse 100% 88% at 128% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-media-track-window.can-scroll-right::after {
-  opacity: 0.58;
-}
-
-:root[data-theme="dark"] .tv-media-track-window.can-scroll-right::after {
-  opacity: 0.5;
-}
-
-.tv-media-track-window.can-scroll-left .tv-media-track-scroll {
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent 0,
-    #000 var(--tv-track-left-fade),
-    #000 100%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent 0,
-    #000 var(--tv-track-left-fade),
-    #000 100%
-  );
 }
 
 .tv-media-track-scroll {
@@ -7820,9 +7636,12 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding: 18px clamp(22px, calc(2.4 * var(--vw)), 46px) 24px
-    calc(var(--tv-track-left-fade) + 8px);
-  margin: 0 0 -24px -8px;
+  padding: calc(18px + var(--tv-track-shadow-top)) var(--tv-track-shadow-end)
+    calc(24px + var(--tv-track-shadow-bottom)) calc(var(--tv-track-left-fade) + 8px);
+  margin: calc(-1 * var(--tv-track-shadow-top)) 0 calc(-24px - var(--tv-track-shadow-bottom)) -8px;
+  /* The left side is a clear gutter (transparent to opaque over the gutter width); the right is the shared soft fade. */
+  --edge-fade-start-size: var(--tv-track-left-fade);
+  --edge-fade-start-floor: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
@@ -10004,6 +9823,11 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   .tv-media-track-scroll {
+    padding-top: calc(10px + var(--tv-track-shadow-top));
+    padding-right: var(--mobile-page-gutter);
+    padding-bottom: calc(18px + var(--tv-track-shadow-bottom));
+    margin-top: calc(-1 * var(--tv-track-shadow-top));
+    margin-bottom: calc(-18px - var(--tv-track-shadow-bottom));
     padding-left: calc(var(--tv-track-left-fade) + 5px);
     scroll-padding-inline: calc(var(--tv-track-left-fade) + 5px)
       var(--mobile-page-gutter);
@@ -12087,74 +11911,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     max-width: 100%;
     padding: 0 0.6rem;
   }
-}
-
-/*
- * Edge scrim (intentional visual change). In the dark theme the original radial shade (near-black on a
- * near-black page) was invisible, so no scroll area read as continuing. Every shared fade now draws a real
- * scrim: the page background fading out over the content, tall enough to read from a TV sofa. The light
- * theme keeps its radial shade. One token set drives them all.
- */
-:root[data-theme="dark"] {
-  --edge-scrim-size: clamp(56px, calc(8 * var(--viewport-unit)), 104px);
-  --edge-scrim-opacity: 0.96;
-}
-
-:root[data-theme="dark"] .tv-scroll-edge-window::before,
-:root[data-theme="dark"] .tv-scroll-edge-window::after,
-:root[data-theme="dark"] .tv-library-grid-panel::before,
-:root[data-theme="dark"] .tv-library-grid-panel::after {
-  height: var(--edge-scrim-size);
-  border-radius: 0;
-  box-shadow: none;
-}
-
-:root[data-theme="dark"] .tv-scroll-edge-window::before,
-:root[data-theme="dark"] .tv-library-grid-panel::before {
-  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
-}
-
-:root[data-theme="dark"] .tv-scroll-edge-window::after,
-:root[data-theme="dark"] .tv-library-grid-panel::after {
-  background: linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
-}
-
-:root[data-theme="dark"] .tv-scroll-edge-window.can-scroll-up::before,
-:root[data-theme="dark"] .tv-scroll-edge-window.can-scroll-down::after,
-:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-up::before,
-:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-down::after {
-  opacity: var(--edge-scrim-opacity);
-}
-
-:root[data-theme="dark"] .tv-media-track-window::after {
-  width: var(--edge-scrim-size);
-  border-radius: 0;
-  box-shadow: none;
-  background: linear-gradient(to left, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
-}
-
-:root[data-theme="dark"] .tv-media-track-window.can-scroll-right::after {
-  opacity: var(--edge-scrim-opacity);
-}
-
-:root[data-theme="dark"] .calendar-edge-window-x::before,
-:root[data-theme="dark"] .calendar-edge-window-x::after {
-  width: var(--edge-scrim-size);
-  height: auto;
-  border-radius: 0;
-}
-
-:root[data-theme="dark"] .calendar-edge-window-x::before {
-  background: linear-gradient(to right, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
-}
-
-:root[data-theme="dark"] .calendar-edge-window-x::after {
-  background: linear-gradient(to left, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
-}
-
-:root[data-theme="dark"] .calendar-edge-window-x.can-scroll-left::before,
-:root[data-theme="dark"] .calendar-edge-window-x.can-scroll-right::after {
-  opacity: var(--edge-scrim-opacity);
 }
 
 /* Drawer closing: the exact reverse of the opening animation (`tv-filter-drawer-in` and

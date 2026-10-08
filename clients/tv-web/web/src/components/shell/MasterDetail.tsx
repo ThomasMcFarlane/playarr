@@ -23,11 +23,11 @@ export function MasterDetail({
   detailKey?: string | number;
 }) {
   const paneRef = useRef<HTMLElement>(null);
-  const edges = useScrollEdges(paneRef, "vertical", `${detailLabel}:${detailKey}`);
+  useScrollEdges(paneRef, "vertical", `${detailLabel}:${detailKey}`);
   return (
     <div className={`master-detail${className ? ` ${className}` : ""}`}>
       <div
-        className={`tv-scroll-edge-window master-detail-pane-window${edges.start ? " can-scroll-up" : ""}${edges.end ? " can-scroll-down" : ""}`}
+        className="master-detail-pane-window"
       >
         <aside ref={paneRef} className="master-detail-pane" aria-label={detailLabel} aria-live="polite">
           {detail}

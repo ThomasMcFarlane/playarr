@@ -727,12 +727,11 @@
   padding: 0;
 }
 
-/*
- * Edge fades: every scrollable calendar area sits in a window that reuses the shared
- * .tv-scroll-edge-window top/bottom fade (same size, gradient and 0.58 opacity as the rails).
- * Horizontal scrollers get the same fade turned through 90 degrees.
- */
+/* Each scrollable calendar area sits in a plain window; the edge fade is the shared mask on the scroller (page-layout.css). */
 .calendar-edge-window {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -741,43 +740,6 @@
 .calendar-edge-window > .calendar-edge-scroller {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.calendar-edge-window-x::before,
-.calendar-edge-window-x::after {
-  top: 0;
-  bottom: 0;
-  left: auto;
-  right: auto;
-  width: clamp(32px, calc(3.6 * var(--vw)), 58px);
-  height: auto;
-}
-
-.calendar-edge-window-x::before {
-  left: 0;
-  border-radius: 0 48% 48% 0;
-  background: radial-gradient(
-    ellipse 100% 88% at -28% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-}
-
-.calendar-edge-window-x::after {
-  right: 0;
-  border-radius: 48% 0 0 48%;
-  background: radial-gradient(
-    ellipse 100% 88% at 128% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-}
-
-.calendar-edge-window-x.can-scroll-left::before,
-.calendar-edge-window-x.can-scroll-right::after {
-  opacity: 0.58;
 }
 
 .calendar-edge-window.calendar-day-window {

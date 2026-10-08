@@ -526,6 +526,14 @@ jobs:
         working-directory: clients/tv-web/web
         run: node scripts/drawer-close.mjs
 
+      - name: Build the web client for the edge fade check
+        working-directory: clients/tv-web/web
+        run: pnpm exec vite build
+
+      - name: Scroll edge fade (profile, first paint, no box, unclipped focus shadow) in both themes
+        working-directory: clients/tv-web/web
+        run: node scripts/edge-fade-e2e.mjs
+
       - name: Keyboard e2e (BACK keys, focus start and restore)
         working-directory: clients/tv-web/web
         run: |

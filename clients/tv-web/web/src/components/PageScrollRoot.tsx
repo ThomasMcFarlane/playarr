@@ -16,6 +16,7 @@ export function PageScrollRoot({
       className="app-main"
       data-tv-scroll-container
       data-tv-scroll-axis="vertical"
+      data-fade="off"
       data-navigation-scroll-key={scrollKey}
       data-route-motion={routeMotion}
     >

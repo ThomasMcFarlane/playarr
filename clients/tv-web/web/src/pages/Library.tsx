@@ -220,7 +220,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const gridMetricsRef = useRef({ cols: 3, rowHeight: 180 });
   const mountedEndRef = useRef(mountedEnd);
   mountedEndRef.current = mountedEnd;
-  const scrollEdges = useScrollEdges(
+  useScrollEdges(
     gridRef,
     view === "cover-flow" ? "horizontal" : "vertical",
     `${kind}:${view}:${artworkSize}:${items?.length ?? 0}`
@@ -980,19 +980,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       </aside>
 
       <TvRailSurface
-        className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}${
-          scrollEdges.start
-            ? view === "cover-flow"
-              ? " can-scroll-left"
-              : " can-scroll-up"
-            : ""
-        }${
-          scrollEdges.end
-            ? view === "cover-flow"
-              ? " can-scroll-right"
-              : " can-scroll-down"
-            : ""
-        }`}
+        className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}`}
         mode="content"
         ariaLabel={t("pages.library.railAriaLabel", { plural, collectionNoun })}
       >

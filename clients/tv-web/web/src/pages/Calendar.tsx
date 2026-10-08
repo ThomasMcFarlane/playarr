@@ -78,7 +78,7 @@ import "./Calendar.css";
 import { isBackKey } from "../lib/backKey";
 
 /**
- * A scroll viewport inside the shared rail edge window: the web fade (`.tv-scroll-edge-window`) shows on each
+ * A scroll viewport inside a plain window: the one shared edge fade (`useScrollEdges`) shows on each
  * side where content continues. The scroller keeps its own element so native wheel, touch and focus
  * scrolling are unchanged.
  */
@@ -98,14 +98,10 @@ export function EdgeScroller({
   children: ReactNode;
 } & HTMLAttributes<HTMLElement> & { "data-tv-scroll-container"?: boolean; "data-tv-scroll-axis"?: string; "data-tv-nav-geometric"?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const edges = useScrollEdges(ref, axis, refreshKey);
-  const vertical = axis === "vertical";
-  const flags = vertical
-    ? `${edges.start ? " can-scroll-up" : ""}${edges.end ? " can-scroll-down" : ""}`
-    : `${edges.start ? " can-scroll-left" : ""}${edges.end ? " can-scroll-right" : ""}`;
+  useScrollEdges(ref, axis, refreshKey);
   return (
     <div
-      className={`tv-scroll-edge-window calendar-edge-window${vertical ? "" : " calendar-edge-window-x"}${windowClassName ? ` ${windowClassName}` : ""}${flags}`}
+      className={`calendar-edge-window${windowClassName ? ` ${windowClassName}` : ""}`}
       data-edge-window={axis}
     >
       <Tag ref={ref as never} className={`calendar-edge-scroller${className ? ` ${className}` : ""}`} {...rest}>
