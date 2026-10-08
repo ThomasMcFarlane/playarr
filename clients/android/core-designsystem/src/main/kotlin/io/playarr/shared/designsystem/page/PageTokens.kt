@@ -122,7 +122,8 @@ object PlayarrPageTokens {
     val Phone = PlayarrPageMetrics(
         headerTop = 2.dp,
         start = 16.dp,
-        headerEnd = 72.dp,
+        // Web phone shell action column: `right: 66px`, a row of 44 px tiles left of the avatar with an 8 px gap.
+        headerEnd = 66.dp,
         bodyEnd = 16.dp,
         control = 38.dp,
         controlWidth = 42.dp,

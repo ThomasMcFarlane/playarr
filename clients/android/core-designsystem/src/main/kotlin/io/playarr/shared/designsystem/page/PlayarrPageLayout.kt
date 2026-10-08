@@ -130,8 +130,8 @@ internal fun PlayarrPageActions(actions: List<PlayarrPageAction>, modifier: Modi
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
         modifier.padding(end = metrics.headerEnd, top = metrics.headerTop),
-        // Web TV: the period arrows sit 25 px before the panel pills, which touch the Filters pill.
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        // Phones: the web shell column is a row of tiles with an 8 px gap; on TV the header row only holds the period navigation.
+        horizontalArrangement = Arrangement.spacedBy(if (tv) 0.dp else metrics.actionsGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         orderedForHeader(actions).forEach { action ->
