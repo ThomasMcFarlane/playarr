@@ -3,6 +3,7 @@ import type { ResumeOption, ResumePlan } from "@playarr-tv/api-client";
 import { Button } from "./ui";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { formatLastWatched, resumeOptionCaptionKey } from "../lib/resumePlan";
+import { isBackKey } from "../lib/backKey";
 
 /**
  * Asks where to continue a series when the server's resume plan found an
@@ -27,9 +28,7 @@ export function ResumeChooserModal({
   useEffect(() => {
     firstButtonRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "BrowserBack" && event.key !== "GoBack") {
-        return;
-      }
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onCancel();

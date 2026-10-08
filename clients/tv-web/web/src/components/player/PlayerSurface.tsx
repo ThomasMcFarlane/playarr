@@ -42,6 +42,7 @@ import {
   SpinnerIcon,
 } from "./PlayerIcons";
 import { Button } from "../ui";
+import { isBackKey } from "../../lib/backKey";
 
 const SEEK_STEP_SECONDS = 10;
 const AUTO_HIDE_MS = 5000;
@@ -1330,11 +1331,7 @@ export function PlayerSurface({
             }
             if (
               event.key === "ArrowLeft" ||
-              event.key === "Escape" ||
-              event.key === "BrowserBack" ||
-              event.key === "GoBack" ||
-              event.keyCode === 10009 ||
-              event.keyCode === 461
+              isBackKey(event)
             ) {
               event.preventDefault();
               event.stopPropagation();

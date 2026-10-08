@@ -1,19 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, type HTMLAttributes, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
 import { Button } from "../ui";
 import { browserDrawerCloseEnv, playDrawerClose, restoreOpenerFocus, snapshotDrawer } from "./drawerClose";
+import { isBackKey } from "../../lib/backKey";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function isBack(event: KeyboardEvent): boolean {
-  return (
-    event.key === "Escape" ||
-    event.key === "BrowserBack" ||
-    event.key === "GoBack" ||
-    event.keyCode === 10009 ||
-    event.keyCode === 461
-  );
-}
 
 /**
  * The ONE right-side pop-out used everywhere (Filters on every page, Calendar
@@ -110,7 +101,7 @@ function DrawerPanel({
       frame = window.requestAnimationFrame(() => closeRef.current?.focus({ preventScroll: true }));
     }
     const handleBack = (event: KeyboardEvent) => {
-      if (!isBack(event)) return;
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onCloseRef.current();

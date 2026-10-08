@@ -1,6 +1,7 @@
 import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../ui";
+import { isBackKey } from "../../lib/backKey";
 
 interface Props {
   /** Current anchor day (`YYYY-MM-DD`). */
@@ -55,7 +56,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
     root?.querySelector<HTMLElement>("[aria-selected='true']")?.focus({ preventScroll: true });
     root?.querySelectorAll<HTMLElement>("[aria-selected='true']").forEach((el) => smoothScrollIntoView(el, { block: "center", instant: true }));
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" || event.key === "BrowserBack" || event.key === "GoBack") {
+      if (isBackKey(event)) {
         event.preventDefault();
         event.stopPropagation();
         setOpen(false);

@@ -1,3 +1,5 @@
+import { isBackKey } from "./backKey";
+
 /**
  * Playback never shows an interstitial page while the session or stream is
  * negotiated: Play mounts the player straight away (black stage, normal
@@ -35,13 +37,5 @@ export function resolvePlayerBack(options: {
   return options.controlsVisible ? "hide-controls" : "exit";
 }
 
-/** Remote BACK across platforms: Escape, BrowserBack, GoBack, Tizen 10009 and webOS/VIDAA 461. */
-export function isPlayerBackKey(event: { key: string; keyCode?: number }): boolean {
-  return (
-    event.key === "Escape" ||
-    event.key === "BrowserBack" ||
-    event.key === "GoBack" ||
-    event.keyCode === 10009 ||
-    event.keyCode === 461
-  );
-}
+/** Remote BACK across platforms; see lib/backKey.ts. */
+export const isPlayerBackKey = isBackKey;

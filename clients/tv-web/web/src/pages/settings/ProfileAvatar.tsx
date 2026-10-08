@@ -28,6 +28,7 @@ import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 import { Button } from "../../components/ui";
+import { isBackKey } from "../../lib/backKey";
 
 export function SettingsProfileAvatarPage() {
   const { t } = useLanguage();
@@ -66,11 +67,7 @@ export function SettingsProfileAvatarPage() {
     });
     const handleBack = (event: KeyboardEvent) => {
       const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
+        isBackKey(event);
       if (!isBack) return;
       event.preventDefault();
       event.stopPropagation();

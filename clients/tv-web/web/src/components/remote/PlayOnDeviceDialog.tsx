@@ -5,6 +5,7 @@ import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { HandoffFailure, handOffPlayback, type HandoffProgress } from "../../lib/remote/handoff";
 import { getRemotePlayer } from "../../lib/remote/playerBridge";
 import { Button } from "../ui";
+import { isBackKey } from "../../lib/backKey";
 
 type Phase =
   | { kind: "choose" }
@@ -54,7 +55,7 @@ export function PlayOnDeviceDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "BrowserBack" && event.key !== "GoBack") return;
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onClose();

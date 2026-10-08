@@ -19,6 +19,7 @@ import {
 } from "../../lib/playerQualityLabel";
 import { audioTrackLabel, subtitleTrackLabel } from "../../lib/trackLabels";
 import { CastButton } from "./CastButton";
+import { isBackKey } from "../../lib/backKey";
 import {
   AudioTrackIcon,
   FullscreenEnterIcon,
@@ -553,15 +554,8 @@ export function PlayerControls({
         case "End":
           nextOption = options[options.length - 1];
           break;
-        case "Escape":
-        case "BrowserBack":
-        case "GoBack":
-          event.preventDefault();
-          event.stopPropagation();
-          closeQualityMenu();
-          return;
         default:
-          if (event.keyCode === 10009 || event.keyCode === 461) {
+          if (isBackKey(event)) {
             event.preventDefault();
             event.stopPropagation();
             closeQualityMenu();
@@ -612,15 +606,8 @@ export function PlayerControls({
             window.requestAnimationFrame(() => leftTarget.focus());
           }
           return;
-        case "Escape":
-        case "BrowserBack":
-        case "GoBack":
-          event.preventDefault();
-          event.stopPropagation();
-          closeMenu();
-          return;
         default:
-          if (event.keyCode === 10009 || event.keyCode === 461) {
+          if (isBackKey(event)) {
             event.preventDefault();
             event.stopPropagation();
             closeMenu();

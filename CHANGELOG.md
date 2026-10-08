@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: BACK works the same everywhere. One shared helper covers Escape, Backspace, BrowserBack, Tizen and webOS codes; dialogs close without also leaving the page; nested Folders and a playlist's detail go up one level on the remote as on the on-screen Back.
 - Web player: watch progress is no longer written to the next item after a playlist advance, never writes position 0, and the offline progress queue no longer double-sends or retries rejected writes forever; Space and K no longer hijack focused buttons.
 - Web: restored the Home and detail rail edge fades (a dark box appeared at the right edge of rails that run off screen); the focused-card shadow fix returns separately.
 - Calendar: a slow or unreachable *arr source now times out after 4 s instead of 10 s, is not retried for 30 s, and its last good entries stand in while it is down.

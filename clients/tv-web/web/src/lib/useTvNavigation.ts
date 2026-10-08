@@ -27,6 +27,8 @@ import {
   pickNearestByEdgeDistance,
   titleGridNeighbourIndex,
 } from "./focusGeometry";
+import { isBackKey } from "./backKey";
+import { runPageBack } from "./pageBack";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -1536,12 +1538,14 @@ export function useTvNavigation(
       if (handleDirectionalKeyDown(event)) return;
 
       const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
+        isBackKey(event);
       if (isBack) {
+        // A dialog or panel already consumed this press.
+        if (event.defaultPrevented) return;
+        if (runPageBack()) {
+          event.preventDefault();
+          return;
+        }
         const target = tvBackNavigationTarget(
           routeKey,
           requestedBackTo,

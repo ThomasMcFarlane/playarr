@@ -28,6 +28,7 @@ import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { usePanelParam } from "../lib/usePanelParam";
+import { usePageBack } from "../lib/pageBack";
 import "./Folders.css";
 
 const PAGE_SIZE = 200;
@@ -217,6 +218,11 @@ export function FoldersPage() {
       navigate(url.kind ? kindRoute(url.kind) : "/");
     }
   }
+
+  usePageBack(() => {
+    goBack();
+    return true;
+  });
 
   const filterCount = activeFolderFilterCount(url);
   const sizeClass = `is-size-${url.size}`;

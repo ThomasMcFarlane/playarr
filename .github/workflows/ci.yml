@@ -526,6 +526,11 @@ jobs:
         working-directory: clients/tv-web/web
         run: node scripts/drawer-close.mjs
 
+      - name: Keyboard e2e (BACK keys, focus start and restore)
+        working-directory: clients/tv-web/web
+        run: |
+          for script in scripts/nav-*-e2e.mjs; do node "$script" --no-build --dist dist || exit 1; done
+
       - name: Upload the diff images
         if: failure()
         uses: actions/upload-artifact@v4

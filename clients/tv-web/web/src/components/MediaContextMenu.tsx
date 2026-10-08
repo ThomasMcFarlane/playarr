@@ -29,6 +29,7 @@ import {
 import { Drawer } from "./shell";
 import { Button } from "./ui";
 import { TvEmptyState } from "./tv/TvEmptyState";
+import { isBackKey } from "../lib/backKey";
 
 const LONG_PRESS_MS = 650;
 /** Download enqueue calls are heavier than a watch-progress PUT (each creates a server-side download ticket) -- a smaller batch than `setWatched`'s. */
@@ -1056,11 +1057,7 @@ export function useMediaContextMenu({
         }}
         onKeyDown={(event) => {
           const isBack =
-            event.key === "Escape" ||
-            event.key === "BrowserBack" ||
-            event.key === "GoBack" ||
-            event.keyCode === 10009 ||
-            event.keyCode === 461;
+            isBackKey(event);
           if (isBack || event.key === "ArrowLeft") {
             event.preventDefault();
             event.stopPropagation();

@@ -18,6 +18,7 @@ import { useToast } from "../lib/toast";
 import { SearchablePlaylistSelect } from "./SearchablePlaylistSelect";
 import { Drawer } from "./shell";
 import { Button } from "./ui";
+import { isBackKey } from "../lib/backKey";
 
 const LONG_PRESS_MS = 650;
 type PlaylistContextView = "actions" | "edit" | "delete";
@@ -304,11 +305,7 @@ export function usePlaylistContextMenu({
             onClose={close}
             onKeyDown={(event) => {
               const back =
-                event.key === "Escape" ||
-                event.key === "BrowserBack" ||
-                event.key === "GoBack" ||
-                event.keyCode === 10009 ||
-                event.keyCode === 461;
+                isBackKey(event);
               if (back || event.key === "ArrowLeft") {
                 event.preventDefault();
                 event.stopPropagation();
