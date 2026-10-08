@@ -1558,6 +1558,7 @@ export const en = {
   "pages.folders.resumeItem": "Resume {{name}}",
   "pages.folders.filters": "Filters",
   "pages.folders.closeFilters": "Close folder filters",
+  "pages.search.closeFilters": "Close search filters",
   "pages.folders.search": "Search this folder",
   "pages.folders.searchPlaceholder": "Name contains…",
   "pages.folders.view": "View",

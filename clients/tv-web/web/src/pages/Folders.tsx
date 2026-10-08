@@ -8,7 +8,7 @@ import {
 } from "@playarr-tv/api-client";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { Button } from "../components/ui";
-import { EmptyState, ErrorState, FilterSection, FiltersDrawer, LoadingState, PageLayout, ScrollArea, ViewToggle } from "../components/shell";
+import { EmptyState, ErrorState, ChoiceGroup, FilterSection, FiltersDrawer, LoadingState, PageLayout, ScrollArea, ViewToggle } from "../components/shell";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes } from "../lib/formatBytes";
 import {
@@ -471,33 +471,6 @@ function kindRoute(kind: FolderUrlState["kind"]): string {
   }
 }
 
-function ChoiceGroup<T extends string>({
-  options,
-  value,
-  onChange,
-  ariaLabel,
-}: {
-  options: ReadonlyArray<{ value: T; label: string }>;
-  value: T;
-  onChange: (next: T) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <div className="tv-filter-choice-grid" role="group" aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={value === option.value ? "is-active" : ""}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function RootChooser({
   roots,

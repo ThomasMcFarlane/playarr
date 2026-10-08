@@ -26,7 +26,8 @@ import {
   WatchStateOverlay,
 } from "../components/WatchStateOverlay";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { PageLayout, ScrollArea } from "../components/shell";
+import { ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea } from "../components/shell";
+import { usePanelParam } from "../lib/usePanelParam";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
@@ -298,7 +299,8 @@ export function SearchPage() {
   const requestedMediaType = parseMediaType(searchParams.get("type"));
   const requestedLibraryId = searchParams.get("library");
   const [query, setQuery] = useState(requestedQuery);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [panel, setPanel] = usePanelParam(["filters"] as const);
+  const filtersOpen = panel === "filters";
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistResponse[] | null>(null);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
@@ -309,7 +311,6 @@ export function SearchPage() {
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const backButtonRef = useRef<HTMLAnchorElement>(null);
-  const filterButtonRef = useRef<HTMLButtonElement>(null);
   const resultRefs = useRef(new Map<string, HTMLAnchorElement>());
   const requestGenerationRef = useRef(0);
   const focusResultsAfterSearchRef = useRef(false);
@@ -613,28 +614,10 @@ export function SearchPage() {
       }
       return;
     }
-    if (event.key !== "ArrowDown") return;
-    event.preventDefault();
-    event.stopPropagation();
-    filterButtonRef.current?.focus({ preventScroll: true });
-  }
-
-  function handleClearKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowDown") return;
-    event.preventDefault();
-    event.stopPropagation();
-    filterButtonRef.current?.focus({ preventScroll: true });
   }
 
   function handleBackKeyDown(event: KeyboardEvent<HTMLAnchorElement>) {
     if (event.key !== "ArrowDown") return;
-    event.preventDefault();
-    event.stopPropagation();
-    inputRef.current?.focus({ preventScroll: true });
-  }
-
-  function handleFilterKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowUp") return;
     event.preventDefault();
     event.stopPropagation();
     inputRef.current?.focus({ preventScroll: true });
@@ -720,6 +703,16 @@ export function SearchPage() {
               ? t("pages.search.searching")
               : t("pages.search.zeroResults")
           : null,
+        actions: [
+          {
+            kind: "filters",
+            label: t("pages.search.filters"),
+            open: filtersOpen,
+            onToggle: () => setPanel(filtersOpen ? null : "filters"),
+            controls: "search-filters-drawer",
+            activeCount: (requestedMediaType !== "all" ? 1 : 0) + (activeLibrary ? 1 : 0),
+          },
+        ],
       }}
     >
       <div className="tv-search-copy">
@@ -757,95 +750,10 @@ export function SearchPage() {
               type="button"
               className="tv-search-clear"
               onClick={clearSearch}
-              onKeyDown={handleClearKeyDown}
             >
               {t("pages.search.clear")}
             </button>
           ) : null}
-        </div>
-
-        <div className="tv-search-filter-control">
-          <button
-            ref={filterButtonRef}
-            type="button"
-            className={`tv-search-filter-toggle${filtersOpen ? " is-open" : ""}`}
-            aria-expanded={filtersOpen}
-            aria-controls="search-filters"
-            onClick={() => setFiltersOpen((current) => !current)}
-            onKeyDown={handleFilterKeyDown}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6" />
-            </svg>
-            <span>{t("pages.search.filters")}</span>
-            <small>
-              {t(
-                visibleSearchTypes.find(
-                  (option) => option.value === requestedMediaType
-                )?.labelKey ?? "pages.search.all"
-              )}
-              {activeLibrary
-                ? t("pages.search.libraryFilterNamed", { name: activeLibrary.name })
-                : t("pages.search.libraryFilterAll")}
-            </small>
-          </button>
-
-          <div
-            id="search-filters"
-            className={`tv-search-filters${filtersOpen ? " is-open" : ""}`}
-            aria-hidden={!filtersOpen}
-          >
-            <div
-              className="tv-search-filter-row"
-              aria-label={t("pages.search.filterByType")}
-            >
-              <p>{t("pages.search.typeLabel")}</p>
-              <div>
-                {visibleSearchTypes.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={requestedMediaType === option.value ? "is-active" : ""}
-                    aria-pressed={requestedMediaType === option.value}
-                    tabIndex={filtersOpen ? 0 : -1}
-                    onClick={() => updateFilters({ mediaType: option.value })}
-                  >
-                    {t(option.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div
-              className="tv-search-filter-row"
-              aria-label={t("pages.search.filterByLibrary")}
-            >
-              <p>{t("pages.search.libraryLabel")}</p>
-              <div>
-                <button
-                  type="button"
-                  className={!requestedLibraryId ? "is-active" : ""}
-                  aria-pressed={!requestedLibraryId}
-                  tabIndex={filtersOpen ? 0 : -1}
-                  onClick={() => updateFilters({ libraryId: null })}
-                >
-                  {t("pages.search.all")}
-                </button>
-                {views.map((view) => (
-                  <button
-                    key={view.id}
-                    type="button"
-                    className={requestedLibraryId === view.id ? "is-active" : ""}
-                    aria-pressed={requestedLibraryId === view.id}
-                    tabIndex={filtersOpen ? 0 : -1}
-                    onClick={() => updateFilters({ libraryId: view.id })}
-                  >
-                    {view.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         {selectedWork ? (
@@ -968,6 +876,35 @@ export function SearchPage() {
           ) : null}
         </ScrollArea>
       </TvRailSurface>
+
+      <FiltersDrawer
+        id="search-filters-drawer"
+        open={filtersOpen}
+        kicker={t("pages.search.title")}
+        title={t("pages.search.filters")}
+        closeLabel={t("pages.search.closeFilters")}
+        onClose={() => setPanel(null)}
+      >
+        <FilterSection title={t("pages.search.typeLabel")}>
+          <ChoiceGroup
+            ariaLabel={t("pages.search.filterByType")}
+            value={requestedMediaType}
+            options={visibleSearchTypes.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+            onChange={(mediaType) => updateFilters({ mediaType })}
+          />
+        </FilterSection>
+        <FilterSection title={t("pages.search.libraryLabel")}>
+          <ChoiceGroup
+            ariaLabel={t("pages.search.filterByLibrary")}
+            value={requestedLibraryId ?? ""}
+            options={[
+              { value: "", label: t("pages.search.all") },
+              ...views.map((view) => ({ value: view.id, label: view.name })),
+            ]}
+            onChange={(libraryId) => updateFilters({ libraryId: libraryId || null })}
+          />
+        </FilterSection>
+      </FiltersDrawer>
 
       {mediaContext.contextMenu}
     </PageLayout>

@@ -1549,6 +1549,7 @@ export const th: Translations = {
   "pages.folders.resumeItem": "เล่น {{name}} ต่อ",
   "pages.folders.filters": "ตัวกรอง",
   "pages.folders.closeFilters": "ปิดตัวกรองโฟลเดอร์",
+  "pages.search.closeFilters": "ปิดตัวกรองการค้นหา",
   "pages.folders.search": "ค้นหาในโฟลเดอร์นี้",
   "pages.folders.searchPlaceholder": "ชื่อมีคำว่า…",
   "pages.folders.view": "มุมมอง",

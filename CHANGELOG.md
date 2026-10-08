@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: Search Filters sits in the action column on the right like every other page and opens the shared filters panel.
 - Calendar background refresh: slow sources get 120 s per month instead of 30 s, and a failed refresh logs its reason.
 - Web: the navigation rail fits 1280x720 and 1366x768 screens; the profile chip no longer covers the last entries and the first is no longer cut off at the top.
 - Web player: BACK leaves on the first press while the stream is loading, buffering, failed or showing the end card, and the mute button is reachable with the remote.

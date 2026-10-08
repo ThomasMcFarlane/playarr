@@ -6,18 +6,17 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 describe("TV search focus order (rows 53, 174)", () => {
   const search = read("./Search.tsx");
 
-  it("sends Up from Filters to the search field, not Back", () => {
-    const handler = search.match(
-      /function handleFilterKeyDown[\s\S]*?\n  }\n/
-    )?.[0];
-    expect(handler).toContain('event.key !== "ArrowUp"');
-    expect(handler).toContain("inputRef.current?.focus");
-    expect(handler).not.toContain("backButtonRef");
+  it("registers Filters in the shell action column instead of an inline pill (audit R7)", () => {
+    expect(search).toMatch(/kind: "filters"/);
+    expect(search).toContain("<FiltersDrawer");
+    expect(search).not.toContain("tv-search-filter-toggle");
+    expect(search).not.toContain("filterButtonRef");
   });
 
-  it("sends Down from Back to the field and from the field to Filters", () => {
+  it("sends Down from Back to the field and lets Down from the field fall to the results", () => {
     expect(search).toMatch(/function handleBackKeyDown[\s\S]*?inputRef\.current\?\.focus/);
-    expect(search).toMatch(/ArrowDown[\s\S]*?filterButtonRef\.current\?\.focus/);
+    const input = search.slice(search.indexOf("function handleInputKeyDown"), search.indexOf("function handleBackKeyDown"));
+    expect(input).not.toContain("ArrowDown");
   });
 });
 
