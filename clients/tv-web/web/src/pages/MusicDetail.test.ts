@@ -214,4 +214,9 @@ describe("MusicDetail track list", () => {
     expect(contextMenuSource).toContain("track_id: target.trackId");
     expect(contextMenuSource).toContain("const LONG_PRESS_MS = 650");
   });
+
+  it("keeps the artist page mini player clear of the track list", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.player-page\.is-minimised\.player-inline-music-mini \{[^}]*width: min\([^}]*38 \* var\(--vw\)/);
+  });
 });

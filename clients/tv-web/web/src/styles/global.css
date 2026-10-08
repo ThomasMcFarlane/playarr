@@ -2971,6 +2971,14 @@ code {
   filter: drop-shadow(0 22px 44px rgba(0, 0, 0, 0.34));
 }
 
+/* Artist page: the mini player stays clear of the track list (the browser panel starts at 38% of the width or later). */
+@media (min-width: 761px) {
+  .player-page.is-minimised.player-inline-music-mini {
+    left: calc(var(--tv-nav-clearance, 110px) + 8px);
+    width: min(clamp(340px, calc(27 * var(--vw)), 500px), calc(38 * var(--vw) - var(--tv-nav-clearance, 110px) - 20px));
+  }
+}
+
 .player-page.is-minimised:not(.is-inline-music) {
   display: block;
   opacity: 1;
