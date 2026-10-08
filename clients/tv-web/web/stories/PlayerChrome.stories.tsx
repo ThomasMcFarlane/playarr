@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { PlaybackEngineState } from "@playarr-tv/player-core";
 import { PlayerControls } from "../src/components/player/PlayerControls";
-import { focusOn } from "./fixtures";
 
 const noop = () => undefined;
 
@@ -59,12 +58,8 @@ function Chrome({ state, visible = true }: { state: PlaybackEngineState["state"]
   );
 }
 
-const meta = { title: "Components/Player chrome", component: Chrome, tags: ["autodocs"], args: { state: "playing" } } satisfies Meta<typeof Chrome>;
+const meta = { title: "Components/Player chrome", component: Chrome, tags: ["autodocs"], args: { state: "playing", visible: true }, argTypes: { state: { control: "inline-radio", options: ["playing", "paused", "buffering"] }, visible: { control: "boolean", description: "Controls overlay shown" } } } satisfies Meta<typeof Chrome>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playing: Story = {};
-export const Paused: Story = { args: { state: "paused" } };
-export const Buffering: Story = { args: { state: "buffering" } };
-export const Hidden: Story = { args: { visible: false } };
-export const Focus: Story = { parameters: focusOn(".player-controls button, .player-seek-track") };
+export const Playground: Story = {};

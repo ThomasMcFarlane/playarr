@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button } from "../src/components/ui";
 import { Drawer, FilterSection, MultiSelect, ScrollArea } from "../src/components/shell";
-import { focusOn } from "./fixtures";
 
 const GENRES = ["Action", "Drama", "Comedy", "Documentary", "Thriller", "Animation"].map((g) => ({ value: g, label: g }));
 
@@ -42,15 +41,11 @@ function DrawerDemo({ open, tall }: { open: boolean; tall?: boolean }) {
   );
 }
 
-const meta = { title: "Components/Panel drawer", component: DrawerDemo, tags: ["autodocs"], args: { open: true } } satisfies Meta<typeof DrawerDemo>;
+const meta = { title: "Components/Panel drawer", component: DrawerDemo, tags: ["autodocs"], args: { open: true, tall: false }, argTypes: { open: { control: "boolean" }, tall: { control: "boolean", description: "Long body scrolls with the edge fade" } } } satisfies Meta<typeof DrawerDemo>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Open: Story = {};
-export const Closed: Story = { args: { open: false } };
-/** A long body scrolls natively and shows the edge fade on the side where content continues. */
-export const Scrolling: Story = { args: { tall: true } };
-export const Focus: Story = { args: { open: true }, parameters: focusOn(".drawer button") };
+export const Playground: Story = {};
 
 function ScrollDemo({ axis }: { axis: "vertical" | "horizontal" }) {
   return (
@@ -68,5 +63,10 @@ function ScrollDemo({ axis }: { axis: "vertical" | "horizontal" }) {
   );
 }
 
-export const ScrollAreaVertical: Story = { name: "Scroll area (vertical)", render: () => <ScrollDemo axis="vertical" /> };
-export const ScrollAreaHorizontal: Story = { name: "Scroll area (horizontal)", render: () => <ScrollDemo axis="horizontal" /> };
+/** The scroll area is a separate component: its axis is a control. */
+export const ScrollAreaStory: Story = {
+  name: "Scroll area",
+  args: { axis: "vertical" } as never,
+  argTypes: { axis: { control: "inline-radio", options: ["vertical", "horizontal"] } } as never,
+  render: (args) => <ScrollDemo axis={(args as unknown as { axis: "vertical" | "horizontal" }).axis} />,
+};

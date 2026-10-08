@@ -84,6 +84,8 @@ const preview: Preview = {
     controls: { expanded: false },
     viewport: { options: LAYOUTS },
     backgrounds: { disabled: true },
+    // The Pseudo states toolbar item forces :hover, :focus-visible, :active and :focus-within on everything in the page.
+    pseudo: { rootSelector: "body" },
     options: { storySort: { order: ["Foundations", "Components", "Pages"] } },
   },
 };

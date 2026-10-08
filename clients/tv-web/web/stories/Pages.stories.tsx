@@ -66,12 +66,8 @@ function LibraryPage({ mode }: { mode: Mode }) {
   );
 }
 
-const meta = { title: "Pages/Library composition", component: LibraryPage, args: { mode: "default" } } satisfies Meta<typeof LibraryPage>;
+const meta = { title: "Pages/Library", component: LibraryPage, args: { mode: "default" }, argTypes: { mode: { control: "inline-radio", options: ["default", "loading", "empty", "error", "retry"] } } } satisfies Meta<typeof LibraryPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Loading: Story = { args: { mode: "loading" } };
-export const Empty: Story = { args: { mode: "empty" } };
-export const ErrorState: Story = { name: "Error", args: { mode: "error" } };
-export const ErrorWithRetry: Story = { args: { mode: "retry" } };
+export const Playground: Story = {};

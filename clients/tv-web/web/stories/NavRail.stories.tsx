@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { NavLink, MemoryRouter } from "react-router-dom";
 import { CalendarIcon, DownloadsIcon, HomeIcon, MoviesIcon, MusicIcon, PlaylistsIcon, SearchIcon, SeriesIcon, SettingsIcon, WatchlistIcon } from "../src/components/NavIcons";
-import { focusOn } from "./fixtures";
 
 // Mirrors the markup of `<nav className="app-nav">` in src/App.tsx; the classes and icons are the real ones.
 const GROUPS = [
@@ -44,9 +43,8 @@ function NavRail({ active }: { active: string }) {
   );
 }
 
-const meta = { title: "Components/Nav rail", component: NavRail, tags: ["autodocs"], args: { active: "/movies" } } satisfies Meta<typeof NavRail>;
+const meta = { title: "Components/Nav rail", component: NavRail, tags: ["autodocs"], args: { active: "/movies" }, argTypes: { active: { control: "select", options: ["/", "/series", "/movies", "/music", "/playlists", "/watchlist", "/calendar", "/settings", "/downloads", "/search"] } } } satisfies Meta<typeof NavRail>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn(".app-nav-link") };
+export const Playground: Story = {};

@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ResumePlan } from "@playarr-tv/api-client";
 import { ResumeChooserModal } from "../src/components/ResumeChooserModal";
 import { UpdateToast } from "../src/components/UpdateToast";
-import { focusOn } from "./fixtures";
 
 const SERIES = "00000000-0000-4000-8000-0000000000a1";
 const option = (n: number, kind: "unfinished" | "next_in_series" | "start_over", percent: number) => ({
@@ -36,8 +35,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** The modal dialog: a real dialog role, first option focused, Back closes it. */
-export const ResumeChooser: Story = { name: "Resume chooser (open)" };
-export const ResumeChooserFocus: Story = { name: "Resume chooser (focus)", parameters: focusOn(".resume-chooser-modal button") };
+export const ResumeChooser: Story = { name: "Resume chooser" };
 
 function Toast({ kind }: { kind: "update" | "package" }) {
   return (
@@ -55,5 +53,9 @@ function Toast({ kind }: { kind: "update" | "package" }) {
   );
 }
 
-export const UpdateAvailable: Story = { name: "Update toast", render: () => <Toast kind="update" /> };
-export const PackageUpdate: Story = { name: "Update toast (reinstall required)", render: () => <Toast kind="package" /> };
+export const UpdateToastStory: Story = {
+  name: "Update toast",
+  args: { kind: "update" } as never,
+  argTypes: { kind: { control: "inline-radio", options: ["update", "package"], description: "package: reinstall required" } } as never,
+  render: (args) => <Toast kind={(args as unknown as { kind: "update" | "package" }).kind} />,
+};

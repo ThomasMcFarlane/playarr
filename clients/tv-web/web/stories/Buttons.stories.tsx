@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button, type ButtonSize, type ButtonVariant } from "../src/components/ui";
-import { Caption, focusOn, hoverOn } from "./fixtures";
+import { Caption } from "./fixtures";
 
 const VARIANTS: ButtonVariant[] = ["primary", "secondary", "ghost", "danger", "icon"];
 const SIZES: ButtonSize[] = ["sm", "md", "lg"];
@@ -28,12 +28,10 @@ const meta = {
   title: "Components/Button",
   component: Matrix,
   tags: ["autodocs"],
+  args: { disabled: false, active: false },
+  argTypes: { disabled: { control: "boolean" }, active: { control: "boolean", description: "Open or pressed" } },
 } satisfies Meta<typeof Matrix>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn(".ui-btn") };
-export const Hover: Story = { parameters: hoverOn(".ui-btn") };
-export const Open: Story = { args: { active: true } };
-export const Disabled: Story = { args: { disabled: true } };
+export const Playground: Story = {};

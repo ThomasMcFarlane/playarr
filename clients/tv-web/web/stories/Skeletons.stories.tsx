@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { SkeletonBlock, SkeletonLines } from "../src/components/shell";
 import { Caption } from "./fixtures";
 
-function Skeletons() {
+function Skeletons({ lines }: { lines: number }) {
   return (
     <div className="sb-pad sb-col" style={{ maxWidth: 720 }} aria-busy="true">
       <div>
@@ -11,7 +11,7 @@ function Skeletons() {
       </div>
       <div>
         <Caption>Text lines</Caption>
-        <SkeletonLines count={4} />
+        <SkeletonLines count={lines} />
       </div>
       <div>
         <Caption>Header</Caption>
@@ -24,8 +24,8 @@ function Skeletons() {
   );
 }
 
-const meta = { title: "Components/Skeleton", component: Skeletons, tags: ["autodocs"] } satisfies Meta<typeof Skeletons>;
+const meta = { title: "Components/Skeleton", component: Skeletons, tags: ["autodocs"], args: { lines: 4 }, argTypes: { lines: { control: { type: "number", min: 1, max: 12 } } } } satisfies Meta<typeof Skeletons>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Loading: Story = {};
+export const Playground: Story = {};

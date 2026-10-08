@@ -4,7 +4,7 @@ import { DateRangeField, MasterDetail, PeriodPicker } from "../src/components/sh
 import { ProfileAvatar } from "../src/components/ProfileAvatar";
 import { LanguageDropdown } from "../src/components/LanguageDropdown";
 import { WatchStateOverlay } from "../src/components/WatchStateOverlay";
-import { Art, Caption, FIXTURE_TITLES, focusOn } from "./fixtures";
+import { Art, Caption, FIXTURE_TITLES } from "./fixtures";
 import type { WatchProgress } from "@playarr-tv/api-client";
 
 const progress = (state: "part_watched" | "unseen", position: number): WatchProgress =>
@@ -72,5 +72,4 @@ const meta = { title: "Components/Other surfaces", component: Surfaces, tags: ["
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Focus: Story = { parameters: focusOn("button, input, select") };
+export const Playground: Story = {};
