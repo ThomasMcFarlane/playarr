@@ -22,11 +22,6 @@ pub enum UnratedContent {
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApprovalKind {
-    /// A purchase on an OS/provider store (recorded; enforced by the OS or
-    /// provider integration, not by Playarr Server alone).
-    Purchase,
-    /// An application install (same enforcement caveat as `Purchase`).
-    Install,
     /// One work that would otherwise be blocked by the rating gate.
     Content,
     /// Extra watch time or a schedule override for today.
@@ -70,11 +65,22 @@ pub struct HouseholdControls {
     #[serde(default)]
     pub guardian_user_ids: Vec<Uuid>,
     /// Approval kinds that must be granted by a guardian.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_known_approval_kinds")]
     pub approval_required: Vec<ApprovalKind>,
     /// Maximum age of a client's cached authorisation. `None` = default.
     #[serde(default)]
     pub offline_ttl_hours: Option<u32>,
+}
+
+/// Reads `approval_required`, skipping kinds this build does not know (the
+/// retired `purchase`/`install`, or kinds from a newer peer) instead of
+/// failing the whole policy.
+fn deserialize_known_approval_kinds<'de, D>(deserializer: D) -> Result<Vec<ApprovalKind>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Vec::<String>::deserialize(deserializer)?;
+    Ok(raw.iter().filter_map(|k| ApprovalKind::parse(k)).collect())
 }
 
 impl HouseholdControls {
@@ -97,8 +103,6 @@ impl HouseholdControls {
 impl ApprovalKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Purchase => "purchase",
-            Self::Install => "install",
             Self::Content => "content",
             Self::Time => "time",
         }
@@ -106,8 +110,6 @@ impl ApprovalKind {
 
     pub fn parse(raw: &str) -> Option<Self> {
         Some(match raw {
-            "purchase" => Self::Purchase,
-            "install" => Self::Install,
             "content" => Self::Content,
             "time" => Self::Time,
             _ => return None,
@@ -151,7 +153,6 @@ pub struct Approval {
     pub profile_user_id: Uuid,
     pub kind: ApprovalKind,
     /// `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
-    /// `Purchase`/`Install`: an opaque provider/app identifier.
     pub subject: String,
     pub note: Option<String>,
     pub status: ApprovalStatus,
@@ -169,4 +170,21 @@ pub struct Approval {
     pub uses: u32,
     /// Extra watch seconds for a `Time`/`budget` grant.
     pub bonus_seconds: i64,
+}
+
+#[cfg(test)]
+mod retired_kind_tests {
+    use super::*;
+
+    #[test]
+    fn retired_approval_kinds_are_skipped_when_reading_stored_policy() {
+        let controls: HouseholdControls = serde_json::from_str(
+            r#"{"approval_required":["purchase","content","install","time"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            controls.approval_required,
+            vec![ApprovalKind::Content, ApprovalKind::Time]
+        );
+    }
 }

@@ -14,8 +14,6 @@ import {
 import { Modal } from "./Modal";
 
 const APPROVAL_LABELS: Record<ApprovalKind, string> = {
-  purchase: "Purchases",
-  install: "App installs",
   content: "Blocked titles",
   time: "Extra time",
 };
@@ -302,10 +300,6 @@ export function HouseholdModal({
                 {APPROVAL_LABELS[kind]}
               </label>
             ))}
-            <p className="muted hint" style={{ margin: 0 }}>
-              Purchases and installs are recorded here; the operating system or provider must
-              still ask for the approval, which Playarr cannot force on third-party stores.
-            </p>
           </fieldset>
           <div className="modal-field">
             <label htmlFor="household-offline">Offline validity (hours, 1-72)</label>

@@ -8873,9 +8873,7 @@ components:
           $ref: '#/components/schemas/ApprovalStatus'
         subject:
           type: string
-          description: |-
-            `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
-            `Purchase`/`Install`: an opaque provider/app identifier.
+          description: '`Content`: the work id. `Time`: `"schedule"` or `"budget"`.'
         uses:
           type: integer
           format: int32
@@ -8884,8 +8882,6 @@ components:
       type: string
       description: Things a guardian can be asked to approve.
       enum:
-      - purchase
-      - install
       - content
       - time
     ApprovalStatus:
@@ -9850,9 +9846,7 @@ components:
           - 'null'
         subject:
           type: string
-          description: |-
-            `content`: a work id. `time`: `schedule` or `budget`. `purchase`/
-            `install`: an opaque provider or application identifier.
+          description: '`content`: a work id. `time`: `schedule` or `budget`.'
     CreateDownloadTicketRequest:
       type: object
       required:
@@ -10117,8 +10111,8 @@ components:
           - 'null'
           format: int32
           description: |-
-            How long an approval stays usable. Default 15 minutes for
-            purchase/install, 60 for content and time; at most 240.
+            How long an approval stays usable. Default 60 minutes
+            for content and time; at most 240.
           minimum: 0
         pin:
           type:

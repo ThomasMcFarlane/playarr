@@ -12,7 +12,7 @@ export const WEEKDAYS = [
 export type Weekday = (typeof WEEKDAYS)[number];
 
 export const RATING_OPTIONS = ["G", "PG", "PG-13", "R", "NC-17"] as const;
-export const APPROVAL_KINDS = ["purchase", "install", "content", "time"] as const;
+export const APPROVAL_KINDS = ["content", "time"] as const;
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
 
 export interface DayWindow {

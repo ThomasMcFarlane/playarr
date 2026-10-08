@@ -3756,7 +3756,6 @@ export interface components {
             status: components["schemas"]["ApprovalStatus"];
             /**
              * @description `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
-             *     `Purchase`/`Install`: an opaque provider/app identifier.
              */
             subject: string;
             /** Format: int32 */
@@ -3766,7 +3765,7 @@ export interface components {
          * @description Things a guardian can be asked to approve.
          * @enum {string}
          */
-        ApprovalKind: "purchase" | "install" | "content" | "time";
+        ApprovalKind: "content" | "time";
         /** @enum {string} */
         ApprovalStatus: "pending" | "approved" | "denied";
         ApprovePairingRequest: {
@@ -4235,8 +4234,7 @@ export interface components {
             kind: components["schemas"]["ApprovalKind"];
             note?: string | null;
             /**
-             * @description `content`: a work id. `time`: `schedule` or `budget`. `purchase`/
-             *     `install`: an opaque provider or application identifier.
+             * @description `content`: a work id. `time`: `schedule` or `budget`.
              */
             subject: string;
         };
@@ -4399,8 +4397,8 @@ export interface components {
             bonus_minutes?: number | null;
             /**
              * Format: int32
-             * @description How long an approval stays usable. Default 15 minutes for
-             *     purchase/install, 60 for content and time; at most 240.
+             * @description How long an approval stays usable. Default 60 minutes
+             *     for content and time; at most 240.
              */
             duration_minutes?: number | null;
             /** @description The guardian's own profile PIN (required to approve). */

@@ -15,10 +15,6 @@ import { TvRailSurface } from "../components/tv/TvStage";
 
 function kindLabelKey(kind: HouseholdApproval["kind"]) {
   switch (kind) {
-    case "purchase":
-      return "household.kind.purchase" as const;
-    case "install":
-      return "household.kind.install" as const;
     case "content":
       return "household.kind.content" as const;
     default:

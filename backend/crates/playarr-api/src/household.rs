@@ -90,6 +90,8 @@ const PIN_MAX_LOCK_SECONDS: i64 = 3600;
 const MAX_PENDING_APPROVALS: usize = 20;
 const REQUEST_TTL_MINUTES: i64 = 15;
 const MAX_GRANT_MINUTES: u32 = 240;
+/// Default lifetime of a granted approval, in minutes.
+const DEFAULT_GRANT_MINUTES: u32 = 60;
 
 #[derive(Debug)]
 struct Pending {
@@ -618,8 +620,7 @@ pub async fn household_status_handler(
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateApprovalRequest {
     pub kind: ApprovalKind,
-    /// `content`: a work id. `time`: `schedule` or `budget`. `purchase`/
-    /// `install`: an opaque provider or application identifier.
+    /// `content`: a work id. `time`: `schedule` or `budget`.
     pub subject: String,
     #[serde(default)]
     pub note: Option<String>,
@@ -741,8 +742,8 @@ pub struct DecideApprovalRequest {
     /// The guardian's own profile PIN (required to approve).
     #[serde(default)]
     pub pin: Option<String>,
-    /// How long an approval stays usable. Default 15 minutes for
-    /// purchase/install, 60 for content and time; at most 240.
+    /// How long an approval stays usable. Default 60 minutes
+    /// for content and time; at most 240.
     #[serde(default)]
     pub duration_minutes: Option<u32>,
     /// `time`/`budget` only: extra watch minutes granted.
@@ -867,17 +868,12 @@ pub async fn decide_approval_handler(
         .reset_pin_failures(guardian.user_id, guardian.user_id)
         .await;
 
-    let default_minutes = match approval.kind {
-        ApprovalKind::Purchase | ApprovalKind::Install => 15,
-        _ => 60,
-    };
     let minutes = body
         .duration_minutes
-        .unwrap_or(default_minutes)
+        .unwrap_or(DEFAULT_GRANT_MINUTES)
         .clamp(1, MAX_GRANT_MINUTES);
     let grant_expires_at = now + Duration::minutes(minutes.into());
     let (max_uses, bonus_seconds) = match approval.kind {
-        ApprovalKind::Purchase | ApprovalKind::Install => (Some(1), 0),
         ApprovalKind::Content => (None, 0),
         ApprovalKind::Time => {
             let bonus = if approval.subject == "budget" {

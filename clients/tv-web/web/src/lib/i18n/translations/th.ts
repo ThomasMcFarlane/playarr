@@ -1485,8 +1485,6 @@ export const th: Translations = {
   "household.page.needsPin": "ตั้ง PIN โปรไฟล์ในการตั้งค่าก่อนอนุมัติคำขอ",
   "household.page.unknownProfile": "โปรไฟล์",
   "household.page.back": "กลับ",
-  "household.kind.purchase": "การซื้อ",
-  "household.kind.install": "การติดตั้งแอป",
   "household.kind.content": "เรื่องที่ถูกบล็อก",
   "household.kind.time": "ขอเวลาเพิ่ม",
   "household.status.pending": "รอดำเนินการ",

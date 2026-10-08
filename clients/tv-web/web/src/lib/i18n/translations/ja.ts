@@ -1481,8 +1481,6 @@ export const ja: Translations = {
   "household.page.needsPin": "リクエストを承認する前に、設定でプロフィールPINを設定してください。",
   "household.page.unknownProfile": "プロフィール",
   "household.page.back": "戻る",
-  "household.kind.purchase": "購入",
-  "household.kind.install": "アプリのインストール",
   "household.kind.content": "ブロックされた作品",
   "household.kind.time": "時間の追加",
   "household.status.pending": "保留中",

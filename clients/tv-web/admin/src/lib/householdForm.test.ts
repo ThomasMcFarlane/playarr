@@ -22,7 +22,7 @@ const saved: HouseholdSettings = {
     timezone: "Europe/London",
     daily_budget_minutes: 90,
     guardian_user_ids: ["g-1"],
-    approval_required: ["purchase"],
+    approval_required: ["content"],
     offline_ttl_hours: 12,
   },
 };

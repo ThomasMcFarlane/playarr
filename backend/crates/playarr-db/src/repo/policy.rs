@@ -415,7 +415,7 @@ mod tests {
                 daily_budget_minutes: Some(90),
                 game_allow: Some(vec![]),
                 guardian_user_ids: vec![Uuid::new_v4()],
-                approval_required: vec![playarr_model::ApprovalKind::Purchase],
+                approval_required: vec![playarr_model::ApprovalKind::Content],
                 offline_ttl_hours: Some(12),
                 ..Default::default()
             },
@@ -441,6 +441,56 @@ mod tests {
         let fetched = repo.find_by_id(policy.id).await.expect("find_by_id");
 
         assert_eq!(fetched, Some(policy));
+    }
+
+    #[tokio::test]
+    async fn retired_approval_kinds_migration_strips_policies_and_deletes_rows() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxPolicyRepo::new(pool.clone());
+        let policy = sample_policy("Legacy");
+        repo.upsert(&policy).await.unwrap();
+        sqlx::query("UPDATE policies SET household = ? WHERE id = ?")
+            .bind(r#"{"approval_required":["purchase","content","install","time"]}"#)
+            .bind(policy.id.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        for (id, kind) in [("a", "purchase"), ("b", "install"), ("c", "content")] {
+            sqlx::query(
+                "INSERT INTO household_approvals (id, profile_user_id, kind, subject, status, \
+                 requested_at, request_expires_at) VALUES (?, 'p', ?, 's', 'pending', 't', 't')",
+            )
+            .bind(id)
+            .bind(kind)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        for statement in
+            include_str!("../../../../migrations/sqlite/0081_drop_purchase_install_approvals.sql")
+                .split(';')
+                .filter(|s| {
+                    s.lines()
+                        .any(|l| !l.trim().is_empty() && !l.trim_start().starts_with("--"))
+                })
+        {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+
+        let fetched = repo.find_by_id(policy.id).await.unwrap().unwrap();
+        assert_eq!(
+            fetched.household.approval_required,
+            vec![
+                playarr_model::ApprovalKind::Content,
+                playarr_model::ApprovalKind::Time
+            ]
+        );
+        let left: Vec<String> = sqlx::query_scalar("SELECT id FROM household_approvals")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert_eq!(left, vec!["c".to_string()]);
     }
 
     #[tokio::test]

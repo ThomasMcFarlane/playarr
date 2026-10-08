@@ -773,6 +773,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Guardian approvals no longer have `purchase` or `install` kinds (owner decision, 9 October 2026: Playarr has no store, so approvals cover only `content` and `time`). The kinds are gone from the model, API, OpenAPI contract, generated web types and the admin and web UI. Migration 0081 strips the two values from stored household policies and deletes their approval rows; reading a policy also skips unknown approval kinds, so old or replicated data never fails to load.
 - Removed the unused `pages.player.preparingPlayback`, `pages.player.preparingMessage` and `pages.player.oneMoment` translation strings.
 - Removed the Postgres backend: the `postgres` cargo features and `sqlx` Postgres driver, `backend/migrations/postgres`, the Postgres coordinator, `LISTEN`/`NOTIFY` cache and Postgres backup/restore paths, the Redis cache (only reachable on the shared-database tier), the `DeploymentTier` and `REDIS_URL` configuration, and the per-backend SQL variants in `playarr-db`. Playarr is SQLite-only (ADR 0002).
 - A `postgres://` or `postgresql://` `DATABASE_URL` now fails startup with a clear error instead of connecting, and `playarr_db::run_migrations` no longer takes an `is_postgres` argument.

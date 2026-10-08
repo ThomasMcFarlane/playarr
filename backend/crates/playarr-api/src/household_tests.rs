@@ -10,7 +10,7 @@ use axum::Router;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use playarr_model::media::LeafRef;
 use playarr_model::{
-    AccessWindow, ApprovalKind, ClientPlatform, MediaFile, PlayMethod, PlaybackSession, TimeRange,
+    AccessWindow, ClientPlatform, MediaFile, PlayMethod, PlaybackSession, TimeRange,
     UnratedContent, Weekday,
 };
 use serde_json::{json, Value};
@@ -1090,85 +1090,6 @@ async fn content_approval_unlocks_one_title_until_it_expires() {
 }
 
 #[tokio::test]
-async fn purchase_approval_is_single_use_scoped_to_the_profile_and_expiring() {
-    let h = household().await;
-    update_policy(&h.state, h.child, |p| {
-        p.household.approval_required = vec![ApprovalKind::Purchase];
-    })
-    .await;
-    let (_, created) = post(
-        &h.router,
-        &h.child_token,
-        "/api/v1/household/approvals",
-        json!({"kind": "purchase", "subject": "store:item-42", "note": "a game"}),
-    )
-    .await;
-    let id = created["id"].as_str().unwrap().to_string();
-    let consume = format!("/api/v1/household/approvals/{id}/consume");
-
-    // Not approved yet.
-    assert_eq!(
-        post(&h.router, &h.child_token, &consume, json!({})).await.0,
-        StatusCode::FORBIDDEN
-    );
-    post(
-        &h.router,
-        &h.guardian_token,
-        &format!("/api/v1/household/approvals/{id}/decision"),
-        json!({"approve": true, "pin": "2468"}),
-    )
-    .await;
-
-    // Another profile cannot spend it.
-    let sibling = Uuid::new_v4();
-    seed_policy_user(&h.state, sibling, |_| {}).await;
-    let sibling_token = mint_access_token(&h.state, sibling);
-    assert_eq!(
-        post(&h.router, &sibling_token, &consume, json!({})).await.0,
-        StatusCode::FORBIDDEN
-    );
-    // The profile spends it once.
-    assert_eq!(
-        post(&h.router, &h.child_token, &consume, json!({})).await.0,
-        StatusCode::OK
-    );
-    // Replay fails.
-    assert_eq!(
-        post(&h.router, &h.child_token, &consume, json!({})).await.0,
-        StatusCode::FORBIDDEN
-    );
-
-    // A fresh approval that expires unused cannot be spent afterwards.
-    let (_, created) = post(
-        &h.router,
-        &h.child_token,
-        "/api/v1/household/approvals",
-        json!({"kind": "install", "subject": "app:example"}),
-    )
-    .await;
-    let id = created["id"].as_str().unwrap().to_string();
-    post(
-        &h.router,
-        &h.guardian_token,
-        &format!("/api/v1/household/approvals/{id}/decision"),
-        json!({"approve": true, "pin": "2468", "duration_minutes": 5}),
-    )
-    .await;
-    h.state.clock.advance(Duration::minutes(6));
-    assert_eq!(
-        post(
-            &h.router,
-            &h.child_token,
-            &format!("/api/v1/household/approvals/{id}/consume"),
-            json!({})
-        )
-        .await
-        .0,
-        StatusCode::FORBIDDEN
-    );
-}
-
-#[tokio::test]
 async fn budget_bonus_approval_extends_today_only() {
     let h = household().await;
     update_policy(&h.state, h.child, |p| {
@@ -1303,7 +1224,7 @@ async fn approvals_are_private_to_the_profile_and_its_guardians() {
         &h.router,
         &h.child_token,
         "/api/v1/household/approvals",
-        json!({"kind": "purchase", "subject": "x"}),
+        json!({"kind": "time", "subject": "budget"}),
     )
     .await;
     let (_, own) = get(&h.router, &h.child_token, "/api/v1/household/approvals").await;
@@ -1345,7 +1266,7 @@ async fn admin_household_settings_validate_and_round_trip() {
             "timezone": "Europe/London",
             "daily_budget_minutes": 90,
             "guardian_user_ids": [guardian],
-            "approval_required": ["purchase", "install"],
+            "approval_required": ["content", "time"],
             "offline_ttl_hours": 12
         }
     });

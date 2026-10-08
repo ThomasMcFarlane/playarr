@@ -1494,8 +1494,6 @@ export const en = {
   "household.page.needsPin": "Set a profile PIN in Settings before approving requests.",
   "household.page.unknownProfile": "A profile",
   "household.page.back": "Back",
-  "household.kind.purchase": "Purchase",
-  "household.kind.install": "App install",
   "household.kind.content": "Blocked title",
   "household.kind.time": "More time",
   "household.status.pending": "Waiting",

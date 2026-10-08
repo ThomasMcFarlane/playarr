@@ -449,7 +449,7 @@ mod tests {
     #[tokio::test]
     async fn consume_is_single_use_scoped_and_expiring() {
         let repo = SqlxHouseholdRepo::new(test_sqlite_pool().await);
-        let a = approval(ApprovalKind::Purchase);
+        let a = approval(ApprovalKind::Content);
         repo.insert(&a).await.unwrap();
         let now = Utc::now();
         // Not approved yet.
@@ -471,7 +471,7 @@ mod tests {
         // Second use is refused.
         assert!(!repo.consume(a.id, a.profile_user_id, now).await.unwrap());
 
-        let b = approval(ApprovalKind::Install);
+        let b = approval(ApprovalKind::Time);
         repo.insert(&b).await.unwrap();
         repo.decide(
             b.id,
