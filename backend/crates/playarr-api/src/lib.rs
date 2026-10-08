@@ -32,6 +32,7 @@ pub mod admin_routing;
 pub mod artwork;
 pub mod auth_extractor;
 pub mod calendar;
+pub mod calendar_cache;
 pub mod catalog;
 pub mod credits;
 pub mod discovery;

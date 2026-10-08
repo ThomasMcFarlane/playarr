@@ -36,6 +36,13 @@ function formatTimestamp(iso: string | null | undefined): string | null {
   return date.toLocaleString();
 }
 
+/** Calendar data freshness for one source (admin diagnostics; users never see it). */
+function calendarLabel(row: SourceInstanceSyncStatus): string {
+  const synced = formatTimestamp(row.calendar_last_success_at);
+  const base = synced ? `Synced ${synced}` : "Not synced yet";
+  return row.calendar_error ? `${base} (last refresh failed: ${row.calendar_error})` : base;
+}
+
 function lastRunLabel(row: SourceInstanceSyncStatus): string {
   const finished = formatTimestamp(row.finished_at);
   if (finished) return finished;
@@ -265,6 +272,7 @@ export function TasksPage() {
               <th style={{ textAlign: "left" }}>Kind</th>
               <th style={{ textAlign: "left" }}>Status</th>
               <th style={{ textAlign: "left" }}>Last run</th>
+              <th style={{ textAlign: "left" }}>Calendar data</th>
               <th style={{ textAlign: "left" }}>Error</th>
               <th style={{ textAlign: "right" }}></th>
             </tr>
@@ -285,6 +293,7 @@ export function TasksPage() {
                   )}
                 </td>
                 <td className="muted">{lastRunLabel(row)}</td>
+                <td className={row.calendar_error ? "error-text" : "muted"}>{calendarLabel(row)}</td>
                 <td className="error-text">
                   {syncErrors[row.source_instance_id] ??
                     (row.status === "failed" ? row.error ?? "Unknown error" : "")}

@@ -9,6 +9,7 @@
 
 mod availability_event;
 mod calendar_feed_token;
+mod calendar_source_cache;
 mod credit;
 mod device;
 mod download_ticket;
@@ -54,6 +55,7 @@ pub use availability_event::{AvailabilityEventRepo, SqlxAvailabilityEventRepo};
 pub use calendar_feed_token::{
     CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxCalendarFeedTokenRepo,
 };
+pub use calendar_source_cache::{SqlxCalendarSourceCacheRepo, StoredChunk, StoredHealth};
 pub use credit::{CreditRepo, SqlxCreditRepo};
 pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};

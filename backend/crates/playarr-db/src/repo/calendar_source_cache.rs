@@ -1,0 +1,174 @@
+//! Persistence for the calendar's per-source cache: the last good entries per
+//! instance and month (opaque JSON, owned by the API layer) and refresh health.
+
+use chrono::{DateTime, Utc};
+use sqlx::Row;
+
+use crate::codec::{format_datetime, parse_datetime};
+use crate::error::DbError;
+use crate::pool::DbPool;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredChunk {
+    pub instance_id: String,
+    pub month: String,
+    pub fetched_at: DateTime<Utc>,
+    pub entries_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StoredHealth {
+    pub instance_id: String,
+    pub last_success_at: Option<DateTime<Utc>>,
+    pub last_attempt_at: Option<DateTime<Utc>>,
+    pub last_error_state: Option<String>,
+    pub last_error_message: Option<String>,
+    pub consecutive_failures: u32,
+}
+
+#[derive(Clone)]
+pub struct SqlxCalendarSourceCacheRepo {
+    pool: DbPool,
+}
+
+impl SqlxCalendarSourceCacheRepo {
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn put_chunk(&self, chunk: &StoredChunk) -> Result<(), DbError> {
+        sqlx::query(
+            "INSERT INTO calendar_source_chunks (instance_id, month, fetched_at, entries_json) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT(instance_id, month) DO UPDATE SET \
+             fetched_at = excluded.fetched_at, entries_json = excluded.entries_json",
+        )
+        .bind(&chunk.instance_id)
+        .bind(&chunk.month)
+        .bind(format_datetime(chunk.fetched_at))
+        .bind(&chunk.entries_json)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn all_chunks(&self) -> Result<Vec<StoredChunk>, DbError> {
+        let rows = sqlx::query(
+            "SELECT instance_id, month, fetched_at, entries_json FROM calendar_source_chunks",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                let fetched_at: String = row.try_get("fetched_at")?;
+                Ok(StoredChunk {
+                    instance_id: row.try_get("instance_id")?,
+                    month: row.try_get("month")?,
+                    fetched_at: parse_datetime(&fetched_at)?,
+                    entries_json: row.try_get("entries_json")?,
+                })
+            })
+            .collect()
+    }
+
+    /// Drops chunks of months before `oldest_month` and of instances not in `keep`.
+    pub async fn prune(&self, oldest_month: &str, keep: &[String]) -> Result<(), DbError> {
+        sqlx::query("DELETE FROM calendar_source_chunks WHERE month < ?")
+            .bind(oldest_month)
+            .execute(&self.pool)
+            .await?;
+        for table in ["calendar_source_chunks", "calendar_source_health"] {
+            let existing: Vec<String> =
+                sqlx::query_scalar(&format!("SELECT DISTINCT instance_id FROM {table}"))
+                    .fetch_all(&self.pool)
+                    .await?;
+            for id in existing.into_iter().filter(|id| !keep.contains(id)) {
+                sqlx::query(&format!("DELETE FROM {table} WHERE instance_id = ?"))
+                    .bind(id)
+                    .execute(&self.pool)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn put_health(&self, health: &StoredHealth) -> Result<(), DbError> {
+        sqlx::query(
+            "INSERT INTO calendar_source_health (instance_id, last_success_at, last_attempt_at, \
+             last_error_state, last_error_message, consecutive_failures) VALUES (?, ?, ?, ?, ?, ?) \
+             ON CONFLICT(instance_id) DO UPDATE SET last_success_at = excluded.last_success_at, \
+             last_attempt_at = excluded.last_attempt_at, last_error_state = excluded.last_error_state, \
+             last_error_message = excluded.last_error_message, \
+             consecutive_failures = excluded.consecutive_failures",
+        )
+        .bind(&health.instance_id)
+        .bind(health.last_success_at.map(format_datetime))
+        .bind(health.last_attempt_at.map(format_datetime))
+        .bind(&health.last_error_state)
+        .bind(&health.last_error_message)
+        .bind(i64::from(health.consecutive_failures))
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn all_health(&self) -> Result<Vec<StoredHealth>, DbError> {
+        let rows = sqlx::query(
+            "SELECT instance_id, last_success_at, last_attempt_at, last_error_state, \
+             last_error_message, consecutive_failures FROM calendar_source_health",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                let success: Option<String> = row.try_get("last_success_at")?;
+                let attempt: Option<String> = row.try_get("last_attempt_at")?;
+                let failures: i64 = row.try_get("consecutive_failures")?;
+                Ok(StoredHealth {
+                    instance_id: row.try_get("instance_id")?,
+                    last_success_at: success.as_deref().map(parse_datetime).transpose()?,
+                    last_attempt_at: attempt.as_deref().map(parse_datetime).transpose()?,
+                    last_error_state: row.try_get("last_error_state")?,
+                    last_error_message: row.try_get("last_error_message")?,
+                    consecutive_failures: failures.max(0) as u32,
+                })
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pool::test_sqlite_pool;
+
+    #[tokio::test]
+    async fn chunks_and_health_round_trip_and_prune() {
+        let repo = SqlxCalendarSourceCacheRepo::new(test_sqlite_pool().await);
+        let now = Utc::now();
+        for (id, month) in [("a", "2026-01"), ("a", "2026-10"), ("gone", "2026-10")] {
+            repo.put_chunk(&StoredChunk {
+                instance_id: id.into(),
+                month: month.into(),
+                fetched_at: now,
+                entries_json: "[]".into(),
+            })
+            .await
+            .unwrap();
+        }
+        repo.put_health(&StoredHealth {
+            instance_id: "gone".into(),
+            consecutive_failures: 3,
+            last_error_message: Some("timed out".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        assert_eq!(repo.all_chunks().await.unwrap().len(), 3);
+        repo.prune("2026-07", &["a".to_string()]).await.unwrap();
+        let left = repo.all_chunks().await.unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].month, "2026-10");
+        assert!(repo.all_health().await.unwrap().is_empty());
+    }
+}

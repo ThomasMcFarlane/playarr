@@ -1589,7 +1589,9 @@ paths:
                 items:
                   $ref: '#/components/schemas/SourceInstanceSyncStatusResponse'
               example:
-              - detail: null
+              - calendar_error: null
+                calendar_last_success_at: 2026-07-20T18:41:00Z
+                detail: null
                 error: null
                 finished_at: 2026-07-20T18:40:12Z
                 kind: radarr
@@ -15627,6 +15629,19 @@ components:
       - name
       - kind
       properties:
+        calendar_error:
+          type:
+          - string
+          - 'null'
+          description: Reason of the most recent failed calendar refresh, cleared by the next success.
+        calendar_last_success_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            When this source's calendar data was last refreshed successfully
+            (admin diagnostics only; the calendar itself never reports source health).
         detail:
           type:
           - string

@@ -1790,7 +1790,9 @@ async fn boot_api(
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         live_events,
-        calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::new()),
+        calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::persistent(
+            playarr_db::SqlxCalendarSourceCacheRepo::new(pool.clone()),
+        )),
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
         calendar_feed_token_repo,
         availability_event_repo,
@@ -1864,6 +1866,10 @@ async fn boot_api(
     // enabled root's scan cache current. Runs where the media is readable
     // (the API role); a per-root in-flight guard keeps overlapping scans out.
     tokio::spawn(playarr_api::folder_scan::run_folder_scanner(state.clone()));
+
+    // Calendar: refresh every source's data in the background so the calendar
+    // API answers from the cache and never waits on an *arr instance.
+    tokio::spawn(playarr_api::calendar_cache::run_refresher(state.clone()));
 
     let (router, _openapi) = playarr_api::build_router_with_tv(
         state,

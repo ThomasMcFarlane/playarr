@@ -524,6 +524,8 @@ pub async fn sync_source_instance_handler(
     Path(id): Path<Uuid>,
 ) -> Result<axum::http::StatusCode, ApiError> {
     state.source_instances.trigger_sync(id)?;
+    // A library sync is also a reason to refresh the calendar data.
+    state.calendar_cache.request_refresh(Some(id));
     Ok(axum::http::StatusCode::ACCEPTED)
 }
 
@@ -547,6 +549,11 @@ pub struct SourceInstanceSyncStatusResponse {
     pub detail: Option<String>,
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
     pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When this source's calendar data was last refreshed successfully
+    /// (admin diagnostics only; the calendar itself never reports source health).
+    pub calendar_last_success_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Reason of the most recent failed calendar refresh, cleared by the next success.
+    pub calendar_error: Option<String>,
 }
 
 /// Every registered source instance's last-known sync status in one call --
@@ -569,7 +576,9 @@ pub struct SourceInstanceSyncStatusResponse {
                 "error": null,
                 "detail": null,
                 "started_at": "2026-07-20T18:40:00Z",
-                "finished_at": "2026-07-20T18:40:12Z"
+                "finished_at": "2026-07-20T18:40:12Z",
+                "calendar_last_success_at": "2026-07-20T18:41:00Z",
+                "calendar_error": null
             }
         ])),
         (status = 401, description = "Missing or invalid access token"),
@@ -599,6 +608,7 @@ pub async fn sync_status_handler(
                     (Some("failed"), Some(error), None, None, Some(finished_at))
                 }
             };
+            let calendar = state.calendar_cache.health(instance.id);
             SourceInstanceSyncStatusResponse {
                 source_instance_id: instance.id,
                 name: instance.name,
@@ -608,6 +618,8 @@ pub async fn sync_status_handler(
                 detail,
                 started_at,
                 finished_at,
+                calendar_last_success_at: calendar.last_success_at,
+                calendar_error: calendar.last_error.map(|(_, message)| message),
             }
         })
         .collect();

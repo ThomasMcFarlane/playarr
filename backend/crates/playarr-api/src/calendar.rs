@@ -6,8 +6,6 @@
 //! its catalog `Work` when one exists.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
@@ -18,9 +16,7 @@ use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use chrono::{DateTime, Datelike, Duration as ChronoDuration, NaiveDate, Utc};
 use futures::StreamExt;
-use playarr_arr_sync::calendar::{
-    classify_error, fetch_calendar, merge_candidates, CalendarCandidate,
-};
+use playarr_arr_sync::calendar::{merge_candidates, CalendarCandidate};
 use playarr_model::discovery::{ActionKind, DiscoveryKind, TitleSnapshot};
 use playarr_model::{
     CalendarAction, CalendarActionKind, CalendarGroupMember, CalendarMediaKind, CalendarResponse,
@@ -39,94 +35,7 @@ use crate::AppState;
 /// Longest window one request may cover.
 pub const MAX_WINDOW_DAYS: i64 = 92;
 const DEFAULT_WINDOW_DAYS: i64 = 30;
-/// A slow *arr instance must not hold the whole calendar hostage: the other
-/// sources are returned as soon as this elapses and the slow one is reported
-/// as unreachable.
-const SOURCE_TIMEOUT: Duration = Duration::from_secs(4);
-const CACHE_TTL: Duration = Duration::from_secs(60);
-/// How long the last good answer of an instance is kept to stand in for it
-/// while it is failing.
-const STALE_TTL: Duration = Duration::from_secs(60 * 60);
-/// After a failure the instance is not asked again for this long, so a dead
-/// source costs one timeout, not one per request.
-const FAILURE_TTL: Duration = Duration::from_secs(30);
-
-type CacheKey = (Uuid, NaiveDate, NaiveDate);
-type SourceFailure = (CalendarSourceState, String);
-
-/// Short-lived cache of raw per-instance answers. User-independent on
-/// purpose: permissions are applied before querying and after merging.
-pub struct CalendarCache {
-    entries: Mutex<HashMap<CacheKey, (Instant, Vec<CalendarCandidate>)>>,
-    failures: Mutex<HashMap<Uuid, (Instant, SourceFailure)>>,
-    ttl: Duration,
-    stale_ttl: Duration,
-    failure_ttl: Duration,
-}
-
-impl Default for CalendarCache {
-    fn default() -> Self {
-        Self::with_ttls(CACHE_TTL, STALE_TTL, FAILURE_TTL)
-    }
-}
-
-impl CalendarCache {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn with_ttls(ttl: Duration, stale_ttl: Duration, failure_ttl: Duration) -> Self {
-        Self {
-            entries: Mutex::default(),
-            failures: Mutex::default(),
-            ttl,
-            stale_ttl,
-            failure_ttl,
-        }
-    }
-
-    fn get(&self, key: &CacheKey) -> Option<Vec<CalendarCandidate>> {
-        let entries = self.entries.lock().ok()?;
-        entries
-            .get(key)
-            .filter(|(at, _)| at.elapsed() < self.ttl)
-            .map(|(_, value)| value.clone())
-    }
-
-    /// The last good answer, however old (within the stale window).
-    fn get_stale(&self, key: &CacheKey) -> Option<Vec<CalendarCandidate>> {
-        let entries = self.entries.lock().ok()?;
-        entries
-            .get(key)
-            .filter(|(at, _)| at.elapsed() < self.stale_ttl)
-            .map(|(_, value)| value.clone())
-    }
-
-    fn put(&self, key: CacheKey, value: Vec<CalendarCandidate>) {
-        if let Ok(mut entries) = self.entries.lock() {
-            entries.retain(|_, (at, _)| at.elapsed() < self.stale_ttl);
-            entries.insert(key, (Instant::now(), value));
-        }
-        if let Ok(mut failures) = self.failures.lock() {
-            failures.remove(&key.0);
-        }
-    }
-
-    fn recent_failure(&self, instance: Uuid) -> Option<SourceFailure> {
-        let failures = self.failures.lock().ok()?;
-        failures
-            .get(&instance)
-            .filter(|(at, _)| at.elapsed() < self.failure_ttl)
-            .map(|(_, failure)| failure.clone())
-    }
-
-    fn note_failure(&self, instance: Uuid, failure: SourceFailure) {
-        if let Ok(mut failures) = self.failures.lock() {
-            failures.retain(|_, (at, _)| at.elapsed() < self.failure_ttl);
-            failures.insert(instance, (Instant::now(), failure));
-        }
-    }
-}
+pub use crate::calendar_cache::CalendarCache;
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct CalendarQuery {
@@ -513,74 +422,26 @@ pub(crate) async fn build_calendar(
         .collect();
     instances.sort_by(|a, b| (a.priority, &a.name, a.id).cmp(&(b.priority, &b.name, b.id)));
 
+    // Answered from the background-refreshed cache: a request never waits on
+    // (or reports the health of) a source. Admins see source health in Settings.
     let cache = &state.calendar_cache;
-    let results = futures::future::join_all(instances.iter().map(|instance| async move {
-        let key = (instance.id, start, end);
-        if let Some(hit) = cache.get(&key) {
-            return Ok((hit, None));
-        }
-        // Stand-in for a failing source: its last good answer, flagged.
-        let fail = |failure: SourceFailure| -> Result<_, SourceFailure> {
-            match cache.get_stale(&key) {
-                Some(stale) => Ok((stale, Some(failure))),
-                None => Err(failure),
-            }
-        };
-        if let Some(failure) = cache.recent_failure(instance.id) {
-            return fail(failure);
-        }
-        let fetched = tokio::time::timeout(SOURCE_TIMEOUT, fetch_calendar(instance, start, end))
-            .await
-            .map_err(|_| {
-                (
-                    CalendarSourceState::Unreachable,
-                    "timed out waiting for the instance".to_string(),
-                )
-            })
-            .and_then(|r| r.map_err(|e| classify_error(&e)));
-        match fetched {
-            Ok(fetched) => {
-                cache.put(key, fetched.clone());
-                Ok((fetched, None))
-            }
-            Err(failure) => {
-                cache.note_failure(instance.id, failure.clone());
-                fail(failure)
-            }
-        }
-    }))
-    .await;
-
     let mut statuses = Vec::new();
     let mut candidates = Vec::new();
-    for (instance, result) in instances.iter().zip(results) {
-        let (status, error, count) = match result {
-            Ok((entries, stale_failure)) => {
-                let kept: Vec<_> = entries
-                    .into_iter()
-                    .filter(|c| kinds.is_none_or(|k| k.contains(&c.entry.media_kind)))
-                    .collect();
-                let count = kept.len() as u32;
-                candidates.extend(kept);
-                match stale_failure {
-                    // Last good entries stand in; the source is still flagged.
-                    Some((state, message)) => (state, Some(message), count),
-                    None => (CalendarSourceState::Ok, None, count),
-                }
-            }
-            Err((state, message)) => {
-                tracing::warn!(instance = %instance.name, state = ?state, "calendar source failed");
-                (state, Some(message), 0)
-            }
-        };
+    for instance in &instances {
+        let kept: Vec<_> = cache
+            .snapshot(instance.id, start, end)
+            .into_iter()
+            .filter(|c| kinds.is_none_or(|k| k.contains(&c.entry.media_kind)))
+            .collect();
         statuses.push(CalendarSourceStatus {
             source_instance_id: instance.id,
             name: instance.name.clone(),
             kind: instance.kind,
-            status,
-            error,
-            entry_count: count,
+            status: CalendarSourceState::Ok,
+            error: None,
+            entry_count: kept.len() as u32,
         });
+        candidates.extend(kept);
     }
 
     let mut merged = merge_candidates(candidates);
@@ -1023,35 +884,22 @@ mod tests {
     use axum::http::Request;
     use playarr_model::Sensitive;
     use serde_json::json;
+    use std::time::Duration;
     use tower::ServiceExt;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    #[test]
-    fn failing_source_is_remembered_and_served_from_last_good_answer() {
-        let cache = CalendarCache::with_ttls(
-            Duration::from_millis(20),
-            Duration::from_secs(60),
-            Duration::from_millis(60),
-        );
-        let id = Uuid::new_v4();
-        let day = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
-        let key = (id, day, day);
-        assert!(cache.recent_failure(id).is_none());
-        cache.put(key, Vec::new());
-        assert!(cache.get(&key).is_some());
-        cache.note_failure(id, (CalendarSourceState::Unreachable, "timed out".into()));
-        assert!(cache.recent_failure(id).is_some());
-        std::thread::sleep(Duration::from_millis(30));
-        // Past the fresh TTL the last good answer is still there as a stand-in.
-        assert!(cache.get(&key).is_none());
-        assert!(cache.get_stale(&key).is_some());
-        std::thread::sleep(Duration::from_millis(50));
-        assert!(cache.recent_failure(id).is_none());
-        // A success clears the failure memory.
-        cache.note_failure(id, (CalendarSourceState::Unreachable, "x".into()));
-        cache.put(key, Vec::new());
-        assert!(cache.recent_failure(id).is_none());
+    /// Fills the calendar cache from the registered (mock) sources, as the
+    /// background refresher does in production.
+    async fn prime(state: &crate::test_support::TestState) {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 15).unwrap();
+        for instance in state.source_instances.all() {
+            state
+                .app
+                .calendar_cache
+                .refresh_instance(&instance, today)
+                .await;
+        }
     }
 
     fn instance(kind: SourceKind, name: &str, url: String) -> SourceInstance {
@@ -1107,7 +955,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn merges_instances_reports_unreachable_and_respects_permissions() {
+    async fn merges_instances_hides_source_health_and_respects_permissions() {
         let (router, state) = test_state().await;
         let a = fake_sonarr("Show").await;
         let b = fake_sonarr("Show").await;
@@ -1117,6 +965,7 @@ mod tests {
         for i in [&sonarr_a, &sonarr_b, &down] {
             state.source_instances.upsert(i.clone());
         }
+        prime(&state).await;
 
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
@@ -1134,9 +983,10 @@ mod tests {
         assert_eq!(entries[0]["title"], "Show");
         let sources = body["sources"].as_array().unwrap();
         assert_eq!(sources.len(), 3);
+        // A dead source is never reported to users: no status, no error.
         let radarr = sources.iter().find(|s| s["name"] == "Movies").unwrap();
-        assert_eq!(radarr["status"], "unreachable");
-        assert!(radarr["error"].as_str().unwrap().len() > 3);
+        assert_eq!(radarr["status"], "ok");
+        assert!(radarr.get("error").is_none());
 
         // A restricted user sees only the library they were granted.
         let user = Uuid::new_v4();
@@ -1148,6 +998,38 @@ mod tests {
         assert_eq!(entries[0]["sources"].as_array().unwrap().len(), 1);
         assert_eq!(body["sources"].as_array().unwrap().len(), 1);
         assert_eq!(body["sources"][0]["name"], "TV HD");
+    }
+
+    #[tokio::test]
+    async fn requests_never_wait_on_a_slow_source() {
+        let (router, state) = test_state().await;
+        let slow = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(20))
+                    .set_body_json(json!([])),
+            )
+            .mount(&slow)
+            .await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", slow.uri()));
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let started = std::time::Instant::now();
+        let (status, body) = get(
+            router,
+            &token,
+            "/api/v1/calendar?start=2026-10-01&end=2026-10-31",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(body["entries"].as_array().unwrap().len(), 0);
+        assert_eq!(body["sources"][0]["status"], "ok");
     }
 
     #[tokio::test]
@@ -1188,6 +1070,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let work_id = crate::test_support::seed_series_with_tvdb(&state, "Show", "77").await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
@@ -1245,6 +1128,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
         let token = mint_access_token(&state, admin);
@@ -1383,6 +1267,7 @@ mod tests {
         let server = fake_sonarr("Show").await;
         let mut sonarr = instance(SourceKind::Sonarr, "TV", server.uri());
         state.source_instances.upsert(sonarr.clone());
+        prime(&state).await;
         let uri = "/api/v1/calendar?start=2026-10-01&end=2026-10-31";
 
         // No request provider configured: request is listed, disabled, with a reason.
@@ -1407,6 +1292,7 @@ mod tests {
         sonarr.default_root_folder_id = Some("/tv".to_string());
         sonarr.default_quality_profile_id = Some(4);
         state.source_instances.upsert(sonarr.clone());
+        prime(&state).await;
         let (_, body) = get(router.clone(), &admin_token, uri).await;
         assert!(actions_of(&body["entries"][0]).contains(&("request".to_string(), true)));
         assert!(actions_of(&body["entries"][0]).contains(&("watchlist".to_string(), true)));
@@ -1450,6 +1336,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
         let token = mint_access_token(&state, admin);
@@ -1492,6 +1379,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
         let token = mint_access_token(&state, admin);
@@ -1614,6 +1502,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let (work, file1, file2) = seed_series_with_files(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
@@ -1660,6 +1549,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
         let token = mint_access_token(&state, admin);
@@ -1701,6 +1591,7 @@ mod tests {
         state
             .source_instances
             .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        prime(&state).await;
         let (_, file1, _) = seed_series_with_files(&state).await;
         let admin = Uuid::new_v4();
         seed_admin_user(&state, admin).await;
@@ -1893,7 +1784,9 @@ mod tests {
         let hd_instance = instance(SourceKind::Sonarr, "TV HD", hd.uri());
         let uhd_instance = instance(SourceKind::Sonarr, "TV 4K", uhd.uri());
         state.source_instances.upsert(hd_instance.clone());
+        prime(&state).await;
         state.source_instances.upsert(uhd_instance);
+        prime(&state).await;
         let user = Uuid::new_v4();
         seed_streaming_user_with_library_allow(&state, user, vec![hd_instance.id]).await;
         let token = mint_access_token(&state, user);
@@ -1937,6 +1830,7 @@ mod tests {
         let server = fake_sonarr("Show").await; // tvdb 77, aired 2026-10-10 in the fixture
         let sonarr = instance(SourceKind::Sonarr, "TV", server.uri());
         state.source_instances.upsert(sonarr.clone());
+        prime(&state).await;
         let work_id = crate::test_support::seed_series_with_tvdb(&state, "Show", "77").await;
 
         let now = Utc::now();

@@ -7113,6 +7113,14 @@ export interface components {
          *     instance yet (e.g. it was registered less than ~10s ago).
          */
         SourceInstanceSyncStatusResponse: {
+            /** @description Reason of the most recent failed calendar refresh, cleared by the next success. */
+            calendar_error?: string | null;
+            /**
+             * Format: date-time
+             * @description When this source's calendar data was last refreshed successfully
+             *     (admin diagnostics only; the calendar itself never reports source health).
+             */
+            calendar_last_success_at?: string | null;
             /**
              * @description Only set when `status` is `"running"` and the poller has something
              *     more specific to report than "running" alone -- see
@@ -10167,6 +10175,8 @@ export interface operations {
                     /**
                      * @example [
                      *       {
+                     *         "calendar_error": null,
+                     *         "calendar_last_success_at": "2026-07-20T18:41:00Z",
                      *         "detail": null,
                      *         "error": null,
                      *         "finished_at": "2026-07-20T18:40:12Z",

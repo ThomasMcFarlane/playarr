@@ -41,7 +41,7 @@ pub use repo::{
 
 pub use repo::{
     AvailabilityEventRepo, CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxAvailabilityEventRepo,
-    SqlxCalendarFeedTokenRepo,
+    SqlxCalendarFeedTokenRepo, SqlxCalendarSourceCacheRepo, StoredChunk, StoredHealth,
 };
 
 pub use repo::{

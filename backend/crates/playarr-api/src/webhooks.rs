@@ -66,6 +66,9 @@ pub async fn arr_webhook_handler(
         .await
         .map_err(|err| ApiError::bad_request(err.to_string()))?;
 
+    // Something changed at the source: refresh its calendar data soon.
+    state.calendar_cache.request_refresh(Some(instance_id));
+
     Ok(StatusCode::ACCEPTED)
 }
 
