@@ -61,7 +61,7 @@ class NavigationContractTests(unittest.TestCase):
     def test_overflowing_collections_are_native_scenegraph_lists(self) -> None:
         self.assertRegex(SCENE, r'<RowList id="libraryList"')
         self.assertRegex(SCENE, r'<RowList id="profilesRow"')
-        self.assertRegex(SCENE, r'<LabelList id="detailActions"')
+        self.assertRegex(SCENE, r'<DetailActions id="detailActions"')
         self.assertIn('rowFocusAnimationStyle="fixedFocusWrap"', SCENE)
 
     def test_profiles_screen_renders_a_horizontal_avatar_row(self) -> None:
@@ -614,14 +614,14 @@ class RokuDeviceBugfixTests(unittest.TestCase):
     def test_series_detail_layout(self) -> None:
         # Play button for series, label inside the row (not clipped above it),
         # similar rail scrolled into view, stills through the server proxy.
-        self.assertIn('setListContent(m.detailActions, ["Play"])', MAIN)
+        self.assertIn('m.detailActions.playMode = "play"', MAIN)
         self.assertIn("m.detailFirstPlayable", MAIN)
         self.assertNotIn("m.detailContent.AppendChild(m.detailActions)", MAIN)
         self.assertNotIn('rowLabelOffset="[[0,-30]]"', SCENE)
         self.assertIn("sub layoutDetailRails()", MAIN)
         self.assertIn("m.detailContent.translation = [881.6, 422.9 - scrollY]", MAIN)
         self.assertIn('"/api/v1/artwork/episode/"', MAIN)
-        self.assertIn("m.detailStage.stageOverview = overview", MAIN)
+        self.assertIn("layoutDetailHeader(work, detail)", MAIN)
 
     def test_playback_stream_format_follows_the_negotiated_container(self) -> None:
         self.assertIn("content.streamFormat = PlaybackStreamFormat(data)", MAIN)

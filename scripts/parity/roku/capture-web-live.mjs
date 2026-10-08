@@ -69,6 +69,11 @@ const first = async (kind, token) => {
 };
 const seed = await login();
 const film = await first("movie", seed.access_token);
+// The catalogue page carries no media file id; the work detail does.
+if (film) film.media_file_id = (await api(`/api/v1/catalog/${film.id}`, seed.access_token)).media_file_id;
+// The player screens use what the Roku Home plays first: the most recently watched part-watched title.
+const recent = (await api("/api/v1/playback/progress", seed.access_token)).filter((r) => r.state === "part_watched").sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+const playerFile = recent?.media_file_id ?? film?.media_file_id;
 const series = await first("series", seed.access_token);
 
 const screens = [
@@ -91,6 +96,9 @@ const screens = [
   { id: "settings-remote", route: "/settings/remote" },
   { id: "settings-latency", route: "/settings/request-latency" },
   { id: "settings-your-data", route: "/settings/your-data" },
+  // Player chrome: the first film paused at 2 s with the controls shown (video hidden: the picture is a codec difference).
+  { id: "player-controls", route: `/player/${playerFile}`, player: "controls" },
+  { id: "player-quality-menu", route: `/player/${playerFile}`, player: "quality" },
   { id: "profile-switcher", route: "/profiles" },
   // Scrolled states, reached with the same remote keys as the device capture.
   { id: "home-scrolled", route: "/", keys: ["ArrowDown", ...Array(7).fill("ArrowRight")] },
@@ -149,6 +157,29 @@ try {
         await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
         // The relay is slow: On deck resolves after several round trips, so Home needs a long settle (and every screen a little).
         await page.waitForTimeout(screen.id.startsWith("home") ? 12000 : /^(movies|series|film|search|watchlist|requests)/.test(screen.id) ? 9000 : 1500);
+        if (screen.player) {
+          await page.waitForFunction(() => {
+            const v = document.querySelector("video");
+            if (v?.paused) v.play().catch(() => {});
+            return (v?.readyState ?? 0) >= 2;
+          }, null, { timeout: 90000, polling: 500 }).catch(() => {});
+          await page.evaluate(() => { const v = document.querySelector("video"); if (v) { v.pause(); v.currentTime = 2; } });
+          await page.addStyleTag({ content: "video{visibility:hidden!important}" });
+          const vp = page.viewportSize();
+          for (let i = 0; i < 4; i += 1) {
+            await page.mouse.move(vp.width / 2 + i * 9, vp.height / 2 + i * 9);
+            if (await page.locator(".player-controls").first().isVisible().catch(() => false)) break;
+            await page.waitForTimeout(400);
+          }
+          if (screen.player === "quality") {
+            for (let i = 0; i < 4; i += 1) {
+              await page.mouse.move(40 + i * 7, 300 + i * 7);
+              await page.locator(".player-quality:not(.player-track-selector) > button").first().click({ timeout: 6000, force: true }).catch(() => {});
+              if (await page.locator(".player-quality-menu").count()) break;
+            }
+          }
+          await page.waitForTimeout(600);
+        }
         for (const key of screen.keys ?? []) {
           await page.keyboard.press(key);
           await page.waitForTimeout(450);

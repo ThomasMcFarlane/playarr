@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  DetailActions: the web detail page action tiles (.tv-detail-download pills and the brand .tv-detail-play), at their web
+  positions (1920 x 1080): Playback (311.6, 508.6, 142 x 64), Play (464.9, 506.7, 165.4 x 67.8), Add to watchlist
+  (153.6, 584.6) and Add to Playlist (311.6, 584.6). Download needs offline storage, which Roku does not have, so its tile
+  (153.6, 508.6) is left out. Arrow keys move between tiles; a key with nowhere to go bubbles to the scene (Right enters the rails).
+  `itemSelected` reports the chosen tile: 0 Play, 1 Playback, 2 Watchlist, 3 Playlist.
+-->
+<component name="DetailActions" extends="Group">
+  <interface>
+    <!-- "play" (Play tile), "unavailable" (disabled Play tile) -->
+    <!-- "movie" (Playback, Play, watchlist, playlist) or "series" (Start, watchlist, playlist) -->
+    <field id="layoutKind" type="string" value="movie" onChange="onLayoutChange" />
+    <field id="playMode" type="string" value="play" onChange="onLayoutChange" />
+    <field id="playLabel" type="string" value="Start" onChange="onLayoutChange" />
+    <field id="watchlisted" type="boolean" value="false" onChange="onLayoutChange" />
+    <field id="itemSelected" type="integer" value="-1" alwaysNotify="true" />
+  </interface>
+  <children>
+    <Group id="tiles" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+  <script type="text/brightscript" uri="pkg:/components/DetailActions.brs" />
+</component>

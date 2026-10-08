@@ -169,6 +169,16 @@ sub init()
     m.detailContent.AppendChild(m.detailEpisodes)
     m.detailContent.AppendChild(m.detailChapters)
     m.detailContent.AppendChild(m.detailSimilar)
+    ' Rail headings (web .tv-media-track h2 and its count line) live beside the rails, inside the scrolling content panel.
+    m.detailHeads = []
+    for headIndex = 0 to 1
+        head = CreateObject("roSGNode", "TrackedText")
+        creditLine = CreateObject("roSGNode", "TrackedText")
+        m.detailContent.AppendChild(head)
+        m.detailContent.AppendChild(creditLine)
+        m.detailHeads.Push({ title: head, sub: creditLine })
+    end for
+    detailChromeInit()
     m.profileLabel = m.top.findNode("profileLabel")
     m.persistentHeader = m.top.findNode("persistentHeader")
     m.video = m.top.findNode("video")
@@ -333,7 +343,7 @@ sub init()
     m.deviceId = m.session.deviceId
     publishArtAuthHeaders()
     m.profileLabel.text = m.session.profileName
-    setListContent(m.detailActions, ["Play"])
+    m.detailActions.playMode = "play"
 
     applyAppTheme()
     updateClock()
@@ -731,6 +741,16 @@ sub onApiResult(event as Object)
     else if action = "homeMoreSeries"
         m.homeMoreSeries = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         finishHomeLoad()
+    else if action = "detailWatchlist"
+        acceptDetailWatchlist(result.data)
+    else if action = "detailCredits"
+        acceptDetailCredits(result.data)
+    else if action = "detailLag"
+        acceptDetailLag(result.data)
+    else if action = "detailPlaylists"
+        acceptDetailPlaylists(result.data)
+    else if action = "detailWatchlistAdd" or action = "detailWatchlistRemove" or action = "detailPlaylistAdd"
+        loadDetailWatchlist()
     else if action = "detail"
         showDetail(result.data)
     else if action = "chapters"
@@ -2583,6 +2603,7 @@ sub onBrowseKeyArtTimer()
     m.browseKeyArt.loadWidth = 1038
     m.browseKeyArt.loadHeight = 1191
     m.browseKeyArt.uri = uri
+    if Instr(1, uri, "style=stage") > 0 then m.browseKeyArt.opacity = 1 else m.browseKeyArt.opacity = 0.4
     m.browseKeyArt.visible = true
     m.browseKeyArtFade.visible = true
 end sub
@@ -2634,6 +2655,12 @@ sub onBrowseItemFocused(event as Object)
         updateBrowsePreview(m.browseItems[itemIndex])
     end if
     browseFadesUpdate(itemIndex)
+    ' Web keeps the focused row 70 px clear of the bottom edge once the grid scrolls (its rows then sit 56 px higher).
+    if Int(itemIndex / m.browseGrid.numColumns) >= 4
+        m.browseGrid.translation = [783.4, 106]
+    else
+        m.browseGrid.translation = [783.4, 162]
+    end if
     moreAvailable = m.browseTotal = invalid or m.browseItems.Count() < m.browseTotal
     if moreAvailable and itemIndex >= m.browseItems.Count() - 10 and not m.requestBusy
         loadBrowseCatalog(true)
@@ -3223,6 +3250,8 @@ function heroArtworkUrl(work as Object) as String
     end if
     if url = "" then url = artworkUrl(work)
     if url = "" then return ""
+    ' Light theme: the web draws the raw art at 40 % opacity, so the dark-baked stage image is not used (see TvStage.brs).
+    if m.global.themeMode = "light" then return url
     return withArtworkStyle(url, "stage")
 end function
 
@@ -4399,33 +4428,13 @@ sub showDetail(detail as Object)
     ' the split is kicker=kind, meta=year+genres rather than one combined
     ' string.
     m.detailStage.stageTitle = work.title
-    m.detailStage.stageKicker = UCase(work.kind)
-    ' Matches the real detail page's own meta line (confirmed live:
-    ' "Movie  1h 48m  2003  Released Oct 23, 2003  Action  Crime  Thriller"),
-    ' not just "year  •  genres" -- kind + runtime (movies only, from
-    ' detail.runtime_ms) + year + genres, joined the same way this app's
-    ' other meta lines already are (no pill-chip rendering infrastructure
-    ' exists here yet, so plain "  •  " separators stand in for those).
-    metaParts = [CapitalizeFirst(work.kind)]
-    if detail.runtime_ms <> invalid and detail.runtime_ms > 0
-        metaParts.Push(formatRuntime(detail.runtime_ms))
-    end if
-    if work.release_date <> invalid and work.release_date.Len() >= 4
-        metaParts.Push(work.release_date.Left(4))
-    end if
-    if work.genres <> invalid and work.genres.Count() > 0
-        metaParts.Push(joinStrings(work.genres, ", "))
-    end if
-    m.detailStage.stageMeta = joinStrings(metaParts, "  •  ")
-    ' Full-bleed backdrop key-art replaces the old small poster thumbnail
-    ' (detailPoster, removed) -- tv-web's real detail page has no separate
-    ' poster once there is hero art behind the title panel. Auth headers
-    ' required for the artwork proxy (same as home hero).
+    ' Hero art: backdrop with the web stage treatment.
     setStageKeyArt(m.detailStage, heroArtworkUrl(work))
     overview = JsonString(work.overview)
     if overview = "" then overview = "No description is available."
     m.detailOverview.text = overview
-    m.detailStage.stageOverview = overview
+    layoutDetailHeader(work, detail)
+    m.detailActions.translation = [0, m.detailActionsTop - 508.6]
 
     isSeriesShaped = work.kind = "series" or work.kind = "site"
     isArtistShaped = work.kind = "artist"
@@ -4441,6 +4450,7 @@ sub showDetail(detail as Object)
         m.detailGroupKind = "series"
         m.detailSeasons = seasonsFromDetail(detail)
         showSeriesDetailActions()
+        updateSeriesEpisodeHeader()
     else if isArtistShaped
         m.detailGroupKind = "artist"
         m.detailSeasons = albumsFromDetail(detail)
@@ -4465,7 +4475,7 @@ sub showDetail(detail as Object)
     if m.currentMediaFileId <> ""
         loadDetailChapters(m.currentMediaFileId)
     else
-        loadSimilarTitles(work)
+        loadDetailAfterChapters()
     end if
 
     showOnly("detail")
@@ -4481,6 +4491,10 @@ sub showDetail(detail as Object)
     ' newly selected title. callFunc() (not dot-call) per the platform bug
     ' documented on TvStage.xml's playEntrance interface function.
     m.detailStage.callFunc("playEntrance")
+    m.detailActions.watchlisted = false
+    m.detailLagText = ""
+    loadDetailWatchlist()
+    if isSeriesShaped and work.kind = "series" then sendApi("detailLag", "GET", "/api/v1/catalog/" + UrlEncode(work.id) + "/availability-lag", invalid, true)
     ' Focus starts on the left-hand Play button (web's primary action); Right
     ' moves into the season/chapter/similar rails, Left comes back.
     m.detailFocusIndex = -1
@@ -4527,6 +4541,7 @@ sub acceptResumePlan(plan as Dynamic)
     if m.detailEpisodes.visible
         setDetailFocusIndex(0)
     end if
+    updateSeriesEpisodeHeader()
 end sub
 
 ' Chapters/Similar Titles load in asynchronously after showDetail already
@@ -4567,9 +4582,12 @@ sub setDetailFocusIndex(newIndex as Integer)
     end if
     if m.detailEpisodes.visible then rebuildDetailEpisodes()
     if m.detailChapters.visible then buildDetailChaptersRail(chaptersActive)
-    if m.detailSimilar.visible then buildDetailSimilarRail(similarActive)
+    if m.detailSimilar.visible
+        if m.detailGroupKind = "" then buildDetailCastRail(similarActive) else buildDetailSimilarRail(similarActive)
+    end if
     scrollY = 0
-    if newIndex > 0 and newIndex < slots.Count() then scrollY = slots[newIndex].translation[1]
+    if newIndex > 0 and newIndex < slots.Count() then scrollY = slots[newIndex].translation[1] - m.detailRailBase
+    if scrollY < 0 then scrollY = 0
     m.detailContent.translation = [881.6, 422.9 - scrollY]
     ' Rails scrolled above the top edge must not bleed into view.
     for i = 0 to slots.Count() - 1
@@ -4619,8 +4637,45 @@ end function
 ' visibility or size changes.
 sub layoutDetailRails()
     y = 0
+    hideDetailRailHeads()
+    m.detailRailBase = 0
+    showLabels = false
+    m.detailChapters.showRowLabel = showLabels
+    m.detailSimilar.showRowLabel = showLabels
+    if m.detailGroupKind = ""
+        ' Movie: Chapters then Cast, headings at web y 540 and 854, cards 80 px below, rows 314 px apart.
+        m.detailRailBase = 197.8
+        m.detailEpisodes.visible = false
+        slot = 0
+        y = 117.1
+        if m.detailChapters.visible
+            captionText = "10 scene markers"
+            n = 0
+            if m.detailChapterList <> invalid then n = m.detailChapterList.Count()
+            if m.detailChaptersGenerated = true
+                captionText = n.ToStr() + " scene markers"
+            else
+                captionText = n.ToStr() + " chapters"
+            end if
+            if n = 1 and m.detailChaptersGenerated <> true then captionText = "1 chapter"
+            setDetailRailHead(slot, y, "Chapters", captionText)
+            m.detailChapters.translation = [0, y + 80.7]
+            slot = slot + 1
+            y = y + 314.3
+        end if
+        if m.detailSimilar.visible
+            n = 0
+            if m.detailCastList <> invalid then n = m.detailCastList.Count()
+            people = n.ToStr() + " people"
+            if n = 1 then people = "1 person"
+            setDetailRailHead(slot, y, "Cast", people)
+            m.detailSimilar.translation = [0, y + 80.7]
+        end if
+        return
+    end if
     if m.detailEpisodes.visible
-        m.detailEpisodes.translation = [0, 0]
+        m.detailEpisodes.translation = [0, 59]
+        updateSeasonHeads()
         visibleRows = m.detailSeasons.Count()
         if visibleRows > 2 then visibleRows = 2
         if visibleRows < 1 then visibleRows = 1
@@ -4647,9 +4702,9 @@ sub showMovieDetailActions(detail as Object)
     if detail.media_file_id <> invalid then mediaFileId = detail.media_file_id
     m.currentMediaFileId = mediaFileId
     if mediaFileId = ""
-        setListContent(m.detailActions, ["Not available to play"])
+        m.detailActions.playMode = "unavailable"
     else
-        setListContent(m.detailActions, ["Play"])
+        m.detailActions.playMode = "play"
     end if
 end sub
 
@@ -4669,18 +4724,61 @@ end sub
 ' than going through buildRailContent/artworkUrl (which both assume a real
 ' catalog work's `images` array).
 sub acceptDetailChapters(chapters as Object)
+    m.detailChaptersGenerated = false
     if chapters = invalid or chapters.Count() = 0
+        ' Web generatedMovieChapters: about ten markers at a 5, 10, 15, 20 or 30 minute interval.
+        chapters = []
+        runtimeMs = 0
+        if m.selectedDetail <> invalid and m.selectedDetail.runtime_ms <> invalid then runtimeMs = m.selectedDetail.runtime_ms
+        if runtimeMs > 0
+            target = runtimeMs / 10
+            intervalMs = 30 * 60000
+            for each minutes in [5, 10, 15, 20, 30]
+                if minutes * 60000 >= target
+                    intervalMs = minutes * 60000
+                    exit for
+                end if
+            end for
+            count = Int((runtimeMs + intervalMs - 1) / intervalMs)
+            for i = 0 to count - 1
+                chapters.Push({ index: i, title: "Chapter " + (i + 1).ToStr(), start_ms: i * intervalMs })
+            end for
+            m.detailChaptersGenerated = true
+        end if
+    end if
+    if chapters.Count() = 0
         m.detailChapterList = []
         m.detailChapters.visible = false
         layoutDetailRails()
-        loadSimilarTitles(m.selectedDetail.work)
+        loadDetailAfterChapters()
         return
     end if
     m.detailChapterList = chapters
     buildDetailChaptersRail(false)
     m.detailChapters.visible = true
     layoutDetailRails()
-    loadSimilarTitles(m.selectedDetail.work)
+    loadDetailAfterChapters()
+end sub
+
+' Movies continue to the Cast rail, series and the rest to Similar Titles (web WorkDetail tracks).
+sub loadDetailAfterChapters()
+    if m.detailGroupKind = "" and m.selectedDetail <> invalid
+        sendApi("detailCredits", "GET", "/api/v1/catalog/" + UrlEncode(m.selectedDetail.work.id) + "/credits", invalid, true)
+    else
+        loadSimilarTitles(m.selectedDetail.work)
+    end if
+end sub
+
+sub acceptDetailCredits(data as Dynamic)
+    m.detailCastList = []
+    if data <> invalid and data.cast <> invalid then m.detailCastList = data.cast
+    if m.detailCastList.Count() = 0
+        m.detailSimilar.visible = false
+    else
+        buildDetailCastRail(false)
+        m.detailSimilar.visible = true
+    end if
+    layoutDetailRails()
 end sub
 
 ' Split out of acceptDetailChapters so moveDetailFocus (below) can rebuild
@@ -4704,16 +4802,23 @@ sub buildDetailChaptersRail(isActive as Boolean)
         item.id = chapter.index.ToStr()
         item.title = chapter.title
         item.AddField("kind", "string", false)
-        item.kind = formatPlaybackTime(chapter.start_ms / 1000)
+        item.kind = ""
         item.AddField("showKind", "boolean", false)
-        item.showKind = true
+        item.showKind = false
+        ' Web chapter card: big index over the art (01), then the start time and the chapter title under it.
+        item.AddField("overlayNumber", "string", false)
+        number = (chapter.index + 1).ToStr()
+        if Len(number) < 2 then number = "0" + number
+        item.overlayNumber = number
+        item.AddField("captionPrefix", "string", false)
+        item.captionPrefix = formatPlaybackTime(chapter.start_ms / 1000)
         item.hdPosterUrl = thumbUrl
         item.AddField("artHeaders", "assocarray", false)
         item.artHeaders = artworkHeaders(thumbUrl, headers)
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         item.AddField("cardScale", "float", false)
-        item.cardScale = 1.5
+        item.cardScale = 268.0 / 220.0
         item.AddField("startMs", "integer", false)
         item.startMs = chapter.start_ms
     end for
@@ -5013,11 +5118,11 @@ sub renderGroupedDetailActions(groups as Object, kind as String)
     if playableTotal = 0
         m.detailEpisodes.visible = false
         m.currentMediaFileId = ""
-        setListContent(m.detailActions, ["Not available to play"])
+        m.detailActions.playMode = "unavailable"
     else
         ' Web shows a Play button for a series as well (starts the first
         ' playable episode), with the seasons rails to its right.
-        setListContent(m.detailActions, ["Play"])
+        m.detailActions.playMode = "play"
         m.detailEpisodes.visible = true
         m.detailEpisodeActive = false
         buildEpisodeContent(groups, kind)
@@ -5058,6 +5163,73 @@ sub onDetailEpisodeFocused(event as Object)
     position = event.GetData()
     if position = invalid or position.Count() < 2 then return
     m.detailEpisodePos = [position[0], position[1]]
+    updateSeasonHeads()
+    updateSeriesEpisodeHeader()
+end sub
+
+' The left panel of a series page follows the focused episode (web series page): kicker, episode title, meta, availability and
+' synopsis of that episode, and the Start / Resume tile.
+sub updateSeriesEpisodeHeader()
+    if m.detailGroupKind <> "series" or m.selectedDetail = invalid then return
+    epPos = m.detailEpisodePos
+    if epPos = invalid or epPos[0] >= m.detailSeasons.Count() then return
+    group = m.detailSeasons[epPos[0]]
+    leaves = group.episodes
+    if leaves = invalid or epPos[1] >= leaves.Count() then return
+    epDetail = leaves[epPos[1]]
+    ep = epDetail.episode
+    season = group.season
+    work = m.selectedDetail.work
+    code = "S" + twoDigits(season.season_number) + " · E" + twoDigits(ep.episode_number)
+    m.detailStage.stageKicker = code
+    m.detailStage.stageMeta = ""
+    titleLines = m.detailStage.findNode("stageTitleLabel").lineCount
+    if titleLines < 1 then titleLines = 1
+    titleBottom = 303.5 + 62.208 * titleLines
+    epTitle = JsonString(ep.title)
+    if epTitle = "" then epTitle = "Episode " + ep.episode_number.ToStr()
+    m.detailEpisodeTitle.visible = true
+    m.detailEpisodeTitle.translation = [153.6, titleBottom + 19.5]
+    m.detailEpisodeTitle.spec = { text: epTitle, size: 21, weight: 600, tracking: -0.739, role: "inkSoft", width: 312, lineHeight: 24.3, maxLines: 1 }
+    metaY = titleBottom + 70.7
+    parts = []
+    parts.Push({ text: "Season " + season.season_number.ToStr(), role: "inkSoft", weight: 700 })
+    parts.Push({ text: code, role: "inkMuted", weight: 400 })
+    if ep.runtime_minutes <> invalid and ep.runtime_minutes > 0 then parts.Push({ text: ep.runtime_minutes.ToStr() + " min", role: "inkMuted", weight: 400 })
+    if work.release_date <> invalid and work.release_date.Len() >= 4 then parts.Push({ text: work.release_date.Left(4), role: "inkMuted", weight: 400 })
+    if ep.air_date <> invalid and ep.air_date <> "" then parts.Push({ text: "Aired " + formatReleaseDate(ep.air_date), role: "inkMuted", weight: 400 })
+    if work.genres <> invalid and work.genres.Count() > 0 then parts.Push({ text: work.genres[0], role: "inkMuted", weight: 400 })
+    x = 153.6
+    for i = 0 to m.detailMetaParts.Count() - 1
+        node = m.detailMetaParts[i]
+        if i < parts.Count()
+            node.translation = [x, metaY]
+            node.spec = { text: parts[i].text, size: 11, weight: parts[i].weight, tracking: 0, role: parts[i].role, width: 400, lineHeight: 15.84, maxLines: 1 }
+            node.visible = true
+            x = x + node.textWidth + 13.6
+        else
+            node.visible = false
+        end if
+    end for
+    nextY = metaY + 22.3
+    if m.detailLagText <> invalid and m.detailLagText <> ""
+        m.detailAvailability.translation = [153.6, nextY]
+        m.detailAvailability.spec = { text: m.detailLagText, size: 19, weight: 600, tracking: 0, role: "ink", width: 455, lineHeight: 28.8, maxLines: 1 }
+        m.detailAvailability.visible = true
+        nextY = nextY + 50.4
+    else
+        m.detailAvailability.visible = false
+        nextY = nextY + 8
+    end if
+    overview = JsonString(ep.overview)
+    if overview = "" then overview = JsonString(work.overview)
+    m.detailSynopsis.translation = [153.6, nextY]
+    m.detailSynopsis.spec = { text: overview, size: 14, weight: 400, tracking: 0, role: "inkMuted", width: 336, lineHeight: 20.33, maxLines: 5 }
+    m.detailActions.translation = [0, nextY + 20.33 * m.detailSynopsis.lineCount + 13 - 508.6]
+    m.detailActions.layoutKind = "series"
+    label = "Start"
+    if epDetail.media_file_id <> invalid and m.detailResumeIds <> invalid and m.detailResumeIds[epDetail.media_file_id] = true then label = "Resume"
+    m.detailActions.playLabel = label
 end sub
 
 sub buildEpisodeContent(groups as Object, kind as String)
@@ -5096,20 +5268,39 @@ sub buildEpisodeContent(groups as Object, kind as String)
                 item.id = ep.id
                 label = "S" + season.season_number.ToStr() + " · E" + ep.episode_number.ToStr()
                 if ep.title <> invalid and ep.title <> "" then label += "  " + ep.title
-                item.title = label
+                item.title = ep.title
+                if ep.title = invalid or ep.title = "" then item.title = "Episode " + ep.episode_number.ToStr()
                 item.description = JsonString(ep.overview)
                 item.hdPosterUrl = episodeArtworkUrl(ep, epDetail.media_file_id)
                 item.AddField("artHeaders", "assocarray", false)
                 item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
                 addEpisodeCardFields(item, episodeActive)
+                ' Web episode card: two-digit index over the art, "S01 · E01" then the title underneath, and the watch dot.
+                item.AddField("overlayNumber", "string", false)
+                item.overlayNumber = twoDigits(ep.episode_number)
+                item.AddField("captionPrefix", "string", false)
+                item.captionPrefix = "S" + twoDigits(season.season_number) + " · E" + twoDigits(ep.episode_number)
+                item.AddField("showKind", "boolean", false)
+                item.showKind = false
+                item.AddField("watchState", "string", false)
+                item.watchState = ""
+                if m.progressByWork <> invalid
+                    row = m.progressByWork[m.selectedDetail.work.id]
+                    item.watchState = "unseen"
+                end if
             end for
         end if
     end for
     rowHeights = []
     for i = 1 to groups.Count()
-        rowHeights.Push(315)
+        rowHeights.Push(320)
     end for
     m.detailEpisodes.rowHeights = rowHeights
+    m.detailEpisodes.rowItemSize = [[268, 190]]
+    m.detailEpisodes.rowItemSpacing = [[25, 0]]
+    m.detailEpisodes.showRowLabel = false
+    m.detailEpisodes.rowLabelFont = PlayarrMakeFont(600, 18)
+    m.detailEpisodes.rowLabelColor = ThemeColor("ink")
     m.detailEpisodes.content = root
     layoutDetailRails()
 end sub
@@ -5120,7 +5311,7 @@ sub addEpisodeCardFields(item as Object, activeFactor as Float)
     item.AddField("activeRailFactor", "float", false)
     item.activeRailFactor = activeFactor
     item.AddField("cardScale", "float", false)
-    item.cardScale = 1.25
+    item.cardScale = 268.0 / 220.0
 end sub
 
 ' Episode still, always through the server proxy (the catalog's own image
@@ -5168,7 +5359,20 @@ function findFirstMediaFileId(value as Dynamic) as String
 end function
 
 sub onDetailActionSelected(event as Object)
-    if event.GetData() <> 0 then return
+    choice = event.GetData()
+    if choice = 1
+        ' Playback settings: the player section of Preferences.
+        m.settingsPanel = "player"
+        openPage("settings")
+        return
+    else if choice = 2
+        toggleDetailWatchlist()
+        return
+    else if choice = 3
+        openDetailPlaylistPicker()
+        return
+    end if
+    if choice <> 0 then return
     if m.detailGroupKind <> "" and m.detailFirstPlayable <> invalid
         ' Series/album Play: start the first playable episode/track with the
         ' adjacent-item list the player's Previous/Next buttons walk.
@@ -5868,7 +6072,7 @@ sub showOnly(name as String)
     m.settingsGroup.visible = name = "settings"
     m.pageGroup.visible = name = "page"
     ' The shell clock sits further right on page-shell screens (web .app-clock follows the page header).
-    if name = "page"
+    if name = "page" or name = "detail" or name = "browse"
         m.clockTime.translation = [557, 68]
         m.clockDate.translation = [612, 75]
     else
@@ -6294,3 +6498,277 @@ function PlaybackStreamFormat(data as Object) as String
     if mime.Instr("mp2t") >= 0 or mime.Instr("mpegts") >= 0 then return "ts"
     return "mp4"
 end function
+
+' ---------------------------------------------------------------------------
+' Detail page watchlist and playlist tiles (web WatchlistToggle and the Add to Playlist menu).
+
+' Library work id of a watchlist entry (title.sources[].work_id).
+function watchlistEntryHasWork(entry as Object, workId as String) as Boolean
+    if entry = invalid or entry.title = invalid or entry.title.sources = invalid then return false
+    for each source in entry.title.sources
+        if source.work_id <> invalid and source.work_id = workId then return true
+    end for
+    return false
+end function
+
+sub loadDetailWatchlist()
+    sendApi("detailWatchlist", "GET", "/api/v1/watchlist", invalid, true)
+end sub
+
+sub acceptDetailWatchlist(data as Dynamic)
+    m.detailWatchlistKey = ""
+    on = false
+    if data <> invalid and data.items <> invalid and m.selectedDetail <> invalid
+        for each entry in data.items
+            if watchlistEntryHasWork(entry, m.selectedDetail.work.id)
+                on = true
+                m.detailWatchlistKey = entry.title.title_key
+            end if
+        end for
+    end if
+    m.detailActions.watchlisted = on
+end sub
+
+sub toggleDetailWatchlist()
+    if m.selectedDetail = invalid then return
+    work = m.selectedDetail.work
+    if m.detailActions.watchlisted and m.detailWatchlistKey <> invalid and m.detailWatchlistKey <> ""
+        sendApi("detailWatchlistRemove", "DELETE", "/api/v1/watchlist/" + UrlEncode(m.detailWatchlistKey), invalid, true)
+        m.detailActions.watchlisted = false
+        return
+    end if
+    year = invalid
+    if work.release_date <> invalid and work.release_date.Len() >= 4 then year = Val(work.release_date.Left(4))
+    poster = invalid
+    if work.images <> invalid
+        for each image in work.images
+            if image.kind = "poster" and image.url <> invalid then poster = image.url
+        end for
+    end if
+    body = { kind: work.kind, title: work.title, year: year, work_id: work.id, external_refs: work.external_refs, poster_url: poster }
+    sendApi("detailWatchlistAdd", "POST", "/api/v1/watchlist", body, true)
+    m.detailActions.watchlisted = true
+end sub
+
+sub openDetailPlaylistPicker()
+    sendApi("detailPlaylists", "GET", "/api/v1/playlists", invalid, true)
+end sub
+
+sub acceptDetailPlaylists(data as Dynamic)
+    m.detailPlaylistChoices = []
+    names = []
+    if data <> invalid
+        for each playlist in data
+            if playlist.kind = invalid or playlist.kind <> "system"
+                m.detailPlaylistChoices.Push(playlist)
+                names.Push(playlist.name)
+                if names.Count() >= 6 then exit for
+            end if
+        end for
+    end if
+    dialog = CreateObject("roSGNode", "Dialog")
+    dialog.title = "Add to Playlist"
+    if names.Count() = 0
+        dialog.message = ["You have no playlists yet. Create one in Playarr on the web or a phone."]
+        dialog.buttons = ["Close"]
+    else
+        dialog.message = ["Choose a playlist."]
+        dialog.buttons = names
+    end if
+    dialog.ObserveField("buttonSelected", "onDetailPlaylistChosen")
+    m.top.dialog = dialog
+end sub
+
+sub onDetailPlaylistChosen(event as Object)
+    index = event.GetData()
+    m.top.dialog.close = true
+    if m.detailPlaylistChoices = invalid or index < 0 or index >= m.detailPlaylistChoices.Count() then return
+    if m.selectedDetail = invalid then return
+    playlist = m.detailPlaylistChoices[index]
+    body = { work_id: m.selectedDetail.work.id }
+    if m.currentMediaFileId <> invalid and m.currentMediaFileId <> "" then body.media_file_id = m.currentMediaFileId
+    sendApi("detailPlaylistAdd", "POST", "/api/v1/playlists/" + UrlEncode(playlist.id) + "/items", body, true)
+end sub
+
+' ---------------------------------------------------------------------------
+' Detail page chrome and layout (web .tv-detail): back button, "Movies | TITLE" heading, kicker, tracked title, meta row,
+' synopsis, then Chapters and Cast rails at 314 px pitch.
+
+sub detailChromeInit()
+    holder = m.top.findNode("detailGroup")
+    pgRound(holder, 153.6, 56.3, 50, 50, 25, "surface", 179)
+    pgRound(holder, 153.6, 56.3, 50, 50, 25, "line", -1, true)
+    pgIcon(holder, 170, 73, 17, "arrow-left.png", "inkSoft")
+    m.detailHeaderTitle = CreateObject("roSGNode", "TrackedText")
+    m.detailHeaderTitle.translation = [226.6, 56.2]
+    holder.AppendChild(m.detailHeaderTitle)
+    m.detailHeaderDivider = pgRect(holder, 348, 57, 1, 48, "line")
+    m.detailHeaderChip = CreateObject("roSGNode", "TrackedText")
+    holder.AppendChild(m.detailHeaderChip)
+    m.detailMetaParts = []
+    for i = 0 to 7
+        part = CreateObject("roSGNode", "TrackedText")
+        holder.AppendChild(part)
+        m.detailMetaParts.Push(part)
+    end for
+    m.detailSynopsis = CreateObject("roSGNode", "TrackedText")
+    holder.AppendChild(m.detailSynopsis)
+    m.detailEpisodeTitle = CreateObject("roSGNode", "TrackedText")
+    holder.AppendChild(m.detailEpisodeTitle)
+    m.detailAvailability = CreateObject("roSGNode", "TrackedText")
+    m.detailAvailability.visible = false
+    holder.AppendChild(m.detailAvailability)
+end sub
+
+' Everything above the rails for the selected title.
+sub layoutDetailHeader(work as Object, detail as Object)
+    heading = "Movies"
+    if work.kind = "series" then heading = "Series"
+    if work.kind = "site" then heading = "Sites"
+    if work.kind = "artist" then heading = "Music"
+    m.detailHeaderTitle.spec = { text: heading, size: 34, weight: 600, tracking: -1.512, role: "ink" }
+    titleRight = 226.6 + m.detailHeaderTitle.textWidth
+    m.detailHeaderDivider.translation = [titleRight + 22, 57]
+    m.detailHeaderChip.translation = [titleRight + 47, 72]
+    m.detailHeaderChip.spec = { text: work.title, size: 11, weight: 700, tracking: 0.5, role: "inkMuted", upper: true, width: 520, lineHeight: 16.7, maxLines: 1 }
+    ' Kicker: the first genre, like the library preview.
+    kicker = UCase(work.kind)
+    if work.genres <> invalid and work.genres.Count() > 0 then kicker = UCase(work.genres[0])
+    m.detailStage.stageKicker = kicker
+    m.detailStage.stageMeta = ""
+    m.detailStage.stageOverview = ""
+    m.detailEpisodeTitle.visible = false
+    m.detailAvailability.visible = false
+    m.detailActions.layoutKind = "movie"
+    if work.kind = "series" or work.kind = "site" then m.detailActions.layoutKind = "series"
+    titleLines = m.detailStage.findNode("stageTitleLabel").lineCount
+    if titleLines < 1 then titleLines = 1
+    metaY = 303.5 + 62.208 * titleLines + 27
+    parts = []
+    parts.Push({ text: CapitalizeFirst(work.kind), role: "inkSoft", weight: 700 })
+    if detail.runtime_ms <> invalid and detail.runtime_ms > 0 then parts.Push({ text: formatRuntime(detail.runtime_ms), role: "inkMuted", weight: 400 })
+    if work.release_date <> invalid and work.release_date.Len() >= 4
+        parts.Push({ text: work.release_date.Left(4), role: "inkMuted", weight: 400 })
+        parts.Push({ text: "Released " + formatReleaseDate(work.release_date), role: "inkMuted", weight: 400 })
+    end if
+    if work.genres <> invalid
+        for g = 0 to work.genres.Count() - 1
+            if g >= 3 then exit for
+            parts.Push({ text: work.genres[g], role: "inkMuted", weight: 400 })
+        end for
+    end if
+    x = 153.6
+    for i = 0 to m.detailMetaParts.Count() - 1
+        node = m.detailMetaParts[i]
+        if i < parts.Count()
+            node.translation = [x, metaY]
+            node.spec = { text: parts[i].text, size: 11, weight: parts[i].weight, tracking: 0, role: parts[i].role, width: 400, lineHeight: 15.84, maxLines: 1 }
+            node.visible = true
+            x = x + node.textWidth + 13.6
+        else
+            node.visible = false
+        end if
+    end for
+    overview = JsonString(work.overview)
+    if overview = "" then overview = "No description is available."
+    m.detailSynopsis.translation = [153.6, metaY + 37.5]
+    m.detailSynopsis.spec = { text: overview, size: 14, weight: 400, tracking: 0, role: "inkMuted", width: 336, lineHeight: 20.33, maxLines: 3 }
+    m.detailActionsTop = metaY + 37.5 + 20.33 * m.detailSynopsis.lineCount + 58
+end sub
+
+function formatReleaseDate(iso as String) as String
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if Len(iso) < 10 then return iso
+    month = Val(Mid(iso, 6, 2))
+    day = Val(Mid(iso, 9, 2))
+    if month < 1 or month > 12 then return iso
+    return day.ToStr() + " " + months[month - 1] + " " + Left(iso, 4)
+end function
+
+' Heading and count line above a rail (web .tv-media-track header), at the rail's y offset inside the content panel.
+sub setDetailRailHead(slot as Integer, y as Float, title as String, caption as String)
+    head = m.detailHeads[slot]
+    head.title.translation = [0, y]
+    head.title.spec = { text: title, size: 18, weight: 600, tracking: -0.53, role: "ink" }
+    head.sub.translation = [0, y + 30.5]
+    head.sub.spec = { text: caption, size: 10, weight: 400, tracking: 0, role: "inkMuted" }
+    head.title.visible = true
+    head.sub.visible = true
+end sub
+
+sub hideDetailRailHeads()
+    for each head in m.detailHeads
+        head.title.visible = false
+        head.sub.visible = false
+    end for
+end sub
+
+sub buildDetailCastRail(isActive as Boolean)
+    root = CreateObject("roSGNode", "ContentNode")
+    rowNode = root.CreateChild("ContentNode")
+    headers = ClientHeaders(m.accessToken)
+    activeRailFactor = 0.0
+    if isActive then activeRailFactor = 1.0
+    for each credit in m.detailCastList
+        item = rowNode.CreateChild("ContentNode")
+        item.id = credit.id
+        item.title = credit.person.name
+        item.AddField("kind", "string", false)
+        creditLine = ""
+        if credit.character <> invalid and Len(credit.character) > 0 then creditLine = credit.character
+        item.kind = creditLine
+        item.AddField("showKind", "boolean", false)
+        item.showKind = creditLine <> ""
+        item.hdPosterUrl = ""
+        if credit.person.headshot_url <> invalid then item.hdPosterUrl = credit.person.headshot_url
+        item.AddField("artHeaders", "assocarray", false)
+        item.artHeaders = {}
+        item.AddField("activeRailFactor", "float", false)
+        item.activeRailFactor = activeRailFactor
+        item.AddField("cardScale", "float", false)
+        item.cardScale = 268.0 / 220.0
+        item.AddField("watchState", "string", false)
+        item.watchState = ""
+        item.AddField("subtitleOverride", "string", false)
+    end for
+    m.detailSimilar.content = root
+end sub
+
+' Season headings (web .tv-media-track h2 + "N episodes"): drawn here because RowList row labels cannot take the web type or sit
+' 59 px above the cards. Follows the focused row: the first two seasons at rest, then the pair that ends on the focused row.
+sub updateSeasonHeads()
+    if m.detailGroupKind <> "series" or m.detailSeasons = invalid then return
+    first = 0
+    if m.detailEpisodePos <> invalid and m.detailEpisodePos[0] > 1 then first = m.detailEpisodePos[0] - 1
+    for slot = 0 to 1
+        index = first + slot
+        if index < m.detailSeasons.Count()
+            group = m.detailSeasons[index]
+            count = group.episodes.Count()
+            word = " episodes"
+            if count = 1 then word = " episode"
+            setDetailRailHead(slot, slot * 315.0 - 12, "Season " + group.season.season_number.ToStr(), count.ToStr() + word)
+        end if
+    end for
+end sub
+
+' Web AvailabilityLagNote: "Usually available about N days after release", or "No availability data yet".
+sub acceptDetailLag(data as Dynamic)
+    text = "No availability data yet"
+    if data <> invalid and data.average_seconds <> invalid
+        seconds = data.average_seconds
+        if seconds >= 86400
+            value = Int(seconds / 86400 * 10 + 0.5) / 10.0
+            unit = " days"
+            if value = 1 then unit = " day"
+            text = "Usually available about " + value.ToStr() + unit + " after release"
+        else if seconds >= 3600
+            value = Int(seconds / 3600 * 10 + 0.5) / 10.0
+            text = "Usually available about " + value.ToStr() + " hours after release"
+        else
+            text = "Usually available about " + Int(seconds / 60 + 0.5).ToStr() + " minutes after release"
+        end if
+    end if
+    m.detailLagText = text
+    updateSeriesEpisodeHeader()
+end sub

@@ -79,6 +79,7 @@ sub onKeyArtUriChange()
     m.keyArtRetries = 0
     m.keyArtRetryTimer.control = "stop"
     m.keyArt.uri = uri
+    if Instr(1, uri, "style=stage") > 0 then m.keyArt.opacity = 1 else m.keyArt.opacity = 0.4
     m.keyArtRetryTimer.duration = 10
     m.keyArtRetryTimer.control = "start"
     if m.keyArtLayer <> invalid then m.keyArtLayer.opacity = 1

@@ -101,6 +101,8 @@ def main() -> None:
     nine_patch("round-outline-r82", 82, 1.2)
     nine_patch("round-ring-r12", 12, 3)
     nine_patch("round-ring-r25", 25, 3)
+    nine_patch("round-r32", 32)
+    nine_patch("round-ring-r32", 32, 3)
     for n in range(1, 5):
         group(n)
     # Page shell: the right-hand panel fades in over 260 px (white ramp, tinted by the panel token).

@@ -20,28 +20,32 @@ captures (they show real library artwork).
 
 | Screen | Dark | Light | Status |
 | --- | ---: | ---: | --- |
-| home | 2.07% | not re-measured | open (dark: art included; remaining differences are text anti-aliasing and 1 px art edges) |
-| movies | 3.51% | not re-measured | open (dark: art included; text anti-aliasing and 1 px art edges) |
-| series | 4.28% | not re-measured | open (dark) |
-| film-detail | 24.96% | 29.53% | open |
-| series-detail | 18.52% | 31.26% | open |
-| search | 1.05% | 1.07% | open (just over) |
-| calendar | 3.44% | 2.57% | open |
-| settings | 2.00% | 1.98% | open |
-| settings-avatar | 3.81% | 3.83% | open |
-| settings-language | 1.68% | 1.72% | open |
-| settings-player | 2.67% | 2.86% | open |
-| settings-server | 3.91% | 3.97% | open |
-| settings-lock | 3.06% | 2.78% | open |
-| settings-invite | 4.71% | 4.75% | open |
-| settings-remote | 2.19% | 2.17% | open |
-| settings-latency | 2.01% | 1.75% | open |
-| settings-your-data | 3.58% | 3.50% | open |
-| watchlist | 5.61% | 0.61% | light passes; dark capture predates a loading race, re-measure |
-| requests | 56.75% | 0.51% | light passes; dark capture predates a loading race, re-measure |
-| profile-switcher | 5.98% | 97.64% | the light web capture is a blank frame, re-measure |
-| player-controls, player-quality-menu | not measured | not measured | the live web player needs a running stream; the chrome is built to the web DOM numbers |
+| home | 2.08% | 27.30% | open (light: the stage art is the dark-baked server image; web light uses the raw art at 40% opacity) |
+| movies | 3.51% | 27.95% | open (same light key-art cause) |
+| series | 4.28% | not measured | open |
+| film-detail | 25.38% | not re-measured | open (layout not yet rebuilt: no Download, Playback, watchlist or playlist actions, no Cast rail) |
+| series-detail | 18.90% | not re-measured | open (same) |
+| search | 1.00% | not re-measured | open (at the line) |
+| calendar | 2.78% | not re-measured | open |
+| settings | 1.92% | not re-measured | open |
+| settings-avatar | 4.54% | not re-measured | open |
+| settings-language | 1.67% | not re-measured | open |
+| settings-player | 2.61% | not re-measured | open |
+| settings-server | 2.75% | not re-measured | open |
+| settings-lock | 2.78% | not re-measured | open |
+| settings-invite | 4.69% | not re-measured | open |
+| settings-remote | 2.14% | not re-measured | open |
+| settings-latency | 1.69% | not re-measured | open |
+| settings-your-data | 3.52% | not measured | open |
+| watchlist | 0.49% | 0.61% | pass |
+| requests | 0.46% | 0.51% | pass |
+| profile-switcher | 6.09% | not re-measured | open (the light web capture was blank) |
+| player-controls | 0.72% | not measured | pass (chrome regions only: top-right controls and the bottom bar; the video plane screenshots black) |
+| player-quality-menu | 0.82% | not measured | pass (chrome regions only) |
 | household-blocked | n/a | n/a | needs a restricted profile; the real device account is not one |
+| home-scrolled | 9.13% | not measured | open (rail viewport shift differs from web's track scroll) |
+| movies-scrolled | 4.28% | not measured | open (grid shifts like web once the fifth row is reached) |
+| settings-player-scrolled | 2.83% | not measured | open |
 | downloads | n/a | n/a | justified exception: offline storage is not possible on Roku |
 
 Where the figures stay high: Library and detail screens differ in live artwork decoding and the Library/Detail layouts are still the

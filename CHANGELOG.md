@@ -272,6 +272,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: film and series pages follow the web layout: header chip, tracked title, meta row, action tiles (Playback, Play or Start, Add to watchlist, Add to Playlist) with working watchlist and playlist actions, Chapters and Cast rails with number overlays, and a series left panel that follows the focused episode.
+- Roku: the Library follows the web layout (header, hero text with letter-spacing, four grid rows, art at web size with 12 px titles, key art at the web scale with smooth gradients), the action tiles sit in the shell column at the web position, a slow refresh no longer signs the device out, and the web comparison scripts log in once and accept scrolled-state ids.
 - Fire TV client: text uses fractional sizes, so widths match the web's; Home cards sit on the web's pixel positions, the right edge masks like the web's, and the hero art is the server's greyscale `stage` bake.
 - Server: the artwork `style` query accepts `stage-light`, the light-theme key-art look (greyscale, contrast 0.88, brightness 1.1, opacity 0.4 baked into alpha).
 - Android: Playlists Create, the Calendar link and Search Filters are now typed header actions drawn by the one action pill (the 30 September Filters tile) instead of hand-built buttons; Search's Filters moves from the body into the header slot. Back and every pill show the theme focus ring (white in dark, ink in light) with no fill, and on phones the Back button centres on the action tile.

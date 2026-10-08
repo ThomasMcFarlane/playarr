@@ -67,8 +67,10 @@ const screens = {
   requests: async () => { await toHome(); await dock(6, 6); },
   // The first Home card opens its detail page; Play there starts playback. The video plane screenshots black, so the
   // diff compares only the chrome (screens.json compareRegions, diff.mjs --chrome-only).
-  "player-controls": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Down", 2); },
-  "player-quality-menu": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Up", 2); },
+  // The first Home card (the most recently watched film; the web reference plays the same file): open it, Play, wait for the
+  // stream, pause. The video plane screenshots black, so the diff compares the chrome only (--chrome-only).
+  "player-controls": async () => { await toHome(); await presses(["Select", "Select"], 25); await press("play", 2); await press("Down", 2); },
+  "player-quality-menu": async () => { await toHome(); await presses(["Select", "Select"], 25); await press("play", 2); await press("Up", 2); },
   // Scrolled states (owner rule): a Home rail several cards in, a library grid several rows down, a long settings panel.
   "home-scrolled": async () => { await toHome(); await press("Down", 2); await presses(Array(7).fill("Right"), 0.8); await sleep(2); },
   "movies-scrolled": async () => { await toHome(); await dock(3, 14); await presses(Array(7).fill("Down"), 0.8); await sleep(3); },

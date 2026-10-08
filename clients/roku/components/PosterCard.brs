@@ -7,6 +7,10 @@ sub init()
     ThemeInitComponent()
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
+    m.overlayNumber = m.top.findNode("overlayNumber")
+    m.captionPrefix = m.top.findNode("captionPrefix")
+    m.overlayNumber.font = PlayarrMakeFont(600, 19)
+    m.captionPrefix.font = PlayarrMakeFont(700, 9)
     m.kind = m.top.findNode("kind")
     m.unwatchedBadge = m.top.findNode("unwatchedBadge")
     m.progressTrack = m.top.findNode("progressTrack")
@@ -17,6 +21,7 @@ sub init()
     m.focusShadow = m.top.findNode("focusShadow")
     m.restShadow = m.top.findNode("restShadow")
     m.cardScaleValue = 1.0
+    m.titleY = 133
     m.liftInterp = m.top.findNode("liftInterp")
     m.retryTimer = m.top.findNode("retryTimer")
     m.retryTimer.ObserveField("fire", "onPosterRetry")
@@ -55,6 +60,17 @@ sub onContentChanged()
     ' every single card observed, so defaulting to visible is the closer
     ' match of the two options available without deeper API work, not a
     ' guess: a documented simplification, not a bug.
+    hasNumber = content.overlayNumber <> invalid and content.overlayNumber <> ""
+    m.overlayNumber.visible = hasNumber
+    if hasNumber then m.overlayNumber.text = content.overlayNumber
+    hasPrefix = content.captionPrefix <> invalid and content.captionPrefix <> ""
+    m.captionPrefix.visible = hasPrefix
+    if hasPrefix
+        m.captionPrefix.text = content.captionPrefix
+        m.title.translation = [m.captionPrefix.boundingRect().width + 8, m.titleY]
+    else
+        m.title.translation = [0, m.titleY]
+    end if
     watchState = ""
     if content.watchState <> invalid then watchState = content.watchState
     m.unwatchedBadge.visible = watchState = "unseen"
@@ -188,8 +204,11 @@ sub layoutCard(cardScale as Float)
     m.focusShadow.height = artH + 180
     titleGap = 9.9
     if cardScale > 1 then titleGap = 11.5
-    m.title.translation = [0, artH + titleGap]
+    m.titleY = artH + titleGap
+    m.title.translation = [0, m.titleY]
     m.title.width = artW
     m.kind.translation = [0, artH + titleGap + 19.5]
     m.kind.width = artW
+    m.overlayNumber.translation = [artW - 72, artH - 40]
+    m.captionPrefix.translation = [0, artH + 12]
 end sub

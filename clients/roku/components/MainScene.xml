@@ -268,7 +268,7 @@
       <TrackedText id="browsePreviewOverview" translation="[153.6,494.7]" />
       <MarkupGrid id="browseGrid" translation="[783.4,162]" itemComponentName="PosterCard"
         numColumns="3" numRows="4" itemSize="[353.5,240.5]" itemSpacing="[0,0]"
-        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" />
       <Label id="browseHint" translation="[200,1020]" width="1700" height="40" text="" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
            A-Z, right edge, entered from the grid via Right at its last
@@ -377,7 +377,7 @@
       <Label id="searchPreviewOverview" translation="[200,540]" width="380" height="280" wrap="true" vertAlign="top" scale="[0.52,0.52]" color="0xA9B7C9FF" visible="false" />
       <MarkupGrid id="searchGrid" translation="[700,320]" itemComponentName="PosterCard"
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
-        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
+        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" visible="false" />
       <!-- Web has no footer hint on empty Search. -->
       <Label id="searchHint" translation="[200,1020]" width="1700" height="40" text="OK type query  •  Back home" scale="[0.62,0.62]" color="0xA9B7C9FF" visible="false" />
 </Group>
@@ -428,13 +428,13 @@
         </Group>
         <MarkupGrid id="playlistsGrid" translation="[560,245]" itemComponentName="PosterCard"
           numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
-          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
+          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" visible="false" />
       </Group>
       <Group id="playlistDetailGroup" visible="false">
         <TvStage id="playlistDetailStage" />
         <MarkupGrid id="playlistItemsGrid" translation="[0,0]" itemComponentName="PosterCard"
           numColumns="2" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
-          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" />
         <Label translation="[100,915]" width="1600" height="50" text="OK details  •  Back playlists" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       </Group>
     </Group>
@@ -490,7 +490,7 @@
            hidden, and detailActions is NOT reparented into the right-hand
            content panel (see MainScene.brs init). -->
       <Label id="detailOverview" translation="[0,0]" width="1067" height="182" wrap="true" maxLines="4" scale="[0.81,0.81]" color="0xDCE5F0FF" visible="false" />
-      <LabelList id="detailActions" translation="[176,760]" itemSize="[300,64]" numRows="1" focusBitmapBlendColor="0xCF3157FF" />
+      <DetailActions id="detailActions" translation="[0,0]" />
       <!-- RowList places each row's items vertically centred inside
            rowHeights[row] and draws the row label at rowLabelOffset from the
            row top. The previous 185px row with a -30px label offset put the
@@ -510,14 +510,14 @@
            detail page's network calls and the genre-search fallback). Both
            use the larger .tv-title-card sizing (cardScale 1.5 = 330x247). -->
       <RowList id="detailChapters" translation="[0,0]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[1038,330]" rowItemSize="[[330,247]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[330]" showRowLabel="true"
+        numRows="1" itemSize="[1038,330]" rowItemSize="[[268,190]]"
+        rowItemSpacing="[[25,0]]" rowHeights="[330]" showRowLabel="true"
         rowLabelOffset="[[0,4]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
       <RowList id="detailSimilar" translation="[0,0]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[1038,330]" rowItemSize="[[330,247]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[330]" showRowLabel="true"
+        numRows="1" itemSize="[1038,330]" rowItemSize="[[268,190]]"
+        rowItemSpacing="[[25,0]]" rowHeights="[330]" showRowLabel="true"
         rowLabelOffset="[[0,4]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
