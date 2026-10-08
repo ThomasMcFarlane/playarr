@@ -1,3 +1,4 @@
+import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
 import {
@@ -134,10 +135,9 @@ function centreTrack(
   const target =
     section.offsetTop + section.offsetHeight / 2 - container.clientHeight / 2;
   const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-  container.scrollTo({
-    top: Math.max(0, Math.min(maxScrollTop, target)),
-    behavior: behaviour,
-  });
+  const top = Math.max(0, Math.min(maxScrollTop, target));
+  if (behaviour === "smooth") smoothScrollTo(container, { top });
+  else setScrollInstant(container, { top });
 }
 
 function playlistRoute(

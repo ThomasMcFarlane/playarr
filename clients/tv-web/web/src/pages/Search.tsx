@@ -1,3 +1,4 @@
+import { smoothScrollIntoView } from "../lib/smoothScroll";
 import {
   memo,
   startTransition,
@@ -593,7 +594,7 @@ export function SearchPage() {
       window.requestAnimationFrame(() => {
         const result = resultRefs.current.get(requestedFocusId);
         result?.focus({ preventScroll: true });
-        result?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        if (result) smoothScrollIntoView(result, { block: "center" });
       });
     });
     return () => window.cancelAnimationFrame(frame);

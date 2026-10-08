@@ -23,7 +23,7 @@ describe("series page opens on the next item to play", () => {
     expect(detail).toContain("if (navigationLayer.hasSnapshot) return;");
     expect(detail).toContain("initialFocusDoneRef.current !== workKey");
     expect(detail).toContain("Do not steal focus the viewer already moved elsewhere");
-    expect(detail).toContain("initialCard.scrollIntoView");
+    expect(detail).toContain("smoothScrollIntoView(initialCard");
     expect(detail).toContain("userSelectionRef.current = { workId: work.id, episodeId };");
   });
 });

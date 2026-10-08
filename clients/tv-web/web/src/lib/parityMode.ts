@@ -1,3 +1,4 @@
+import { setScrollInstant } from "./smoothScroll";
 /**
  * Product-path parity mode for cross-engine freezes.
  *
@@ -145,13 +146,12 @@ function ensureStyle(id: string, css: string): void {
 }
 
 function freezeScrollAndClock(): void {
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
+  setScrollInstant(document.documentElement, { top: 0 });
+  setScrollInstant(document.body, { top: 0 });
   document.querySelectorAll("*").forEach((node) => {
     const el = node as HTMLElement;
     try {
-      el.scrollTop = 0;
-      el.scrollLeft = 0;
+      setScrollInstant(el, { top: 0, left: 0 });
     } catch {
       /* ignore */
     }

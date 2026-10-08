@@ -1,3 +1,4 @@
+import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../ui";
 
@@ -52,7 +53,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
     setDraftYear(year);
     const root = rootRef.current;
     root?.querySelector<HTMLElement>("[aria-selected='true']")?.focus({ preventScroll: true });
-    root?.querySelectorAll<HTMLElement>("[aria-selected='true']").forEach((el) => el.scrollIntoView({ block: "center" }));
+    root?.querySelectorAll<HTMLElement>("[aria-selected='true']").forEach((el) => smoothScrollIntoView(el, { block: "center", instant: true }));
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "BrowserBack" || event.key === "GoBack") {
         event.preventDefault();

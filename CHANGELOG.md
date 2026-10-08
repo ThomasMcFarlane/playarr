@@ -285,6 +285,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: all focus-driven scrolling (page between rails, rails, library and search grids, lists, calendar, settings, detail seasons and episodes, player lists) now glides through one shared, cancelable, retargeting scroll engine instead of snapping. Held arrow keys keep up without a backlog, and reduced motion is respected.
 - Web: Home renders through the shared page layout (no header and no action button); its loading, error and empty states sit inside the page.
 - iOS: the calendar header uses the shared action tiles (bell and sliders) at the web's phone positions, the range label wraps like the web, and the film detail chapter frames match the browser's colours in the parity capture.
 - Web: work and music detail pages render through the shared page layout with a single page heading; Library, Playlists and the detail pages keep their header and Back visible while loading, empty or failed, with the state centred in the page body.
@@ -2469,6 +2470,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: unit tests for the scroll engine, an audit that forbids direct scroll writes outside it, a Playwright motion check (`scripts/motion-e2e.mjs`), and frame-pacing numbers in the nav-perf harness.
 - Web: `scripts/drawer-close.mjs` (Playwright, run in CI) samples the drawer opening and closing animations and asserts they mirror in the TV, desktop and mobile layouts and both themes; unit tests cover the closing state.
 - Roku parity capture: a cold start moves the picker focus back to the first profile before pressing Select, so a remembered bottom-row focus can no longer sign the test device out.
 - Roku parity capture: the Preferences screens press Left before Select so the gear, not Sign out, is focused when the profile picker remembers the bottom row.

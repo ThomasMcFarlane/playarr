@@ -1,3 +1,4 @@
+import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import {
   Fragment,
   useCallback,
@@ -648,7 +649,7 @@ export function PlayerSurface({
         panel?.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
         panel?.querySelector<HTMLButtonElement>(".player-playlist-item");
       active?.focus({ preventScroll: true });
-      active?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (active) smoothScrollIntoView(active, { block: "center" });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activePlaylistIndex, playlistOpen]);
@@ -1323,7 +1324,7 @@ export function PlayerSurface({
               const delta = event.key === "ArrowUp" ? -1 : 1;
               const next = items[Math.min(items.length - 1, Math.max(0, index + delta))];
               next?.focus({ preventScroll: true });
-              next?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              if (next) smoothScrollIntoView(next);
               return;
             }
             if (

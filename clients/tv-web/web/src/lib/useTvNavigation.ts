@@ -10,7 +10,12 @@ import {
   pickNearestCardByCentre,
 } from "./trackNavigation";
 import { noteNavigationKey } from "./navigationActivity";
-import { smoothScrollTo } from "./smoothScroll";
+import {
+  holdScroll,
+  settledScrollOffset,
+  smoothScrollIntoView,
+  smoothScrollTo,
+} from "./smoothScroll";
 import {
   type Direction,
   type FocusRect,
@@ -491,15 +496,8 @@ function focusWithinTitleGrid(
 
   markRemoteLibraryFocus(grid, next, nextIndex, () => {
     // One pair of rect reads per frame (layout is clean at rAF start), then a
-    // single scroll write that keeps the card inside the safe viewport band.
-    const gridRect = grid.getBoundingClientRect();
-    const cardRect = next.getBoundingClientRect();
-    const inset = Math.min(40, Math.max(24, gridRect.height * 0.05));
-    if (cardRect.top < gridRect.top + inset) {
-      grid.scrollTop += cardRect.top - (gridRect.top + inset);
-    } else if (cardRect.bottom > gridRect.bottom - inset) {
-      grid.scrollTop += cardRect.bottom - (gridRect.bottom - inset);
-    }
+    // single eased scroll that keeps the card inside the safe viewport band.
+    revealVerticallyWithin(grid, next);
   });
   return true;
 }
@@ -530,20 +528,28 @@ function uniformGridColumns(container: HTMLElement): number {
   return cols;
 }
 
+/** Glide `scroller` just enough to keep `element` inside its safe band (judged against where it will settle). */
+function revealVerticallyWithin(scroller: HTMLElement, element: HTMLElement): void {
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const inset = Math.min(40, Math.max(24, scrollerRect.height * 0.05));
+  const settled = settledScrollOffset(scroller, "top");
+  const shift = scroller.scrollTop - settled;
+  const top = rect.top + shift;
+  const bottom = rect.bottom + shift;
+  if (top < scrollerRect.top + inset) {
+    smoothScrollTo(scroller, { top: settled + top - (scrollerRect.top + inset) });
+  } else if (bottom > scrollerRect.bottom - inset) {
+    smoothScrollTo(scroller, { top: settled + bottom - (scrollerRect.bottom - inset) });
+  }
+}
+
 /** Scroll the nearest vertical scroller just enough to keep `element` inside its safe band. */
 function revealInVerticalScroller(element: HTMLElement): void {
   const scroller = element.closest<HTMLElement>(
     '[data-tv-scroll-container][data-tv-scroll-axis="vertical"]'
   );
-  if (!scroller) return;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const rect = element.getBoundingClientRect();
-  const inset = Math.min(40, Math.max(24, scrollerRect.height * 0.05));
-  if (rect.top < scrollerRect.top + inset) {
-    scroller.scrollTop += rect.top - (scrollerRect.top + inset);
-  } else if (rect.bottom > scrollerRect.bottom - inset) {
-    scroller.scrollTop += rect.bottom - (scrollerRect.bottom - inset);
-  }
+  if (scroller) revealVerticallyWithin(scroller, element);
 }
 
 /**
@@ -595,10 +601,6 @@ function focusWithinUniformGrid(
   if (!(next instanceof HTMLElement)) return false;
   markRemoteLibraryFocus(container, next, nextIndex, () => revealInVerticalScroller(next));
   return true;
-}
-
-function remoteScrollBehavior(): ScrollBehavior {
-  return document.body.dataset.inputMode === "remote" ? "auto" : "smooth";
 }
 
 export function shouldAutoFocusViewDefault({
@@ -693,8 +695,7 @@ function focusWithinScrollContainer(
   markFocusableRectsDirty();
   revealFullyWithinHorizontalContainer(container, next);
   if (pageScroller && pageScrollTop !== undefined) {
-    pageScroller.scrollTop = pageScrollTop;
-    pageScroller.scrollLeft = pageScrollLeft ?? 0;
+    holdScroll(pageScroller, { top: pageScrollTop, left: pageScrollLeft ?? 0 });
   }
   return true;
 }
@@ -828,11 +829,7 @@ function focusExplicitEdgeTarget(
   if (horizontalContainer) {
     revealFullyWithinHorizontalContainer(horizontalContainer, target);
   } else if (target.closest<HTMLElement>('[data-tv-scroll-axis="vertical"]')) {
-    target.scrollIntoView({
-      behavior: remoteScrollBehavior(),
-      block: "nearest",
-      inline: "nearest",
-    });
+    smoothScrollIntoView(target);
   }
   return true;
 }
@@ -868,11 +865,13 @@ function revealFullyWithinHorizontalContainer(
   const style = window.getComputedStyle(container);
   const startInset = parsePixelValue(style.scrollPaddingLeft);
   const endInset = parsePixelValue(style.scrollPaddingRight);
+  const settledLeft = settledScrollOffset(container, "left");
+  const shift = container.scrollLeft - settledLeft;
   const delta = horizontalRevealDelta({
     containerLeft: containerRect.left,
     containerRight: containerRect.right,
-    elementLeft: elementRect.left,
-    elementRight: elementRect.right,
+    elementLeft: elementRect.left + shift,
+    elementRight: elementRect.right + shift,
     scrollPaddingLeft: startInset,
     scrollPaddingRight: endInset,
   });
@@ -880,7 +879,7 @@ function revealFullyWithinHorizontalContainer(
   if (Math.abs(delta) < 0.5) return;
 
   const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-  const targetScrollLeft = Math.max(0, Math.min(maxScrollLeft, container.scrollLeft + delta));
+  const targetScrollLeft = Math.max(0, Math.min(maxScrollLeft, settledLeft + delta));
   smoothScrollTo(container, { left: targetScrollLeft });
 }
 
@@ -933,9 +932,9 @@ function scrollVerticalContainer(
       clientHeight: element.clientHeight,
       direction,
       scrollHeight: element.scrollHeight,
-      scrollTop: element.scrollTop,
+      scrollTop: settledScrollOffset(element, "top"),
     });
-    if (Math.abs(target - element.scrollTop) < 1) continue;
+    if (Math.abs(target - settledScrollOffset(element, "top")) < 1) continue;
     smoothScrollTo(element, { top: target });
     return true;
   }
@@ -964,7 +963,7 @@ function focusFromShellActionColumn(
     if (!target) return false;
     target.focus({ preventScroll: true });
     markFocusableRectsDirty();
-    target.scrollIntoView({ behavior: remoteScrollBehavior(), block: "nearest", inline: "nearest" });
+    smoothScrollIntoView(target);
     return true;
   };
   const nearest = (inHeader: boolean) =>
@@ -1108,7 +1107,7 @@ function focusWithinHomeRails(
             sibling.offsetLeft < viewLeft + 24 ||
             sibling.offsetLeft + sibling.offsetWidth > viewRight - 24
           ) {
-            rail.scrollLeft = targetLeft;
+            smoothScrollTo(rail, { left: targetLeft });
           }
         }
       }
@@ -1284,7 +1283,7 @@ function moveFocus(direction: Direction): void {
     markFocusableRectsDirty();
     if (next.closest("[data-tv-nav-geometric]")) {
       // Nested scrollers (a day column inside a sideways track): reveal the entry in every one of them.
-      next.scrollIntoView({ behavior: remoteScrollBehavior(), block: "nearest", inline: "nearest" });
+      smoothScrollIntoView(next);
       return;
     }
     const scrollContainer = next.closest<HTMLElement>("[data-tv-scroll-container]");
@@ -1293,8 +1292,7 @@ function moveFocus(direction: Direction): void {
       if (!isVerticalRail) {
         revealFullyWithinHorizontalContainer(scrollContainer, next);
         if (pageScroller && pageScrollTop !== undefined) {
-          pageScroller.scrollTop = pageScrollTop;
-          pageScroller.scrollLeft = pageScrollLeft ?? 0;
+          holdScroll(pageScroller, { top: pageScrollTop, left: pageScrollLeft ?? 0 });
         }
         return;
       }
@@ -1303,37 +1301,36 @@ function moveFocus(direction: Direction): void {
       const nextRect = next.getBoundingClientRect();
       const horizontalInset = Math.min(56, Math.max(24, scrollContainer.clientWidth * 0.05));
       const verticalInset = Math.min(64, Math.max(36, scrollContainer.clientHeight * 0.08));
+      const settledX = settledScrollOffset(scrollContainer, "left");
+      const settledY = settledScrollOffset(scrollContainer, "top");
+      const shiftX = scrollContainer.scrollLeft - settledX;
+      const shiftY = scrollContainer.scrollTop - settledY;
       const horizontalDelta =
-        nextRect.left < containerRect.left + horizontalInset
-          ? nextRect.left - (containerRect.left + horizontalInset)
-          : nextRect.right > containerRect.right - horizontalInset
-            ? nextRect.right - (containerRect.right - horizontalInset)
+        nextRect.left + shiftX < containerRect.left + horizontalInset
+          ? nextRect.left + shiftX - (containerRect.left + horizontalInset)
+          : nextRect.right + shiftX > containerRect.right - horizontalInset
+            ? nextRect.right + shiftX - (containerRect.right - horizontalInset)
             : 0;
       const verticalDelta =
-        nextRect.top < containerRect.top + verticalInset
-          ? nextRect.top - (containerRect.top + verticalInset)
-          : nextRect.bottom > containerRect.bottom - verticalInset
-            ? nextRect.bottom - (containerRect.bottom - verticalInset)
+        nextRect.top + shiftY < containerRect.top + verticalInset
+          ? nextRect.top + shiftY - (containerRect.top + verticalInset)
+          : nextRect.bottom + shiftY > containerRect.bottom - verticalInset
+            ? nextRect.bottom + shiftY - (containerRect.bottom - verticalInset)
             : 0;
       if (horizontalDelta !== 0 || verticalDelta !== 0) {
         // Directory rows should glide into their safe viewport area. Each
         // new key press retargets the native animation to the newly focused
         // card, avoiding the hard row-by-row jumps of a forced auto scroll.
         smoothScrollTo(scrollContainer, {
-          left: scrollContainer.scrollLeft + horizontalDelta,
-          top: scrollContainer.scrollTop + verticalDelta,
+          left: settledX + horizontalDelta,
+          top: settledY + verticalDelta,
         });
       }
     } else if (!homeMove) {
-      next.scrollIntoView({
-        behavior: remoteScrollBehavior(),
-        block: "nearest",
-        inline: "nearest",
-      });
+      smoothScrollIntoView(next);
     }
     if (pageScroller && pageScrollTop !== undefined) {
-      pageScroller.scrollTop = pageScrollTop;
-      pageScroller.scrollLeft = pageScrollLeft ?? 0;
+      holdScroll(pageScroller, { top: pageScrollTop, left: pageScrollLeft ?? 0 });
     }
     return;
   }

@@ -1,3 +1,4 @@
+import { setScrollInstant, settledScrollOffset, smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
 import { Drawer, PageLayout } from "../components/shell";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { snapshotFromWork } from "../lib/discovery";
@@ -487,7 +488,9 @@ function centreDetailTrack(track: HTMLElement, behavior: ScrollBehavior) {
   const delta =
     trackRect.top + trackRect.height / 2 - (browserRect.top + browserRect.height / 2);
   if (Math.abs(delta) > 1) {
-    browser.scrollBy({ top: delta, behavior });
+    const top = settledScrollOffset(browser, "top") + delta;
+    if (behavior === "smooth") smoothScrollTo(browser, { top });
+    else setScrollInstant(browser, { top });
   }
 }
 
@@ -1337,18 +1340,17 @@ export function WorkDetailPage() {
       if (targetTrack) centreDetailTrack(targetTrack, "auto");
       const rail = initialCard?.closest<HTMLElement>(".tv-episode-rail");
       if (initialCard && rail) {
-        rail.scrollTo({
+        setScrollInstant(rail, {
           left:
             initialCard.offsetLeft +
             initialCard.offsetWidth / 2 -
             rail.clientWidth / 2,
-          behavior: "auto",
         });
         initialCard.focus({ preventScroll: true });
         // Stacked (phone) layouts scroll the page, not the track surface: bring the tile into view.
         const cardRect = initialCard.getBoundingClientRect();
         if (cardRect.top < 0 || cardRect.bottom > window.innerHeight) {
-          initialCard.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+          smoothScrollIntoView(initialCard, { block: "center", instant: true });
         }
         if (nextUpCard) initialFocusDoneRef.current = workKey;
       }

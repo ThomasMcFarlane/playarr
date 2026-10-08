@@ -1,3 +1,4 @@
+import { setScrollInstant } from "./smoothScroll";
 import {
   useCallback,
   useEffect,
@@ -191,8 +192,7 @@ function restoreSnapshot(snapshot: NavigationSnapshot): (() => void) | false {
         `[data-navigation-scroll-key="${CSS.escape(key)}"]`
       );
       if (!container) continue;
-      container.scrollTop = position.top;
-      container.scrollLeft = position.left;
+      setScrollInstant(container, { top: position.top, left: position.left });
     }
   };
 

@@ -93,6 +93,16 @@ const INSTRUMENT = `(() => {
       ch.port2.postMessage(0);
     });
   }, true);
+  // Frame pacing: rAF-to-rAF deltas, sampled only while \`s.framing\` is set.
+  s.frames = [];
+  s.framing = false;
+  let last = 0;
+  const tick = (t) => {
+    if (s.framing && last) s.frames.push(t - last);
+    last = t;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
   new PerformanceObserver((list) => {
     for (const e of list.getEntries()) s.longTasks.push(e.duration);
   }).observe({ type: "longtask", buffered: true });
@@ -151,7 +161,7 @@ async function runOne(browser, base, name, throttle, { profile }) {
     await new Promise((r) => setTimeout(r, INTERVAL_MS));
   }
   await page.waitForTimeout(1500 * Math.max(1, throttle / 10));
-  await page.evaluate(() => { window.__navPerf.samples.length = 0; window.__navPerf.longTasks.length = 0; });
+  await page.evaluate(() => { window.__navPerf.samples.length = 0; window.__navPerf.longTasks.length = 0; window.__navPerf.frames.length = 0; window.__navPerf.framing = true; });
   if (profile) {
     await cdp.send("Profiler.enable");
     await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
@@ -185,6 +195,8 @@ async function runOne(browser, base, name, throttle, { profile }) {
     await new Promise((r) => setTimeout(r, 250));
   }
   const metricsEnd = await metricsOf();
+  const frames = await page.evaluate(() => { window.__navPerf.framing = false; return window.__navPerf.frames.slice(); });
+  const sortedFrames = [...frames].sort((a, b) => a - b);
   // Main-thread cost per key, converted to unthrottled-equivalent ms.
   const perKey = (name) => (((metricsEnd[name] - metricsStart[name]) * 1000) / sequence.length / throttle);
   const cost = {
@@ -230,6 +242,11 @@ async function runOne(browser, base, name, throttle, { profile }) {
     p50: pct(sorted, 50),
     p95: pct(sorted, 95),
     max: sorted[sorted.length - 1],
+    frameCount: frames.length,
+    frameP50: pct(sortedFrames, 50),
+    frameP95: pct(sortedFrames, 95),
+    frameMax: sortedFrames[sortedFrames.length - 1],
+    slowFrames: frames.filter((d) => d > 33.4).length,
     longTasks50: longTasks.filter((d) => d > 50).length,
     longTasks100: longTasks.filter((d) => d > 100).length,
     domNodes,
@@ -271,7 +288,7 @@ try {
       const res = runs[Math.floor(runs.length / 2)];
       results.push(res);
       console.log(
-        `${screen.padEnd(7)} ${String(throttle).padStart(2)}x  p50 ${res.p50.toFixed(0).padStart(5)}  p95 ${res.p95.toFixed(0).padStart(5)}  max ${res.max.toFixed(0).padStart(5)}  long>50 ${String(res.longTasks50).padStart(3)}  long>100 ${String(res.longTasks100).padStart(3)}  dom ${res.domNodes}  cpu/key ${res.cost.taskMs.toFixed(2)}ms (script ${res.cost.scriptMs.toFixed(2)} layout ${res.cost.layoutMs.toFixed(2)} style ${res.cost.styleMs.toFixed(2)})  keys ${res.sampled}/${res.keys}${res.focusState.ok ? "" : `  FOCUS ${res.focusState.reason}`}${res.errors.length ? `  ERRORS ${res.errors[0]}` : ""}`
+        `${screen.padEnd(7)} ${String(throttle).padStart(2)}x  p50 ${res.p50.toFixed(0).padStart(5)}  p95 ${res.p95.toFixed(0).padStart(5)}  max ${res.max.toFixed(0).padStart(5)}  frame p50/p95/max ${res.frameP50.toFixed(1)}/${res.frameP95.toFixed(1)}/${res.frameMax.toFixed(0)} slow ${res.slowFrames}/${res.frameCount}  long>50 ${String(res.longTasks50).padStart(3)}  long>100 ${String(res.longTasks100).padStart(3)}  dom ${res.domNodes}  cpu/key ${res.cost.taskMs.toFixed(2)}ms (script ${res.cost.scriptMs.toFixed(2)} layout ${res.cost.layoutMs.toFixed(2)} style ${res.cost.styleMs.toFixed(2)})  keys ${res.sampled}/${res.keys}${res.focusState.ok ? "" : `  FOCUS ${res.focusState.reason}`}${res.errors.length ? `  ERRORS ${res.errors[0]}` : ""}`
       );
       if (res.analysis) console.log(res.analysis.cpu.text + "\n" + res.analysis.trace.text);
     }
@@ -283,8 +300,8 @@ try {
 if (server.unknown.size) console.log("mock API: unimplemented endpoints hit:", [...server.unknown].join(", "));
 await mkdir(OUT, { recursive: true });
 await writeFile(join(OUT, "latest.json"), JSON.stringify(results, null, 2));
-console.log("\n| screen | throttle | p50 ms | p95 ms | long>100 ms |\n|---|---|---|---|---|");
-for (const r of results) console.log(`| ${r.screen} | ${r.throttle}x | ${r.p50.toFixed(0)} | ${r.p95.toFixed(0)} | ${r.longTasks100} |`);
+console.log("\n| screen | throttle | key p50 ms | key p95 ms | frame p50 | frame p95 | frame max | slow frames | long>100 ms |\n|---|---|---|---|---|---|---|---|---|");
+for (const r of results) console.log(`| ${r.screen} | ${r.throttle}x | ${r.p50.toFixed(0)} | ${r.p95.toFixed(0)} | ${r.frameP50.toFixed(1)} | ${r.frameP95.toFixed(1)} | ${r.frameMax.toFixed(0)} | ${r.slowFrames}/${r.frameCount} | ${r.longTasks100} |`);
 if (flag("check")) {
   const broken = results.filter((r) => !r.focusState.ok);
   if (broken.length) {

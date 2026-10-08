@@ -1,3 +1,4 @@
+import { smoothScrollIntoView } from "../lib/smoothScroll";
 import {
   useEffect,
   useMemo,
@@ -116,7 +117,8 @@ export function LanguageDropdown({
   useEffect(() => {
     if (!open) return;
     const selectedIndex = filteredOptions.indexOf(preference);
-    optionRefs.current[Math.max(0, selectedIndex)]?.scrollIntoView({ block: "nearest" });
+    const selected = optionRefs.current[Math.max(0, selectedIndex)];
+    if (selected) smoothScrollIntoView(selected, { instant: true });
     // Only run once per open -- re-running on every filteredOptions change would
     // fight the user's own scrolling as they type.
     // eslint-disable-next-line react-hooks/exhaustive-deps

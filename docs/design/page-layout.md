@@ -544,6 +544,17 @@ Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
 | Q11 | Focus ring in the light theme | **Owner:** the ring is white (`#ffffff`) in dark theme and a near-black ink ring in light theme (the theme's ink token). Width, offset and the 1.06 scale are unchanged, with no fill. | Section 5.1 and the `--focus-ring-color` token. Wherever the spec said "literal white" or "white everywhere", it now reads as this theme-aware ring. |
 | Q12 | Drawer-open state | **Owner:** the drawer-open state keeps its ink fill. | Section 2.1. The ring draws on top when focused. |
 
+## 10a. Motion (owner ruling, 8 October 2026)
+
+"When I am navigating through content, it needs to animate nicely when scrolling; not just immediately snap. All navigation and page transitions need to look smooth."
+
+1. **One scroll engine** (`clients/tv-web/web/src/lib/smoothScroll.ts`) drives every focus-driven scroll on web: the page between rails and sections, rails sideways, grids, lists, calendar views, settings panels and detail seasons and episodes. It eases (cubic ease-out) over 200 to 280 ms depending on distance, is cancelable, and retargets from the current position when the next key press arrives (150 ms, or 110 ms under a held key). Each scroller owns at most one animation per axis, so nothing queues, nothing overshoots and the viewport converges on the newest focus. Reveal maths is judged against where an in-flight glide will settle.
+2. **No direct scroll writes.** `scrollTop =`, `scrollLeft =`, native `scrollIntoView`, `scrollTo`, `scrollBy` and `behavior: "instant"` are forbidden outside the engine (`scrollMotionAudit.test.ts`). Restoring a saved position or opening a list at its selection uses the engine's instant helpers.
+3. **Remote nav stays lag-free.** Key to focus is unchanged; the engine writes once per frame inside rAF and never reads layout straight after a write. `scripts/nav-perf.mjs` (now also reporting frame pacing) is the check, at 1280x720 with 4x and 6x CPU throttling.
+4. **Reduced motion**: `prefers-reduced-motion: reduce` makes every move instant.
+5. **Route transitions**: one short fade-and-rise of the page body only; the shell, nav rail and header stay put; Back reverses it; skeletons appear inside it. Landed in a follow-up PR.
+6. Native clients follow the same timings when parity resumes (200 to 300 ms ease-out, retarget on repeat, reduced motion respected).
+
 ## Appendix A: audit inventory
 
 ### Web

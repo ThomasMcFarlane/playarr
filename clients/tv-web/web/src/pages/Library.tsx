@@ -1,3 +1,4 @@
+import { smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
 import {
   memo,
   startTransition,
@@ -825,11 +826,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       if (!grid || !destination) return;
       destination.focus({ preventScroll: true });
       // A jump can cross hundreds of unmounted rows: scroll instantly.
-      grid.style.scrollBehavior = "auto";
-      destination.scrollIntoView({ block: "center", inline: "nearest" });
-      window.requestAnimationFrame(() => {
-        grid.style.scrollBehavior = "";
-      });
+      smoothScrollIntoView(destination, { block: "center", instant: true });
     } finally {
       setJumpingLetter(null);
     }
@@ -865,10 +862,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       if (grid) {
         const targetLeft =
           card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
-        grid.scrollTo({
-          left: Math.max(0, targetLeft),
-          behavior: remote ? "auto" : "smooth",
-        });
+        smoothScrollTo(grid, { left: Math.max(0, targetLeft) });
       }
     }
     if (state.items && index >= state.items.length - 12 && state.hasMore) {

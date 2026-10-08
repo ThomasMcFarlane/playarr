@@ -26,7 +26,7 @@ import {
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
-import { smoothScrollTo } from "../lib/smoothScroll";
+import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import {
   isNavigationLayerRestoring,
   useNavigationLayer,
@@ -95,7 +95,7 @@ function centreHomeRail(
   // Eased, interruptible, retargeting scroll (shared with remote navigation);
   // the focused rail glides to a stable vertical anchor at the viewport centre.
   if (animate) smoothScrollTo(container, { top });
-  else container.scrollTop = top;
+  else setScrollInstant(container, { top });
 }
 
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
