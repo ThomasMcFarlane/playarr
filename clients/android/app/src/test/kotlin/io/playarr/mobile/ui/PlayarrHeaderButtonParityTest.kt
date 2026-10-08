@@ -48,7 +48,7 @@ class PlayarrHeaderButtonParityTest {
         assertTrue("page Filters is drawn by the one action pill", actions.contains("PlayarrActionPill(PlayarrActionIcon.Filters"))
         assertTrue("the scaffold hands Filters to the page layout", scaffold.contains("PlayarrPageAction.Filters("))
         val calendar = ui("PlayarrCalendar.kt")
-        val header = calendar.substring(calendar.indexOf("val bellAction"), calendar.indexOf("val navigation:"))
+        val header = calendar.substring(calendar.indexOf("val bellAction"), calendar.indexOf("val navigation = "))
         assertTrue("Calendar link is a typed panel action", header.contains("PlayarrPageAction.Panel("))
         assertTrue("with the bell glyph from the one icon map", header.contains("PlayarrActionIcon.Bell"))
         assertTrue("Calendar Filters goes through the scaffold", calendar.contains("filters = PlayarrFilterAction("))

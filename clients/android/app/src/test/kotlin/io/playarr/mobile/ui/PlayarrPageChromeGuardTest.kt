@@ -29,8 +29,8 @@ class PlayarrPageChromeGuardTest {
     /** A clickable `Surface` with a round shape and a pill height is a hand-rolled header pill. */
     @Test
     fun `no hand-rolled round pills in screens`() {
-        // Calendar period arrows and Today move onto the navigation action in A6; the profile picker is registry-exempt.
-        val allowed = setOf("PlayarrCalendar.kt", "PlayarrPhoneProfiles.kt")
+        // The profile picker is registry-exempt.
+        val allowed = setOf("PlayarrPhoneProfiles.kt")
         val pillHeights = Regex("""\.(size|height)\((\d+(\.\d+)?)\.dp[,)]""")
         val offenders = uiFiles().filter { it.name !in allowed }.flatMap { f ->
             val text = f.readText()
@@ -79,7 +79,7 @@ class PlayarrPageChromeGuardTest {
     /** The page start gutter is a token (`playarrPageMetrics(...).start`); the allow-list shrinks as pages migrate (A5, A6). */
     @Test
     fun `no page start literals in screens`() {
-        val allowed = setOf("PlayarrCalendar.kt") // moves with the calendar in A6
+        val allowed = emptySet<String>()
         val offenders = uiFiles().filter { it.name !in allowed }.filter { Regex("""\b154\.dp\b""").containsMatchIn(it.readText()) }.map { it.name }
         assertEquals("read the gutter from playarrPageMetrics()", emptyList<String>(), offenders)
     }
@@ -93,10 +93,10 @@ class PlayarrPageChromeGuardTest {
         assertEquals("every Experience scaffold call names its page", 0, Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(text).count())
     }
 
-    /** List pages register with the page package too; only the calendar is still on the legacy id (A6). */
+    /** List pages register with the page package too; none is left on the legacy id. */
     @Test
-    fun `no legacy page ids outside the calendar`() {
-        val allowed = setOf("PlayarrCalendar.kt", "PlayarrPageScaffold.kt")
+    fun `no legacy page ids`() {
+        val allowed = setOf("PlayarrPageScaffold.kt")
         val offenders = uiFiles().filter { it.name !in allowed }.flatMap { f ->
             Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(f.readText()).map { "${f.name}@${it.range.first}" }.toList()
         }

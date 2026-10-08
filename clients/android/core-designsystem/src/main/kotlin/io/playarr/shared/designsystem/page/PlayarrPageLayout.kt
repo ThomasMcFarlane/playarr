@@ -1,5 +1,9 @@
 package io.playarr.shared.designsystem.page
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -148,14 +152,21 @@ private fun PlayarrNavButton(item: PlayarrNavItem) {
     val tv = LocalPlayarrFormFactor.current == PlayarrFormFactor.Tv
     val height = PlayarrPageTokens.current().control
     val glyph = item.icon?.glyph
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Surface(
             onClick = item.onClick,
+            interactionSource = source,
             shape = CircleShape,
             color = palette.surface,
             contentColor = palette.inkSoft,
             border = BorderStroke(1.dp, palette.pillBorder),
             modifier = (if (glyph != null) Modifier.size(height) else Modifier.size(if (tv) 92.dp else 76.dp, height))
+                .then(item.modifier)
+                .then(if (item.primary) Modifier.graphicsLayer { scaleX = 1.055f; scaleY = 1.055f } else Modifier)
+                // The ring is the focus state (white in dark, ink in light), never alongside another ring and never a fill.
+                .then(if (focused) Modifier.playarrFocusRing(PlayarrRingShape.Round) else Modifier)
                 .semantics { contentDescription = item.label },
         ) {
             Box(contentAlignment = Alignment.Center) {

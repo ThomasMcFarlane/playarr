@@ -1,5 +1,6 @@
 package io.playarr.shared.designsystem.page
 
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
@@ -29,7 +30,16 @@ enum class PlayarrHeaderVariant { Page, Detail }
 data class PlayarrBack(val label: String, val onBack: () -> Unit)
 
 @Immutable
-data class PlayarrNavItem(val id: String, val label: String, val icon: PlayarrActionIcon?, val onClick: () -> Unit)
+data class PlayarrNavItem(
+    val id: String,
+    val label: String,
+    val icon: PlayarrActionIcon?,
+    /** The label pill (Today) is the group's default focus: drawn 1.055x. */
+    val primary: Boolean = false,
+    /** Hooks the screen owns, such as the television default-focus modifier. */
+    val modifier: Modifier = Modifier,
+    val onClick: () -> Unit,
+)
 
 /** What goes in the header action slot. Order is enforced by [orderedForHeader], never trusted from the caller. */
 sealed interface PlayarrPageAction {

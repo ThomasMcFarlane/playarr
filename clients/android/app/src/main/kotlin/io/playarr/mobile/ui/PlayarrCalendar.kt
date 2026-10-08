@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.playarrPageMetrics
+import io.playarr.shared.designsystem.page.PlayarrPageId
+import io.playarr.shared.designsystem.page.PlayarrNavItem
 import io.playarr.shared.designsystem.page.PlayarrErrorState
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrActionIcon
@@ -178,12 +181,18 @@ private fun ExperienceCalendarScreen(
         open = state.panel == CalendarPanel.Subscription,
         onToggle = { holder.openPanel(CalendarPanel.Subscription) },
     )
-    val navigation: @Composable RowScope.() -> Unit = {
-        TvCalendarRound("\u2190", playarrString(PlayarrString.CalendarPrevious), holder::previous)
-        TvCalendarToday(playarrString(PlayarrString.CalendarToday), holder::goToToday)
-        TvCalendarRound("\u2192", playarrString(PlayarrString.CalendarNext), holder::next)
-    }
+    // Period navigation is a typed Navigation action: the page header orders it first and draws round arrows and Today.
+    val navigation = PlayarrPageAction.Navigation(
+        id = "calendar-period",
+        items = listOf(
+            PlayarrNavItem("previous", playarrString(PlayarrString.CalendarPrevious), PlayarrActionIcon.Prev, onClick = holder::previous),
+            // Web TV: Today holds the autofocus ring on entry.
+            PlayarrNavItem("today", playarrString(PlayarrString.CalendarToday), null, primary = true, modifier = Modifier.tvContentDefaultFocus(), onClick = holder::goToToday),
+            PlayarrNavItem("next", playarrString(PlayarrString.CalendarNext), PlayarrActionIcon.Next, onClick = holder::next),
+        ),
+    )
     PlayarrPageScaffold(
+        pageId = PlayarrPageId.Calendar,
         title = playarrString(PlayarrString.CalendarTitle),
         onBack = onBack,
         isTelevision = isTelevision,
@@ -194,10 +203,9 @@ private fun ExperienceCalendarScreen(
             onClick = { holder.openPanel(CalendarPanel.Filters) },
         ),
         padBody = !(isTelevision && state.mode == CalendarViewMode.Agenda),
-        actions = listOf(bellAction),
+        actions = if (isTelevision) listOf(navigation, bellAction) else listOf(bellAction),
         // Phones are too narrow for five header actions beside the back button and title: the period
         // navigation moves into the period row below the header there.
-        trailingNav = if (isTelevision) navigation else null,
     ) {
         if (!isTelevision) {
             PhoneCalendarHeader(state, language.locale, holder) { jumpOpen = true }
@@ -632,42 +640,6 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     }
 }
 
-@Composable
-private fun TvCalendarRound(glyph: String, description: String, onClick: () -> Unit) {
-    androidx.compose.material3.Surface(
-        shape = CircleShape, color = WebSurface, contentColor = WebInkSoft,
-        border = BorderStroke(1.dp, WebPillBorder),
-        modifier = Modifier.size(50.dp).calendarClick(remember { MutableInteractionSource() }, onClick).semantics { contentDescription = description },
-    ) { Box(contentAlignment = Alignment.Center) { Text(glyph, fontSize = 13.sp, fontWeight = FontWeight(720)) } }
-}
-
-/** Web TV: Today holds the autofocus ring on entry, drawn 1.055x with a heavy ink ring. */
-@Composable
-private fun TvCalendarToday(label: String, onClick: () -> Unit) {
-    val ring = WebInk
-    val source = remember { MutableInteractionSource() }
-    // The ring is the focus state: it shows on Today only while Today holds focus, never alongside another ring.
-    val focused by source.collectIsFocusedAsState()
-    androidx.compose.material3.Surface(
-        modifier = Modifier.size(92.dp, 50.dp)
-            .tvContentDefaultFocus()
-            .calendarClick(source, onClick)
-            .graphicsLayer { scaleX = 1.055f; scaleY = 1.055f }
-            .drawBehind {
-                if (!focused) return@drawBehind
-                val grow = 3.5.dp.toPx()
-                drawRoundRect(
-                    color = ring,
-                    topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
-                    size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius((size.height + 2 * grow) / 2f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
-                )
-            },
-        shape = CircleShape, color = WebSurface, contentColor = WebInkSoft, border = BorderStroke(1.dp, WebPillBorder),
-    ) { Box(contentAlignment = Alignment.Center) { Text(label, fontSize = 14.4.sp, fontWeight = FontWeight(720)) } }
-}
-
 /** Web TV agenda: the period label, the selected release's details at the left and the day list at the right. */
 @Composable
 internal fun TvCalendarAgenda(
@@ -690,7 +662,7 @@ internal fun TvCalendarAgenda(
             val listTop = 240.dp
             val title = remember(state.window, state.mode, state.anchor, locale) { phoneCalendarRangeTitle(state.mode, state.anchor, state.window, locale) }
             Row(
-                Modifier.offset(x = 154.dp, y = 165.dp).height(56.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
+                Modifier.offset(x = playarrPageMetrics(true).start, y = 165.dp).height(56.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
@@ -705,7 +677,7 @@ internal fun TvCalendarAgenda(
             }
             val detailScroll = rememberScrollState()
             Column(
-                Modifier.offset(x = 154.dp, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))
+                Modifier.offset(x = playarrPageMetrics(true).start, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))
                     .calendarEdgeFades(detailScroll.verticalEdges())
                     .verticalScroll(detailScroll)
                     .padding(bottom = 48.dp),
