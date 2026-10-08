@@ -24,7 +24,6 @@ import { PeriodPicker } from "../components/shell";
 import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
-import { useCachedArtwork } from "../lib/artwork";
 import {
   CALENDAR_VIEWS,
   anchorForView,
@@ -257,38 +256,25 @@ function itemTitle(item: CalendarItem): string {
   return item.kind === "single" ? item.entry.title : item.title;
 }
 
-/** Tile width: the poster is drawn about 100 px wide. */
-const CALENDAR_POSTER_WIDTH = 240;
-
 /**
- * An entry that is in the catalogue shows its poster through the server's artwork proxy (cached,
- * tile-sized, one request path with the rest of the app); otherwise, or when the proxy has none,
- * the provider's poster at a tile-sized width. No version token is sent: the proxy serves the
- * work's own poster, which the calendar's poster URL does not identify, so it could not be kept
- * as immutable safely.
+ * The provider's poster at a tile-sized width. Routing these through the server's artwork proxy
+ * was measured and rejected: a calendar month shows over a hundred posters, and one proxied
+ * request each (about 0.9 s of relay latency apiece) took longer to finish (about 7 s against
+ * 4.5 s) than loading the small provider images directly, for a few MB fewer bytes.
  */
 function Poster({ entry }: { entry: CalendarEntry }) {
-  const work = useMemo(
-    () => ({ id: entry.work_id ?? "", images: entry.poster_url ? [{ kind: "poster" as const, url: entry.poster_url }] : [] }),
-    [entry.work_id, entry.poster_url]
+  return entry.poster_url ? (
+    <img
+      className="calendar-poster"
+      src={sizedPosterUrl(entry.poster_url)}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+    />
+  ) : (
+    <span className="calendar-poster calendar-poster-empty" aria-hidden="true" />
   );
-  const proxied = useCachedArtwork(work, ["poster"], Boolean(entry.work_id && entry.poster_url), CALENDAR_POSTER_WIDTH, false);
-  if (proxied.url) {
-    return <img className="calendar-poster" src={proxied.url} alt="" decoding="async" />;
-  }
-  if (entry.poster_url && !(entry.work_id && proxied.loading)) {
-    return (
-      <img
-        className="calendar-poster"
-        src={sizedPosterUrl(entry.poster_url)}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-      />
-    );
-  }
-  return <span className="calendar-poster calendar-poster-empty" aria-hidden="true" />;
 }
 
 function ItemRow({

@@ -1772,6 +1772,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Web: Calendar posters load directly from the provider at tile width again; routing them through the artwork proxy finished slower on a high-latency link.
 - Web: Calendar posters ask the image provider for a tile-sized width instead of the 1 to 2 MB original.
 - Web: episode frames and Home On Deck frames load only for rails within about a row of the page's viewport (previously every season's rail below the fold fetched its first frames on page load), and Calendar posters come through the artwork proxy at tile width, falling back to the provider's tile-sized poster.
 - Web: the page header measures its layout when its content changes or its box resizes, instead of on every render of the page (and no longer rebuilds its resize observer each time).
