@@ -86,7 +86,7 @@ export function AvatarPanel(): React.ReactElement {
   const {colour} = useTheme();
   const {t} = useLanguage();
   const [userId, setUserId] = useState<string | undefined>(undefined);
-  const [chosen, setChosen] = useState<ProfileAvatarPresetId | undefined>(undefined);
+  const [chosen, setChosen] = useState<ProfileAvatarPresetId | 'custom' | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     client
@@ -103,6 +103,7 @@ export function AvatarPanel(): React.ReactElement {
         if (cancelled) return;
         const preference = remote.preference;
         if (preference && preference.kind === 'preset') setChosen(preference.value as ProfileAvatarPresetId);
+        else if (preference && preference.kind === 'custom') setChosen('custom');
       })
       .catch(() => undefined);
     return () => {
@@ -134,6 +135,19 @@ export function AvatarPanel(): React.ReactElement {
           />
         );
       })}
+      {chosen === 'custom' ? (
+        <AvatarChoice
+          id="astronaut"
+          custom
+          active
+          x={768.8 + 2 * 185.5}
+          y={205.1 + 185.5}
+          size={173.3}
+          userId={userId}
+          onPress={() => undefined}
+          label={t('settings.profileAvatar.customCurrent')}
+        />
+      ) : null}
       <Box x={773.8} y={591.4} w={995}>
         <T size={19.2} weight={400} lh={28.8} color={colour.inkMuted}>
           {t('settings.profileAvatar.presetsOnly')}
@@ -145,6 +159,8 @@ export function AvatarPanel(): React.ReactElement {
 
 function AvatarChoice(props: {
   id: ProfileAvatarPresetId;
+  /** Draw the profile's own saved photo rather than the preset. */
+  custom?: boolean;
   active: boolean;
   x: number;
   y: number;
@@ -178,7 +194,7 @@ function AvatarChoice(props: {
         transform: [{scale: focused && !props.active ? 1.06 : 1}],
       }}
     >
-      <ProfileAvatar profileId={props.userId ?? props.id} presetId={props.id} size={u(inner)} />
+      <ProfileAvatar profileId={props.userId ?? props.id} presetId={props.custom ? undefined : props.id} size={u(inner)} />
     </Pressable>
   );
 }

@@ -69,6 +69,9 @@ const SCREENS = [
   { id: "home", path: "/" },
   { id: "movies", path: "/movies" },
   { id: "series", path: "/series" },
+  { id: "home-scrolled", path: "/", keys: ["ArrowDown", ...Array(7).fill("ArrowRight")] },
+  { id: "movies-scrolled", path: "/movies", keys: Array(8).fill("ArrowDown") },
+  { id: "settings-scrolled", path: "/settings", keys: Array(8).fill("ArrowDown") },
   { id: "movies-filters", path: "/movies?panel=filters" },
   { id: "movies-list", path: "/movies?view=list" },
   { id: "movies-cover", path: "/movies?view=cover" },
@@ -78,14 +81,17 @@ const SCREENS = [
   { id: "movies-cover-large", path: "/movies?view=cover&size=large" },
   { id: "film-detail", path: "/movies", click: ".tv-title-card" },
   { id: "series-detail", path: "/series", click: ".tv-title-card" },
+  { id: "film-playback", path: "/movies", click: [".tv-title-card", ".tv-detail-playback-settings"] },
   { id: "calendar", path: "/calendar" },
   { id: "calendar-week", path: "/calendar?view=week" },
   { id: "calendar-month", path: "/calendar?view=month" },
   { id: "calendar-filters", path: "/calendar?panel=filters" },
   { id: "calendar-link", path: "/calendar?panel=link" },
   { id: "search", path: "/search", type: { selector: "input[type=search], input[type=text]", text: "fast" } },
+  { id: "search-filters", path: "/search", type: { selector: "input[type=search], input[type=text]", text: "fast" }, click: ".tv-search-filter-toggle" },
   { id: "playlists", path: "/playlists" },
   { id: "music", path: "/music" },
+  { id: "music-detail", path: "/music", click: ".tv-title-card" },
   { id: "downloads", path: "/downloads" },
   { id: "watchlist", path: "/watchlist" },
   { id: "requests", path: "/requests" },
@@ -165,9 +171,15 @@ async function capture(theme, screen) {
       await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
       await page.waitForTimeout(1500);
     }
-    if (screen.click) {
-      await page.locator(screen.click).first().click();
+    // Remote presses (the same keys the device capture sends), for the scrolled states.
+    for (const key of screen.keys ?? []) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(900);
+    }
+    for (const selector of [screen.click].flat().filter(Boolean)) {
+      await page.locator(selector).first().click();
       await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(800);
     }
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 20000 }).catch(() => {});
     // Lazy artwork tiles on screen show their title until the image arrives: wait for every visible tile to hold a loaded image.
@@ -227,6 +239,8 @@ async function capture(theme, screen) {
 }
 
 const manifest = { base: "<live>", layouts: { tv: { width: layout.width, height: layout.height, dpr: 1 } }, screens: [] };
+// A run that captures a few screens keeps the entries of the screens captured earlier (same theme and id are replaced).
+const previous = existsSync(join(out, "manifest.json")) ? JSON.parse(readFileSync(join(out, "manifest.json"), "utf8")).screens ?? [] : [];
 let failures = 0;
 for (const theme of themes) {
   mkdirSync(join(out, "tv", theme), { recursive: true });
@@ -241,6 +255,8 @@ for (const theme of themes) {
     }
   }
 }
+const fresh = new Set(manifest.screens.map((entry) => `${entry.theme}/${entry.id}`));
+manifest.screens = [...previous.filter((entry) => !fresh.has(`${entry.theme}/${entry.id}`)), ...manifest.screens];
 writeFileSync(join(out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 staticServer.close();
 process.exit(failures ? 1 : 0);

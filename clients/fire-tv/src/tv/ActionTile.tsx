@@ -14,34 +14,35 @@ export const ACTION_COLUMN_X = 1846;
 export const ACTION_COLUMN_Y = 152;
 export const ACTION_PITCH = 85;
 
-export function ActionTile({icon, label, slot = 0, onPress}: {icon: IconName; label: string; slot?: number; onPress?: () => void}): React.ReactElement {
+export function ActionTile({icon, label, slot = 0, onPress, active, focusable = true}: {icon: IconName; label: string; slot?: number; onPress?: () => void; active?: boolean; focusable?: boolean}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      focusable={focusable}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={onPress}
       style={{
         position: 'absolute',
-        left: u(ACTION_COLUMN_X),
-        top: u(ACTION_COLUMN_Y + slot * ACTION_PITCH),
-        width: u(60),
-        height: u(70),
+        left: u(ACTION_COLUMN_X - 0.5),
+        top: u(ACTION_COLUMN_Y - 0.8 + slot * ACTION_PITCH),
+        width: u(62),
+        height: u(72),
         borderRadius: u(16),
         borderWidth: 1,
         borderColor: colour.line,
-        backgroundColor: focused ? colour.ink : mix(colour.surfaceStrong, 0.56),
+        backgroundColor: focused || active ? colour.ink : mix(colour.surfaceStrong, 0.56),
         alignItems: 'center',
         justifyContent: 'center',
         transform: [{scale: focused ? 1.06 : 1}],
       }}
     >
-      <Icon name={icon} size={u(18)} color={focused ? colour.bg : colour.inkSoft} />
+      <Icon name={icon} size={u(18)} color={focused || active ? colour.bg : colour.inkSoft} />
       <View style={{marginTop: u(6)}}>
-        <T size={8.256} weight={700} ls={0.165} lh={12.4} color={focused ? colour.bg : colour.inkMuted}>
+        <T size={8.256} weight={700} ls={0.165} lh={12.4} color={focused || active ? colour.bg : colour.inkMuted}>
           {label}
         </T>
       </View>

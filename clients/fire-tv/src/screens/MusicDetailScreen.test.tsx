@@ -7,10 +7,13 @@ import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {Text} from 'react-native';
 import type {Work} from '@playarr-tv/api-client';
 import {ApiClientProvider} from '../api/ApiClientProvider';
+import {LanguageProvider} from '../i18n/LanguageProvider';
 import {MusicDetailScreen, type MusicDetailScreenNavigation} from './MusicDetailScreen';
 
 // See LibraryScreen.test.tsx's own comment for exactly why this is needed.
 (globalThis as unknown as {React: typeof React}).React = React;
+
+jest.mock('../navigation/backPolicy', () => ({useTvBackNavigation: jest.fn(), useBackLayer: jest.fn()}));
 
 function work(overrides: Partial<Work> & Pick<Work, 'id' | 'title'>): Work {
   return {
@@ -110,7 +113,9 @@ describe('MusicDetailScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
       await Promise.resolve();
@@ -121,10 +126,11 @@ describe('MusicDetailScreen', () => {
     expect(rendered).toContain('A Great Band');
     expect(rendered).toContain('Debut');
     expect(rendered).toContain('Opening Track');
-    expect(rendered).toContain('Unsynced Track');
+    // Only synced tracks are listed.
+    expect(rendered).not.toContain('Unsynced Track');
   });
 
-  it('calls onPlay with the media file id for a synced track, and disables an unsynced one', async () => {
+  it('calls onPlay with the media file id of a track that is pressed', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse(ARTIST_DETAIL));
     const onPlay = jest.fn();
 
@@ -132,7 +138,9 @@ describe('MusicDetailScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} onPlay={onPlay} />
+          <LanguageProvider>
+            <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} onPlay={onPlay} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
       await Promise.resolve();
@@ -140,12 +148,9 @@ describe('MusicDetailScreen', () => {
     });
 
     act(() => {
-      renderer.root.findByProps({accessibilityLabel: 'Play Opening Track'}).props.onPress();
+      renderer.root.findAllByProps({accessibilityLabel: 'Opening Track'})[0]!.props.onPress();
     });
     expect(onPlay).toHaveBeenCalledWith('mf-track-1');
-
-    const unsyncedRow = renderer.root.findByProps({accessibilityLabel: 'Play Unsynced Track'});
-    expect(unsyncedRow.props.accessibilityState).toEqual({disabled: true});
   });
 
   it('shows an error state when the artist fails to load', async () => {
@@ -155,7 +160,9 @@ describe('MusicDetailScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <MusicDetailScreen route={{params: {workId: 'artist-1'}}} navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
       await Promise.resolve();

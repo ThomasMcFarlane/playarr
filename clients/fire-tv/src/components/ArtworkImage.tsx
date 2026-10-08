@@ -54,6 +54,11 @@ export interface ArtworkImageProps {
   fallback?: React.ReactNode;
   /** Called once when the image could not be loaded (a missing artwork, a refused style, a network failure). */
   onFailed?: () => void;
+  /**
+   * Where a cropped picture sits in its box, as CSS `object-position`'s vertical value (0 top, 0.5 centre, 1 bottom). The web
+   * crops headshots at 20%; React Native only centres, so the picture is laid out by hand once its size is known.
+   */
+  focalY?: number;
 }
 
 const styles = StyleSheet.create({
@@ -83,7 +88,9 @@ async function fetchAsDataUri(uri: string, accessToken: string | undefined): Pro
 }
 
 export function ArtworkImage(props: ArtworkImageProps): React.ReactElement {
-  const {uri, accessToken, style, resizeMode = 'cover', accessibilityLabel, fallback, onFailed} = props;
+  const {uri, accessToken, style, resizeMode = 'cover', accessibilityLabel, fallback, onFailed, focalY} = props;
+  const [natural, setNatural] = useState<{width: number; height: number} | null>(null);
+  const [box, setBox] = useState<{width: number; height: number} | null>(null);
   const [failed, setFailed] = useState(false);
   const onFailedRef = useRef(onFailed);
   onFailedRef.current = onFailed;
@@ -134,6 +141,34 @@ export function ArtworkImage(props: ArtworkImageProps): React.ReactElement {
         accessibilityLabel={accessibilityLabel}
         onError={() => setFailed(true)}
       />
+    );
+  }
+
+  if (focalY !== undefined && resizeMode === 'cover') {
+    // `cover` with the picture's own aspect: scale to fill the box, then place it at `focalY` of the overflow.
+    const fit =
+      natural && box
+        ? (() => {
+            const scale = Math.max(box.width / natural.width, box.height / natural.height);
+            const width = natural.width * scale;
+            const height = natural.height * scale;
+            return {left: (box.width - width) * 0.5, top: (box.height - height) * focalY, width, height};
+          })()
+        : null;
+    return (
+      <View style={[styles.fill, style, {overflow: 'hidden'}]} onLayout={(event) => setBox(event.nativeEvent.layout)}>
+        <Image
+          source={{uri, headers: artworkAuthHeaders(accessToken)}}
+          style={fit ? {position: 'absolute', ...fit} : styles.fill}
+          resizeMode={fit ? 'stretch' : 'cover'}
+          accessibilityLabel={accessibilityLabel}
+          onLoad={(event) => {
+            const source = (event.nativeEvent as {source?: {width?: number; height?: number}}).source;
+            if (source?.width && source?.height) setNatural({width: source.width, height: source.height});
+          }}
+          onError={() => setFailed(true)}
+        />
+      </View>
     );
   }
 

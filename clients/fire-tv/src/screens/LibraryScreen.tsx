@@ -48,6 +48,7 @@ import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
 import {Icon} from '../shell/icons';
 import {ActionTile} from '../tv/ActionTile';
+import {Button} from '../tv/forms';
 import {EdgeFade} from '../tv/EdgeFade';
 import {MediaFocus} from '../tv/mediaFocus';
 import {Box, T, u} from '../tv/kit';
@@ -56,7 +57,17 @@ import {Preview} from '../tv/Preview';
 import {RailFrost, Stage} from '../tv/Stage';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {cardArtUrl, stageArtUrl} from '../tv/ArtOfWork';
-import {workYear} from './HomeScreen';
+import {FilterDrawer, type DrawerChip, type DrawerSection} from '../tv/FilterDrawer';
+import {
+  type ArtworkSize,
+  type LibrarySort,
+  type LibraryView,
+  type SortOrder,
+  rememberLibraryView,
+  storedLibraryView,
+} from '../lib/libraryView';
+import {languageDisplayName, toggleLanguage} from '../lib/languageFilters';
+import type {LanguageFacets} from '@playarr-tv/api-client';
 import {useCatalogBrowse} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {artworkAuthHeaders, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
@@ -217,16 +228,36 @@ export function PosterCard({
   );
 }
 
-const GRID_COLUMNS = 3;
-const CARD_W = 327.2;
-const CARD_H = 184;
-const COL_PITCH = 353.05;
-const ROW_PITCH = 240.4;
+/** Card and grid measurements of each view and size, from the web layout (`.tv-library-grid-panel`). */
+interface GridLayout {
+  cols: number;
+  cardW: number;
+  cardH: number;
+  colPitch: number;
+  rowPitch: number;
+  /** Poster-first artwork (cover view) or backdrop-first (screen view). */
+  posters: boolean;
+}
+const SCREEN_LAYOUTS: Record<ArtworkSize, GridLayout> = {
+  small: {cols: 4, cardW: 238.9, cardH: 134.4, colPitch: 264.8, rowPitch: 190.8, posters: false},
+  medium: {cols: 3, cardW: 327.2, cardH: 184, colPitch: 353.05, rowPitch: 240.4, posters: false},
+  large: {cols: 2, cardW: 503.7, cardH: 283.3, colPitch: 529.6, rowPitch: 339.7, posters: false},
+};
+const COVER_LAYOUTS: Record<ArtworkSize, GridLayout> = {
+  small: {cols: 6, cardW: 156.2, cardH: 234.3, colPitch: 175.4, rowPitch: 296.1, posters: true},
+  medium: {cols: 5, cardW: 191.3, cardH: 287, colPitch: 210.5, rowPitch: 348.8, posters: true},
+  large: {cols: 4, cardW: 244, cardH: 365.9, colPitch: 263.1, rowPitch: 427.7, posters: true},
+};
+const LIST_ROW_PITCH = 121.9;
+const LIST_ART_W = 172.8;
+const LIST_ART_H = 97.2;
 const GRID_X = 783.4;
 const GRID_Y = 162;
 /** The grid scrolls under the page header: clipped below it, with the web's edge fades. */
 const GRID_CLIP_TOP = 150;
 const PAGE_SIZE = 200;
+const CARD_W = 327.2;
+const CARD_H = 184;
 const ALPHABET = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'] as const;
 
 export function letterOf(title: string): string {
@@ -272,17 +303,32 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   const accessToken = useAccessToken(client);
   const baseUrl = client.resolveUrl('/');
   const {colour, scheme} = useTheme();
-  const {t} = useLanguage();
+  const {t, language} = useLanguage();
   const [items, setItems] = useState<Work[] | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
   const [progressRows, setProgressRows] = useState<WatchProgress[] | null>(null);
+  const [look, setLook] = useState(() => storedLibraryView(kind));
+  const [audioLangs, setAudioLangs] = useState<string[]>([]);
+  const [subtitleLangs, setSubtitleLangs] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [drawerFocused, setDrawerFocused] = useState(false);
+  const [facets, setFacets] = useState<LanguageFacets | null>(null);
   const loadingMore = useRef(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   const detailRoute = kind === 'artist' ? ROUTES.musicDetail : ROUTES.workDetail;
   const label = KIND_LABEL[kind];
   const noun = kind === 'movie' ? 'titles' : kind === 'series' ? 'titles' : kind === 'artist' ? 'artists' : 'titles';
+  const listView = look.view === 'list';
+  const layout = look.view === 'cover' ? COVER_LAYOUTS[look.size] : SCREEN_LAYOUTS[look.size];
+  const cols = listView ? 1 : layout.cols;
+  const rowPitch = listView ? LIST_ROW_PITCH : layout.rowPitch;
+  const query = useMemo(
+    () => ({kind, available_only: true, sort: look.sort, order: look.order, audio_lang: audioLangs.join(',') || undefined, subtitle_lang: subtitleLangs.join(',') || undefined}),
+    [kind, look.sort, look.order, audioLangs, subtitleLangs],
+  );
+  const arrange = useCallback((page: readonly Work[]): Work[] => (look.sort === 'title' && look.order === 'asc' ? orderWorksByTitle(page) : [...page]), [look.sort, look.order]);
 
   useTvBackNavigation();
 
@@ -290,16 +336,24 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
     let cancelled = false;
     setItems(null);
     setFailed(false);
+    setFocusIndex(0);
     client
-      .browseCatalog({kind, available_only: true, sort: 'title', order: 'asc', limit: PAGE_SIZE, offset: 0})
+      .browseCatalog({...query, limit: PAGE_SIZE, offset: 0})
       .then((page) => {
         if (cancelled) return;
-        setItems(orderWorksByTitle(page.items as Work[]));
+        setItems(arrange(page.items as Work[]));
         setTotal(page.total ?? page.items.length);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, query, arrange]);
+
+  useEffect(() => {
+    let cancelled = false;
     client
       .listWatchProgress()
       .then((rows) => {
@@ -311,34 +365,98 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
     };
   }, [client, kind]);
 
+  // The language facets follow the other active filters; they are only needed while the drawer is open.
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    let cancelled = false;
+    client
+      .catalogLanguages({kind, available_only: true, audio_lang: audioLangs.join(',') || undefined, subtitle_lang: subtitleLangs.join(',') || undefined})
+      .then((next) => {
+        if (!cancelled) setFacets(next);
+      })
+      .catch(() => {
+        if (!cancelled) setFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, filtersOpen, kind, audioLangs, subtitleLangs]);
+
   const progressByWork = useMemo(() => indexWatchProgressByWork(progressRows ?? []), [progressRows]);
 
   const loadMore = useCallback(() => {
     if (loadingMore.current || items === null || total === null || items.length >= total) return;
     loadingMore.current = true;
     client
-      .browseCatalog({kind, available_only: true, sort: 'title', order: 'asc', limit: PAGE_SIZE, offset: items.length})
-      .then((page) => setItems((current) => [...(current ?? []), ...orderWorksByTitle(page.items as Work[])]))
+      .browseCatalog({...query, limit: PAGE_SIZE, offset: items.length})
+      .then((page) => setItems((current) => [...(current ?? []), ...arrange(page.items as Work[])]))
       .catch(() => undefined)
       .finally(() => {
         loadingMore.current = false;
       });
-  }, [client, items, kind, total]);
+  }, [client, items, query, total, arrange]);
 
   const selected = items?.[focusIndex] ?? items?.[0];
-  const row = Math.floor(focusIndex / GRID_COLUMNS);
+  const row = Math.floor(focusIndex / cols);
   useEffect(() => {
     // Keep the focused row inside the panel: the web scrolls the grid so the row stays visible.
-    const rowTop = GRID_Y + row * ROW_PITCH;
+    const rowTop = GRID_Y + row * rowPitch;
     const target = Math.max(0, rowTop - 300);
     Animated.timing(scrollY, {toValue: -target, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true}).start();
-    if (items && focusIndex > items.length - GRID_COLUMNS * 4) loadMore();
-  }, [row, focusIndex, items, loadMore, scrollY]);
+    if (items && focusIndex > items.length - cols * 4) loadMore();
+  }, [row, rowPitch, cols, focusIndex, items, loadMore, scrollY]);
 
   const dark = scheme === 'dark';
   const activeLetter = selected ? workLetter(selected) : null;
-  const visible = items === null ? [] : items.slice(Math.max(0, (row - 2) * GRID_COLUMNS), (row + 5) * GRID_COLUMNS);
-  const firstVisible = Math.max(0, (row - 2) * GRID_COLUMNS);
+  const firstVisible = Math.max(0, (row - 2) * cols);
+  const visible = items === null ? [] : items.slice(firstVisible, (row + (listView ? 8 : 5)) * cols);
+  const locale = language === 'en' ? 'en-GB' : language;
+
+  const update = (patch: Partial<{view: LibraryView; size: ArtworkSize; sort: LibrarySort; order: SortOrder}>): void => {
+    rememberLibraryView(kind, patch);
+    setLook((current) => ({...current, ...patch}));
+  };
+  const languageChips = (which: 'audio' | 'subs'): DrawerChip[] => {
+    const selectedCodes = which === 'audio' ? audioLangs : subtitleLangs;
+    const rows = ((which === 'audio' ? facets?.audio : facets?.subtitle) ?? []).map((facet) => ({code: facet.code, name: languageDisplayName(facet.code, locale, facet.name), count: facet.count as number | null}));
+    for (const code of selectedCodes) if (!rows.some((entry) => entry.code === code)) rows.push({code, name: languageDisplayName(code, locale), count: null});
+    return rows.map((entry) => ({
+      key: entry.code,
+      label: entry.count === null ? entry.name : `${entry.name} \u00b7 ${entry.count}`,
+      selected: selectedCodes.includes(entry.code),
+      onPress: () => (which === 'audio' ? setAudioLangs(toggleLanguage(audioLangs, entry.code)) : setSubtitleLangs(toggleLanguage(subtitleLangs, entry.code))),
+    }));
+  };
+  const drawerSections = (): DrawerSection[] => {
+    const views: LibraryView[] = kind === 'artist' ? ['list', 'screen', 'cover'] : ['list', 'screen', 'cover'];
+    const viewKey = {list: 'pages.library.viewList', screen: 'pages.library.viewScreen', cover: 'pages.library.viewCover', 'cover-flow': 'pages.library.viewCoverFlow'} as const;
+    const out: DrawerSection[] = [
+      {key: 'view', label: t('pages.library.view'), columns: 3, chips: views.map((value) => ({key: value, label: t(viewKey[value]), selected: look.view === value, icon: value as 'list' | 'screen' | 'cover', onPress: () => update({view: value})}))},
+      {
+        key: 'sort',
+        label: t('pages.library.sortBy'),
+        columns: 2,
+        chips: [
+          {key: 'title', label: t('pages.library.sortTitle'), selected: look.sort === 'title', onPress: () => update({sort: 'title'})},
+          {key: 'date_added', label: t('pages.library.sortDateAdded'), selected: look.sort === 'date_added', onPress: () => update({sort: 'date_added'})},
+        ],
+      },
+      {
+        key: 'order',
+        label: t('pages.library.order'),
+        columns: 2,
+        chips: [
+          {key: 'asc', label: look.sort === 'title' ? t('pages.library.sortAscAlpha') : t('pages.library.sortAscDate'), selected: look.order === 'asc', onPress: () => update({order: 'asc'})},
+          {key: 'desc', label: look.sort === 'title' ? t('pages.library.sortDescAlpha') : t('pages.library.sortDescDate'), selected: look.order === 'desc', onPress: () => update({order: 'desc'})},
+        ],
+      },
+    ];
+    for (const which of ['audio', 'subs'] as const) {
+      const chips = languageChips(which);
+      if (chips.length > 0) out.push({key: which, label: which === 'audio' ? t('pages.library.audioLanguage') : t('pages.library.subtitleLanguage'), columns: 3, chips});
+    }
+    return out;
+  };
 
   return (
     <Stage artUri={stageArtUrl(baseUrl, selected)} accessToken={accessToken}>
@@ -352,7 +470,7 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
         />
       ) : null}
       <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} />
-      <Filters />
+      <ActionTile icon="filters" label={t('pages.library.filters')} active={filtersOpen} focusable={!drawerFocused} onPress={() => setFiltersOpen(!filtersOpen)} />
       {failed ? (
         <Box x={783} y={200} w={600}>
           <T size={17} weight={610} color={colour.ink}>
@@ -364,23 +482,24 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
         <Animated.View style={{position: 'absolute', left: u(-(GRID_X - 24)), top: u(-GRID_CLIP_TOP), width: u(1920), transform: [{translateY: scrollY}]}} pointerEvents="box-none">
           {visible.map((work, offset) => {
             const index = firstVisible + offset;
-            const col = index % GRID_COLUMNS;
-            const rowIndex = Math.floor(index / GRID_COLUMNS);
-            return (
-              <LibraryCard
-                key={work.id}
-                work={work}
-                x={GRID_X + col * COL_PITCH}
-                y={GRID_Y + rowIndex * ROW_PITCH}
-                baseUrl={baseUrl}
-                token={accessToken}
-                selected={index === focusIndex}
-                first={index === 0}
-                progress={progressByWork.get(work.id)}
-                progressReady={progressRows !== null}
-                onFocus={() => setFocusIndex(index)}
-                onPress={() => navigation.navigate(detailRoute, {workId: work.id})}
-              />
+            const col = index % cols;
+            const rowIndex = Math.floor(index / cols);
+            const common = {
+              work,
+              y: GRID_Y + rowIndex * rowPitch,
+              baseUrl,
+              token: accessToken,
+              selected: index === focusIndex,
+              first: index === 0,
+              progress: progressByWork.get(work.id),
+              progressReady: progressRows !== null,
+              onFocus: () => setFocusIndex(index),
+              onPress: () => navigation.navigate(detailRoute, {workId: work.id}),
+            };
+            return listView ? (
+              <ListRow key={work.id} {...common} />
+            ) : (
+              <LibraryCard key={work.id} {...common} x={GRID_X + col * layout.colPitch} card={layout} />
             );
           })}
         </Animated.View>
@@ -388,13 +507,43 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
       <EdgeFade side="top" active={row > 0} x={GRID_X - 24} y={GRID_CLIP_TOP} w={1920 - GRID_X + 24} h={1080 - GRID_CLIP_TOP} />
       <EdgeFade
         side="bottom"
-        active={items !== null && Math.ceil((total ?? items.length) / GRID_COLUMNS) > row + 4}
+        active={items !== null && Math.ceil((total ?? items.length) / cols) > row + (listView ? 7 : 4)}
         x={GRID_X - 24}
         y={GRID_CLIP_TOP}
         w={1920 - GRID_X + 24}
         h={1080 - GRID_CLIP_TOP}
       />
-      <Alphabet active={activeLetter} onJump={(letter) => jumpTo(letter)} />
+      {look.sort === 'title' ? <Alphabet active={activeLetter} onJump={(letter) => jumpTo(letter)} /> : null}
+      {filtersOpen ? (
+        <FilterDrawer
+          kicker={t('pages.library.libraryControls')}
+          title={t('pages.library.filters')}
+          closeLabel={t('pages.library.closeFilters')}
+          onClose={() => {
+            setFiltersOpen(false);
+            setDrawerFocused(false);
+          }}
+          onFocused={() => setDrawerFocused(true)}
+          sections={drawerSections()}
+          footerHeight={audioLangs.length + subtitleLangs.length > 0 ? 90 : 0}
+          footer={
+            audioLangs.length + subtitleLangs.length > 0
+              ? (end) => (
+                  <View style={{position: 'absolute', left: u(46), top: u(end + 26)}}>
+                    <Button
+                      label={t('pages.library.clearLanguages')}
+                      variant="secondary"
+                      onPress={() => {
+                        setAudioLangs([]);
+                        setSubtitleLangs([]);
+                      }}
+                    />
+                  </View>
+                )
+              : undefined
+          }
+        />
+      ) : null}
     </Stage>
   );
 
@@ -405,19 +554,14 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   }
 }
 
-function releaseYearOf(work: Pick<Work, 'release_date'>): string | undefined {
-  const year = workYear(work);
-  return year === null ? undefined : String(year);
+/** The year the web's library shows beside a title: the year it was added to the library, as `Library.tsx` does. */
+function releaseYearOf(work: Pick<Work, 'added_at'>): string | undefined {
+  const year = new Date(work.added_at).getFullYear();
+  return Number.isNaN(year) ? undefined : String(year);
 }
 
-function Filters(): React.ReactElement {
-  const {t} = useLanguage();
-  return <ActionTile icon="filters" label={t('pages.library.filters')} />;
-}
-
-function LibraryCard(props: {
+interface CardProps {
   work: Work;
-  x: number;
   y: number;
   baseUrl: string;
   token: string | undefined;
@@ -427,9 +571,14 @@ function LibraryCard(props: {
   progressReady: boolean;
   onFocus: () => void;
   onPress: () => void;
-}): React.ReactElement {
-  const {work, x, y, baseUrl, token, selected, first, progress, progressReady, onFocus, onPress} = props;
+}
+
+function LibraryCard(props: CardProps & {x: number; card: GridLayout}): React.ReactElement {
+  const {work, x, y, card, baseUrl, token, selected, first, progress, progressReady, onFocus, onPress} = props;
   const {colour} = useTheme();
+  const kinds: readonly ('backdrop' | 'poster')[] = card.posters ? ['poster', 'backdrop'] : ['backdrop', 'poster'];
+  const artKind = preferredArtworkKind(work, kinds);
+  const uri = artKind ? workArtworkUrl(baseUrl, work.id, artKind) : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -437,17 +586,55 @@ function LibraryCard(props: {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
-      style={{position: 'absolute', left: u(x), top: u(y), width: u(CARD_W)}}
+      style={{position: 'absolute', left: u(x), top: u(y), width: u(card.cardW)}}
     >
-      <MediaFocus variant="library" focused={selected} width={CARD_W} height={CARD_H} radius={12.48}>
+      <MediaFocus variant="library" focused={selected} width={card.cardW} height={card.cardH} radius={12.48}>
         <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
-          <ArtworkImage uri={cardArtUrl(baseUrl, work)} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+          <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
           <WatchState progress={progress} showUnwatched={progressReady} />
         </View>
       </MediaFocus>
       <View style={{marginTop: u(11.5), paddingHorizontal: u(1.9)}}>
         <T size={11.904} weight={610} ls={-0.1786} lh={17.9} color={colour.ink} lines={1}>
           {work.title}
+        </T>
+      </View>
+    </Pressable>
+  );
+}
+
+/** List view: a 172.8 x 97.2 thumbnail with the title and its genres and year beside it; the focused row is highlighted. */
+function ListRow(props: CardProps): React.ReactElement {
+  const {work, y, baseUrl, token, selected, first, progress, progressReady, onFocus, onPress} = props;
+  const {colour} = useTheme();
+  const artKind = preferredArtworkKind(work, ['backdrop', 'poster']);
+  const uri = artKind ? workArtworkUrl(baseUrl, work.id, artKind) : undefined;
+  const meta = [work.genres.slice(0, 2).join(' \u00b7 '), releaseYearOf(work)].filter((run): run is string => Boolean(run));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={work.title}
+      hasTVPreferredFocus={first}
+      onFocus={onFocus}
+      onPress={onPress}
+      style={{position: 'absolute', left: u(GRID_X + 4), top: u(y + 0.9), width: u(1034), height: u(LIST_ROW_PITCH - 3), borderRadius: u(16), backgroundColor: selected ? mix(colour.surfaceSoft, 0.55) : 'transparent'}}
+    >
+      <View style={{position: 'absolute', left: u(5), top: u(8)}}>
+        <MediaFocus variant="library" focused={selected} width={LIST_ART_W} height={LIST_ART_H} radius={12.48}>
+          <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
+            <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+            <WatchState progress={progress} showUnwatched={progressReady} />
+          </View>
+        </MediaFocus>
+      </View>
+      <View style={{position: 'absolute', left: u(212), top: u(32), width: u(813)}}>
+        <T size={14.976} weight={610} ls={-0.22464} lh={22.5} color={colour.ink} lines={1}>
+          {work.title}
+        </T>
+      </View>
+      <View style={{position: 'absolute', left: u(212), top: u(67)}}>
+        <T size={9.6} weight={400} lh={14.4} color={colour.inkMuted} lines={1}>
+          {meta.join('   \u2022   ')}
         </T>
       </View>
     </Pressable>
