@@ -309,6 +309,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Merge train: batch landing (key mode) stacks up to six ready PRs with green own CI, tests them with one CI run and lands them with one fast-forward; red batches are halved to the culprit.
 - Calendar API logs how long enrichment and per-entry actions take per request, to find where the time goes.
 - Web: every page now loads with skeletons in the normal page frame (header and Back visible) instead of a centred loading screen or a "Preparing ..." message: Home, Library, Playlists, Folders, Downloads, Watchlist, Requests, Search results, title and music detail and the settings panels.
 - Web: every scroller (rails, grids, lists, panels, dialogs, the calendar views) now shares one edge fade, a mask on the scroller itself. It is present from the first paint, soft on the right so content is still seen going off screen, visible in both themes, and shown only where content continues. The focused card's lift and soft shadow are no longer clipped on rails. The overlay boxes, the per-area scrims and the dark-only override are removed.

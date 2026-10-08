@@ -29,4 +29,5 @@ run "push to main is skipped" 0 "$CSS" "x" push main
 run "main dispatch is skipped" 0 "$CSS" "x" workflow_dispatch main
 run "train dispatch checks the body" 1 "$CSS" "x" workflow_dispatch feature
 run "train dispatch with trailer" 0 "$CSS" "$TRAILER" workflow_dispatch feature
+run "train batch dispatch is skipped (members passed on their own heads)" 0 "$CSS" "x" workflow_dispatch train/batch
 exit $fail

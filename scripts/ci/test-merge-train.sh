@@ -182,6 +182,116 @@ ch=$(ogit "$fe" show main:CHANGELOG.md)
 grep -q 'restoring the pre-fold head' "$fe/train.log" && ok "the train unfolded before re-folding" || bad "no unfold logged"
 rm -rf "$fe"
 
+
+# --- Batch mode: several ready PRs stacked, tested once, landed with one fast-forward. ---
+# batch_env <dir>: origin with main (stub fold script) and PR branches feat1 (src/a.txt + fragment), feat2 (src/b.txt +
+# fragment), feat3 (src/a.txt again: conflicts with PR 1) and feat4 (src/d.txt, no fragment). Sets B_ORIG1..4.
+batch_env() {
+  local d="$1" w="$1/seed" n
+  git init -q -b main "$w"; git init -q --bare "$d/origin.git"
+  (
+    cd "$w"; git config user.name t; git config user.email t@example.invalid
+    mkdir -p changelog.d tasks.d scripts/ci src; printf "r\n" >changelog.d/README.md; printf "r\n" >tasks.d/README.md; printf '# Changelog\n' >CHANGELOG.md; printf 'x\n' >TASKS.md
+    printf 'a\n' >src/a.txt; printf 'b\n' >src/b.txt; printf 'd\n' >src/d.txt
+    printf '#!/bin/sh\nexit 0\n' >scripts/ci/check-hosted-runners.sh; chmod +x scripts/ci/check-hosted-runners.sh
+    cat >scripts/fold-fragments.mjs <<'JS'
+import fs from 'node:fs';
+for (const f of fs.readdirSync('changelog.d')) {
+  if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
+  fs.appendFileSync('CHANGELOG.md', fs.readFileSync(`changelog.d/${f}`, 'utf8'));
+  fs.unlinkSync(`changelog.d/${f}`);
+}
+JS
+    git add -A; git commit -qm base; git push -q "$d/origin.git" HEAD:refs/heads/main
+    for n in 1 2 3 4; do
+      git checkout -q -b "feat$n" main
+      case "$n" in 1|3) printf "a$n\n" >src/a.txt ;; 2) printf 'b2\n' >src/b.txt ;; 4) printf 'd2\n' >src/d.txt ;; esac
+      [ "$n" = 4 ] || printf -- "- pr $n entry\n" >"changelog.d/pr$n.fixed.md"
+      git add -A; git commit -qm "pr $n"; git push -q "$d/origin.git" "feat$n"
+    done
+  )
+  git clone -q "$d/origin.git" "$d/work" 2>/dev/null
+  ( cd "$d/work"; git config user.name t; git config user.email t@example.invalid )
+}
+# run_batch <dir> <batch-ci> [ready PRs]: one batch_step with stubbed gh/CI. Each PR head is green on its own; <batch-ci> is the state of the stack.
+run_batch() {
+  local d="$1" bci="$2" queue="${3:-1 2 3 4}"
+  (
+    cd "$d/work"
+    gh() {
+      case "$*" in
+        *"workflow run"*) echo "$*" >>"$d/dispatch.log" ;;
+        *"pr edit"*) echo "blocked ${3:-}" >>"$d/gh.log" ;;
+        *"pr view"*"headRefName,state,labels"*) echo "feat$3" ;;
+        *"pr view"*labels*) echo ready ;;
+        *"pr view"*) printf '{"headRefName":"feat%s","isCrossRepository":false,"isDraft":false,"title":"T%s","body":"B%s","baseRefName":"main","state":"OPEN"}\n' "$3" "$3" "$3" ;;
+        *) echo "$*" >>"$d/gh.log" ;;
+      esac
+    }
+    ready_queue() { tr ' ' '\n' <<<"$queue"; }
+    ci_state() { if [ "$1" = "$(git ls-remote origin refs/heads/train/batch 2>/dev/null | awk 'NR==1{print $1}')" ]; then echo "$bci"; else echo success; fi; }
+    KEY_MODE=true DRY=false SUMMARY=/dev/null BATCH_MAX=${BATCH_MAX_T:-6}; STOP=false
+    batch_step >>"$d/train.log" 2>&1 || true
+  )
+}
+be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
+run_batch "$be" pending
+tip=$(ogit "$be" rev-parse train/batch 2>/dev/null || true)
+[ -n "$tip" ] && ok "batch: a scratch branch holds the stack" || { bad "batch: no train/batch pushed"; cat "$be/train.log"; }
+[ "$(ogit "$be" rev-list --count "$m0..train/batch")" = 3 ] && ok "batch: PRs 1, 2 and 4 stacked, conflicting PR 3 left out" || { bad "batch: wrong stack size"; cat "$be/train.log"; }
+grep -q 'blocked 3' "$be/gh.log" && ok "batch: the conflicting PR was blocked alone" || bad "batch: PR 3 not blocked"
+grep -q 'workflow run ci.yml.*train/batch' "$be/dispatch.log" && ok "batch: CI dispatched once on the stack" || bad "batch: no CI dispatch"
+[ "$(ogit "$be" rev-parse main)" = "$m0" ] && ok "batch: main untouched while the stack is tested" || bad "batch: main moved early"
+[ "$(ogit "$be" show train/batch:src/a.txt)" = a1 ] && [ "$(ogit "$be" show train/batch:src/b.txt)" = b2 ] && ok "batch: the stack has every PR's change" || bad "batch: stack content wrong"
+ch=$(ogit "$be" show train/batch:CHANGELOG.md)
+{ grep -q 'pr 1 entry' <<<"$ch" && grep -q 'pr 2 entry' <<<"$ch"; } && ok "batch: fragments folded into the stack" || bad "batch: fragments not folded"
+ogit "$be" show train/batch:changelog.d/pr1.fixed.md >/dev/null 2>&1 && bad "batch: fragment left behind" || ok "batch: folded fragments removed"
+[ "$(ogit "$be" log -1 --format=%an train/batch)" = t ] && ok "batch: commits authored by the configured identity" || bad "batch: author"
+ogit "$be" log --format=%B "$m0..train/batch" | grep -qi 'co-authored-by' && bad "batch: co-author trailer" || ok "batch: no co-author trailer"
+ogit "$be" log --format=%B "$m0..train/batch" | grep -q '^Merge-Train: yes' && ok "batch: Merge-Train trailer on every commit" || bad "batch: trailer missing"
+# CI still running: wait.
+run_batch "$be" pending; [ "$(ogit "$be" rev-parse train/batch)" = "$tip" ] && [ "$(ogit "$be" rev-parse main)" = "$m0" ] && ok "batch: a running batch is left alone" || bad "batch: disturbed"
+# CI green: one fast-forward lands all.
+run_batch "$be" success
+[ "$(ogit "$be" rev-parse main)" = "$tip" ] && ok "batch: main fast-forwarded to the tested tip" || { bad "batch: main is not the tested tip"; cat "$be/train.log"; }
+[ "$(ogit "$be" rev-list --count "$m0..main")" = 3 ] && [ "$(ogit "$be" rev-list --merges --count "$m0..main")" = 0 ] && ok "batch: linear history, one commit per PR" || bad "batch: history shape"
+for n in 1 2 4; do
+  ogit "$be" rev-parse -q --verify "refs/heads/feat$n" >/dev/null && bad "batch: feat$n branch left" || ok "batch: feat$n branch removed after landing"
+done
+ogit "$be" rev-parse -q --verify refs/heads/feat3 >/dev/null && ok "batch: the blocked PR's branch is untouched" || bad "batch: feat3 lost"
+ogit "$be" rev-parse -q --verify refs/heads/train/batch >/dev/null && bad "batch: scratch branch left" || ok "batch: scratch branch deleted"
+[ -z "$(ogit "$be" for-each-ref 'refs/train/*')" ] && ok "batch: no pre-fold refs left" || bad "batch: stale pre-fold ref"
+rm -rf "$be"
+
+# Red batch: halved down to the culprit, which alone is blocked.
+be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
+run_batch "$be" pending "1 2 4"
+[ "$(ogit "$be" rev-list --count "$m0..train/batch")" = 3 ] && ok "batch red: stack of three built" || bad "batch red: stack"
+run_batch "$be" failure "1 2 4"
+[ "$(ogit "$be" rev-list --count "$m0..train/batch")" = 2 ] && ok "batch red: retried with the first half (2 of 3)" || { bad "batch red: not halved"; cat "$be/train.log"; }
+run_batch "$be" failure "1 2 4"
+[ "$(ogit "$be" rev-list --count "$m0..train/batch")" = 1 ] && ok "batch red: halved again (1 of 2)" || bad "batch red: not halved again"
+run_batch "$be" failure "1 2 4"
+grep -q 'blocked 1' "$be/gh.log" && ok "batch red: the single culprit is blocked" || bad "batch red: culprit not blocked"
+[ "$(ogit "$be" rev-parse main)" = "$m0" ] && ok "batch red: main never moved" || bad "batch red: main moved"
+rm -rf "$be"
+
+# A PR head that moves while the stack is tested discards the stack instead of landing it.
+be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
+run_batch "$be" pending "1 2"
+( cd "$be/seed"; git checkout -q feat2; printf 'b3\n' >src/b.txt; git commit -qam "fix up"; git push -q "$be/origin.git" feat2 )
+run_batch "$be" success "1 2"
+if [ "$(ogit "$be" rev-parse main)" = "$m0" ] && grep -q 'changed since the batch was built' "$be/train.log"; then ok "batch: a moved PR head discards the tested stack"; else bad "batch: landed a stale stack"; cat "$be/train.log"; fi
+rm -rf "$be"
+# Main moving independently discards the stack too.
+be=$(mktemp -d); batch_env "$be"
+run_batch "$be" pending "1 2"
+( cd "$be/seed"; git checkout -q main; printf 'z\n' >src/z.txt; git add -A; git commit -qm "hotfix"; git push -q "$be/origin.git" main )
+moved=$(ogit "$be" rev-parse main)
+run_batch "$be" success "1 2"
+if [ "$(ogit "$be" rev-parse main)" = "$moved" ] && grep -q 'main moved since the batch was built' "$be/train.log"; then ok "batch: a moved main discards the tested stack"; else bad "batch: landed on a moved main"; cat "$be/train.log"; fi
+rm -rf "$be"
+
 # block(): label change and summary only, never a comment.
 bl=$(mktemp -d)
 (

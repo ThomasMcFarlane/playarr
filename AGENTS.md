@@ -91,7 +91,15 @@ on a personal account do not get.
 - **Agents: when your PR is finished and its local checks pass, add the label `ready` and stop.**
   Do not wait for CI to merge it and do not merge it manually (never `--admin`). Move on to
   other work or report.
-- The train handles one PR at a time, oldest `ready` label first: it merges the latest `main`
+- **Batch landing (key mode).** The train stacks up to six `ready` PRs whose own CI is already green on a scratch
+  branch `train/batch` (one folded squash commit per PR on current main), runs CI once on the stack, then moves each
+  PR branch to its commit and fast-forwards main, so ten PRs cost about one CI run instead of ten. A PR whose own CI
+  is still running is skipped until a later batch (it never holds the queue). A red batch is halved until the single
+  culprit is blocked; the others stay `ready`. A head, label or main that moved while the stack was tested discards
+  the stack. Every PR still passes the landing guard (against the stack it lands on), and a conflict confined to
+  CHANGELOG.md/TASKS.md is resolved to main's version because PRs only add fragments. Token mode and the dispatch
+  input `pr` use the single-PR path below. `BATCH_MAX` (default 6) sets the stack size; 1 disables batching.
+- The single-PR path handles one PR at a time, oldest `ready` label first: it merges the latest `main`
   into your branch only when main's new commits touch your files (CHANGELOG.md, TASKS.md,
   `changelog.d/` and `tasks.d/` excluded) or conflict; otherwise it keeps your tested head, so a
   running CI is never cancelled by an unrelated landing. It waits for `ci-required` on that exact

@@ -490,6 +490,10 @@ $TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
   block "$pr" "Gave up after $MAX_ATTEMPTS attempts because \`main\` kept moving or pushes were rejected."
 }
 
+# Batch mode (key mode): test several ready PRs together and land them with one fast-forward.
+# shellcheck source=scripts/merge-train-batch.sh
+source "$(dirname "${BASH_SOURCE[0]}")/merge-train-batch.sh"
+
 main() {
   git config user.name "$TRAIN_NAME"
   git config user.email "$TRAIN_EMAIL"
@@ -500,6 +504,9 @@ main() {
     exit 0
   fi
   local queue pr
+  # Key mode without ONLY_PR: batch landing (scripts/merge-train-batch.sh). Token mode and ONLY_PR use the
+  # single-PR path below.
+  if [ -z "${ONLY_PR:-}" ] && batch_step; then exit 0; fi
   if [ -n "${ONLY_PR:-}" ]; then queue="$ONLY_PR"; else queue=$(ready_queue); fi
   [ -z "$queue" ] && { log "queue empty"; exit 0; }
   for pr in $queue; do

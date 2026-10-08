@@ -29,6 +29,9 @@ case "$event" in
   pull_request | pull_request_target) ;;
   workflow_dispatch)
     if [ "${GITHUB_REF_NAME:-}" = main ]; then echo "Layout owner-request gate: main dispatch, skipped"; exit 0; fi
+    # The merge train's batch stack (scripts/merge-train-batch.sh) holds several PRs, none of which owns the
+    # branch. Each member passed this gate on its own head before it was stacked (a precondition of batching).
+    if [ "${GITHUB_REF_NAME:-}" = train/batch ]; then echo "Layout owner-request gate: train batch, each member passed on its own head"; exit 0; fi
     ;;
   *) echo "Layout owner-request gate: $event, skipped"; exit 0 ;;
 esac
