@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ApiClient } from "@playarr-tv/api-client";
+import { withQueryCacheInvalidation } from "./cacheInvalidation";
 import { createLiveCoordinator } from "./coordinator";
 import { createLiveRegistry, type LiveRegistry, type LiveScope } from "./registry";
 
@@ -40,7 +41,8 @@ export function LiveEventsProvider({
   useEffect(() => {
     if (!signedInKey) return;
     const coordinator = createLiveCoordinator({
-      registry,
+      // Stored query copies are dropped as the frame arrives; mounted screens then refetch (debounced).
+      registry: withQueryCacheInvalidation(registry, client.queries),
       pollIntervalMs,
       open: ({ lastEventId, signal }) => client.openEventStream({ lastEventId, signal }),
     });

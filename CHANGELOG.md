@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: live update frames (and resyncs, reconnect gaps and fallback polls) now also drop the matching stored query copies immediately, so screens opened from the stale-while-revalidate cache after a change on another device never show an old copy first.
 - Storybook: the theme toolbar now drives the whole preview (canvas, docs page and its canvas toolbar use the app `--bg` and surface tokens), and the Storybook manager defaults to dark.
 - Web: every page opens with focus in the page (movie detail on Play, empty pages on Back), the start focus is no longer reset once a minute, Downloads, Watchlist, Calendar and Folders restore focus on return, and the profile-switcher selects and calendar period picker work with the remote.
 - Web: closing a side drawer (Filters and the others) now eases out smoothly. The reversed expo curve sat still for half the time and then dashed away, which read as a jump; the close now starts moving at once over the same path and duration as the opening, and a per-frame e2e checks the drawn close.

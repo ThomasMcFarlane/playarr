@@ -9,3 +9,4 @@ export {
   type LiveStreamStatus,
 } from "./coordinator";
 export { LiveEventsProvider, useLiveRevision, useLiveSubscription } from "./LiveEventsProvider";
+export { queryTagsForInvalidations, withQueryCacheInvalidation } from "./cacheInvalidation";
