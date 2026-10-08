@@ -69,6 +69,15 @@ object PlayarrCardShadows {
     /** Search: `0 22px 52px rgba(31,14,20,.28)`. */
     val FocusedSearch = listOf(PlayarrCardShadowLayer(22.dp, 52.dp, Rose.copy(alpha = 0.28f)))
 
+    /** Home art at rest (`.tv-home-card-art`): `0 10px 22px rgba(56,38,33,.16), 0 3px 9px rgba(56,38,33,.10)`. */
+    val HomeRest = listOf(
+        PlayarrCardShadowLayer(10.dp, 22.dp, Warm.copy(alpha = 0.16f)),
+        PlayarrCardShadowLayer(3.dp, 9.dp, Warm.copy(alpha = 0.10f)),
+    )
+
+    /** Search art at rest (`.tv-search-result-art`): `0 12px 34px rgba(31,14,20,.16)`. */
+    val SearchRest = listOf(PlayarrCardShadowLayer(12.dp, 34.dp, Rose.copy(alpha = 0.16f)))
+
     /** At rest: `0 10px 20px rgba(56,38,33,.14), 0 3px 8px rgba(56,38,33,.10)`. */
     val Rest = listOf(
         PlayarrCardShadowLayer(10.dp, 20.dp, Warm.copy(alpha = 0.14f)),

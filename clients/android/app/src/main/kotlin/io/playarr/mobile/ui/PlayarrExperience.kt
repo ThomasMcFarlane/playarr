@@ -6433,11 +6433,7 @@ private fun WebEpisodeDetailCard(
     Column(Modifier.fillMaxWidth().mediaCardLift(lift)) {
         // `.tv-episode-art` box-shadow: a resting pair, and the larger pair while the episode is selected.
         WebShadowedBox(
-            shadows = if (lift) {
-                listOf(WebShadow(24.dp, 48.dp, WarmShadow.copy(alpha = 0.30f)), WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.20f)))
-            } else {
-                listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
-            },
+            shadows = if (lift) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(13.44.dp),
             modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale),
             innerModifier = Modifier.background(WebSurfaceSoft),

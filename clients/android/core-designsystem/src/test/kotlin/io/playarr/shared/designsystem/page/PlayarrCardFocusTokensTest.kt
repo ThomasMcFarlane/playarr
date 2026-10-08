@@ -27,4 +27,10 @@ class PlayarrCardFocusTokensTest {
         assertEquals(listOf(10.dp to 20.dp, 3.dp to 8.dp), PlayarrCardShadows.Rest.map { it.offsetY to it.blur })
         assertEquals(listOf(30, 20), PlayarrCardShadows.Focused.map { Math.round(it.color.alpha * 100) })
     }
+
+    @Test
+    fun homeAndSearchRestShadowsMatchTheirArt() {
+        assertEquals(listOf(10.dp to 22.dp, 3.dp to 9.dp), PlayarrCardShadows.HomeRest.map { it.offsetY to it.blur })
+        assertEquals(listOf(12.dp to 34.dp), PlayarrCardShadows.SearchRest.map { it.offsetY to it.blur })
+    }
 }
