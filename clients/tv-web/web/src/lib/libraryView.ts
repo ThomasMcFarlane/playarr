@@ -143,3 +143,11 @@ export function libraryFirstPageParams(
 export function libraryFirstPageKey(params: ReturnType<typeof libraryFirstPageParams>): string {
   return `catalog:library:${JSON.stringify(params)}`;
 }
+
+const COVER_IMAGE_KINDS = ["poster", "backdrop"] as const;
+const SCREEN_IMAGE_KINDS = ["backdrop", "poster"] as const;
+
+/** The artwork kinds a library card prefers in this view (cover art, otherwise screen art). */
+export function libraryImageKinds(view: LibraryView): readonly ("poster" | "backdrop")[] {
+  return view === "cover" ? COVER_IMAGE_KINDS : SCREEN_IMAGE_KINDS;
+}

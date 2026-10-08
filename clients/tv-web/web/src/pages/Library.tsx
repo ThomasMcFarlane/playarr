@@ -59,6 +59,7 @@ import {
   storedLibraryView,
   LIBRARY_PAGE_SIZE,
   libraryFirstPageKey,
+  libraryImageKinds,
   libraryFirstPageParams,
   type ArtworkSize,
   type LibraryKind,
@@ -1040,7 +1041,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                       routeBase={routeBase}
                       kind={kind}
                       view={view}
-                      imageKinds={COVER_KINDS}
+                      imageKinds={libraryImageKinds("cover")}
                       letter={letter}
                       isSelected={work.id === selected.id}
                       coverFlowOffset={Math.max(-4, Math.min(4, index - selectedIndex))}
@@ -1274,8 +1275,6 @@ interface LibraryTitleCardProps {
   artworkEnabled: boolean;
 }
 
-const COVER_KINDS = ["poster", "backdrop"] as const;
-const SCREEN_KINDS = ["backdrop", "poster"] as const;
 
 interface LibraryChunkProps {
   items: Work[];
@@ -1320,7 +1319,7 @@ const LibraryChunk = memo(
     artworkFrom,
     artworkTo,
   }: LibraryChunkProps) {
-    const imageKinds = view === "cover" ? COVER_KINDS : SCREEN_KINDS;
+    const imageKinds = libraryImageKinds(view);
     const cards = [];
     for (let index = start; index < end; index += 1) {
       const work = items[index]!;
