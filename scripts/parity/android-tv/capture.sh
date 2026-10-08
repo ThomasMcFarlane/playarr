@@ -105,6 +105,8 @@ for id in "${screens[@]}"; do
       # edge fade is checked (check-edge-fade.mjs fails a hard-cut edge). The fixture has few titles; a container that cannot
       # scroll is reported, not silently passed.
       # Start from a clean Home: the screen before may still be the player (its last BACK can land on the finished overlay).
+      # Earlier screens may have played a title: its On deck card would leave the first rail with nothing to scroll.
+      [ -n "${PLAYARR_FIXTURE_DB:-}" ] && sqlite3 "$PLAYARR_FIXTURE_DB" "delete from watch_progress"
       launch; sleep 12
       case $id in
         home-scrolled) rail home; sleep 3; shoot home-before-scroll 1
