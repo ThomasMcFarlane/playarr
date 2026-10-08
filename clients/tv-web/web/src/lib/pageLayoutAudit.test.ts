@@ -53,7 +53,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
   /** Pages still on the legacy frame (the registry's unmigrated list) and its one wrapper component. */
   frame: {
     "components/tv/TvStage.tsx": 1,
-    "pages/Home.tsx": 1,
   },
   /** None allowed. */
   pill: {},
@@ -98,7 +97,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "components/remote/RemotePad.tsx": 1,
     "components/remote/RemotePairingPrompt.tsx": 1,
     "pages/Downloads.tsx": 1,
-    "pages/Home.tsx": 1,
     "pages/Playlists.tsx": 1,
     "pages/Profiles.tsx": 1,
     "pages/Watchlist.tsx": 1,

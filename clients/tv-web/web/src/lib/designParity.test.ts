@@ -51,7 +51,7 @@ describe("design parity with origin/main", () => {
     const current = readSrc("pages/Home.tsx");
     expect(current).toContain("function centreHomeRail");
     expect(current).toContain("tv-home-rails");
-    expect(current).toContain("TvStageShell");
+    expect(current).toContain("<PageLayout");
     expect(current).not.toContain("is-remote-active");
     // Remote selection debounce present for TV lag budget.
     expect(current).toMatch(/remote \? 280 : 0/);

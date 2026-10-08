@@ -35,6 +35,7 @@ export type PageCoverage =
     };
 
 export const PAGE_REGISTRY: readonly PageCoverage[] = [
+  { file: "Home.tsx", mode: "layout", pageId: "home", routes: ["home"], urls: ["/"] },
   { file: "Calendar.tsx", mode: "layout", pageId: "calendar", routes: ["calendar"], urls: ["/calendar"] },
   { file: "Downloads.tsx", mode: "layout", pageId: "downloads", routes: ["downloads"], urls: ["/downloads"] },
   // `/folders` is a web and Android surface for now; other clients are parked, so it is not in
@@ -53,13 +54,6 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
     pageId: "work-detail",
     routes: ["series-detail", "movies-detail", "sites-detail", "search-detail", "playlists-detail"],
     urls: [],
-  },
-  {
-    file: "Home.tsx",
-    mode: "exempt",
-    routes: ["home"],
-    reason: "Root surface: nothing to go back to; the hero replaces the title row. It has no action button: Customise Home lives in Settings.",
-    evidence: "tv-home-feature",
   },
   {
     file: "Player.tsx",

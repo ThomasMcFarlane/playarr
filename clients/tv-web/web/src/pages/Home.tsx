@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { PageLayout } from "../components/shell";
 import type {
   ResumeOption,
   ResumePlan,
@@ -34,12 +35,7 @@ import { labelWithYear } from "../lib/workYear";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useHomeView, type HomeViewPreference } from "../lib/homeView";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
-import {
-  TvMediaTrack,
-  TvRailSurface,
-  TvStageShell,
-} from "../components/tv/TvStage";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { TvMediaTrack, TvRailSurface } from "../components/tv/TvStage";
 import { ResumeChooserModal } from "../components/ResumeChooserModal";
 import {
   resumePlayerState,
@@ -308,34 +304,28 @@ export function HomePage() {
   const error =
     railsState.status === "error" && siteItems.length === 0 ? railsState.message : null;
 
-  if (isLoading) {
-    return <HomeLoader />;
-  }
+  // Home has no back, no title and no action button (Customise Home lives in Settings).
+  const homeHeader = { kind: "none" as const };
 
-  if (error) {
+  if (isLoading || error || !selected) {
+    // The header actions stay up while Home loads, fails or is empty.
     return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="home"
-          tone="error"
-          variant="page"
-          title={t("pages.home.error.title")}
-          description={error}
-        />
-      </div>
-    );
-  }
-
-  if (!selected) {
-    return (
-      <div className="page tv-state-page">
-        <TvEmptyState
-          graphic="home"
-          variant="page"
-          title={t("pages.home.empty.title")}
-          description={t("pages.home.empty.description")}
-        />
-      </div>
+      <PageLayout
+        pageId="home"
+        className="tv-home"
+        ariaLabel={t("pages.home.title")}
+        header={homeHeader}
+        state={
+          isLoading
+            ? { kind: "loading", label: t("pages.home.preparingHome") }
+            : error
+              ? { kind: "error", props: { graphic: "home", title: t("pages.home.error.title"), description: error } }
+              : {
+                  kind: "empty",
+                  props: { graphic: "home", title: t("pages.home.empty.title"), description: t("pages.home.empty.description") },
+                }
+        }
+      />
     );
   }
 
@@ -411,21 +401,23 @@ export function HomePage() {
   }
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="home"
       className={`tv-home${homeView === "cover" ? " is-cover-view" : ""}`}
       ariaLabel={t("pages.home.title")}
-      artworkKey={selected.id}
-      artwork={
-        <CachedArtworkImage
-          work={selected}
-          kinds={["backdrop", "poster"]}
-          alt=""
-          fallback={<span>{selected.title}</span>}
-        />
-      }
+      backdrop={{
+        artKey: selected.id,
+        art: (
+          <CachedArtworkImage
+            work={selected}
+            kinds={["backdrop", "poster"]}
+            alt=""
+            fallback={<span>{selected.title}</span>}
+          />
+        ),
+      }}
+      header={homeHeader}
     >
-
-
       <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
         <p className="tv-provider">
           {selectedEpisode
@@ -479,7 +471,7 @@ export function HomePage() {
           onSelect={(option) => void playResumeOption(resumeChooser.work, option)}
         />
       ) : null}
-    </TvStageShell>
+    </PageLayout>
   );
 }
 
@@ -667,21 +659,3 @@ const HomeRail = memo(function HomeRail({
     </TvMediaTrack>
   );
 });
-
-function HomeLoader() {
-  const { t } = useLanguage();
-  return (
-    <div
-      className="tv-home tv-compact-loading"
-      aria-label={t("pages.home.loadingAriaLabel")}
-      role="status"
-    >
-      <div className="tv-orbit-loader" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-      <p>{t("pages.home.preparingHome")}</p>
-    </div>
-  );
-}

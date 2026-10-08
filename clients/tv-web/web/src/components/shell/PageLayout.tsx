@@ -48,7 +48,11 @@ function StateView({ state }: { state: PageLayoutState }) {
 export function PageLayout({ pageId, header, body = "panel", backdrop, state, children, ariaLabel, className, bodyClassName }: PageLayoutProps) {
   const headerNode =
     "kind" in header && header.kind === "none" ? (
-      header.actions?.length ? <PageActions actions={header.actions} /> : null
+      header.actions?.length ? (
+        <header className="tv-library-heading page-header has-actions is-actions-only">
+          <PageActions actions={header.actions} />
+        </header>
+      ) : null
     ) : (
       <PageHeader {...(header as PageHeaderProps)} />
     );
