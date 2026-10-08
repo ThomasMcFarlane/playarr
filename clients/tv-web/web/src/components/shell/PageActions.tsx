@@ -16,7 +16,14 @@ export interface NavigationItem {
 }
 
 export type PageAction =
-  | { kind: "navigation"; id: string; label: string; items: NavigationItem[] }
+  | {
+      kind: "navigation";
+      id: string;
+      label: string;
+      items: NavigationItem[];
+      /** The page shows the same controls in its own phone sub-row, so the header group is hidden at phone width. */
+      hideOnPhone?: boolean;
+    }
   | {
       kind: "panel";
       id: string;
@@ -57,7 +64,7 @@ function renderAction(action: PageAction): ReactNode {
   switch (action.kind) {
     case "navigation":
       return (
-        <div key={action.id} className="page-actions-navigation" role="group" aria-label={action.label} data-action-kind="navigation">
+        <div key={action.id} className="page-actions-navigation" role="group" aria-label={action.label} data-action-kind="navigation" data-hide-on-phone={action.hideOnPhone ? "" : undefined}>
           {action.items.map((item) =>
             item.icon ? (
               <ActionPill key={item.id} shape="icon" icon={item.icon} label={item.label} onClick={item.onSelect} buttonProps={item.buttonProps} />

@@ -48,10 +48,10 @@ describe("header button parity across clients", () => {
     m(launcher, /TVHeaderPill\(label: "Filters"/);
   });
 
-  it("web: Calendar passes its buttons through PageHeader like every other page", () => {
+  it("web: Calendar passes its buttons as PageLayout actions like every other page", () => {
     const calendar = repo("clients/tv-web/web/src/pages/Calendar.tsx");
-    m(calendar, /filters=\{\{/);
-    m(calendar, /panelButtons=\{\[/);
+    m(calendar, /kind: "filters"/);
+    m(calendar, /kind: "panel"/);
     nm(calendar, /page-filters-button/);
   });
 });

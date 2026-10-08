@@ -70,9 +70,9 @@ describe("folders page wiring", () => {
   it("keeps every view setting in the URL and uses the shared shell", () => {
     expect(source).toMatch(/useSearchParams/);
     expect(source).toMatch(/parseFolderUrl/);
-    expect(source).toMatch(/<PageShell/);
+    expect(source).toMatch(/<PageLayout/);
     expect(source).toMatch(/<FiltersDrawer/);
-    expect(source).toMatch(/filters=\{/);
+    expect(source).toMatch(/kind: "filters"/);
     expect(source).toMatch(/usePanelParam/);
     expect(source).not.toMatch(/page-filters-button/);
   });

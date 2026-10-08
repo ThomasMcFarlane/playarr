@@ -273,6 +273,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the Release Calendar and Folders render through the shared page layout; the calendar's previous, Today and next controls are the shared navigation group (hidden at phone width, where the page shows its own sub-row), and Folders gains the shared scroll-edge fade.
 - Web: Downloads, Watchlist and Requests render through the shared page layout; their loading, empty and error states now sit centred inside the page body, with the header and Back always visible.
 - Roku: film and series pages follow the web layout: header chip, tracked title, meta row, action tiles (Playback, Play or Start, Add to watchlist, Add to Playlist) with working watchlist and playlist actions, Chapters and Cast rails with number overlays, and a series left panel that follows the focused episode.
 - Roku: the Library follows the web layout (header, hero text with letter-spacing, four grid rows, art at web size with 12 px titles, key art at the web scale with smooth gradients), the action tiles sit in the shell column at the web position, a slow refresh no longer signs the device out, and the web comparison scripts log in once and accept scrolled-state ids.
