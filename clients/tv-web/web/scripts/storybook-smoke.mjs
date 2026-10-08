@@ -125,10 +125,18 @@ for (const layout of layoutNames) {
       if (shown.theme !== theme) failures.push(`${label}: theme attribute is ${shown.theme}`);
       if (pageErrors.length) failures.push(`${label}: ${pageErrors.join("; ").slice(0, 300)}`);
       await page.evaluate(axeSource);
+      // Storybook's own a11y addon runs axe on every render; wait it out when it is still running.
       const result = await page.evaluate(async () => {
-        // eslint-disable-next-line no-undef
-        const r = await axe.run("#storybook-root", { resultTypes: ["violations"] });
-        return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, target: v.nodes[0]?.target?.join(" ") ?? "" }));
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            // eslint-disable-next-line no-undef
+            const r = await axe.run("#storybook-root", { resultTypes: ["violations"] });
+            return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, target: v.nodes[0]?.target?.join(" ") ?? "" }));
+          } catch (error) {
+            if (attempt >= 20 || !String(error).includes("already running")) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        }
       });
       for (const v of result) {
         if (!BLOCKING.has(v.impact)) continue;

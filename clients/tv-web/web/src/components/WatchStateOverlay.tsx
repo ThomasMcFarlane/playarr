@@ -34,6 +34,7 @@ export function WatchStateOverlay({
     return (
       <span
         className="tv-watch-progress"
+        role="img"
         aria-label={t("components.watchStateOverlay.percentWatched", {
           percent: Math.round(progressPercent),
         })}
@@ -47,6 +48,7 @@ export function WatchStateOverlay({
     return (
       <span
         className="tv-watch-unseen"
+        role="img"
         aria-label={t("components.watchStateOverlay.unwatched")}
       />
     );

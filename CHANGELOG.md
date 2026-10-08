@@ -157,6 +157,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Web: Storybook gains dialog, toast, avatar, watch-state, period picker, master-detail and player-control stories; the watch-state overlay marks now have role=img.
 - Web: a public Storybook at `/storybook` shows the real components and styles in light and dark, at TV, desktop and mobile layouts, with focus, hover, open, disabled, loading, empty and error states. CI builds it and runs a render and accessibility smoke over every story.
 - iOS and Apple TV Home now render the server-computed, localised `/api/v1/home/rails` shelves, falling back to the previous client-built rails on older servers.
 - iOS: Customise Home (show, hide and reorder Home rails, saved on the server), the illustrated profile avatars shared with the web, the web-style profile picker with theme and language menus, and the app version label under the profile button.
