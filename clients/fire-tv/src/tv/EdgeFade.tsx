@@ -53,9 +53,11 @@ export function EdgeFade({side, active, x, y, w, h, size, kind = 'shade', tint}:
   // The gutter sits over the Home frost, whose alpha ramps 0 -> 0.72 (0.68 light) across it: match the page colour there.
   const frost = blend(colour.surfaceSoft, colour.surfaceStrong, scheme === 'dark' ? 0.44 : 0.48);
   const frostAlpha = scheme === 'dark' ? 0.72 : 0.68;
+  // Light: the art wash under the frost is pinker than the flat frost colour, so a full-strength cover shows as a box; soften it.
+  const tintPeak = scheme === 'dark' ? 1 : 0.6;
   const stops =
     kind === 'gutter' && tint
-      ? [colour.surface, mix(blend(frost, colour.surface, frostAlpha * 0.35), 0.62), mix(blend(frost, colour.surface, frostAlpha * 0.7), 0.22), mix(blend(frost, colour.surface, frostAlpha), 0)]
+      ? [mix(colour.surface, tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.35), 0.62 * tintPeak), mix(blend(frost, colour.surface, frostAlpha * 0.7), 0.22 * tintPeak), mix(blend(frost, colour.surface, frostAlpha), 0)]
       : [edge, mix(base, strength * 0.35), clear];
   const locations = stops.length === 4 ? [0, 0.35, 0.7, 1] : [0, 0.45, 1];
   const forward = side === 'left' || side === 'top';

@@ -28,7 +28,8 @@ export type IconName =
   | 'subtitles'
   | 'hd'
   | 'check'
-  | 'bell';
+  | 'bell'
+  | 'plus';
 
 export interface IconProps {
   name: IconName;
@@ -200,6 +201,9 @@ export function Icon({name, size, color, strokeWidth = 1.8}: IconProps): React.R
           <Path {...line} d="M7.5 9.5v5M7.5 12h3M10.5 9.5v5M13.5 9.5v5h1.5a2.5 2.5 0 0 0 0-5z" />
         </>
       );
+      break;
+    case 'plus':
+      body = <Path {...line} d="M12 5v14M5 12h14" />;
       break;
     case 'bell':
       body = <Path {...line} d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" />;

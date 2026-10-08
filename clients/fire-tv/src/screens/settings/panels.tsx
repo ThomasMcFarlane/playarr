@@ -136,7 +136,7 @@ export function AvatarPanel(): React.ReactElement {
       })}
       <Box x={773.8} y={591.4} w={995}>
         <T size={19.2} weight={400} lh={28.8} color={colour.inkMuted}>
-          {t('settings.profileAvatar.deviceNote')}
+          {t('settings.profileAvatar.presetsOnly')}
         </T>
       </Box>
     </>
@@ -174,7 +174,7 @@ function AvatarChoice(props: {
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: lit ? u(3) : 1,
-        borderColor: lit ? '#cf3157' : mix(colour.lineStrong, 0.66),
+        borderColor: lit ? '#cf3157' : 'transparent',
         transform: [{scale: focused && !props.active ? 1.06 : 1}],
       }}
     >
@@ -417,20 +417,44 @@ export function PlayerPanel(): React.ReactElement {
 
 export function ServerPanel(): React.ReactElement {
   const [apiBaseUrl] = useApiBaseUrl();
+  const client = useApiClient();
   const {colour} = useTheme();
   const {t} = useLanguage();
   const [host, setHost] = useState('');
+  const [name, setName] = useState('');
+  const [test, setTest] = useState<{status: 'idle' | 'testing'} | {status: 'ok'; text: string} | {status: 'error'; text: string}>({status: 'idle'});
+  const username = typeof localStorage !== 'undefined' ? localStorage.getItem('playarr.currentUserName') ?? '' : '';
+  // The server's own name, as the web's connected-server list shows it.
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getVersion()
+      .then((version) => {
+        if (!cancelled) setName(version.instance_name);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+  const runTest = (): void => {
+    setTest({status: 'testing'});
+    client
+      .getVersion()
+      .then((version) => setTest({status: 'ok', text: t('settings.server.connectedSuccess', {serverVersion: version.server_version, apiVersion: version.api_version})}))
+      .catch((error: unknown) => setTest({status: 'error', text: t('settings.server.connectError', {message: error instanceof Error ? error.message : String(error)})}));
+  };
   return (
     <>
       <Box x={773.8} y={210} w={900}>
         <View style={{borderWidth: 1, borderColor: colour.line, backgroundColor: colour.line, padding: 1}}>
           <View style={{height: u(98.9), backgroundColor: colour.surface, paddingLeft: u(18), paddingTop: u(16), paddingRight: u(18)}}>
             <T size={19.2} weight={700} lh={28.8} color={colour.ink}>
-              {'Playarr Server'}
+              {name}
             </T>
             <View style={{height: u(3)}} />
             <T size={10.56} weight={400} lh={15.8} color={colour.inkMuted}>
-              {''}
+              {username}
             </T>
             <View style={{height: u(3.2)}} />
             <T size={10.56} weight={400} lh={15.8} color={colour.inkMuted} lines={1}>
@@ -448,11 +472,11 @@ export function ServerPanel(): React.ReactElement {
         <FormLabel>{t('settings.server.addAnotherServer')}</FormLabel>
         <Gap h={7.2} />
         <View style={{flexDirection: 'row', backgroundColor: colour.line, padding: 0}}>
-          <Field w={399.5} placeholder={t('settings.server.serverAddressPlaceholder')} value={host} onChangeText={setHost} autoCapitalize="none" />
-          <Field w={199.8} placeholder="Username" autoCapitalize="none" style={{marginLeft: 1}} />
+          <Field w={385} placeholder={t('settings.server.serverAddressPlaceholder')} value={host} onChangeText={setHost} autoCapitalize="none" />
+          <Field w={199.8} placeholder={t('settings.server.usernamePlaceholder')} defaultValue={username} autoCapitalize="none" style={{marginLeft: 1}} />
           <Field w={199.8} placeholder={t('settings.server.passwordPlaceholder')} secureTextEntry style={{marginLeft: 1}} />
           <View style={{marginLeft: 1}}>
-            <Button label={t('settings.server.connect')} w={98} h={62} />
+            <Button label={t('settings.server.connect')} w={113} h={62} />
           </View>
         </View>
         <Gap h={0} />
@@ -460,7 +484,22 @@ export function ServerPanel(): React.ReactElement {
           <Hint w={900}>{t('settings.server.credentialsHint')}</Hint>
         </View>
         <Gap h={30} />
-        <Button label={t('settings.server.testConnection')} variant="secondary" />
+        <Button label={test.status === 'testing' ? t('settings.server.testing') : t('settings.server.testConnection')} variant="secondary" onPress={runTest} />
+        {test.status === 'ok' || test.status === 'error' ? (
+          <View style={{marginTop: u(12)}}>
+            <T size={11.52} weight={400} lh={17} color={test.status === 'ok' ? '#3f9d77' : colour.accent}>
+              {test.text}
+            </T>
+          </View>
+        ) : null}
+        <Gap h={24} />
+        <Hint w={900}>{t('settings.server.primaryServerHint', {apiBaseUrl})}</Hint>
+        <Gap h={36} />
+        <Divider />
+        <Gap h={18} />
+        <T size={11.52} weight={400} lh={17} color={colour.inkMuted}>
+          {'\u25b8 ' + t('settings.server.tvDetailsSummary')}
+        </T>
       </Box>
     </>
   );
@@ -503,9 +542,9 @@ export function ProfileLockPanel(): React.ReactElement {
       <FormLabel>{locked ? t('settings.profileLock.replacePinLabel') : t('settings.profileLock.newPinLabel')}</FormLabel>
       <Gap h={7.2} />
       <View style={{flexDirection: 'row', backgroundColor: colour.line}}>
-        <Field w={325.2} value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} />
+        <Field w={310} value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} placeholder={'\u2022 \u2022 \u2022 \u2022'} />
         <View style={{marginLeft: 1}}>
-          <Button label={locked ? t('settings.profileLock.replace') : t('settings.profileLock.setPin')} w={93.8} h={62} onPress={() => pin.length === 4 && void save(pin)} />
+          <Button label={locked ? t('settings.profileLock.replace') : t('settings.profileLock.setPin')} w={109} h={62} disabled={pin.length !== 4} onPress={() => pin.length === 4 && void save(pin)} />
         </View>
       </View>
       <Gap h={33.8} />

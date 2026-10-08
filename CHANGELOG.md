@@ -271,6 +271,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: Playlists follows the web TV layout (page copy, the Create and Filters tiles, one track of titles per playlist, and the web's empty state).
+- Fire TV client: the settings panels show the server's own name and the signed-in user, use the web's pill buttons and field colour, and the avatar chooser no longer draws a ring round unselected avatars.
 - Android (phone and TV): Customise Home moved from Home into Settings as its own panel with the same controls (show or hide, move up and down, reset), saved on every change. Home no longer has the button.
 - Roku: the Library follows the web layout (header, hero text with letter-spacing, four grid rows, art at web size with 12 px titles, key art at the web scale with smooth gradients), the action tiles sit in the shell column at the web position, a slow refresh no longer signs the device out, and the web comparison scripts log in once and accept scrolled-state ids.
 - Web: the shared page layout primitives (`PageLayout`, `PageActions`, `ActionPill`, `ScrollArea` with the edge fade built in, and the loading, empty and error states) and the page-layout stylesheet that now owns the header, Back, the action pill, the shell clock and the tokens. Pages are not moved onto them yet, so no page looks different, except that focus on Back and on every button is the theme ring (white in dark, ink in light) with no ink fill, and pointer hover on buttons follows focus.
