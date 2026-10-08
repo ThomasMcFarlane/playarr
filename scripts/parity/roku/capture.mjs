@@ -38,6 +38,10 @@ async function coldStart() {
   await press("Home", 4);
   await ecp("launch/dev");
   await sleep(9);
+  // The channel resumes instantly with the picker's last focus (a bottom-row button after a Preferences capture), so move to the
+  // first profile before anything presses Select.
+  await press("Up", 0.6);
+  await press("Left", 0.6);
 }
 const toHome = async () => { await coldStart(); await press("Select", 10); };
 // Left from the first rail enters the dock (web TV); Down walks it: Search 0, Home 1, Series 2, Movies 3, Playlists 4,

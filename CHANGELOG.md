@@ -2468,6 +2468,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Roku parity capture: a cold start moves the picker focus back to the first profile before pressing Select, so a remembered bottom-row focus can no longer sign the test device out.
 - Roku parity capture: the Preferences screens press Left before Select so the gear, not Sign out, is focused when the profile picker remembers the bottom row.
 - Roku: a contract test pins the household blocked states (outside schedule, budget used) and how the blocked page opens and closes; the parity README records why the screen cannot be captured on the real device.
 - Web parity captures are reproducible: backdrop blur, the browser storage estimate, the player focus ring and the paused video frame are pinned, and all references are recaptured from current main on a fresh fixture.
