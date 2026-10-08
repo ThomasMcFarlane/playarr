@@ -5626,9 +5626,18 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   backdrop-filter: none;
 }
 
+/*
+ * The rail is sized from the stage height so ten entries and the profile chip fit a 1280x720 or 1366x768 viewport
+ * that the stage scale does not touch (audit R1). At the 1080 stage these resolve to the original 64px / 0.6rem.
+ */
+.app-nav {
+  --tv-nav-link-size: clamp(38px, calc(5.926 * var(--viewport-unit)), 64px);
+  --tv-nav-gap: clamp(0.15rem, calc(0.889 * var(--viewport-unit)), 0.6rem);
+}
+
 .app-nav-group {
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--tv-nav-gap);
   padding: 0.42rem 0.36rem;
   border: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
   border-radius: 22px;
@@ -5638,18 +5647,18 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .app-nav-group + .app-nav-group {
-  margin-top: 0.85rem;
+  margin-top: clamp(0.25rem, calc(1.26 * var(--viewport-unit)), 0.85rem);
   margin-left: 0;
 }
 
 .app-nav-link {
   width: 64px;
   min-width: 64px;
-  height: 64px;
+  height: var(--tv-nav-link-size);
   flex-direction: column;
   justify-content: center;
-  gap: 0.3rem;
-  padding: 0.35rem 0.2rem;
+  gap: clamp(0.1rem, calc(0.44 * var(--viewport-unit)), 0.3rem);
+  padding: clamp(0.05rem, calc(0.5 * var(--viewport-unit)), 0.35rem) 0.2rem;
   border-radius: 16px;
 }
 
@@ -5659,8 +5668,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   width: 64px;
   min-width: 64px;
   justify-content: center;
-  gap: 0.3rem;
-  padding: 0.35rem 0.2rem;
+  gap: clamp(0.1rem, calc(0.44 * var(--viewport-unit)), 0.3rem);
+  padding: clamp(0.05rem, calc(0.5 * var(--viewport-unit)), 0.35rem) 0.2rem;
   border: 0;
   background: color-mix(in srgb, var(--ink) 9%, transparent);
   color: var(--ink);

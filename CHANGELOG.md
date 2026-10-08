@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the navigation rail fits 1280x720 and 1366x768 screens; the profile chip no longer covers the last entries and the first is no longer cut off at the top.
 - Web player: BACK leaves on the first press while the stream is loading, buffering, failed or showing the end card, and the mute button is reachable with the remote.
 - Web: one focus style system. Controls (buttons, pills, inputs, chips, selects, the profile chip and avatar, Back) show the single theme ring (white in dark, ink in light) with no fill, glow or scale; media cards (including playlist collages, folders, music albums, calendar entries and the watchlist, requests and downloads rows) lift with the pinned soft shadow on keyboard and D-pad focus, never a ring. Playlist cards and stacked items now lift on focus (stale remote-marker neutralisation no longer cancels a settled focus). The three competing ring systems are gone.
 - Web: the music artist page keeps the album card, its label and the audio controls apart (no clipping, no overlap).
