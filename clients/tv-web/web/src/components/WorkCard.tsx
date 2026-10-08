@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Work } from "@playarr-tv/api-client";
 import { CachedArtworkImage } from "../lib/artwork";
 import { labelWithYear } from "../lib/workYear";
 import { useMediaContextMenu } from "./MediaContextMenu";
+import { useDwellPrefetch } from "../lib/prefetch";
 
 /** Poster tile for a `Work`, shared by Home's "recently added" shelf and the full Library grid. */
 export function WorkCard({ work }: { work: Work }) {
@@ -13,15 +15,25 @@ export function WorkCard({ work }: { work: Work }) {
         ? "/sites"
         : "/movies";
   const mediaContext = useMediaContextMenu();
+  const [dwelling, setDwelling] = useState(false);
+  useDwellPrefetch(work, dwelling);
+  const itemProps = mediaContext.itemProps({
+    work,
+    detailRoute: `${routeBase}/${work.id}`,
+    parentRoute: routeBase,
+  });
   return (
     <li className="poster-card">
       <Link
         to={`${routeBase}/${work.id}`}
-        {...mediaContext.itemProps({
-          work,
-          detailRoute: `${routeBase}/${work.id}`,
-          parentRoute: routeBase,
-        })}
+        {...itemProps}
+        onFocus={() => setDwelling(true)}
+        onBlur={() => {
+          setDwelling(false);
+          itemProps.onBlur();
+        }}
+        onMouseEnter={() => setDwelling(true)}
+        onMouseLeave={() => setDwelling(false)}
       >
         <div className="poster-art">
           <CachedArtworkImage

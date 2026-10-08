@@ -977,6 +977,14 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   }, [apiBaseUrl, applyApiBaseUrl, persistProfileSession]);
 
   const activeProfileKey = activeProfileRef.current?.profileKey;
+  // The query cache is per signed-in account and profile: it is named here during render (so a
+  // page mounting in the same commit already sees it) and is off while either is unknown, which
+  // covers sign-out. Changing profile changes the scope, which drops everything held.
+  if (client) {
+    client.queries.setScope(
+      activeProfileKey && currentUserId ? `${apiBaseUrl}|${activeProfileKey}|${currentUserId}` : undefined
+    );
+  }
   const serverClients = useMemo<ConnectedServerClient[]>(() => {
     if (!client) return [];
     const activeSessions = activeProfileKey

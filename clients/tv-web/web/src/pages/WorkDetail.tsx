@@ -1148,7 +1148,7 @@ export function WorkDetailPage() {
     state.status === "ready"
       ? state.data.work
       : { id: workId ?? "", images: [] };
-  const cachedBackdrop = useCachedArtwork(artworkWork, ["backdrop", "poster"]).url;
+  const cachedBackdrop = useCachedArtwork(artworkWork, ["backdrop", "poster"], true, 1920).url;
 
   const seasons = useMemo(() => {
     if (state.status !== "ready") return [];

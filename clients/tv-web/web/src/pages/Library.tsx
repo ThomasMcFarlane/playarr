@@ -14,6 +14,7 @@ import { flushSync } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   describeApiError,
+  type CatalogPage,
   type LanguageFacets,
   type WatchProgress,
   type Work,
@@ -50,11 +51,15 @@ import {
   toggleLanguage,
 } from "../lib/languageFilters";
 import { TvRailSurface } from "../components/tv/TvStage";
+import { useDwellPrefetch } from "../lib/prefetch";
 import {
   applyLibraryView,
   parseLibraryView,
   rememberLibraryView,
   storedLibraryView,
+  LIBRARY_PAGE_SIZE,
+  libraryFirstPageKey,
+  libraryFirstPageParams,
   type ArtworkSize,
   type LibraryKind,
   type LibrarySort,
@@ -76,7 +81,7 @@ const ARTWORK_MARGIN_ROWS = 2;
 const PREMOUNT_SLICE_ROWS = 2;
 const PREMOUNT_GAP_MS = 24;
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = LIBRARY_PAGE_SIZE;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"] as const;
 
 function titleLetter(title: string): string {
@@ -224,39 +229,57 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     generationRef.current = generation;
     let cancelled = false;
     const kindChanged = loadedKindRef.current !== kind;
+    const firstPageParams = libraryFirstPageParams(kind, sort, order, languageParams);
+    const cacheKey = libraryFirstPageKey(firstPageParams);
+    // Stale-while-revalidate: a stored first page paints at once (Back, revisits, tab switches);
+    // the request below revalidates it and swaps in only what changed.
+    const stored = client.queries.peek<CatalogPage>(cacheKey);
     const hasVisibleItems = !kindChanged && itemsRef.current.length > 0;
     loadedKindRef.current = kind;
 
     itemsRef.current = [];
     totalRef.current = null;
     requestRef.current = null;
-    if (!hasVisibleItems) setItems(null);
-    setTotal(null);
-    if (!hasVisibleItems) setSelectedId(null);
+    if (stored) {
+      const orderedItems = orderWorks(stored.data.items, sort, order);
+      itemsRef.current = orderedItems;
+      totalRef.current = stored.data.total ?? orderedItems.length;
+      setItems(orderedItems);
+      setTotal(totalRef.current);
+      setSelectedId(orderedItems[0]?.id ?? null);
+      setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
+    } else {
+      if (!hasVisibleItems) setItems(null);
+      setTotal(null);
+      if (!hasVisibleItems) setSelectedId(null);
+      if (!hasVisibleItems) setActiveLetter("#");
+    }
     setInitialError(null);
     setLoadMoreError(null);
-    setRefreshing(hasVisibleItems);
-    if (!hasVisibleItems) setActiveLetter("#");
+    setRefreshing(hasVisibleItems || Boolean(stored));
 
-    client
-      .browseCatalog({
-        kind,
-        available_only: true,
-        sort,
-        order,
-        limit: PAGE_SIZE,
-        offset: 0,
-        ...languageParams,
-      })
+    client.queries
+      .fetch(cacheKey, () => client.browseCatalog(firstPageParams), { tags: ["catalog"] })
       .then((page) => {
         if (cancelled || generation !== generationRef.current) return;
         const orderedItems = orderWorks(page.items, sort, order);
+        if (
+          stored &&
+          itemsRef.current.length > 0 &&
+          JSON.stringify(orderedItems) === JSON.stringify(itemsRef.current)
+        ) {
+          // Nothing changed since the stored copy: keep the grid, selection and focus as they are.
+          setRefreshing(false);
+          return;
+        }
         itemsRef.current = orderedItems;
         totalRef.current = page.total ?? orderedItems.length;
         setItems(orderedItems);
         setTotal(totalRef.current);
-        setSelectedId(orderedItems[0]?.id ?? null);
-        setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
+        if (!stored) {
+          setSelectedId(orderedItems[0]?.id ?? null);
+          setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
+        }
         setRefreshing(false);
       })
       .catch((error: unknown) => {
@@ -309,15 +332,12 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     () =>
       liveCatalog(() => {
         const generation = generationRef.current;
-        client
-          .browseCatalog({
-            kind,
-            available_only: true,
-            sort,
-            order,
-            limit: PAGE_SIZE,
-            offset: 0,
-            ...languageParams,
+        const firstPageParams = libraryFirstPageParams(kind, sort, order, languageParams);
+        // The change makes any stored copy stale: drop it, then refetch (and store) the first page.
+        client.queries.invalidate(["catalog"]);
+        client.queries
+          .fetch(libraryFirstPageKey(firstPageParams), () => client.browseCatalog(firstPageParams), {
+            tags: ["catalog"],
           })
           .then((page) => {
             if (generation !== generationRef.current || itemsRef.current.length === 0) return;
@@ -518,21 +538,19 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     let frame = 0;
     let cancelIdle = () => {};
     const update = () => {
-      const cards = grid.querySelectorAll<HTMLElement>(".tv-title-card");
-      if (cards.length === 0) return;
-      const cols = Math.max(1, gridMetricsRef.current.cols);
+      // Row arithmetic from the grid metrics: two rect reads however many cards are mounted.
+      const content = grid.querySelector<HTMLElement>(".tv-title-grid-content");
+      if (!content) return;
+      const { cols: rawCols, rowHeight } = gridMetricsRef.current;
+      const cols = Math.max(1, rawCols);
+      if (!(rowHeight > 0)) return;
       const gridRect = grid.getBoundingClientRect();
-      let first = -1;
-      let last = -1;
-      for (let i = 0; i < cards.length; i += 1) {
-        const rect = cards[i]!.getBoundingClientRect();
-        if (rect.bottom < gridRect.top || rect.top > gridRect.bottom) continue;
-        const index = Number.parseInt(cards[i]!.dataset.libraryIndex ?? "", 10);
-        if (!Number.isFinite(index)) continue;
-        if (first < 0) first = index;
-        last = index;
-      }
-      if (first < 0) return;
+      const contentTop = content.getBoundingClientRect().top;
+      const lastIndex = Math.max(0, itemsRef.current.length - 1);
+      const firstRow = Math.max(0, Math.floor((gridRect.top - contentTop) / rowHeight));
+      const lastRow = Math.max(firstRow, Math.floor((gridRect.bottom - contentTop) / rowHeight));
+      const first = Math.min(lastIndex, firstRow * cols);
+      const last = Math.min(lastIndex, (lastRow + 1) * cols - 1);
       const start = Math.max(0, first - ARTWORK_MARGIN_ROWS * cols);
       const end = last + 1 + ARTWORK_MARGIN_ROWS * cols;
       setArtworkRange((current) =>
@@ -610,31 +628,34 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
     const gridRect = grid.getBoundingClientRect();
     if (view === "cover-flow") {
+      // One pass, nearest centre wins (no sort, one rect read per card).
       const trackingLine = gridRect.left + gridRect.width / 2;
-      const closestCard = Array.from(
-        grid.querySelectorAll<HTMLElement>(".tv-title-card")
-      )
-        .filter((card) => {
-          const rect = card.getBoundingClientRect();
-          return rect.right > gridRect.left && rect.left < gridRect.right;
-        })
-        .sort((a, b) => {
-          const aRect = a.getBoundingClientRect();
-          const bRect = b.getBoundingClientRect();
-          const aDistance = Math.abs(aRect.left + aRect.width / 2 - trackingLine);
-          const bDistance = Math.abs(bRect.left + bRect.width / 2 - trackingLine);
-          return aDistance - bDistance;
-        })[0];
-      const visibleLetter = closestCard?.dataset.libraryLetter;
+      let closest: HTMLElement | undefined;
+      let closestDistance = Infinity;
+      for (const card of grid.querySelectorAll<HTMLElement>(".tv-title-card")) {
+        const rect = card.getBoundingClientRect();
+        if (rect.right <= gridRect.left || rect.left >= gridRect.right) continue;
+        const distance = Math.abs(rect.left + rect.width / 2 - trackingLine);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closest = card;
+        }
+      }
+      const visibleLetter = closest?.dataset.libraryLetter;
       if (visibleLetter) setActiveLetter(visibleLetter);
       return;
     }
 
+    // Row arithmetic instead of measuring every card.
+    const content = grid.querySelector<HTMLElement>(".tv-title-grid-content");
+    const { cols: rawCols, rowHeight } = gridMetricsRef.current;
+    if (!content || !(rowHeight > 0)) return;
+    const cols = Math.max(1, rawCols);
     const trackingLine = gridRect.top + Math.min(64, grid.clientHeight * 0.1);
-    const firstVisibleCard = Array.from(
-      grid.querySelectorAll<HTMLElement>(".tv-title-card")
-    ).find((card) => card.getBoundingClientRect().bottom > trackingLine);
-    const visibleLetter = firstVisibleCard?.dataset.libraryLetter;
+    const row = Math.max(0, Math.floor((trackingLine - content.getBoundingClientRect().top) / rowHeight));
+    const lastIndex = Math.max(0, itemsRef.current.length - 1);
+    const card = grid.querySelector<HTMLElement>(`[data-library-index="${Math.min(lastIndex, row * cols)}"]`);
+    const visibleLetter = card?.dataset.libraryLetter;
     if (visibleLetter) setActiveLetter(visibleLetter);
   }, [view]);
 
@@ -1367,6 +1388,7 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
   artworkEnabled,
 }: LibraryTitleCardProps) {
   const { t } = useLanguage();
+  useDwellPrefetch(work, isSelected);
   const contextProps = itemProps({
     work,
     detailRoute: `${routeBase}/${work.id}`,

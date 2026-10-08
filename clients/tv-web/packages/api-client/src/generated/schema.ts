@@ -2382,6 +2382,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/peer/playback/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The signed peer-to-peer equivalent of [`record_playback_event_handler`].
+         *     The entry node has already authenticated the viewer's JWT, but the owner
+         *     still checks the session and forwarded user id against its own registry
+         *     before recording anything.
+         */
+        post: operations["peer_playback_event_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/peer/routing-rules": {
         parameters: {
             query?: never;
@@ -3941,7 +3963,38 @@ export interface components {
             /** Format: uuid */
             media_file_id?: string | null;
         };
+        /**
+         * @description One server-computed action. A disabled action carries a `reason` so a
+         *     client can explain it rather than hide it.
+         */
+        CalendarAction: {
+            action: components["schemas"]["CalendarActionKind"];
+            /**
+             * @description `watchlist`: the title is already on the caller's watchlist.
+             *     `request`: the title is already requested (so the action is disabled).
+             */
+            active?: boolean;
+            enabled: boolean;
+            /** Format: uuid */
+            media_file_id?: string | null;
+            /** Format: int64 */
+            position_ms?: number | null;
+            reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Library work to open or play.
+             */
+            work_id?: string | null;
+        };
+        /** @enum {string} */
+        CalendarActionKind: "open" | "play" | "resume" | "request" | "watchlist";
         CalendarEntry: {
+            /**
+             * @description What the caller can do with this entry, computed by the server for that
+             *     caller (library access, household limits, `can_request`, request
+             *     provider, existing requests, watchlist). Clients show these as given.
+             */
+            actions?: components["schemas"]["CalendarAction"][];
             /**
              * Format: int64
              * @description Average seconds from air to library availability for the series.
@@ -3958,6 +4011,11 @@ export interface components {
             /** @description Stable across refreshes; derived from the deduplication key. */
             id: string;
             media_kind: components["schemas"]["CalendarMediaKind"];
+            /**
+             * @description Present on a grouped entry (`group=series_day`): every episode folded
+             *     into this entry, in season and episode order.
+             */
+            members?: components["schemas"]["CalendarGroupMember"][];
             monitored: boolean;
             /** @description Absolute external artwork URL only, never an instance-local path. */
             poster_url?: string | null;
@@ -3969,6 +4027,7 @@ export interface components {
             release_type: components["schemas"]["CalendarReleaseType"];
             /** Format: int64 */
             season_number?: number | null;
+            snapshot?: null | components["schemas"]["TitleSnapshot"];
             sources: components["schemas"]["CalendarEntrySource"][];
             /** @description Episode, album or book title. */
             subtitle?: string | null;
@@ -3995,9 +4054,9 @@ export interface components {
         CalendarFeedCreated: {
             /** Format: date-time */
             created_at: string;
-            /** @description The secret path component, shown once. */
+            /** @description The secret path component. */
             token: string;
-            /** @description Full subscription URL, shown once. */
+            /** @description Full subscription URL. */
             url: string;
         };
         CalendarFeedStatus: {
@@ -4006,6 +4065,23 @@ export interface components {
             created_at?: string | null;
             /** Format: date-time */
             last_used_at?: string | null;
+            /**
+             * @description `POST /api/v1/calendar/feed` would return the existing link unchanged.
+             *     False for a link created before links could be shown again: asking for
+             *     it then replaces it. Servers without this field always replace.
+             */
+            link_available?: boolean;
+        };
+        /** @description An episode folded into a grouped calendar entry. */
+        CalendarGroupMember: {
+            /** Format: int64 */
+            episode_number?: number | null;
+            has_file: boolean;
+            id: string;
+            monitored: boolean;
+            /** Format: int64 */
+            season_number?: number | null;
+            subtitle?: string | null;
         };
         /** @enum {string} */
         CalendarMediaKind: "episode" | "movie" | "album" | "book";
@@ -5592,6 +5668,11 @@ export interface components {
          * @enum {string}
          */
         PeerNodeStatus: "active" | "unreachable" | "left";
+        PeerPlaybackEventRequest: {
+            kind: components["schemas"]["PlaybackEventKind"];
+            /** Format: uuid */
+            user_id: string;
+        };
         /**
          * @description Request/response DTOs and the receiving-side handler for §5.2's "the
          *     entire negotiation request is forwarded" mechanism, and §5.3's "defense
@@ -7164,8 +7245,8 @@ export interface components {
             work_id?: string | null;
         };
         /**
-         * @description A title snapshot as sent by clients (from a search result or a title
-         *     page) to the watchlist and resolve endpoints.
+         * @description A title snapshot as sent by clients (from a search result, a title page or a
+         *     calendar entry) to the watchlist, resolve and request endpoints.
          */
         TitleSnapshot: {
             external_refs?: components["schemas"]["ExternalRef"][];
@@ -11467,6 +11548,10 @@ export interface operations {
             query?: {
                 /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
+                /** @description Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image. */
+                w?: number | null;
+                /** @description An opaque version token the client derives from the artwork's source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable. */
+                v?: string | null;
             };
             header?: never;
             path: {
@@ -11546,6 +11631,10 @@ export interface operations {
             query?: {
                 /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
+                /** @description Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image. */
+                w?: number | null;
+                /** @description An opaque version token the client derives from the artwork's source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable. */
+                v?: string | null;
             };
             header?: never;
             path: {
@@ -11625,6 +11714,10 @@ export interface operations {
             query?: {
                 /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in). */
                 style?: string | null;
+                /** @description Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image. */
+                w?: number | null;
+                /** @description An opaque version token the client derives from the artwork's source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable. */
+                v?: string | null;
             };
             header?: never;
             path: {
@@ -11958,6 +12051,12 @@ export interface operations {
                 kind?: string | null;
                 /** @description Restrict to one source instance. */
                 source_instance_id?: string | null;
+                /**
+                 * @description `series_day` folds episodes of the same series released on the same
+                 *     (UTC) day and at the same time into one entry whose `members` lists
+                 *     them. Omit for one entry per episode.
+                 */
+                group?: string | null;
             };
             header?: never;
             path?: never;
@@ -12033,14 +12132,26 @@ export interface operations {
     };
     create_calendar_feed_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Replace the existing link with a new one (the old URL stops working). */
+                rotate?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description A new subscription URL; any previous token stops working. The token is returned only here. */
+            /** @description The caller's existing subscription URL, unchanged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedCreated"];
+                };
+            };
+            /** @description A new subscription URL (none existed, the stored one could not be shown, or `rotate=true`); any previous token stops working */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -12407,6 +12518,8 @@ export interface operations {
                 lang_match?: string | null;
                 /** @description See `BrowseQueryParams::lang_scope`. */
                 lang_scope?: string | null;
+                /** @description Keep only works with at least one playable media file, applied before the limit. */
+                available_only?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -13755,7 +13868,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Caller is not a guardian of this profile, is restricted, has no PIN, or is the requester */
+            /** @description Caller is the requester (`self_approval_forbidden`), is not a guardian of this profile (`not_guardian`), has no profile PIN (`guardian_pin_not_set`), or is a restricted profile (`forbidden`) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -15313,6 +15426,52 @@ export interface operations {
             };
             /** @description Missing or invalid peer signature */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_playback_event_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owner-local PlaybackSession id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeerPlaybackEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Event recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid peer signature */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The forwarded user does not own the session */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or already-closed session */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

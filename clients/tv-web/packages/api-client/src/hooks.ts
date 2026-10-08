@@ -15,6 +15,7 @@
  * in hand) are identical everywhere rather than reimplemented per surface.
  */
 import { useEffect, useRef, useState } from "react";
+import type { QueryCache, QueryTag } from "./queryCache";
 import type {
   ApiClient,
   BrowseCatalogParams,
@@ -42,6 +43,13 @@ export interface UseAsyncDataOptions<T> {
    * background refetch keeps the old data. Pass a stable function (memoise it).
    */
   subscribe?: (refresh: () => void) => () => void;
+  /**
+   * Stale-while-revalidate: with a cache and a `key`, a stored copy renders at once (no loading
+   * state) while a fresh one is fetched in the background and swapped in only when it differs.
+   * Requests for the same key share one fetch. The cache itself decides whether it is on (it is
+   * off until a signed-in account scope is set, and per account and profile after that).
+   */
+  cache?: { store: QueryCache; key: string; tags?: readonly QueryTag[] };
 }
 
 /**
@@ -54,11 +62,16 @@ export function useAsyncData<T>(
   deps: unknown[],
   options: UseAsyncDataOptions<T> = {}
 ): AsyncState<T> {
-  const { enabled = true, isEmpty, subscribe } = options;
-  const [state, setState] = useState<AsyncState<T>>(enabled ? { status: "loading" } : { status: "idle" });
+  const { enabled = true, isEmpty, subscribe, cache } = options;
+  const stateFor = (data: T): AsyncState<T> => (isEmpty?.(data) ? { status: "empty" } : { status: "ready", data });
+  const [state, setState] = useState<AsyncState<T>>(() => {
+    if (!enabled) return { status: "idle" };
+    const hit = cache?.store.peek<T>(cache.key);
+    return hit ? stateFor(hit.data) : { status: "loading" };
+  });
   // Latest closures, so a background refresh uses current params without re-subscribing.
-  const latest = useRef({ fetcher, isEmpty });
-  latest.current = { fetcher, isEmpty };
+  const latest = useRef({ fetcher, isEmpty, cache });
+  latest.current = { fetcher, isEmpty, cache };
   // Bumped whenever the primary effect restarts, so an older background refresh never wins.
   const generation = useRef(0);
 
@@ -70,15 +83,28 @@ export function useAsyncData<T>(
 
     let cancelled = false;
     generation.current += 1;
-    setState({ status: "loading" });
+    const hit = cache?.store.peek<T>(cache.key);
+    if (hit) {
+      // Show the stored copy now; the fetch below revalidates it.
+      const stored = stateFor(hit.data);
+      setState((current) => (sameAsyncState(current, stored) ? current : stored));
+    } else {
+      setState({ status: "loading" });
+    }
 
-    fetcher()
+    const load = cache
+      ? cache.store.fetch(cache.key, fetcher, { tags: cache.tags })
+      : fetcher();
+    load
       .then((data) => {
         if (cancelled) return;
-        setState(isEmpty?.(data) ? { status: "empty" } : { status: "ready", data });
+        const next = stateFor(data);
+        setState((current) => (hit && sameAsyncState(current, next) ? current : next));
       })
       .catch((error: unknown) => {
         if (cancelled) return;
+        // A failed revalidation keeps the stored copy on screen.
+        if (hit) return;
         setState({ status: "error", message: error instanceof Error ? error.message : String(error) });
       });
 
@@ -88,14 +114,16 @@ export function useAsyncData<T>(
     // `deps` is an intentionally caller-controlled dependency array (ids / stringified params),
     // not `fetcher`/`isEmpty` themselves, so callers don't need to memoize closures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, ...deps]);
+  }, [enabled, cache?.key, ...deps]);
 
   useEffect(() => {
     if (!enabled || !subscribe) return;
     return subscribe(() => {
       const started = generation.current;
-      latest.current
-        .fetcher()
+      // A live change makes any stored copy stale: drop what depends on it, then refetch (shared).
+      const { cache: liveCache, fetcher: liveFetcher } = latest.current;
+      if (liveCache) liveCache.store.invalidate(liveCache.tags);
+      (liveCache ? liveCache.store.fetch(liveCache.key, liveFetcher, { tags: liveCache.tags }) : liveFetcher())
         .then((data) => {
           if (generation.current !== started) return;
           const next: AsyncState<T> = latest.current.isEmpty?.(data) ? { status: "empty" } : { status: "ready", data };
@@ -130,6 +158,7 @@ export function useCatalogBrowse(
   return useAsyncData(() => client.browseCatalog(params), [client, key], {
     isEmpty: (data) => data.items.length === 0,
     subscribe: options.subscribe,
+    cache: { store: client.queries, key: `catalog:${key}`, tags: ["catalog"] },
   });
 }
 
@@ -143,6 +172,7 @@ export function useHomeRails(
   return useAsyncData(() => client.getHomeRails(params), [client, key], {
     isEmpty: (data) => data.rails.length === 0,
     subscribe: options.subscribe,
+    cache: { store: client.queries, key: `home:${key}`, tags: ["catalog", "progress", "watchlist"] },
   });
 }
 
@@ -155,7 +185,33 @@ export function useWorkDetail(
   return useAsyncData(() => client.getWork(workId as string), [client, workId], {
     enabled: Boolean(workId),
     subscribe: options.subscribe,
+    cache: { store: client.queries, key: `work:${workId}`, tags: ["catalog", "progress", "watchlist"] },
   });
+}
+
+/**
+ * Warms the query cache with a work's detail so opening it paints from the stored copy. A no-op
+ * while the cache is off (signed out, or a joined multi-server client) and when one is stored or
+ * already loading.
+ */
+export function prefetchWorkDetail(client: ApiClient, workId: string): void {
+  const { queries } = client;
+  if (!queries.enabled) return;
+  void queries
+    .fetch(`work:${workId}`, () => client.getWork(workId), { tags: ["catalog", "progress", "watchlist"], ttlMs: 30_000 })
+    .catch(() => undefined);
+}
+
+/** Warms Home's rails (same key as `useHomeRails`). */
+export function prefetchHomeRails(client: ApiClient, params: { lang?: string; library?: "movie" | "series" | "artist" } = {}): void {
+  const { queries } = client;
+  if (!queries.enabled) return;
+  void queries
+    .fetch(`home:${JSON.stringify(params)}`, () => client.getHomeRails(params), {
+      tags: ["catalog", "progress", "watchlist"],
+      ttlMs: 15_000,
+    })
+    .catch(() => undefined);
 }
 
 export interface PlaybackCapabilities {

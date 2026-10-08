@@ -28,6 +28,9 @@
  */
 import createFetchClient, { type Client, type Middleware } from "openapi-fetch";
 import type { components, paths } from "./generated/schema";
+import { QueryCache, tagsForMutation } from "./queryCache";
+
+export { QueryCache, tagsForMutation, type QueryTag } from "./queryCache";
 
 export type { paths, components } from "./generated/schema";
 
@@ -1162,6 +1165,16 @@ export class SseParser {
   }
 }
 
+/**
+ * Optional artwork sizing. `width` is the longest useful width in pixels (the server snaps it up
+ * to a fixed set and never upscales); `version` is an opaque token derived from the artwork's
+ * source, which makes the URL content-addressed so the response may be cached as immutable.
+ */
+export interface ArtworkSize {
+  width?: number;
+  version?: string;
+}
+
 export class ApiClient {
   /** The underlying `openapi-fetch` client, for operations without a convenience method above. */
   readonly raw: Client<paths>;
@@ -1169,6 +1182,12 @@ export class ApiClient {
   private readonly accessTokenProvider: ApiClientConfig["getAccessToken"];
   private readonly rawFetch: (input: Request) => Promise<Response>;
   private readonly retryBodies = new WeakMap<Request, Request>();
+  /**
+   * Stale-while-revalidate cache and request de-duplication for this client's session. Off until
+   * the owner of the client names the signed-in account with `queries.setScope(...)`; see
+   * `queryCache.ts` for the privacy rules.
+   */
+  readonly queries = new QueryCache();
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl;
@@ -1192,6 +1211,9 @@ export class ApiClient {
         return request;
       },
       onResponse: async ({ request, response }) => {
+        if (request.method !== "GET" && request.method !== "HEAD" && response.ok) {
+          this.invalidateForWrite(new URL(request.url).pathname);
+        }
         if (response.status !== 401) return undefined;
         const sent = bearerOf(request);
         if (!sent) return undefined;
@@ -1205,6 +1227,12 @@ export class ApiClient {
       },
     };
     this.raw.use(authMiddleware);
+  }
+
+  /** A write succeeded: forget the stored reads it makes stale (see `tagsForMutation`). */
+  private invalidateForWrite(path: string): void {
+    const tags = tagsForMutation(path);
+    if (tags === undefined || tags.length > 0) this.queries.invalidate(tags);
   }
 
   /**
@@ -1294,6 +1322,7 @@ export class ApiClient {
       }
       throw new ApiError(response.status, response.statusText, errorBody);
     }
+    if (method !== "GET") this.invalidateForWrite(path.split("?")[0] ?? path);
     if (response.status === 204) return undefined as T;
     const text = await response.text();
     return (text ? JSON.parse(text) : undefined) as T;
@@ -1689,9 +1718,11 @@ export class ApiClient {
    * `Work[]` contract unchanged. Surfacing `remote_only` in search results
    * is separate UI work, not part of this endpoint's client wrapper.
    */
-  async searchCatalog(q: string, limit?: number): Promise<Work[]> {
+  async searchCatalog(q: string, limit?: number, options: { availableOnly?: boolean } = {}): Promise<Work[]> {
     return this.unwrap(
-      await this.raw.GET("/api/v1/catalog/search", { params: { query: { q, limit } } })
+      await this.raw.GET("/api/v1/catalog/search", {
+        params: { query: { q, limit, available_only: options.availableOnly } },
+      })
     ).items;
   }
 
@@ -1790,10 +1821,10 @@ export class ApiClient {
    * bearer credentials out of image URLs; web clients can create a local
    * object URL for normal `<img>` rendering.
    */
-  async getWorkArtwork(workId: string, kind: ImageKind): Promise<Blob> {
+  async getWorkArtwork(workId: string, kind: ImageKind, size: ArtworkSize = {}): Promise<Blob> {
     return this.unwrap(
       await this.raw.GET("/api/v1/artwork/work/{work_id}/{kind}", {
-        params: { path: { work_id: workId, kind } },
+        params: { path: { work_id: workId, kind }, query: { w: size.width, v: size.version } },
         parseAs: "blob",
       })
     ) as Blob;
@@ -1806,7 +1837,8 @@ export class ApiClient {
   async getAlbumArtwork(
     artistWorkId: string,
     albumId: string,
-    kind: ImageKind
+    kind: ImageKind,
+    size: ArtworkSize = {}
   ): Promise<Blob> {
     return this.unwrap(
       await this.raw.GET(
@@ -1818,6 +1850,7 @@ export class ApiClient {
               album_id: albumId,
               kind,
             },
+            query: { w: size.width, v: size.version },
           },
           parseAs: "blob",
         }
@@ -1833,7 +1866,8 @@ export class ApiClient {
   async getEpisodeArtwork(
     seriesWorkId: string,
     episodeId: string,
-    kind: ImageKind = "thumb"
+    kind: ImageKind = "thumb",
+    size: ArtworkSize = {}
   ): Promise<Blob> {
     return this.unwrap(
       await this.raw.GET(
@@ -1845,6 +1879,7 @@ export class ApiClient {
               episode_id: episodeId,
               kind,
             },
+            query: { w: size.width, v: size.version },
           },
           parseAs: "blob",
         }
@@ -2084,7 +2119,11 @@ export class ApiClient {
 
   /** The signed-in profile's household state: schedule, remaining time, offline validity. */
   async getHouseholdStatus(): Promise<HouseholdStatus> {
-    return this.unwrap(await this.raw.GET("/api/v1/household/status", {}));
+    return this.queries.fetch(
+      "household:status",
+      async () => this.unwrap(await this.raw.GET("/api/v1/household/status", {})),
+      { tags: ["household"], ttlMs: 5_000 }
+    );
   }
 
   /** Own requests plus requests from profiles this user guards. */
@@ -2289,7 +2328,11 @@ export class ApiClient {
 
   /** Every view, minimal projection (no `criteria`), in the same display order `listAdminViews` returns. */
   async listViews(): Promise<ViewSummary[]> {
-    return this.unwrap(await this.raw.GET("/api/v1/views", {}));
+    return this.queries.fetch(
+      "views:list",
+      async () => this.unwrap(await this.raw.GET("/api/v1/views", {})),
+      { tags: ["views", "catalog"], ttlMs: 5_000 }
+    );
   }
 
   /** Runs a saved view's filter+sort against the live catalog; response shape matches `browseCatalog`. */
@@ -2724,7 +2767,12 @@ export class ApiClient {
 
   /** Every durable progress row for the signed-in viewer, newest first. */
   async listWatchProgress(): Promise<WatchProgress[]> {
-    return this.unwrap(await this.raw.GET("/api/v1/playback/progress"));
+    // Concurrent callers share one request; nothing is kept afterwards, so watch state is never stale.
+    return this.queries.fetch(
+      "progress:list",
+      async () => this.unwrap(await this.raw.GET("/api/v1/playback/progress")),
+      { tags: ["progress"] }
+    );
   }
 
   /**

@@ -53,7 +53,7 @@ function loadEpisodeStill(
   const existing = cache.get(key);
   if (existing) return existing;
   const record: MediaThumbnailRecord = {
-    promise: client.getEpisodeArtwork(seriesWorkId, episodeId).then((blob) => {
+    promise: client.getEpisodeArtwork(seriesWorkId, episodeId, "thumb", { width: 540 }).then((blob) => {
       if (blob.size === 0) throw new Error("The episode still response was empty.");
       const url = URL.createObjectURL(blob);
       record.url = url;

@@ -27,6 +27,7 @@ import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
+import { useDwellPrefetch } from "../lib/prefetch";
 import {
   isNavigationLayerRestoring,
   useNavigationLayer,
@@ -42,6 +43,15 @@ import {
   seriesPlaylist,
 } from "../lib/resumePlan";
 import { loadOnDeck, type OnDeckEntry } from "../lib/onDeck";
+
+const ON_DECK_CACHE_KEY = "home:ondeck";
+interface StoredOnDeck {
+  entries: OnDeckEntry[];
+  progress: WatchProgress[];
+  plans: Map<string, ResumePlan>;
+}
+
+const NO_WORK = { id: "", images: [] as Work["images"] };
 
 function detailRoute(work: Work): string {
   return work.kind === "site"
@@ -160,17 +170,49 @@ export function HomePage() {
     // the wait: results that arrive later are still applied (the rail then
     // fills in place and focus is kept, see the layout effect below). A live
     // refresh (revision > 0) updates in place and has no deadline.
+    // Stale-while-revalidate: the last resolved On Deck paints at once on a revisit; any watch-state
+    // write drops it (the "progress" tag), so it is never shown after the viewer changed progress.
+    const stored = client.queries.peek<StoredOnDeck>(ON_DECK_CACHE_KEY);
+    if (stored && liveOnDeckRevision === 0) {
+      setWatchProgress(stored.data.progress);
+      setStackedPlans(stored.data.plans);
+      setOnDeck(stored.data.entries);
+      setOnDeckSettled(true);
+    }
     const giveUp =
-      liveOnDeckRevision === 0
+      liveOnDeckRevision === 0 && !stored
         ? window.setTimeout(() => setOnDeckSettled(true), ON_DECK_WAIT_MS)
         : undefined;
+    // Title details are shared with the detail pages through the query cache.
+    const detailTags = ["catalog", "progress", "watchlist"] as const;
+    let latestProgress: WatchProgress[] = [];
+    let latestPlans = new Map<string, ResumePlan>();
+    if (liveOnDeckRevision > 0) client.queries.invalidate(["progress"]);
 
-    loadOnDeck(client, {
+    loadOnDeck(
+      {
+        listResumePlans: () => client.listResumePlans(),
+        listWatchProgress: () => client.listWatchProgress(),
+        getWork: (id) =>
+          client.queries.fetch(`work:${id}`, () => client.getWork(id), { tags: detailTags, ttlMs: 30_000 }),
+      },
+      {
       isActive: () => !cancelled,
-      onProgress: setWatchProgress,
-      onStackedPlans: setStackedPlans,
+      onProgress: (rows) => {
+        latestProgress = rows;
+        setWatchProgress(rows);
+      },
+      onStackedPlans: (plans) => {
+        latestPlans = plans;
+        setStackedPlans(plans);
+      },
       onEntries: (entries) => {
-        setOnDeck(entries);
+        client.queries.set(
+          ON_DECK_CACHE_KEY,
+          { entries, progress: latestProgress, plans: latestPlans } satisfies StoredOnDeck,
+          ["progress", "catalog"]
+        );
+        setOnDeck((current) => (JSON.stringify(current) === JSON.stringify(entries) ? current : entries));
         setOnDeckSettled(true);
       },
     }).catch(() => {
@@ -293,6 +335,8 @@ export function HomePage() {
     activeItems.find((work) => work.id === selectedByRail[activeRail]) ??
     activeItems[0] ??
     rails[0]?.items[0];
+  // The selected card's detail page and hero art are fetched once focus has dwelt on it.
+  useDwellPrefetch(selected ?? NO_WORK, Boolean(selected));
   const selectedOnDeck =
     activeRail === "primary" && selected ? onDeckByWork.get(selected.id) : undefined;
   const isLoading =
@@ -411,6 +455,7 @@ export function HomePage() {
           <CachedArtworkImage
             work={selected}
             kinds={["backdrop", "poster"]}
+            artWidth={1920}
             alt=""
             fallback={<span>{selected.title}</span>}
           />
@@ -492,7 +537,10 @@ function HomeRailArtwork({
     view === "cover"
       ? (["poster", "backdrop"] as const)
       : (["backdrop", "poster"] as const);
-  const fallback = useCachedArtwork(work, kinds).url;
+  // Only a thumbnail card needs the work art as its fallback; every other card loads its art lazily
+  // (near the viewport) through `CachedArtworkImage`. Loading it for every mounted card fetched the
+  // art of every title in every rail up front.
+  const fallback = useCachedArtwork(work, kinds, Boolean(mediaFileId && view === "thumbnail")).url;
   if (mediaFileId && view === "thumbnail") {
     return (
       <MediaThumbnailArtwork

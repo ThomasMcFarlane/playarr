@@ -113,3 +113,33 @@ export function applyLibraryView(current: URLSearchParams, patch: Partial<Librar
   }
   return out;
 }
+
+/** Items per library page request. */
+export const LIBRARY_PAGE_SIZE = 200;
+
+/**
+ * The first-page request a library screen makes for `kind` with this sort and these language
+ * filters. One definition shared by the screen and by route prefetching, so a prefetched page is
+ * exactly the one the screen then asks for.
+ */
+export function libraryFirstPageParams(
+  kind: LibraryKind,
+  sort: LibrarySort,
+  order: SortOrder,
+  languageParams: { audio_lang?: string; subtitle_lang?: string } = {}
+) {
+  return {
+    kind,
+    available_only: true,
+    sort,
+    order,
+    limit: LIBRARY_PAGE_SIZE,
+    offset: 0,
+    ...languageParams,
+  };
+}
+
+/** The query-cache key of a library first page. */
+export function libraryFirstPageKey(params: ReturnType<typeof libraryFirstPageParams>): string {
+  return `catalog:library:${JSON.stringify(params)}`;
+}

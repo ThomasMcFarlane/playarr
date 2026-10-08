@@ -302,10 +302,6 @@ export function SearchPage() {
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistResponse[] | null>(null);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
-  const [availableWorkIds, setAvailableWorkIds] = useState<Set<string> | null>(
-    null
-  );
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [state, setState] = useState<SearchState>(
     requestedQuery ? { status: "loading" } : { status: "idle" }
   );
@@ -395,34 +391,6 @@ export function SearchPage() {
         setPlaylists([]);
         setPlaylistError(describeApiError(error));
       });
-    void (async () => {
-      const ids = new Set<string>();
-      let offset = 0;
-      const limit = 500;
-      while (true) {
-        const page = await client.browseCatalog({
-          available_only: true,
-          limit,
-          offset,
-        });
-        for (const work of page.items) ids.add(work.id);
-        offset += page.items.length;
-        if (
-          page.items.length === 0 ||
-          (page.total !== null && page.total !== undefined && offset >= page.total)
-        ) {
-          break;
-        }
-      }
-      if (!cancelled) {
-        setAvailableWorkIds(ids);
-        setAvailabilityError(null);
-      }
-    })().catch((error: unknown) => {
-      if (cancelled) return;
-      setAvailableWorkIds(new Set());
-      setAvailabilityError(describeApiError(error));
-    });
     return () => {
       cancelled = true;
     };
@@ -450,18 +418,10 @@ export function SearchPage() {
       setState({ status: "error", message: playlistError });
       return;
     }
-    if (includesWorks && availableWorkIds === null) {
-      setState({ status: "loading" });
-      return;
-    }
-    if (includesWorks && availabilityError) {
-      setState({ status: "error", message: availabilityError });
-      return;
-    }
 
     setState({ status: "loading" });
     const workRequest = includesWorks
-      ? client.searchCatalog(requestedQuery, SEARCH_LIMIT)
+      ? client.searchCatalog(requestedQuery, SEARCH_LIMIT, { availableOnly: true })
       : Promise.resolve<Work[]>([]);
     const libraryRequest =
       includesWorks && requestedLibraryId
@@ -476,7 +436,6 @@ export function SearchPage() {
           : null;
         const resultRows: SearchResult[] = workResults
           .filter(isSupportedWork)
-          .filter((work) => availableWorkIds?.has(work.id))
           .filter((work) => workMatchesType(work, requestedMediaType))
           .filter((work) => !libraryWorkIds || libraryWorkIds.has(work.id))
           .map((work) => ({ type: "work" as const, id: work.id, work }));
@@ -527,8 +486,6 @@ export function SearchPage() {
       });
   }, [
     client,
-    availabilityError,
-    availableWorkIds,
     playlistError,
     playlists,
     requestedFocusId,

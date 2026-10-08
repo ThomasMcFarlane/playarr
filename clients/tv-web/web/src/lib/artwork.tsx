@@ -18,11 +18,14 @@ import { whenNavigationIdle } from "./navigationActivity";
 interface ArtworkRecord {
   promise: Promise<string>;
   url?: string;
+  /** Mounted images currently showing this URL: never revoked while above zero. */
+  refs: number;
 }
 
-// One object URL per API-client/work/kind for the application lifetime.
-// This de-duplicates Home/detail/directory requests for the same artwork;
-// the server-side cache remains the durable source across reloads.
+// One object URL per API-client/work/kind/width for the application lifetime, capped (see
+// `trimArtwork`). This de-duplicates Home/detail/directory requests for the same artwork; the
+// browser HTTP cache (artwork URLs carry a version, so they are immutable) is the durable source
+// across reloads.
 const artworkByClient = new WeakMap<ApiClient, Map<string, ArtworkRecord>>();
 
 function artworkCache(client: ApiClient): Map<string, ArtworkRecord> {
@@ -34,14 +37,87 @@ function artworkCache(client: ApiClient): Map<string, ArtworkRecord> {
   return cache;
 }
 
-function loadArtwork(client: ApiClient, workId: string, kind: ImageKind): ArtworkRecord {
+/**
+ * How many decoded artwork object URLs one client keeps. Low-memory TVs get fewer: a poster
+ * decoded at card size is a few hundred kilobytes, so the cap bounds memory on a long session.
+ */
+export function artworkCacheLimit(deviceMemoryGb: number | undefined): number {
+  if (deviceMemoryGb === undefined) return 240;
+  if (deviceMemoryGb >= 4) return 400;
+  if (deviceMemoryGb >= 2) return 240;
+  return 120;
+}
+
+const ARTWORK_CACHE_LIMIT = artworkCacheLimit(
+  typeof navigator === "undefined" ? undefined : (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+);
+
+/** Drops the least recently used resolved artwork that nothing is showing, until under the cap. */
+export function trimArtwork(cache: Map<string, ArtworkRecord>, limit: number = ARTWORK_CACHE_LIMIT): void {
+  if (cache.size <= limit) return;
+  for (const [key, record] of cache) {
+    if (cache.size <= limit) break;
+    if (record.refs > 0 || !record.url) continue;
+    URL.revokeObjectURL(record.url);
+    cache.delete(key);
+  }
+}
+
+function touchArtwork(cache: Map<string, ArtworkRecord>, key: string, record: ArtworkRecord): void {
+  cache.delete(key);
+  cache.set(key, record);
+}
+
+/** A short, stable token for an artwork source URL: when the source changes the token does too. */
+export function artworkVersion(sourceUrl: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < sourceUrl.length; i += 1) {
+    hash ^= sourceUrl.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/** Card-sized by default: the server snaps these up to its own set of widths and never upscales. */
+export function defaultArtworkWidth(kind: ImageKind): number {
+  switch (kind) {
+    case "poster":
+      return 360;
+    case "thumb":
+      return 540;
+    case "logo":
+      return 540;
+    case "banner":
+      return 780;
+    case "backdrop":
+      return 780;
+    default:
+      return 540;
+  }
+}
+
+function artworkKey(workId: string, kind: ImageKind, width: number): string {
+  return `${workId}:${kind}:${width}`;
+}
+
+function loadArtwork(
+  client: ApiClient,
+  workId: string,
+  kind: ImageKind,
+  width: number,
+  version: string | undefined
+): ArtworkRecord {
   const cache = artworkCache(client);
-  const key = `${workId}:${kind}`;
+  const key = artworkKey(workId, kind, width);
   const existing = cache.get(key);
-  if (existing) return existing;
+  if (existing) {
+    touchArtwork(cache, key, existing);
+    return existing;
+  }
 
   const record: ArtworkRecord = {
-    promise: client.getWorkArtwork(workId, kind).then(
+    refs: 0,
+    promise: client.getWorkArtwork(workId, kind, { width, version }).then(
       (blob) =>
         new Promise<string>((resolve) => {
           // createObjectURL is synchronous main-thread work: never during a hold.
@@ -49,6 +125,7 @@ function loadArtwork(client: ApiClient, workId: string, kind: ImageKind): Artwor
             const url = URL.createObjectURL(blob);
             record.url = url;
             resolve(url);
+            trimArtwork(cache);
           });
         })
     ),
@@ -60,6 +137,23 @@ function loadArtwork(client: ApiClient, workId: string, kind: ImageKind): Artwor
   });
   cache.set(key, record);
   return record;
+}
+
+/**
+ * Starts fetching a work's artwork ahead of use (focus dwell, the next rail) so it is decoded and
+ * cached by the time the card or page mounts. Safe to call repeatedly.
+ */
+export function prefetchWorkArtwork(
+  client: ApiClient,
+  work: Pick<Work, "id" | "images">,
+  kinds: readonly ImageKind[],
+  width?: number
+): void {
+  const kind = preferredArtworkKind(work, kinds);
+  if (!kind) return;
+  const image = work.images.find((candidate) => candidate.kind === kind);
+  void loadArtwork(client, work.id, kind, width ?? defaultArtworkWidth(kind), image ? artworkVersion(image.url) : undefined)
+    .promise.catch(() => undefined);
 }
 
 function albumArtworkKey(
@@ -82,7 +176,9 @@ function loadAlbumArtwork(
   if (existing) return existing;
 
   const record: ArtworkRecord = {
-    promise: client.getAlbumArtwork(artistWorkId, albumId, kind).then((blob) => {
+    // Album art is never evicted (few per page, and its hook does not track mounts).
+    refs: 1,
+    promise: client.getAlbumArtwork(artistWorkId, albumId, kind, { width: defaultArtworkWidth(kind) }).then((blob) => {
       const url = URL.createObjectURL(blob);
       record.url = url;
       return url;
@@ -105,7 +201,8 @@ export function preferredArtworkKind(
 export function useCachedArtwork(
   work: Pick<Work, "id" | "images">,
   kinds: readonly ImageKind[],
-  enabled = true
+  enabled = true,
+  width?: number
 ): { url: string | null; available: boolean; loading: boolean } {
   const client = useApiClient();
   const kindsKey = kinds.join(":");
@@ -115,9 +212,14 @@ export function useCachedArtwork(
     // new caller-owned array retriggering this calculation every render.
     [kindsKey, work.images]
   );
+  const artWidth = kind ? (width ?? defaultArtworkWidth(kind)) : 0;
+  const version = useMemo(() => {
+    const image = kind ? work.images.find((candidate) => candidate.kind === kind) : undefined;
+    return image ? artworkVersion(image.url) : undefined;
+  }, [kind, work.images]);
   const [url, setUrl] = useState<string | null>(() => {
     if (!kind) return null;
-    return artworkCache(client).get(`${work.id}:${kind}`)?.url ?? null;
+    return artworkCache(client).get(artworkKey(work.id, kind, artWidth))?.url ?? null;
   });
   const [loading, setLoading] = useState(Boolean(enabled && kind && !url));
 
@@ -128,11 +230,29 @@ export function useCachedArtwork(
       return;
     }
 
-    const cachedUrl = artworkCache(client).get(`${work.id}:${kind}`)?.url;
-    if (cachedUrl) {
-      setUrl(cachedUrl);
+    const cache = artworkCache(client);
+    const key = artworkKey(work.id, kind, artWidth);
+    // Hold the record while this image shows it, so the memory cap never revokes a visible URL.
+    let held: ArtworkRecord | undefined;
+    const hold = (record: ArtworkRecord) => {
+      if (held === record) return;
+      if (held) held.refs -= 1;
+      record.refs += 1;
+      held = record;
+    };
+    const release = () => {
+      if (held) held.refs -= 1;
+      held = undefined;
+      trimArtwork(cache);
+    };
+
+    const cached = cache.get(key);
+    if (cached?.url) {
+      hold(cached);
+      touchArtwork(cache, key, cached);
+      setUrl(cached.url);
       setLoading(false);
-      return;
+      return release;
     }
     if (!enabled) {
       setUrl(null);
@@ -141,12 +261,12 @@ export function useCachedArtwork(
     }
 
     let cancelled = false;
-    const existing = artworkCache(client).get(`${work.id}:${kind}`);
     setUrl(null);
     setLoading(true);
     const cancelStart = whenNavigationIdle(() => {
       if (cancelled) return;
-      const record = existing ?? loadArtwork(client, work.id, kind);
+      const record = cache.get(key) ?? loadArtwork(client, work.id, kind, artWidth, version);
+      hold(record);
       record.promise
         .then((resolvedUrl) => {
           if (!cancelled) {
@@ -164,8 +284,9 @@ export function useCachedArtwork(
     return () => {
       cancelled = true;
       cancelStart();
+      release();
     };
-  }, [client, enabled, kind, work.id]);
+  }, [client, enabled, kind, work.id, artWidth, version]);
 
   return { url, available: kind !== null, loading };
 }
@@ -280,6 +401,8 @@ interface CachedArtworkImageProps
    * instead of observing every mounted card.
    */
   enabled?: boolean;
+  /** Longest useful width in pixels; defaults to a card-sized width for the artwork kind. */
+  artWidth?: number;
 }
 
 /** Authenticated `<img>` backed by Playarr Server's persistent artwork cache. */
@@ -288,6 +411,7 @@ export function CachedArtworkImage({
   kinds,
   fallback = null,
   enabled = true,
+  artWidth,
   ...imageProps
 }: CachedArtworkImageProps) {
   const lazyAnchorRef = useRef<HTMLElement>(null);
@@ -310,7 +434,7 @@ export function CachedArtworkImage({
     };
   }, [imageProps.loading, shouldLoad, enabled]);
 
-  const artwork = useCachedArtwork(work, kinds, shouldLoad && enabled);
+  const artwork = useCachedArtwork(work, kinds, shouldLoad && enabled, artWidth);
   if (!artwork.url) {
     return (
       <>
@@ -325,7 +449,7 @@ export function CachedArtworkImage({
       </>
     );
   }
-  return <img {...imageProps} src={artwork.url} />;
+  return <img decoding="async" {...imageProps} src={artwork.url} />;
 }
 
 interface CachedAlbumArtworkImageProps
@@ -384,5 +508,5 @@ export function CachedAlbumArtworkImage({
       </>
     );
   }
-  return <img {...imageProps} src={artwork.url} />;
+  return <img decoding="async" {...imageProps} src={artwork.url} />;
 }

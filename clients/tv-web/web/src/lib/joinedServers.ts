@@ -1,3 +1,4 @@
+import { QueryCache } from "@playarr-tv/api-client";
 import type {
   AccessTokenRequest,
   ApiClient,
@@ -174,6 +175,8 @@ export function createJoinedApiClient(servers: ConnectedServerClient[]): ApiClie
   if (servers.length === 1) return primary;
 
   const joined = Object.create(primary) as ApiClient;
+  // A joined client merges several servers: nothing it returns may be cached under one account scope.
+  (joined as { queries: QueryCache }).queries = new QueryCache();
   joined.browseCatalog = async (params: BrowseCatalogParams = {}): Promise<CatalogPage> => {
     const offset = params.offset ?? 0;
     const limit = params.limit ?? 50;
@@ -230,12 +233,12 @@ export function createJoinedApiClient(servers: ConnectedServerClient[]): ApiClie
       subtitle: merge(results.map((r) => r.subtitle)),
     };
   };
-  joined.searchCatalog = async (query: string, limit = 50): Promise<Work[]> => {
+  joined.searchCatalog = async (query: string, limit = 50, options): Promise<Work[]> => {
     const results = successfulValues(
       await Promise.allSettled(
         servers.map(async (server) => ({
           server,
-          works: await server.client.searchCatalog(query, limit),
+          works: await server.client.searchCatalog(query, limit, options),
         }))
       )
     );
@@ -264,16 +267,17 @@ export function createJoinedApiClient(servers: ConnectedServerClient[]): ApiClie
     );
     return source ? joinServerWorks([{ server: source, works }]) : works;
   };
-  joined.getWorkArtwork = async (workId, kind) => {
+  joined.getWorkArtwork = async (workId, kind, size) => {
     const source = getJoinedWorkSources(workId)[0];
-    return (source?.client ?? primary).getWorkArtwork(source?.work.id ?? workId, kind);
+    return (source?.client ?? primary).getWorkArtwork(source?.work.id ?? workId, kind, size);
   };
-  joined.getAlbumArtwork = async (workId, albumId, kind) => {
+  joined.getAlbumArtwork = async (workId, albumId, kind, size) => {
     const source = getJoinedWorkSources(workId)[0];
     return (source?.client ?? primary).getAlbumArtwork(
       source?.work.id ?? workId,
       albumId,
-      kind
+      kind,
+      size
     );
   };
   joined.getMediaChapters = async (mediaFileId) =>

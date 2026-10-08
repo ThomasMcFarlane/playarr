@@ -108,6 +108,7 @@ import {
 import { ShellActionColumnProvider } from "./components/shell/ShellActionColumn";
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
+import { DWELL_PREFETCH_MS, prefetchRoute } from "./lib/prefetch";
 import type { TranslationKey } from "./lib/i18n/translations";
 import {
   createCatalogKindsCacheScope,
@@ -206,6 +207,13 @@ function AppShell() {
   const [apiBaseUrl] = useApiBaseUrl();
   const { t, language } = useLanguage();
   const localeTag = LOCALE_TAGS[language] ?? "en-GB";
+  // Focusing a nav item for a moment warms the page behind it; moving on cancels.
+  const navPrefetchTimer = useRef(0);
+  const startNavPrefetch = (path: string) => {
+    window.clearTimeout(navPrefetchTimer.current);
+    navPrefetchTimer.current = window.setTimeout(() => prefetchRoute(client, path, language), DWELL_PREFETCH_MS);
+  };
+  const cancelNavPrefetch = () => window.clearTimeout(navPrefetchTimer.current);
   const {
     authFailed,
     connectedServers,
@@ -538,6 +546,9 @@ function AppShell() {
                     className={({ isActive }) =>
                       `app-nav-link${isActive ? " is-active" : ""}`
                     }
+                    onMouseEnter={() => prefetchRoute(client, to, language)}
+                    onFocus={() => startNavPrefetch(to)}
+                    onBlur={cancelNavPrefetch}
                   >
                     <span className="app-nav-icon">
                       <Icon />

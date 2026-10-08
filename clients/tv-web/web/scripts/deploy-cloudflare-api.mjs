@@ -46,6 +46,8 @@ function assetFiles(directory) {
 const filesByHash = new Map();
 const manifest = Object.fromEntries(
   assetFiles(assetsDirectory)
+    // `_headers` is configuration, not a served asset: it is sent with the deployment metadata.
+    .filter((filePath) => relative(assetsDirectory, filePath) !== "_headers")
     .sort()
     .map((filePath) => {
       const content = readFileSync(filePath);
@@ -151,6 +153,9 @@ const metadata = {
   assets: {
     jwt: completionJwt,
     config: {
+      ...(existsSync(resolve(assetsDirectory, "_headers"))
+        ? { _headers: readFileSync(resolve(assetsDirectory, "_headers"), "utf8") }
+        : {}),
       not_found_handling: "single-page-application",
       run_worker_first: [
         "/api/*",
