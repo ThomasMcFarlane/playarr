@@ -62,7 +62,7 @@ describe("PageLayout", () => {
 
   it("keeps the header (and Back) up while the page loads, fails or is empty", () => {
     for (const state of [
-      { kind: "loading", label: "Loading" } as const,
+      { kind: "loading", skeleton: "grid", label: "Loading" } as const,
       { kind: "empty", props: { title: "Nothing here" } } as const,
       { kind: "error", props: { title: "Failed" } } as const,
     ]) {
@@ -75,7 +75,7 @@ describe("PageLayout", () => {
   });
 
   it("announces the loading and error states with the right roles inside the body", () => {
-    expect(render(<PageLayout pageId="library" header={header} state={{ kind: "loading", label: "Loading movies" }} />)).toContain('role="status"');
+    expect(render(<PageLayout pageId="library" header={header} state={{ kind: "loading", skeleton: "grid", label: "Loading movies" }} />)).toContain('role="status"');
     expect(render(<PageLayout pageId="library" header={header} state={{ kind: "error", props: { title: "Failed" } }} />)).toContain('role="alert"');
   });
 

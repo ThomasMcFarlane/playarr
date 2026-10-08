@@ -9,20 +9,6 @@ export type EmptyStateProps = {
 };
 export type ErrorStateProps = EmptyStateProps;
 
-/** The one loading state: the orbit loader and a label, always inside the page body (the header stays up). */
-export function LoadingState({ label, size = "page" }: { label: string; size?: "page" | "inline" }) {
-  return (
-    <div className={`loading-state is-${size}`} role="status" aria-label={label}>
-      <div className="tv-orbit-loader" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-      <p>{label}</p>
-    </div>
-  );
-}
-
 /** A valid, empty collection. */
 export function EmptyState(props: EmptyStateProps) {
   return <TvEmptyState variant="page" {...props} tone="empty" />;

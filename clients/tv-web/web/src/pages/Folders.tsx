@@ -8,7 +8,7 @@ import {
 } from "@playarr-tv/api-client";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { Button } from "../components/ui";
-import { EmptyState, ErrorState, ChoiceGroup, FilterSection, FiltersDrawer, LoadingState, PageLayout, ScrollArea, ViewToggle } from "../components/shell";
+import { EmptyState, ErrorState, ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea, SkeletonState, ViewToggle } from "../components/shell";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes } from "../lib/formatBytes";
 import {
@@ -257,7 +257,7 @@ export function FoldersPage() {
       }}
       state={
         rootsState.status === "loading"
-          ? { kind: "loading", label: t("pages.folders.loading") }
+          ? { kind: "loading", skeleton: "grid", label: t("pages.folders.loading") }
           : rootsState.status === "error"
             ? { kind: "error", props: { graphic: "details", title: t("pages.folders.errorTitle"), description: rootsState.message, onRetry: () => { setRootsState({ status: "loading" }); setRevision((value) => value + 1); }, retryLabel: t("components.states.retry") } }
             : rootsState.roots.length === 0
@@ -313,7 +313,7 @@ export function FoldersPage() {
             refreshKey={listing.status === "ready" ? `${listing.entries.length}:${url.view}` : listing.status}
           >
             {listing.status === "loading" || listing.status === "idle" ? (
-              <LoadingState size="inline" label={t("pages.folders.loading")} />
+              <SkeletonState kind="grid" compact label={t("pages.folders.loading")} />
             ) : listing.status === "error" ? (
               <ErrorState
                 graphic="details"

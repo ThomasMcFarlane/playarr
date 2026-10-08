@@ -796,6 +796,115 @@ body[data-input-mode="remote"] .tv-page-back {
   }
 }
 
+/* -------------------------------------------------------------------------
+ * Skeleton loading (components/shell/Skeletons.tsx; owner ruling 8 October 2026).
+ * The shimmer block is the Calendar's (.skeleton in global.css); these rules only lay the placeholders out with the final
+ * layout's geometry. Never focusable, never interactive.
+ * ---------------------------------------------------------------------- */
+.skeleton-state {
+  width: 100%;
+  min-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.skeleton-state.is-compact .skeleton-grid-set {
+  padding: 0;
+}
+
+.skeleton-set {
+  display: grid;
+  gap: clamp(18px, calc(2 * var(--vw)), 36px);
+}
+
+.skeleton-grid-set {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: clamp(126px, calc(16 * var(--viewport-unit)), 184px) clamp(44px, calc(4.2 * var(--vw)), 82px) 0
+    clamp(50px, calc(5 * var(--vw)), 96px);
+}
+
+.skeleton-card {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.skeleton-card-art {
+  width: 100%;
+  border-radius: clamp(8px, calc(0.65 * var(--vw)), 13px);
+}
+
+.skeleton-rails-set {
+  gap: clamp(26px, calc(4 * var(--viewport-unit)), 52px);
+}
+
+.skeleton-rail {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.skeleton-rail-row {
+  display: flex;
+  gap: clamp(14px, calc(1.3 * var(--vw)), 26px);
+  overflow: hidden;
+}
+
+.skeleton-rail-row > .skeleton-card {
+  flex: 0 0 clamp(150px, calc(11.4 * var(--vw)), 225px);
+}
+
+.skeleton-detail-set {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.skeleton-detail-copy {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: start;
+  max-width: 34rem;
+}
+
+.skeleton-detail-actions {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.skeleton-rows-set,
+.skeleton-settings-set {
+  gap: 0.9rem;
+}
+
+.skeleton-row,
+.skeleton-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 0;
+}
+
+.skeleton-row-thumb {
+  flex: 0 0 clamp(72px, calc(6 * var(--vw)), 112px);
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+}
+
+.skeleton-row-copy {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.skeleton-settings-row {
+  justify-content: space-between;
+}
+
+@media (max-width: 760px) {
+  .skeleton-grid-set {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: calc(var(--mobile-top-inset, 14px) + 72px) var(--mobile-page-gutter, 16px) 0;
+  }
+}
 /* ---- Route transition (owner ruling, 8 October 2026; docs/design/page-layout.md 10a) ---- */
 /*
  * Route transitions (owner ruling, 8 October 2026; docs/design/page-layout.md 10a).

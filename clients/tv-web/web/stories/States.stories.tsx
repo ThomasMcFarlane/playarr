@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { EmptyState, ErrorState, LoadingState } from "../src/components/shell";
+import { EmptyState, ErrorState, SkeletonState } from "../src/components/shell";
 import { Caption, focusOn } from "./fixtures";
 
 function States({ kind }: { kind: "empty" | "error" | "loading" | "retry" }) {
@@ -28,7 +28,7 @@ function States({ kind }: { kind: "empty" | "error" | "loading" | "retry" }) {
       {kind === "loading" ? (
         <>
           <Caption>Loading state</Caption>
-          <LoadingState label="Loading" />
+          <SkeletonState kind="rows" label="Loading" />
         </>
       ) : null}
     </div>

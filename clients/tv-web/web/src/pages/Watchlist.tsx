@@ -6,7 +6,7 @@ import {
   type WatchlistEntry,
 } from "@playarr-tv/api-client";
 import { RequestButton } from "../components/RequestButton";
-import { EmptyState, ErrorState, LoadingState, PageLayout, ScrollArea } from "../components/shell";
+import { EmptyState, ErrorState, PageLayout, ScrollArea, SkeletonState } from "../components/shell";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
@@ -100,7 +100,7 @@ export function WatchlistPage() {
           refreshKey={state.status === "ready" ? state.items.length : state.status}
         >
           {state.status === "loading" ? (
-            <LoadingState size="inline" label={t("pages.watchlist.loading")} />
+            <SkeletonState kind="rows" label={t("pages.watchlist.loading")} />
           ) : state.status === "error" ? (
             <ErrorState
               graphic="details"

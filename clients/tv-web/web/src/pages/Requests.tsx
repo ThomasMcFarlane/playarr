@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { describeApiError, type RequestView } from "@playarr-tv/api-client";
-import { EmptyState, ErrorState, LoadingState, PageLayout, ScrollArea } from "../components/shell";
+import { EmptyState, ErrorState, PageLayout, ScrollArea, SkeletonState } from "../components/shell";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -56,7 +56,7 @@ export function RequestsPage() {
           refreshKey={state.status === "ready" ? state.items.length : state.status}
         >
           {state.status === "loading" ? (
-            <LoadingState size="inline" label={t("pages.requests.loading")} />
+            <SkeletonState kind="rows" label={t("pages.requests.loading")} />
           ) : state.status === "error" ? (
             <ErrorState
               graphic="details"

@@ -789,7 +789,7 @@ export function MusicDetailPage() {
                     description: t("pages.musicDetail.unavailableDescription"),
                   },
                 }
-              : { kind: "loading", label: t("pages.musicDetail.loadingMusic") }
+              : { kind: "loading", skeleton: "detail", label: t("pages.musicDetail.loadingMusic") }
         }
       />
     );

@@ -362,7 +362,7 @@ export function HomePage() {
         header={homeHeader}
         state={
           isLoading
-            ? { kind: "loading", label: t("pages.home.preparingHome") }
+            ? { kind: "loading", skeleton: "rails", label: t("pages.home.preparingHome") }
             : error
               ? { kind: "error", props: { graphic: "home", title: t("pages.home.error.title"), description: error, onRetry: () => setRailsAttempt((value) => value + 1), retryLabel: t("components.states.retry") } }
               : {

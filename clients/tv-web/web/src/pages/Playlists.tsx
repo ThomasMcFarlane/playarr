@@ -1001,7 +1001,7 @@ export function PlaylistsPage() {
         state={
           pageState.status === "error"
             ? { kind: "error", props: { graphic: "playlist", title: t("pages.playlists.loadErrorTitle"), description: pageState.message, onRetry: () => { setPageState({ status: "loading" }); setLoadAttempt((value) => value + 1); }, retryLabel: t("components.states.retry") } }
-            : { kind: "loading", label: t("pages.playlists.preparingLabel") }
+            : { kind: "loading", skeleton: "grid", label: t("pages.playlists.preparingLabel") }
         }
       />
     );

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { describeApiError } from "@playarr-tv/api-client";
-import { ErrorState, LoadingState } from "../../components/shell";
+import { ErrorState, SkeletonState } from "../../components/shell";
 import { Button } from "../../components/ui";
 import { useApiClient } from "../../lib/ApiClientProvider";
 import {
@@ -66,7 +66,7 @@ export function SettingsHomePage() {
     <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         {state.status === "loading" ? (
-          <LoadingState size="inline" label={t("pages.home.customise.loading")} />
+          <SkeletonState kind="rows" compact label={t("pages.home.customise.loading")} />
         ) : state.status === "error" ? (
           <ErrorState
             variant="compact"

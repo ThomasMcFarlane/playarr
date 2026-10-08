@@ -11,7 +11,7 @@ import { QrCode } from "../../components/QrCode";
 import { enableApprovalPushNotifications } from "../../lib/pushNotifications";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
-import { LoadingState } from "../../components/shell";
+import { SkeletonState } from "../../components/shell";
 import { Button } from "../../components/ui";
 
 type FriendInviteState =
@@ -183,7 +183,7 @@ export function SettingsInvitePage() {
       <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         {friendInviteState.status === "loading" ? (
-          <LoadingState size="inline" label={t("settings.invite.checkingStatus")} />
+          <SkeletonState kind="settings" compact label={t("settings.invite.checkingStatus")} />
         ) : (
           <>
             <p className="muted" aria-live="polite">

@@ -1,10 +1,11 @@
 import type { Key, ReactNode } from "react";
 import type { PageId } from "../../lib/pageRegistry";
 import { PageHeader, type PageHeaderProps } from "./PageHeader";
-import { EmptyState, ErrorState, LoadingState, type EmptyStateProps, type ErrorStateProps } from "./States";
+import { EmptyState, ErrorState, type EmptyStateProps, type ErrorStateProps } from "./States";
+import { SkeletonState, type SkeletonKind } from "./Skeletons";
 
 export type PageLayoutState =
-  | { kind: "loading"; label: string }
+  | { kind: "loading"; skeleton: SkeletonKind; label: string }
   | { kind: "empty"; props: EmptyStateProps }
   | { kind: "error"; props: ErrorStateProps & ({ onRetry?: undefined; retryLabel?: undefined } | { onRetry: () => void; retryLabel: string }) };
 
@@ -32,7 +33,7 @@ export interface PageLayoutProps {
 function StateView({ state }: { state: PageLayoutState }) {
   switch (state.kind) {
     case "loading":
-      return <LoadingState label={state.label} />;
+      return <SkeletonState kind={state.skeleton} label={state.label} />;
     case "empty":
       return <EmptyState {...state.props} />;
     case "error":

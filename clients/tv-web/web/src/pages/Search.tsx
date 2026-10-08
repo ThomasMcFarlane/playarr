@@ -26,7 +26,7 @@ import {
   WatchStateOverlay,
 } from "../components/WatchStateOverlay";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea } from "../components/shell";
+import { ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea, SkeletonState } from "../components/shell";
 import { usePanelParam } from "../lib/usePanelParam";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -805,10 +805,7 @@ export function SearchPage() {
           viewportProps={{ "aria-live": "polite", "aria-busy": state.status === "loading" }}
         >
           {state.status === "loading" ? (
-            <div className="tv-search-state" role="status">
-              <span className="tv-mini-loader" aria-hidden="true" />
-              <p>{t("pages.search.loadingEllipsis")}</p>
-            </div>
+            <SkeletonState kind="grid" compact label={t("pages.search.loadingEllipsis")} />
           ) : state.status === "error" ? (
             <TvEmptyState
               announce={false}

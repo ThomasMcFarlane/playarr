@@ -4,7 +4,8 @@ export { PageActions, orderPageActions, type NavigationItem, type PageAction } f
 export { ActionPill, type ActionPillProps } from "./ActionPill";
 export { ActionIconGlyph, type ActionIcon } from "./icons";
 export { ScrollArea, type ScrollAreaProps } from "./ScrollArea";
-export { EmptyState, ErrorState, LoadingState, type EmptyStateProps, type ErrorStateProps } from "./States";
+export { EmptyState, ErrorState, type EmptyStateProps, type ErrorStateProps } from "./States";
+export { SkeletonDetail, SkeletonGrid, SkeletonRails, SkeletonRows, SkeletonSettings, SkeletonState, type SkeletonKind } from "./Skeletons";
 export { Drawer } from "./Drawer";
 export { MasterDetail } from "./MasterDetail";
 export { SkeletonBlock, SkeletonLines } from "./Skeleton";

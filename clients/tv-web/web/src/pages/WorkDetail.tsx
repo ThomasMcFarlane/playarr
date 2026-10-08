@@ -1662,7 +1662,7 @@ export function WorkDetailPage() {
                     description: t("pages.workDetail.titleDetailsUnavailableDescription"),
                   },
                 }
-              : { kind: "loading", label: t("pages.workDetail.loadingDetails") }
+              : { kind: "loading", skeleton: "detail", label: t("pages.workDetail.loadingDetails") }
         }
       />
     );

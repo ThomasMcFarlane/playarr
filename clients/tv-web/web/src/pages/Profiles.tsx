@@ -1,3 +1,4 @@
+import { SkeletonBlock } from "../components/shell/Skeleton";
 import {
   useCallback,
   useEffect,
@@ -649,9 +650,8 @@ export function ProfilesPage(
       </Link>
 
       {loadState.status === "loading" ? (
-        <div className="profiles-status" role="status">
-          <span className="tv-mini-loader" aria-hidden="true" />
-          <span>{t("pages.profiles.loading")}</span>
+        <div className="profiles-status" role="status" aria-label={t("pages.profiles.loading")}>
+          <SkeletonBlock width="12rem" height="1rem" />
         </div>
       ) : loadState.status === "error" ? (
         <p className="profiles-status is-error" role="alert">

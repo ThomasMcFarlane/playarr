@@ -323,7 +323,7 @@ export function DownloadsPage() {
         className="tv-library tv-downloads"
         ariaLabel={t("pages.downloads.title")}
         header={{ title: t("pages.downloads.title"), back: { label: t("pages.downloads.backToHome"), to: "/" } }}
-        state={{ kind: "loading", label: t("pages.downloads.preparingLabel") }}
+        state={{ kind: "loading", skeleton: "rows", label: t("pages.downloads.preparingLabel") }}
       />
     );
   }

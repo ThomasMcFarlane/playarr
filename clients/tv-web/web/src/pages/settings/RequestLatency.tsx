@@ -3,7 +3,7 @@ import { ApiError, type HttpRouteLatency } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
-import { EmptyState, ErrorState, LoadingState } from "../../components/shell";
+import { EmptyState, ErrorState, SkeletonState } from "../../components/shell";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 export type HttpLatencyState =
@@ -28,7 +28,7 @@ export function RequestLatencyContent({ state, onRetry }: { state: HttpLatencySt
   if (state.status === "loading") {
     return (
       <section className="card settings-card settings-card-wide">
-        <LoadingState size="inline" label={t("settings.requestLatency.loading")} />
+        <SkeletonState kind="settings" compact label={t("settings.requestLatency.loading")} />
       </section>
     );
   }

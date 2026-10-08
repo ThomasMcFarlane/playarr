@@ -915,7 +915,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 },
               }
             : items === null
-              ? { kind: "loading", label: t("pages.library.preparingLabel", { label: plural.toLowerCase() }) }
+              ? { kind: "loading", skeleton: "grid", label: t("pages.library.preparingLabel", { label: plural.toLowerCase() }) }
               : {
                   kind: "empty",
                   props: {
