@@ -3803,7 +3803,6 @@ private fun ExperienceSearchScreen(
     var libraryId by remember { mutableStateOf<String?>(null) }
     var filtersOpen by remember { mutableStateOf(false) }
     // Up from Filters must land on the search field, not the page Back button (same as the web TV page).
-    val searchFieldFocus = remember { FocusRequester() }
     var contextWork by remember { mutableStateOf<Work?>(null) }
     var selectedResultKey by remember { mutableStateOf<String?>(null) }
     val visibleMediaTypes = remember(availableKinds) {
@@ -3846,6 +3845,11 @@ private fun ExperienceSearchScreen(
         subtitle = if (isTelevision) resultStatus else null,
         onBack = { navController.openExperienceTopLevel("home") },
         isTelevision = isTelevision,
+        filters = PlayarrFilterAction(
+            label = playarrString(PlayarrString.SearchFilters),
+            onClick = { filtersOpen = !filtersOpen },
+            active = filtersOpen,
+        ),
         padBody = false,
         largeTitle = true,
     ) {
@@ -3870,7 +3874,6 @@ private fun ExperienceSearchScreen(
                 views = views,
                 visibleMediaTypes = visibleMediaTypes,
                 filtersOpen = filtersOpen,
-                onToggleFilters = { filtersOpen = !filtersOpen },
                 onMediaFilter = { type ->
                     mediaFilter = type
                     if (type == PlayarrSearchMediaType.Playlist) libraryId = null
@@ -3953,11 +3956,6 @@ private fun ExperienceSearchScreen(
                 query = query,
                 onQueryChange = { query = it; viewModel.search(it, mediaFilter, libraryId, debounce = true) },
                 onSubmit = { submitSearch(debounce = false) },
-                filterSummary = playarrString(mediaFilter.label) + playarrString(
-                    PlayarrString.SearchLibraryFilter,
-                    "library" to (activeLibrary?.name ?: playarrString(PlayarrString.SearchAllLibraries)),
-                ),
-                onToggleFilters = { filtersOpen = !filtersOpen },
                 filterPanel = filterPanel,
                 state = state,
                 query_ = query,
@@ -3995,8 +3993,6 @@ private fun PhoneSearchContent(
     query: String,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
-    filterSummary: String,
-    onToggleFilters: () -> Unit,
     filterPanel: @Composable () -> Unit,
     state: ExperienceLoad<PlayarrSearchResults>,
     query_: String,
@@ -4079,26 +4075,6 @@ private fun PhoneSearchContent(
                 }
                 }
                 Spacer(Modifier.height(10.dp))
-                androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
-                ) {
-                    Surface(
-                        onClick = onToggleFilters,
-                        shape = CircleShape,
-                        color = WebSurfaceStrong.copy(alpha = 0.78f),
-                        contentColor = WebInk,
-                    ) {
-                        Row(
-                            Modifier.height(42.dp).padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.4.dp),
-                        ) {
-                            Icon(PlayarrWebIcons.FilterToggle, contentDescription = null, tint = WebKicker, modifier = Modifier.size(18.4.dp))
-                            Text(playarrString(PlayarrString.SearchFilters), fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight(760), style = WebTextStyle, maxLines = 1)
-                            Text(filterSummary, color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, style = WebTextStyle, maxLines = 1)
-                        }
-                    }
-                }
                 filterPanel()
             }
             // The web results area does not follow the top inset: it starts where a 24 dp status bar leaves it.
@@ -4190,7 +4166,6 @@ private fun TelevisionSearchBody(
     views: List<ViewSummary>,
     visibleMediaTypes: List<PlayarrSearchMediaType>,
     filtersOpen: Boolean,
-    onToggleFilters: () -> Unit,
     onMediaFilter: (PlayarrSearchMediaType) -> Unit,
     onLibrary: (String?) -> Unit,
     selectedWork: Work?,
@@ -4268,30 +4243,8 @@ private fun TelevisionSearchBody(
                 )
             }
         }
-        Surface(
-            onClick = onToggleFilters,
-            color = WebSurfaceStrong.copy(alpha = 0.78f),
-            contentColor = WebInk,
-            shape = CircleShape,
-            modifier = Modifier.offset(x = 153.6.dp, y = 268.2.dp).height(56.dp).widthIn(min = 165.7.dp).focusProperties { up = searchFieldFocus },
-        ) {
-            Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Web `.tv-search-filter-button`: the sliders icon, the label and the summary on one line.
-                Icon(PlayarrWebIcons.Filters, contentDescription = null, tint = WebKicker, modifier = Modifier.size(14.dp))
-                Text(playarrString(PlayarrString.SearchFilters), fontSize = 11.136.sp, fontWeight = FontWeight(760), maxLines = 1)
-                Text(
-                    playarrString(mediaFilter.label) + playarrString(
-                        PlayarrString.SearchLibraryFilter,
-                        "library" to (activeLibraryName ?: playarrString(PlayarrString.SearchAllLibraries)),
-                    ),
-                    color = WebInkMuted,
-                    fontSize = 9.216.sp,
-                    maxLines = 1,
-                )
-            }
-        }
         if (filtersOpen) {
-            Column(Modifier.offset(x = 153.6.dp, y = 330.dp).width(590.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.offset(x = 153.6.dp, y = 272.dp).width(590.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     visibleMediaTypes.forEach { type ->
                         PlayarrButton(

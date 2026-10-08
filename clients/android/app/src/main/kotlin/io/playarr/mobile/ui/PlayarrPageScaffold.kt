@@ -1,14 +1,12 @@
 package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.page.LegacyPlacement
-import io.playarr.shared.designsystem.page.PlayarrActionIcon
 import io.playarr.shared.designsystem.page.PlayarrBack
 import io.playarr.shared.designsystem.page.PlayarrPageAction
 import io.playarr.shared.designsystem.page.PlayarrPageBody
 import io.playarr.shared.designsystem.page.PlayarrPageHeaderSpec
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrPageLayout
-import io.playarr.shared.designsystem.page.PlayarrActionPill
 import io.playarr.shared.designsystem.icons.PlayarrWebIcons
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -103,7 +101,9 @@ internal fun PlayarrPageScaffold(
     subtitle: String? = null,
     /** The page's Filters action; drawn by the one shared page header so every page matches. */
     filters: PlayarrFilterAction? = null,
-    /** Panel buttons (Create, Calendar link, ...) in a row immediately left of Filters. */
+    /** Typed header actions (Create, Calendar link, ...); the header orders them and draws them as the one action pill. */
+    actions: List<PlayarrPageAction> = emptyList(),
+    /** Hand-built panel buttons still passed by a screen not yet on [actions]. */
     panelActions: (@Composable RowScope.() -> Unit)? = null,
     /** Period navigation (previous / today / next) in the same right cluster, left of the panel buttons. */
     trailingNav: (@Composable RowScope.() -> Unit)? = null,
@@ -122,6 +122,7 @@ internal fun PlayarrPageScaffold(
     val actions = buildList {
         if (trailingNav != null) add(PlayarrPageAction.LegacySlot("navigation", LegacyPlacement.Navigation, trailingNav))
         if (panelActions != null) add(PlayarrPageAction.LegacySlot("panel", LegacyPlacement.Panel, panelActions))
+        addAll(actions)
         if (filters != null) add(PlayarrPageAction.Filters(filters.label, filters.active, filters.badge, filters.onClick))
     }
     Box(modifier) {
@@ -149,22 +150,6 @@ internal data class PlayarrFilterAction(
     val active: Boolean = false,
     val badge: Int = 0,
 )
-
-/**
- * Header action in the shared tile style (Filters, Calendar subscription, Create, ...). A thin call into the page
- * package's one action pill, for screens that still build their own action row (removed with the adapter, A7).
- */
-@Composable
-internal fun PlayarrHeaderButton(
-    label: String,
-    icon: PlayarrActionIcon,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    active: Boolean = false,
-    badge: Int = 0,
-) {
-    PlayarrActionPill(icon = icon, label = label, onClick = onClick, modifier = modifier, active = active, count = badge)
-}
 
 /**
  * The ONE right-side pop-out for every panel (filters on all pages, calendar link, playback settings, ...):

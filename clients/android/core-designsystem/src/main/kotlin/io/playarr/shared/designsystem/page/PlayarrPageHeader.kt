@@ -1,6 +1,14 @@
 package io.playarr.shared.designsystem.page
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,14 +31,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.semantics.contentDescription
@@ -45,9 +50,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
-import io.playarr.shared.designsystem.component.PlayarrButtonSize
-import io.playarr.shared.designsystem.component.PlayarrButtonVariant
-import io.playarr.shared.designsystem.component.PlayarrIconButton
 import io.playarr.shared.designsystem.theme.PlayarrWebTheme
 
 /**
@@ -113,26 +115,7 @@ internal fun PlayarrPageHeaderRow(
         val back = spec.back?.let { b ->
             subcompose("back") {
                 if (tv) {
-                    PlayarrIconButton(
-                        onClick = b.onBack,
-                        contentDescription = b.label,
-                        size = PlayarrButtonSize.Large,
-                        variant = PlayarrButtonVariant.Ghost,
-                        // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
-                        modifier = Modifier
-                            // Settings opens with the back button focused: web fills it with the ink colour, scales it 1.056
-                            // and draws the 3 px ink focus outline 2 px outside it (`.ui-btn:focus-visible`).
-                            .then(
-                                if (spec.backActive) Modifier.drawBehind {
-                                    drawCircle(palette.ink, radius = 29.9.dp.toPx(), style = Stroke(3.dp.toPx()))
-                                } else Modifier,
-                            )
-                            .then(if (spec.backActive) Modifier.graphicsLayer { scaleX = 1.056f; scaleY = 1.056f } else Modifier)
-                            .background(if (spec.backActive) palette.ink else palette.surfaceStrong.copy(alpha = 0.7f), CircleShape)
-                            .then(if (spec.backActive) Modifier else Modifier.border(1.dp, palette.pillBorder, CircleShape)),
-                    ) {
-                        Text("←", color = if (spec.backActive) palette.background else palette.inkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
-                    }
+                    PlayarrRoundBackButton(b, spec.backActive)
                 } else {
                     PlayarrPhoneBackPill(
                         onClick = b.onBack,
@@ -235,26 +218,15 @@ private fun PlayarrPhoneBackPill(
 ) {
     val palette = PlayarrWebTheme.palette
     val metrics = PlayarrPageTokens.Phone
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    val scale = if (focused) maxOf(focusScale, 1.06f) else focusScale
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Surface(
             onClick = onClick,
-            modifier = Modifier.size(metrics.controlWidth, metrics.control).graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-                .then(
-                    if (focusScale > 1f) {
-                        // Web focus outline: 3 px solid, offset 2 px, following the element's elliptical shape.
-                        Modifier.drawBehind {
-                            val grow = 3.5.dp.toPx()
-                            drawOval(
-                                color = palette.ink,
-                                topLeft = Offset(-grow, -grow),
-                                size = Size(size.width + 2 * grow, size.height + 2 * grow),
-                                style = Stroke(width = 3.dp.toPx()),
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                )
+            interactionSource = source,
+            modifier = Modifier.size(metrics.controlWidth, metrics.control).graphicsLayer { scaleX = scale; scaleY = scale }
+                .then(if (focused || focusScale > 1f) Modifier.playarrFocusRing(PlayarrRingShape.Ellipse) else Modifier)
                 .semantics { this.contentDescription = contentDescription },
             shape = PlayarrEllipseShape,
             color = if (active) palette.ink else palette.surfaceStrong.copy(alpha = 0.7f),
@@ -262,6 +234,43 @@ private fun PlayarrPhoneBackPill(
             border = BorderStroke(1.dp, palette.pillBorder),
         ) {
             Box(contentAlignment = Alignment.Center) { content() }
+        }
+    }
+}
+
+/** The television Back button: a round ghost button that takes only the theme focus ring, never a fill (owner decision Q10). */
+@Composable
+private fun PlayarrRoundBackButton(back: PlayarrBack, active: Boolean) {
+    val palette = PlayarrWebTheme.palette
+    val metrics = PlayarrPageTokens.Tv
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    // Settings opens with the back button focused: web fills it with the ink colour, scales it 1.056 and draws the
+    // 3 px ink outline 2 px outside it (`.ui-btn:focus-visible`).
+    val scale = if (active) 1.056f else if (focused) 1.1f else 1f
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        Surface(
+            onClick = back.onBack,
+            interactionSource = source,
+            shape = CircleShape,
+            // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px ring and a text arrow.
+            color = if (active) palette.ink else palette.surfaceStrong.copy(alpha = 0.7f),
+            contentColor = if (active) palette.background else palette.inkSoft,
+            border = if (active) null else BorderStroke(1.dp, palette.pillBorder),
+            modifier = Modifier
+                .size(metrics.controlWidth, metrics.control)
+                .then(
+                    if (active) Modifier.drawBehind {
+                        drawCircle(palette.ink, radius = 29.9.dp.toPx(), style = Stroke(3.dp.toPx()))
+                    } else Modifier,
+                )
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .then(if (focused && !active) Modifier.playarrFocusRing(PlayarrRingShape.Round) else Modifier)
+                .semantics { contentDescription = back.label; role = Role.Button },
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("\u2190", fontSize = 17.28.sp, fontWeight = FontWeight(720))
+            }
         }
     }
 }

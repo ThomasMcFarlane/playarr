@@ -3,6 +3,7 @@ package io.playarr.mobile.ui
 import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.RailPreferencesRequest
 import io.playarr.shared.designsystem.page.PlayarrActionIcon
+import io.playarr.shared.designsystem.page.PlayarrPageAction
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
@@ -435,13 +436,9 @@ internal fun ExperiencePlaylistsScreen(
                 active = filtering,
                 badge = listOf(visibility != PlaylistVisibility.All, order != PlaylistOrder.Ascending).count { it },
             ),
-            panelActions = {
-                PlayarrHeaderButton(
-                    label = playarrString(PlayarrString.PlaylistsCreate),
-                    icon = PlayarrActionIcon.Add,
-                    onClick = { creating = true },
-                )
-            },
+            actions = listOf(
+                PlayarrPageAction.Link("create-playlist", playarrString(PlayarrString.PlaylistsCreate), PlayarrActionIcon.Add) { creating = true },
+            ),
         ) {
             when (val current = state) {
                 ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsPreparing))
@@ -955,16 +952,12 @@ internal fun ExperiencePlaylistDetailScreen(
                 ).uppercase(LocalPlayarrLanguage.current.locale),
                 onBack = onBack,
                 isTelevision = isTelevision,
-                panelActions = if (value.root.isSystem) {
-                    null
+                actions = if (value.root.isSystem) {
+                    emptyList()
                 } else {
-                    {
-                        PlayarrHeaderButton(
-                            label = playarrString(PlayarrString.PlaylistsCreateSubPlaylist),
-                            icon = PlayarrActionIcon.Add,
-                            onClick = { creatingUnder = value.root },
-                        )
-                    }
+                    listOf(
+                        PlayarrPageAction.Link("create-sub-playlist", playarrString(PlayarrString.PlaylistsCreateSubPlaylist), PlayarrActionIcon.Add) { creatingUnder = value.root },
+                    )
                 },
             ) {
                     LazyColumn(

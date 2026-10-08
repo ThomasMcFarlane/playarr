@@ -22,15 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -76,24 +71,7 @@ fun PlayarrActionPill(
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
                 .shadow(14.dp, tile, clip = false, ambientColor = Color(0x14382621), spotColor = Color(0x14382621))
-                .then(
-                    if (focused) {
-                        // Web focus outline: 3 px solid, offset 2 px, following the tile's rounded shape.
-                        val ring = palette.ink
-                        Modifier.drawBehind {
-                            val grow = 3.5.dp.toPx()
-                            drawRoundRect(
-                                color = ring,
-                                topLeft = Offset(-grow, -grow),
-                                size = Size(size.width + 2 * grow, size.height + 2 * grow),
-                                cornerRadius = CornerRadius(metrics.pillRadius.toPx() + grow),
-                                style = Stroke(width = 3.dp.toPx()),
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                )
+                .then(if (focused) Modifier.playarrFocusRing(PlayarrRingShape.Rounded(metrics.pillRadius)) else Modifier)
                 .semantics { contentDescription = label },
             shape = tile,
             // Focus draws the ring only; the open state (panel shown) keeps the ink fill.

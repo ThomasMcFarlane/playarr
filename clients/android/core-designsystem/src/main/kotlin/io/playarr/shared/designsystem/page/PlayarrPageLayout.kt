@@ -97,7 +97,7 @@ fun PlayarrPageLayout(
                     .align(Alignment.TopStart)
                     .then(headerInsets)
                     // The row centres its items on the action tile: Back drops by half the difference.
-                    .padding(start = metrics.start, top = if (tv && actions.isNotEmpty()) metrics.headerTop + (metrics.pillHeight - metrics.control) / 2 else metrics.headerTop),
+                    .padding(start = metrics.start, top = if (actions.isNotEmpty()) metrics.headerTop + (metrics.headerHeight - metrics.control) / 2 else metrics.headerTop),
             )
             if (actions.isNotEmpty()) {
                 PlayarrPageActions(

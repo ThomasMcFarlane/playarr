@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -24,6 +27,9 @@ fun golden(name: String) = "src/test/snapshots/$name.png"
 @Composable
 fun GoldenFrame(target: Target, width: Dp, height: Dp, content: @Composable () -> Unit) {
     PlayarrWebTheme.select(target.dark)
+    // A D-pad remote: clickable elements only take focus in keyboard input mode.
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(Unit) { inputMode.requestInputMode(InputMode.Keyboard) }
     CompositionLocalProvider(LocalPlayarrFormFactor provides target.formFactor) {
         Box(Modifier.size(width, height).background(PlayarrWebTheme.palette.surface)) { content() }
     }

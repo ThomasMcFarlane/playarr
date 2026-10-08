@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -98,6 +100,7 @@ class PlayarrPageGoldenTest(private val target: Target) {
             compose.runOnIdle { focus.requestFocus() }
             compose.waitForIdle()
             compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithContentDescription(label).assertIsFocused()
         }
         compose.onRoot().captureRoboImage(golden("pill-$name-${target.slug}"))
     }

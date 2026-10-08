@@ -1,6 +1,7 @@
 package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.page.PlayarrActionIcon
+import io.playarr.shared.designsystem.page.PlayarrPageAction
 import io.playarr.shared.designsystem.icons.PlayarrWebIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -167,23 +168,14 @@ private fun ExperienceCalendarScreen(
     val detailItem = if (state.mode == CalendarViewMode.Agenda) selectedItem ?: items.firstOrNull() else selectedItem
     val filtersLabel = playarrString(PlayarrString.LibraryFilters)
     var jumpOpen by rememberSaveable { mutableStateOf(false) }
-    val panelActions: @Composable RowScope.() -> Unit = {
-            PlayarrHeaderButton(
-                label = playarrString(PlayarrString.CalendarLinkTitle),
-                icon = PlayarrActionIcon.Bell,
-                active = state.panel == CalendarPanel.Subscription,
-                onClick = { holder.openPanel(CalendarPanel.Subscription) },
-            )
-    }
-    val phonePanelActions: @Composable RowScope.() -> Unit = {
-        // Web phone: the subscription bell is the same icon-only launcher as Filters, beside it.
-        PlayarrHeaderButton(
-            label = playarrString(PlayarrString.CalendarLinkTitle),
-            icon = PlayarrActionIcon.Bell,
-            active = state.panel == CalendarPanel.Subscription,
-            onClick = { holder.openPanel(CalendarPanel.Subscription) },
-        )
-    }
+    // Web: the subscription bell is the same launcher as Filters, beside it (icon only on phones).
+    val bellAction = PlayarrPageAction.Panel(
+        id = "calendar-link",
+        label = playarrString(PlayarrString.CalendarLinkTitle),
+        icon = PlayarrActionIcon.Bell,
+        open = state.panel == CalendarPanel.Subscription,
+        onToggle = { holder.openPanel(CalendarPanel.Subscription) },
+    )
     val navigation: @Composable RowScope.() -> Unit = {
         TvCalendarRound("\u2190", playarrString(PlayarrString.CalendarPrevious), holder::previous)
         TvCalendarToday(playarrString(PlayarrString.CalendarToday), holder::goToToday)
@@ -200,7 +192,7 @@ private fun ExperienceCalendarScreen(
             onClick = { holder.openPanel(CalendarPanel.Filters) },
         ),
         padBody = !(isTelevision && state.mode == CalendarViewMode.Agenda),
-        panelActions = if (isTelevision) panelActions else phonePanelActions,
+        actions = listOf(bellAction),
         // Phones are too narrow for five header actions beside the back button and title: the period
         // navigation moves into the period row below the header there.
         trailingNav = if (isTelevision) navigation else null,
