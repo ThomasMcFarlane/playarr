@@ -274,6 +274,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: in the light theme the hero and Library key art use the server's light stage bake (greyscale at the web's contrast, brightness and opacity) instead of the raw colour image.
 - Web: the Release Calendar and Folders render through the shared page layout; the calendar's previous, Today and next controls are the shared navigation group (hidden at phone width, where the page shows its own sub-row), and Folders gains the shared scroll-edge fade.
 - Web: Downloads, Watchlist and Requests render through the shared page layout; their loading, empty and error states now sit centred inside the page body, with the header and Back always visible.
 - Roku: film and series pages follow the web layout: header chip, tracked title, meta row, action tiles (Playback, Play or Start, Add to watchlist, Add to Playlist) with working watchlist and playlist actions, Chapters and Cast rails with number overlays, and a series left panel that follows the focused episode.

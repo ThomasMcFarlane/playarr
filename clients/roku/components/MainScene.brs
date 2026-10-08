@@ -3250,8 +3250,8 @@ function heroArtworkUrl(work as Object) as String
     end if
     if url = "" then url = artworkUrl(work)
     if url = "" then return ""
-    ' Light theme: the web draws the raw art at 40 % opacity, so the dark-baked stage image is not used (see TvStage.brs).
-    if m.global.themeMode = "light" then return url
+    ' The server bakes web's per-theme .tv-key-art look: greyscale, contrast, brightness, opacity and the right-edge fade.
+    if m.global.themeMode = "light" then return withArtworkStyle(url, "stage-light")
     return withArtworkStyle(url, "stage")
 end function
 

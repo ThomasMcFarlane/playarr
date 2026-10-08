@@ -594,6 +594,8 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertIn("m.homeRailPool", MAIN)
         self.assertIn("findOnDeckEpisode", MAIN)
         self.assertIn("applyWatchState", MAIN)
+        # Hero art uses the server's per-theme stage bake.
+        self.assertIn('withArtworkStyle(url, "stage-light")', MAIN)
         # Hero and rail headings keep the web letter-spacing through TrackedText; stage gradients are stretched ramps.
         stage_xml = (ROOT / "components" / "TvStage.xml").read_text(encoding="utf-8")
         self.assertIn("TrackedText", stage_xml)
