@@ -8409,10 +8409,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   animation: tv-copy-in 520ms 70ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-.tv-search-heading {
-  z-index: 24;
-}
-
 .tv-search-kicker {
   margin-bottom: clamp(8px, calc(1 * var(--viewport-unit)), 14px);
   color: #cf3157;
@@ -8701,10 +8697,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: var(--ink-muted);
   font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.9rem);
   line-height: 1.55;
-}
-
-.tv-search-results-window {
-  flex: 1 1 auto;
 }
 
 .tv-search-results {
@@ -10575,10 +10567,6 @@ html.is-native-scroll-root .profile-auth-scroll {
 
   .tv-music-heading {
     right: 66px;
-  }
-
-  .tv-playlists-heading {
-    right: 176px;
   }
 
   .tv-music-browser.is-content {

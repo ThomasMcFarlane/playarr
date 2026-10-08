@@ -73,9 +73,13 @@ export function PanelButton({
 export { Drawer as FiltersDrawer } from "./Drawer";
 
 /** One titled section inside a {@link FiltersDrawer}. */
-export function FilterSection({ title, children }: { title?: string; children: ReactNode }) {
+export function FilterSection({
+  title,
+  children,
+  ...rest
+}: { title?: string; children: ReactNode } & Record<`data-${string}`, string | boolean | undefined>) {
   return (
-    <section>
+    <section {...rest}>
       {title ? <h3>{title}</h3> : null}
       {children}
     </section>

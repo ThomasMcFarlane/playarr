@@ -74,8 +74,7 @@ describe("design parity with origin/main", () => {
     const library = readSrc("pages/Library.tsx");
     expect(library).toContain("data-library-index");
     expect(library).toContain("data-library-count");
-    expect(library).toContain("TvStageShell");
-    expect(library).toContain("PageHeader");
+    expect(library).toContain("<PageLayout");
     expect(library).toContain("tv-library-preview");
     expect(library).toContain("tv-title-grid-content");
     // Expand-only mount is allowed; bottom spacer only (never paddingTop assigns).

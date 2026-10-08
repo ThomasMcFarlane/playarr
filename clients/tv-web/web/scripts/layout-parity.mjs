@@ -197,7 +197,7 @@ async function bandShot(page) {
     const hr = header.getBoundingClientRect();
     const pills = [...header.querySelectorAll("[data-action-kind]")].map((el) => el.getBoundingClientRect().bottom);
     // The shell action column is checked by the pill checks, not by the header band.
-    document.querySelectorAll(".shell-action-column").forEach((el) => { el.style.visibility = "hidden"; });
+    document.querySelectorAll(".shell-action-column").forEach((el) => { el.style.display = "none"; });
     return {
       bottom: Math.max(hr.bottom, ...pills) + 8,
       left: parseFloat(getComputedStyle(header).left) || 0,
@@ -360,6 +360,11 @@ for (const layoutId of layoutIds) {
         }
         // Header band, for pages that render PageLayout.
         if (entry.mode === "layout") {
+          // The pill checks isolated a pill with an injected style; drop it before photographing the band.
+          await page.evaluate(() => {
+            for (const id of ["__isolate", "__hide_label"]) document.getElementById(id)?.remove();
+            document.querySelectorAll(".__pill").forEach((el) => el.classList.remove("__pill"));
+          });
           const hide = `.tv-key-art,.tv-stage-wash{display:none!important}`;
           await page.addStyleTag({ content: hide });
           const actions = header.nav ? ["navigation"] : [];
@@ -370,6 +375,9 @@ for (const layoutId of layoutIds) {
           maskBands([live, canonical], layoutId !== "mobile");
           const result = diffImages(live.png, canonical.png, `${name}-band`);
           bandsChecked += 1;
+          if (result.bad !== 0) {
+            for (const [suffix, shot] of [["page", live.png], ["canonical", canonical.png]]) writeFileSync(join(outDir, `${name.replace(/[^A-Za-z0-9._-]+/g, "-")}-band.${suffix}.png`), PNG.sync.write(shot));
+          }
           if (result.bad !== 0) fail(`${name}: header band differs from the canonical header by ${result.bad} pixels${result.size ? ` (${result.size})` : ""}`);
           else console.log(`ok    ${name} header band`);
         }

@@ -48,7 +48,7 @@ import {
   parseLanguageParam,
   toggleLanguage,
 } from "../lib/languageFilters";
-import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { TvRailSurface } from "../components/tv/TvStage";
 import {
   applyLibraryView,
   parseLibraryView,
@@ -61,7 +61,7 @@ import {
   type SortOrder,
 } from "../lib/libraryView";
 import { usePanelParam } from "../lib/usePanelParam";
-import { FiltersDrawer, PageHeader, ViewToggle } from "../components/shell";
+import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
@@ -915,32 +915,37 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   );
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="library"
       className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
       ariaLabel={t("pages.library.stageAriaLabel", { plural })}
-      artworkKey={selected.id}
-      artwork={
-        <CachedArtworkImage
-          work={selected}
-          kinds={["backdrop", "poster"]}
-          alt=""
-          fallback={<span>{selected.title}</span>}
-        />
-      }
+      backdrop={{
+        artKey: selected.id,
+        art: (
+          <CachedArtworkImage
+            work={selected}
+            kinds={["backdrop", "poster"]}
+            alt=""
+            fallback={<span>{selected.title}</span>}
+          />
+        ),
+      }}
+      header={{
+        title: plural,
+        back: { label: t("pages.library.backToHome"), to: "/" },
+        detail: `${(total ?? items.length).toLocaleString()} ${collectionNoun}`,
+        actions: [
+          {
+            kind: "filters",
+            label: t("pages.library.filters"),
+            open: filtersOpen,
+            onToggle: () => setFiltersOpen((open) => !open),
+            controls: `${kind}-library-filters`,
+            activeCount: audioLangs.length + subtitleLangs.length,
+          },
+        ],
+      }}
     >
-      <PageHeader
-        title={plural}
-        backLabel={t("pages.library.backToHome")}
-        detail={`${(total ?? items.length).toLocaleString()} ${collectionNoun}`}
-        filters={{
-          label: t("pages.library.filters"),
-          open: filtersOpen,
-          onToggle: () => setFiltersOpen((open) => !open),
-          controls: `${kind}-library-filters`,
-          activeCount: audioLangs.length + subtitleLangs.length,
-        }}
-      />
-
       <aside className="tv-library-preview" key={`preview-${selected.id}`}>
         <p className="tv-provider">{selected.genres[0] ?? singular}</p>
         <h2>{selected.title}</h2>
@@ -1083,8 +1088,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         closeLabel={t("pages.library.closeFilters")}
         onClose={() => setFiltersOpen(false)}
       >
-          <section>
-            <h3>{t("pages.library.view")}</h3>
+          <FilterSection title={t("pages.library.view")}>
             <ViewToggle
               ariaLabel={t("pages.library.view")}
               value={view}
@@ -1107,10 +1111,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 }))
               )}
             />
-          </section>
+          </FilterSection>
 
-          <section>
-            <h3>{t("pages.library.artworkSize")}</h3>
+          <FilterSection title={t("pages.library.artworkSize")}>
             <div className="tv-filter-choice-grid">
               {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
                 <button
@@ -1128,10 +1131,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 </button>
               ))}
             </div>
-          </section>
+          </FilterSection>
 
-          <section>
-            <h3>{t("pages.library.sortBy")}</h3>
+          <FilterSection title={t("pages.library.sortBy")}>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
               <button
                 type="button"
@@ -1150,10 +1152,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 {t("pages.library.sortDateAdded")}
               </button>
             </div>
-          </section>
+          </FilterSection>
 
-          <section>
-            <h3>{t("pages.library.order")}</h3>
+          <FilterSection title={t("pages.library.order")}>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
               <button
                 type="button"
@@ -1172,7 +1173,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
               </button>
             </div>
-          </section>
+          </FilterSection>
 
           {(
             [
@@ -1182,8 +1183,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           ).map(([which, heading, facets, selected]) => {
             const options = languageOptions(facets, [...selected]);
             return (
-              <section key={which} data-language-filter={which}>
-                <h3>{heading}</h3>
+              <FilterSection key={which} title={heading} data-language-filter={which}>
                 {options.length === 0 ? (
                   <p>{t("pages.library.noLanguages")}</p>
                 ) : (
@@ -1201,17 +1201,17 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     ))}
                   </div>
                 )}
-              </section>
+              </FilterSection>
             );
           })}
           {audioLangs.length + subtitleLangs.length > 0 ? (
-            <section>
+            <FilterSection>
               <div className="tv-filter-choice-grid">
                 <button type="button" onClick={clearLanguages}>
                   {t("pages.library.clearLanguages")}
                 </button>
               </div>
-            </section>
+            </FilterSection>
           ) : null}
       </FiltersDrawer>
 
@@ -1232,7 +1232,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         </nav>
       ) : null}
       {mediaContext.contextMenu}
-    </TvStageShell>
+    </PageLayout>
   );
 }
 
