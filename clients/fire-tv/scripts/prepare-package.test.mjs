@@ -5,12 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 import {preparePackage, readPngDimensions, tomlStringField} from './prepare-package.mjs';
 
-function fakePng(width, height) {
-  const data = Buffer.alloc(24);
+function fakePng(width, height, bitDepth = 8) {
+  const data = Buffer.alloc(26);
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(data);
   data.write('IHDR', 12, 'ascii');
   data.writeUInt32BE(width, 16);
   data.writeUInt32BE(height, 20);
+  data.writeUInt8(bitDepth, 24);
   return data;
 }
 
@@ -53,7 +54,7 @@ test('tomlStringField extracts a value from an array-of-tables heading', () => {
 });
 
 test('readPngDimensions reads width/height straight from the IHDR chunk', () => {
-  assert.deepEqual(readPngDimensions(fakePng(512, 512), 'x.png'), {width: 512, height: 512});
+  assert.deepEqual(readPngDimensions(fakePng(512, 512), 'x.png'), {width: 512, height: 512, bitDepth: 8});
 });
 
 test('readPngDimensions rejects a non-PNG buffer', () => {
@@ -92,15 +93,38 @@ test('rejects a non-square PlayarrIcon.png', async () => {
   await validProjectTree(root);
   await writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(512, 480));
 
-  await assert.rejects(preparePackage({sourceRoot: root}), /must be square/);
+  await assert.rejects(preparePackage({sourceRoot: root}), /must be exactly 512x512px/);
 });
 
-test('rejects a too-small PlayarrIcon.png', async () => {
+test('rejects a wrong-sized PlayarrIcon.png', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-icon-small-'));
   await validProjectTree(root);
   await writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(64, 64));
 
-  await assert.rejects(preparePackage({sourceRoot: root}), /too small/);
+  await assert.rejects(preparePackage({sourceRoot: root}), /must be exactly 512x512px/);
+});
+
+test('rejects a 16-bit PlayarrIcon.png (the launcher draws no icon for it)', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-icon-16bit-'));
+  await validProjectTree(root);
+  await writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(512, 512, 16));
+
+  await assert.rejects(preparePackage({sourceRoot: root}), /must be an 8-bit PNG/);
+});
+
+test('rejects a PlayarrIcon.png over the 1 MB Vega limit', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-icon-big-'));
+  await validProjectTree(root);
+  await writeFile(
+    path.join(root, 'assets', 'image', 'PlayarrIcon.png'),
+    Buffer.concat([fakePng(512, 512), Buffer.alloc(1024 * 1024)])
+  );
+
+  await assert.rejects(preparePackage({sourceRoot: root}), /Vega icon limit/);
+});
+
+test('the committed assets pass the package gate', async () => {
+  await preparePackage();
 });
 
 test('rejects a PlayarrLargeIcon.png that is not 16:9', async () => {

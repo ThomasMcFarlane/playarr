@@ -38,6 +38,9 @@ export function readPngDimensions(contents, fileName) {
   return {
     width: contents.readUInt32BE(16),
     height: contents.readUInt32BE(20),
+    // IHDR bytes 24 and 25: bit depth and colour type. Absent on the hand-built
+    // 24-byte buffers older callers pass, hence the guard.
+    bitDepth: contents.length > 24 ? contents.readUInt8(24) : undefined,
   };
 }
 
@@ -84,17 +87,20 @@ export function tomlStringField(tomlText, heading, key) {
   return fieldMatch?.[1];
 }
 
-function assertSquareIcon(fileName, {width, height}) {
-  // Vega's actual required icon pixel dimensions are not documented
-  // anywhere this design's research reached (design doc's own icon-size
-  // web search came back empty-handed) -- this is deliberately a loose,
-  // sanity-only check (square, not tiny) rather than a specific number
-  // presented as verified fact it is not.
-  if (width !== height) {
-    throw new Error(`${fileName} must be square (received ${width}x${height}px)`);
+/** Amazon's Vega manifest reference for [package] icon: 512x512, PNG, at most 1 MB. */
+const ICON_SIZE = 512;
+const ICON_MAX_BYTES = 1024 * 1024;
+
+function assertPackageIcon(fileName, {width, height, bitDepth}, byteLength) {
+  if (width !== ICON_SIZE || height !== ICON_SIZE) {
+    throw new Error(`${fileName} must be exactly ${ICON_SIZE}x${ICON_SIZE}px (received ${width}x${height}px)`);
   }
-  if (width < 256) {
-    throw new Error(`${fileName} is only ${width}x${height}px -- too small for a TV launcher icon`);
+  if (byteLength > ICON_MAX_BYTES) {
+    throw new Error(`${fileName} is ${byteLength} bytes; the Vega icon limit is ${ICON_MAX_BYTES}`);
+  }
+  // The launcher draws no icon (it shows the generic grey tile) for 16-bit PNGs.
+  if (bitDepth !== undefined && bitDepth !== 8) {
+    throw new Error(`${fileName} must be an 8-bit PNG (received ${bitDepth}-bit)`);
   }
 }
 
@@ -155,7 +161,7 @@ export async function preparePackage({sourceRoot = projectRoot} = {}) {
   const iconContents = await readFile(iconPath).catch(() => {
     throw new Error(`manifest.toml references assets/image/${iconFileName}, but that file does not exist`);
   });
-  assertSquareIcon(iconFileName, readPngDimensions(iconContents, iconFileName));
+  assertPackageIcon(iconFileName, readPngDimensions(iconContents, iconFileName), iconContents.length);
 
   const largeIconPath = path.join(sourceRoot, 'assets', 'image', 'PlayarrLargeIcon.png');
   const largeIconContents = await readFile(largeIconPath).catch(() => {
