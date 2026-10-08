@@ -16,8 +16,10 @@
 //! dependency direction -- unable to use it). Callers map
 //! [`ArtworkCacheError`] into their own error type.
 
+mod resize;
 mod style;
 
+pub use resize::{snap_width, ALLOWED_WIDTHS};
 pub use style::{apply_artwork_style, ArtworkStyle, ArtworkStyleError};
 
 use std::path::{Path as FsPath, PathBuf};
@@ -644,6 +646,79 @@ impl ArtworkCache {
         })
     }
 
+    /// A width-limited derivative of `art` (raw or styled), materialised next to it and reused on
+    /// later hits. `width` is snapped up to one of [`ALLOWED_WIDTHS`] so the number of variants per
+    /// image stays small. An image that is already no wider than the snapped width is returned
+    /// unchanged (never upscaled).
+    pub async fn ensure_resized(
+        &self,
+        art: CachedArtwork,
+        width: u32,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        let width = snap_width(width);
+        let Some(resized_path) = resize::resized_cache_path(&art.path, width) else {
+            return Ok(art);
+        };
+        let content_type = resize::output_content_type(art.content_type);
+        let done = |path: PathBuf| CachedArtwork {
+            path,
+            content_type,
+            url_hash: art.url_hash,
+        };
+        if tokio::fs::try_exists(&resized_path).await.unwrap_or(false) {
+            return Ok(done(resized_path));
+        }
+        // A marker file records "already small enough": the original is served without re-decoding.
+        let keep_marker = resize::keep_marker_path(&resized_path);
+        if tokio::fs::try_exists(&keep_marker).await.unwrap_or(false) {
+            return Ok(art);
+        }
+        let lock_key = resized_path.to_string_lossy().into_owned();
+        let lock = {
+            let entry = self
+                .fill_locks
+                .entry(lock_key.clone())
+                .or_insert_with(|| Arc::new(Mutex::new(())));
+            entry.value().clone()
+        };
+        let _guard = lock.lock().await;
+        if tokio::fs::try_exists(&resized_path).await.unwrap_or(false) {
+            self.fill_locks.remove(&lock_key);
+            return Ok(done(resized_path));
+        }
+        let source = tokio::fs::read(&art.path).await.map_err(|error| {
+            ArtworkCacheError::Io(format!("could not read cached artwork: {error}"))
+        })?;
+        let resized = tokio::task::spawn_blocking(move || resize::resize_to_width(&source, width))
+            .await
+            .map_err(|error| ArtworkCacheError::Io(format!("resize worker join failed: {error}")))?
+            .map_err(ArtworkCacheError::Io)?;
+        let Some(bytes) = resized else {
+            let _ = tokio::fs::write(&keep_marker, b"").await;
+            self.fill_locks.remove(&lock_key);
+            return Ok(art);
+        };
+        let directory = resized_path.parent().ok_or_else(|| {
+            ArtworkCacheError::Io("resized artwork path has no parent directory".into())
+        })?;
+        let temp_path = directory.join(format!("resize-{width}-{}.tmp", Uuid::new_v4()));
+        tokio::fs::write(&temp_path, &bytes)
+            .await
+            .map_err(|error| {
+                ArtworkCacheError::Io(format!("could not write resized artwork: {error}"))
+            })?;
+        if let Err(error) = tokio::fs::rename(&temp_path, &resized_path).await {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            if !tokio::fs::try_exists(&resized_path).await.unwrap_or(false) {
+                return Err(ArtworkCacheError::Io(format!(
+                    "could not commit resized artwork: {error}"
+                )));
+            }
+        }
+        self.fill_locks.remove(&lock_key);
+        Ok(done(resized_path))
+    }
+
     /// `true` if every image kind attached to `images` is already cached
     /// locally -- lets `playarr-arr-sync`'s prewarm job skip a work
     /// entirely (no HTTP calls at all) when a previous pass already
@@ -784,5 +859,38 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(ArtworkCacheError::InvalidUrl(_))));
+    }
+
+    #[tokio::test]
+    async fn ensure_resized_writes_a_cached_smaller_derivative_and_reuses_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join("poster-abc.jpg");
+        let image = image::RgbImage::from_pixel(1200, 1800, image::Rgb([10, 20, 30]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90)
+            .encode_image(&image)
+            .unwrap();
+        tokio::fs::write(&raw, &bytes).await.unwrap();
+        let cache = ArtworkCache::new();
+        let art = |path: &PathBuf| CachedArtwork {
+            path: path.clone(),
+            content_type: "image/jpeg",
+            url_hash: 1,
+        };
+        let small = cache.ensure_resized(art(&raw), 200).await.unwrap();
+        assert_eq!(small.path, dir.path().join("poster-abc.w240.jpg"));
+        assert!(tokio::fs::metadata(&small.path).await.unwrap().len() < bytes.len() as u64);
+        let again = cache.ensure_resized(art(&raw), 240).await.unwrap();
+        assert_eq!(again.path, small.path);
+        // Already narrower than the requested width: the original is served, never upscaled.
+        let narrow = dir.path().join("poster-def.jpg");
+        let small_image = image::RgbImage::from_pixel(100, 150, image::Rgb([1, 2, 3]));
+        let mut small_bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut small_bytes, 90)
+            .encode_image(&small_image)
+            .unwrap();
+        tokio::fs::write(&narrow, &small_bytes).await.unwrap();
+        let same = cache.ensure_resized(art(&narrow), 240).await.unwrap();
+        assert_eq!(same.path, narrow);
     }
 }

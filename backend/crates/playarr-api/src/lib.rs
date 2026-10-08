@@ -44,6 +44,7 @@ pub mod folders;
 pub mod health;
 pub mod home_rails;
 pub mod household;
+pub mod http_cache;
 pub mod ics;
 pub mod language_index;
 pub mod login;
@@ -1026,6 +1027,9 @@ pub fn build_router_with_tv(
         );
 
     let router = router
+        // The ETag layer hashes the identity bytes, so it sits inside the compression layer.
+        .layer(axum::middleware::from_fn(http_cache::json_cache_middleware))
+        .layer(http_cache::compression_layer())
         .layer(version_gate)
         .layer(
             // CorsLayer::permissive() emits the literal Access-Control-Allow-Headers: *, and the

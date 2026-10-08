@@ -2557,6 +2557,24 @@ paths:
           type:
           - string
           - 'null'
+      - name: w
+        in: query
+        description: Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      - name: v
+        in: query
+        description: 'An opaque version token the client derives from the artwork''s source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached album artwork (optionally style-baked)
@@ -2612,6 +2630,24 @@ paths:
           type:
           - string
           - 'null'
+      - name: w
+        in: query
+        description: Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      - name: v
+        in: query
+        description: 'An opaque version token the client derives from the artwork''s source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached episode artwork (optionally style-baked)
@@ -2655,6 +2691,24 @@ paths:
       - name: style
         in: query
         description: 'Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: w
+        in: query
+        description: Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      - name: v
+        in: query
+        description: 'An opaque version token the client derives from the artwork''s source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable.'
         required: false
         schema:
           type:
@@ -3381,6 +3435,14 @@ paths:
         schema:
           type:
           - string
+          - 'null'
+      - name: available_only
+        in: query
+        description: Keep only works with at least one playable media file, applied before the limit.
+        required: false
+        schema:
+          type:
+          - boolean
           - 'null'
       responses:
         '200':

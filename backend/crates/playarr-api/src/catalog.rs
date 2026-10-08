@@ -167,6 +167,9 @@ pub struct SearchQueryParams {
     pub lang_match: Option<String>,
     /// See `BrowseQueryParams::lang_scope`.
     pub lang_scope: Option<String>,
+    /// Keep only works with at least one playable media file, applied before the limit.
+    #[serde(default)]
+    pub available_only: Option<bool>,
 }
 
 /// One available language with the number of works that carry it.
@@ -612,11 +615,12 @@ pub async fn search_catalog_handler(
     );
     let items = state
         .catalog
-        .search_with_languages(
+        .search_ranked(
             &params.q,
             limit,
             crate::household::access(allowed.as_deref(), gate.as_deref()),
             &languages,
+            params.available_only.unwrap_or(false),
         )
         .await?;
     // Peer-only titles cannot be rated locally: hidden under content rules.

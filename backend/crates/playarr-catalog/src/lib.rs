@@ -1473,6 +1473,21 @@ impl CatalogService {
         access: Access<'_>,
         languages: &LanguageFilter,
     ) -> Result<Vec<Work>, CatalogError> {
+        self.search_ranked(query, limit, access, languages, false)
+            .await
+    }
+
+    /// [`Self::search_with_languages`] that can also keep only works with at least one playable
+    /// media file (the same meaning as `BrowseQuery::available_only`), applied after ranking and
+    /// before truncating, so a client never has to walk the whole catalogue to filter results.
+    pub async fn search_ranked(
+        &self,
+        query: &str,
+        limit: i64,
+        access: Access<'_>,
+        languages: &LanguageFilter,
+        available_only: bool,
+    ) -> Result<Vec<Work>, CatalogError> {
         let allowed_source_instance_ids = access.allowed;
 
         let raw_needle = query.trim();
@@ -1491,6 +1506,9 @@ impl CatalogService {
         );
         if !languages.is_empty() {
             cache_key.push_str(&format!(":lang={languages:?}"));
+        }
+        if available_only {
+            cache_key.push_str(":available");
         }
         if let Some(cached) = self.cache.get(&cache_key).await? {
             if let Ok(items) = serde_json::from_slice::<Vec<Work>>(&cached) {
@@ -1526,12 +1544,23 @@ impl CatalogService {
         let mut ranked: Vec<Work> = scored.into_iter().map(|(work, _, _)| work).collect();
         self.apply_language_filter(&mut ranked, languages).await?;
 
+        let playable_work_ids = if available_only {
+            Some(self.media_file_repo.list_work_ids().await?)
+        } else {
+            None
+        };
         let mut matches: Vec<Work> = Vec::with_capacity(ranked.len().min(limit.max(1)));
         for work in ranked {
             if matches.len() >= limit {
                 break;
             }
             if !access.permits(&work) {
+                continue;
+            }
+            if playable_work_ids
+                .as_ref()
+                .is_some_and(|playable| !playable.contains(&work.id))
+            {
                 continue;
             }
             if let Some(allowed) = allowed_source_instance_ids {
@@ -3152,6 +3181,33 @@ mod tests {
 
         let denied_all = svc.search("findme", 10, Some(&[])).await.unwrap();
         assert!(denied_all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn search_available_only_drops_works_without_a_media_file_before_the_limit() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let playable = movie("Findme Playable", "Findme Playable", &[], 0);
+        let playable_id = playable.id;
+        repo.upsert(&playable).await.unwrap();
+        // Sorts first (an exact tier tie broken alphabetically) but has no media file.
+        let unplayable = movie("Findme Absent", "Findme Absent", &[], 0);
+        repo.upsert(&unplayable).await.unwrap();
+        seed_media_file_for_source(&pool, playable_id, LeafRef::Work, Uuid::new_v4()).await;
+        let svc = service(pool, repo);
+        let access = || Access::from(None::<&[Uuid]>);
+
+        let all = svc
+            .search_ranked("findme", 10, access(), &LanguageFilter::default(), false)
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 2);
+        let only = svc
+            .search_ranked("findme", 1, access(), &LanguageFilter::default(), true)
+            .await
+            .unwrap();
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].id, playable_id);
     }
 
     fn embedding_repo(pool: DbPool) -> Arc<dyn playarr_db::EmbeddingRepo> {

@@ -18,3 +18,4 @@ playarr-model = { path = "../playarr-model" }
 [dev-dependencies]
 tokio = { workspace = true }
 wiremock = "0.6"
+tempfile = "3"

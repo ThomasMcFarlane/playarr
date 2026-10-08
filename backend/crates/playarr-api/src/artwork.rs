@@ -32,6 +32,9 @@ use crate::error::ApiError;
 use crate::AppState;
 
 const ARTWORK_CACHE_CONTROL: &str = "private, max-age=604800, stale-while-revalidate=2592000";
+/// For a URL that carries a version token (`v=`): the bytes behind it never change, so a browser
+/// never needs to revalidate. `private` because artwork needs a signed-in user.
+const ARTWORK_IMMUTABLE_CACHE_CONTROL: &str = "private, max-age=31536000, immutable";
 
 impl From<ArtworkCacheError> for ApiError {
     fn from(err: ArtworkCacheError) -> Self {
@@ -82,6 +85,30 @@ pub struct ArtworkQuery {
     /// Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend), or `stage-grey` / `stage-grey-light` (the same greyscale as an opaque JPEG with no opacity or fade baked in).
     #[serde(default)]
     pub style: Option<String>,
+    /// Longest useful width in pixels. Snapped up to one of 160, 240, 360, 540, 780, 1280 or 1920; an image already no wider is served as is. Omit for the full-size image.
+    #[serde(default)]
+    pub w: Option<u32>,
+    /// An opaque version token the client derives from the artwork's source (for example a hash of its URL). It does not change what is served: it makes the URL content-addressed, which is what allows the response to be cached as immutable.
+    #[serde(default)]
+    pub v: Option<String>,
+}
+
+/// `Some(width)` for a usable `w`, `None` when absent. `w=0` is rejected.
+fn parse_width(raw: Option<u32>) -> Result<Option<u32>, ApiError> {
+    match raw {
+        None => Ok(None),
+        Some(0) => Err(ApiError::bad_request("artwork width must be at least 1")),
+        Some(width) => Ok(Some(playarr_artwork::snap_width(width))),
+    }
+}
+
+/// A version token is a short run of URL-safe characters.
+fn valid_version(raw: Option<&str>) -> bool {
+    raw.is_some_and(|v| {
+        (1..=64).contains(&v.len())
+            && v.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    })
 }
 
 fn parse_artwork_style(raw: Option<&str>) -> Result<ArtworkStyle, ApiError> {
@@ -206,14 +233,22 @@ async fn artwork_response(
     content_type: &'static str,
     url_hash: u64,
     style: ArtworkStyle,
+    width: Option<u32>,
+    immutable: bool,
     headers: &HeaderMap,
 ) -> Result<Response, ApiError> {
+    let cache_control = if immutable {
+        ARTWORK_IMMUTABLE_CACHE_CONTROL
+    } else {
+        ARTWORK_CACHE_CONTROL
+    };
     let metadata = tokio::fs::metadata(path)
         .await
         .map_err(|error| ApiError::internal(format!("could not read cached artwork: {error}")))?;
     let etag = format!(
-        "\"{url_hash:016x}-{}-{:x}\"",
+        "\"{url_hash:016x}-{}{}-{:x}\"",
         style.as_str(),
+        width.map(|w| format!("-w{w}")).unwrap_or_default(),
         metadata.len()
     );
     if headers
@@ -224,7 +259,7 @@ async fn artwork_response(
         return Response::builder()
             .status(StatusCode::NOT_MODIFIED)
             .header(ETAG, etag)
-            .header(CACHE_CONTROL, ARTWORK_CACHE_CONTROL)
+            .header(CACHE_CONTROL, cache_control)
             .body(Body::empty())
             .map_err(|error| ApiError::internal(error.to_string()));
     }
@@ -237,7 +272,7 @@ async fn artwork_response(
         .header(CONTENT_TYPE, HeaderValue::from_static(content_type))
         .header(CONTENT_LENGTH, bytes.len())
         .header(ETAG, etag)
-        .header(CACHE_CONTROL, ARTWORK_CACHE_CONTROL)
+        .header(CACHE_CONTROL, cache_control)
         .body(Body::from(bytes))
         .map_err(|error| ApiError::internal(error.to_string()))
 }
@@ -271,6 +306,8 @@ pub async fn work_artwork_handler(
 ) -> Result<Response, ApiError> {
     let kind = parse_image_kind(&kind)?;
     let style = parse_artwork_style(query.style.as_deref())?;
+    let width = parse_width(query.w)?;
+    let immutable = valid_version(query.v.as_deref());
     let allowed = viewer.allowed_libraries();
     let detail = state.catalog.get_by_id(work_id, allowed.as_deref()).await?;
     let source = artwork_source_from_images(
@@ -280,11 +317,21 @@ pub async fn work_artwork_handler(
         kind,
     )?;
     let cached = ensure_artwork_cached(work_id, kind, source, style).await?;
+    let cached = match width {
+        Some(width) => {
+            playarr_artwork::shared()
+                .ensure_resized(cached, width)
+                .await?
+        }
+        None => cached,
+    };
     artwork_response(
         &cached.path,
         cached.content_type,
         cached.url_hash,
         style,
+        width,
+        immutable,
         &headers,
     )
     .await
@@ -320,6 +367,8 @@ pub async fn album_artwork_handler(
 ) -> Result<Response, ApiError> {
     let kind = parse_image_kind(&kind)?;
     let style = parse_artwork_style(query.style.as_deref())?;
+    let width = parse_width(query.w)?;
+    let immutable = valid_version(query.v.as_deref());
     let allowed = viewer.allowed_libraries();
     let detail = state
         .catalog
@@ -341,11 +390,21 @@ pub async fn album_artwork_handler(
         kind,
     )?;
     let cached = ensure_artwork_cached(album_id, kind, source, style).await?;
+    let cached = match width {
+        Some(width) => {
+            playarr_artwork::shared()
+                .ensure_resized(cached, width)
+                .await?
+        }
+        None => cached,
+    };
     artwork_response(
         &cached.path,
         cached.content_type,
         cached.url_hash,
         style,
+        width,
+        immutable,
         &headers,
     )
     .await
@@ -393,6 +452,8 @@ pub async fn episode_artwork_handler(
 ) -> Result<Response, ApiError> {
     let kind = parse_image_kind(&kind)?;
     let style = parse_artwork_style(query.style.as_deref())?;
+    let width = parse_width(query.w)?;
+    let immutable = valid_version(query.v.as_deref());
     let allowed = viewer.allowed_libraries();
     let detail = state
         .catalog
@@ -408,11 +469,21 @@ pub async fn episode_artwork_handler(
     let source =
         artwork_source_from_images(&state, images, &format!("episode {episode_id}"), kind)?;
     let cached = ensure_artwork_cached(episode_id, kind, source, style).await?;
+    let cached = match width {
+        Some(width) => {
+            playarr_artwork::shared()
+                .ensure_resized(cached, width)
+                .await?
+        }
+        None => cached,
+    };
     artwork_response(
         &cached.path,
         cached.content_type,
         cached.url_hash,
         style,
+        width,
+        immutable,
         &headers,
     )
     .await
@@ -735,5 +806,71 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get(CONTENT_TYPE).unwrap(), "image/jpeg");
+    }
+
+    #[test]
+    fn width_and_version_parameters_are_validated() {
+        assert_eq!(parse_width(None).unwrap(), None);
+        assert_eq!(parse_width(Some(200)).unwrap(), Some(240));
+        assert!(parse_width(Some(0)).is_err());
+        assert!(valid_version(Some("5f64d67237edac61")));
+        assert!(!valid_version(Some("")));
+        assert!(!valid_version(Some("a b")));
+        assert!(!valid_version(None));
+    }
+
+    #[tokio::test]
+    async fn versioned_urls_are_immutable_and_unversioned_ones_are_revalidated_later() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("poster-1.jpg");
+        tokio::fs::write(&file, b"jpeg").await.unwrap();
+        let versioned = artwork_response(
+            &file,
+            "image/jpeg",
+            7,
+            ArtworkStyle::Original,
+            Some(240),
+            true,
+            &HeaderMap::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            versioned.headers()[CACHE_CONTROL],
+            ARTWORK_IMMUTABLE_CACHE_CONTROL
+        );
+        let etag = versioned.headers()[ETAG].to_str().unwrap().to_owned();
+        assert!(etag.contains("-w240-"));
+        let plain = artwork_response(
+            &file,
+            "image/jpeg",
+            7,
+            ArtworkStyle::Original,
+            None,
+            false,
+            &HeaderMap::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain.headers()[CACHE_CONTROL], ARTWORK_CACHE_CONTROL);
+        assert_ne!(plain.headers()[ETAG].to_str().unwrap(), etag);
+        let mut conditional = HeaderMap::new();
+        conditional.insert(IF_NONE_MATCH, HeaderValue::from_str(&etag).unwrap());
+        let not_modified = artwork_response(
+            &file,
+            "image/jpeg",
+            7,
+            ArtworkStyle::Original,
+            Some(240),
+            true,
+            &conditional,
+        )
+        .await
+        .unwrap();
+        assert_eq!(not_modified.status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(
+            not_modified.headers()[CACHE_CONTROL],
+            ARTWORK_IMMUTABLE_CACHE_CONTROL
+        );
     }
 }
