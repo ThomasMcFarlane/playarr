@@ -115,11 +115,7 @@ export function SettingsRemotePage() {
   const live = pairings.filter((p) => p.status === "active" || p.status === "pending");
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.index.remote.title")}
-      title={t("settings.index.remote.title")}
-      description={t("settings.index.remote.description")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <h3>{t("remote.host.title")}</h3>
         <label className="remote-toggle">

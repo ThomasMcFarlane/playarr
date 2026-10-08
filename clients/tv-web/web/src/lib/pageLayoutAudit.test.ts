@@ -56,7 +56,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "pages/Home.tsx": 1,
     "pages/MusicDetail.tsx": 2,
     "pages/WorkDetail.tsx": 2,
-    "pages/settings/Index.tsx": 2,
   },
   /** None allowed. */
   pill: {},
@@ -84,7 +83,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "pages/NavPerfHarness.tsx": 1,
     "pages/Playlists.tsx": 1,
     "pages/Profiles.tsx": 1,
-    "pages/settings/Index.tsx": 2,
     "pages/settings/ProfileAvatar.tsx": 1,
   },
   /** Pages with hand-made states (W3, W6) and inline field errors or status text in components that are not page states. */
@@ -112,7 +110,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "pages/settings/Invite.tsx": 2,
     "pages/settings/ProfileAvatar.tsx": 1,
     "pages/settings/Remote.tsx": 1,
-    "pages/settings/RequestLatency.tsx": 1,
     "pages/settings/YourData.tsx": 3,
   },
 };

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { isValidElement, useLayoutEffect, useRef, useState } from "react";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { detailFitsInline } from "../../lib/pageHeaderLayout";
 import { Button, ButtonLink } from "../ui";
@@ -34,8 +34,13 @@ type BackProps = { label: string } & ({ to: string } | { onBack: () => void });
 export interface PageHeaderProps {
   /** Large page title (`<h1>`). */
   title: ReactNode;
-  /** Secondary text after the divider (counts, section name, breadcrumb). In the `detail` variant it is the item title. */
-  detail?: ReactNode;
+  /**
+   * Secondary text after the divider (counts, section name, breadcrumb). In the `detail` variant it is the item title.
+   * `{ title, description }` is the two-line section detail (Settings): the section name over its description.
+   */
+  detail?: ReactNode | SectionDetail;
+  /** Phones show either the page title or the detail, never both (Settings: the list shows the title, a section the detail). */
+  mobileShow?: "title" | "detail";
   /** Back control: where it goes, and its accessible label. Home is the default destination. */
   back?: BackProps;
   /**
@@ -68,6 +73,15 @@ export interface PageHeaderProps {
   className?: string;
 }
 
+export interface SectionDetail {
+  title: string;
+  description?: string;
+}
+
+function isSectionDetail(value: unknown): value is SectionDetail {
+  return Boolean(value) && typeof value === "object" && !isValidElement(value) && "title" in (value as object);
+}
+
 function isActionList(value: unknown): value is PageAction[] {
   return Array.isArray(value) && value.every((item) => item && typeof item === "object" && "kind" in item);
 }
@@ -88,6 +102,7 @@ function naturalWidth(element: HTMLElement): number {
 export function PageHeader({
   title,
   detail,
+  mobileShow,
   back,
   actions,
   variant = "page",
@@ -170,7 +185,7 @@ export function PageHeader({
     .join(" ");
   return (
     <>
-    <header ref={headerRef} className={classes}>
+    <header ref={headerRef} className={classes} data-mobile-show={mobileShow}>
       {onBack ? (
         <Button
           variant="icon"
@@ -199,9 +214,18 @@ export function PageHeader({
         {detail ? (
           <span
             ref={detailRef}
-            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${detailClassName ? ` ${detailClassName}` : ""}`}
+            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${isSectionDetail(detail) ? " is-section" : ""}${detailClassName ? ` ${detailClassName}` : ""}`}
           >
-            {isDetail ? <strong>{detail}</strong> : detail}
+            {isSectionDetail(detail) ? (
+              <>
+                <strong>{detail.title}</strong>
+                {detail.description ? <small>{detail.description}</small> : null}
+              </>
+            ) : isDetail ? (
+              <strong>{detail as ReactNode}</strong>
+            ) : (
+              (detail as ReactNode)
+            )}
           </span>
         ) : null}
       </div>

@@ -3,7 +3,7 @@ import { ApiError, type HttpRouteLatency } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
-import { TvEmptyState } from "../../components/tv/TvEmptyState";
+import { EmptyState, ErrorState, LoadingState } from "../../components/shell";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 export type HttpLatencyState =
@@ -28,7 +28,7 @@ export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
   if (state.status === "loading") {
     return (
       <section className="card settings-card settings-card-wide">
-        <p className="muted">{t("settings.requestLatency.loading")}</p>
+        <LoadingState size="inline" label={t("settings.requestLatency.loading")} />
       </section>
     );
   }
@@ -36,8 +36,7 @@ export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
   if (state.status === "forbidden") {
     return (
       <section className="card settings-card settings-card-wide">
-        <TvEmptyState
-          variant="page"
+        <EmptyState
           graphic="details"
           title={t("settings.requestLatency.forbiddenTitle")}
           description={t("settings.requestLatency.forbiddenDescription")}
@@ -49,9 +48,7 @@ export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
   if (state.status === "error") {
     return (
       <section className="card settings-card settings-card-wide">
-        <p className="error-text" role="alert">
-          {state.message}
-        </p>
+        <ErrorState graphic="details" title={t("settings.requestLatency.errorTitle")} description={state.message} />
       </section>
     );
   }
@@ -59,8 +56,7 @@ export function RequestLatencyContent({ state }: { state: HttpLatencyState }) {
   if (state.metrics.length === 0) {
     return (
       <section className="card settings-card settings-card-wide">
-        <TvEmptyState
-          variant="page"
+        <EmptyState
           graphic="details"
           title={t("settings.requestLatency.emptyTitle")}
           description={t("settings.requestLatency.emptyDescription")}
@@ -153,11 +149,7 @@ export function SettingsRequestLatencyPage() {
   }, [client]);
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.requestLatency.kicker")}
-      title={t("settings.requestLatency.title")}
-      description={t("settings.requestLatency.description")}
-    >
+    <SettingsSectionLayout>
       <RequestLatencyContent state={state} />
     </SettingsSectionLayout>
   );

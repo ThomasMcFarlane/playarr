@@ -98,7 +98,8 @@ describe("RequestLatencyContent", () => {
     const markup = renderContent({ status: "error", message: "Network error" });
 
     expect(markup).not.toContain("<table");
-    expect(markup).toContain('class="error-text"');
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Request latency could not be loaded");
     expect(markup).toContain("Network error");
   });
 

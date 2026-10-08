@@ -17,8 +17,7 @@ import {
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import { PRODUCT_SETTINGS_SECTIONS } from "../../lib/productSurfaces";
-import { PageHeader } from "../../components/shell";
-import { TvStageShell } from "../../components/tv/TvStage";
+import { PageLayout, ScrollArea } from "../../components/shell";
 
 interface SettingsSection {
   to: string;
@@ -224,35 +223,24 @@ export function SettingsIndexPage() {
   }
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="settings"
       className={`tv-library tv-directory settings-page settings-workspace-page ${
         isSettingsIndex ? "settings-index-route" : "settings-detail-route"
       }`}
       ariaLabel={t("settings.index.sectionsAriaLabel")}
+      header={{
+        title: t("settings.index.title"),
+        back: { label: t("settings.sectionLayout.backLink"), onBack: leaveSettings },
+        backProps: { "data-tv-focus-default": true },
+        detail: { title: activeSection.title, description: activeSection.description },
+        mobileShow: isSettingsIndex ? "title" : "detail",
+      }}
     >
-      <PageHeader
-        title={t("settings.index.title")}
-        backLabel={t("settings.sectionLayout.backLink")}
-        onBack={leaveSettings}
-        backProps={{ "data-tv-focus-default": true }}
-        detailClassName="settings-heading-detail"
-        detail={
-          <>
-            <strong>{activeSection.title}</strong>
-            <small>{activeSection.description}</small>
-          </>
-        }
-      />
-
       <div className="settings-workspace">
         <div className="settings-workspace-track">
-          <nav
-            className="settings-options-panel"
-            aria-label={t("settings.index.sectionsAriaLabel")}
-            data-tv-scroll-container
-            data-tv-scroll-axis="vertical"
-            data-navigation-scroll-key="settings:options"
-          >
+          <nav className="settings-options-panel" aria-label={t("settings.index.sectionsAriaLabel")}>
+            <ScrollArea axis="vertical" scrollKey="settings:options" className="settings-options-scroll">
             <ol className="settings-options-list">
               {settingsSections.map((section) => {
                 const isActive = section.to === activeSection?.to;
@@ -285,6 +273,7 @@ export function SettingsIndexPage() {
                 );
               })}
             </ol>
+            </ScrollArea>
           </nav>
 
           <section
@@ -293,17 +282,17 @@ export function SettingsIndexPage() {
             aria-label={activeSection?.title}
             onKeyDownCapture={handleDetailKeyDown}
           >
-            <div
+            <ScrollArea
+              axis="vertical"
+              scrollKey={`settings:detail:${activeSection.number}`}
               className="settings-detail-scroll"
-              data-tv-scroll-container
-              data-tv-scroll-axis="vertical"
-              data-navigation-scroll-key={`settings:detail:${activeSection.number}`}
+              refreshKey={location.pathname}
             >
               <Outlet />
-            </div>
+            </ScrollArea>
           </section>
         </div>
       </div>
-    </TvStageShell>
+    </PageLayout>
   );
 }

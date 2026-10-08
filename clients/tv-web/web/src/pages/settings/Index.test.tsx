@@ -64,7 +64,7 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');
     expect(markup).toContain('id="settings-active-option"');
     expect(markup).toContain("Appearance controls");
-    expect(markup).toContain('<span class="page-header-detail settings-heading-detail"><strong>Appearance</strong>');
+    expect(markup).toContain('<span class="page-header-detail is-section"><strong>Appearance</strong>');
   });
 
   it("returns focus to the list only at the detail panel's left boundary", () => {
@@ -102,10 +102,10 @@ describe("SettingsIndexPage", () => {
   it("separates the mobile settings menu from routed page content", () => {
     const indexMarkup = renderSettingsRoute("/settings");
     const detailMarkup = renderSettingsRoute("/settings/appearance");
-    const css = readFileSync(
-      new URL("../../styles/global.css", import.meta.url),
-      "utf8"
-    );
+    const css = [
+      readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8"),
+      readFileSync(new URL("../../styles/page-layout.css", import.meta.url), "utf8"),
+    ].join("\n");
 
     expect(indexMarkup).toContain("settings-index-route");
     expect(detailMarkup).toContain("settings-detail-route");
@@ -124,7 +124,7 @@ describe("SettingsIndexPage", () => {
       /\.settings-index-route \.settings-detail-panel,\s*\.settings-detail-route \.settings-options-panel\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
-      /\.settings-index-route \.tv-library-heading > \.page-header-title-block > \.settings-heading-detail,\s*\.settings-detail-route \.tv-library-heading h1\s*\{[^}]*display:\s*none/s
+      /\.page-header\[data-mobile-show="title"\] > \.page-header-title-block > \.page-header-detail,\s*\.page-header\[data-mobile-show="detail"\] h1\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
       /\.settings-index-route \.settings-option-copy small,\s*\.settings-index-route \.settings-option-arrow\s*\{[^}]*display:\s*block/s
@@ -151,7 +151,7 @@ describe("SettingsIndexPage", () => {
     expect(css).toMatch(/\.tv-library-grid-panel\s*\{[^}]*width:\s*65%[^}]*height:\s*100%/s);
     expect(css).toMatch(/\.app-clock\s*\{[^}]*right:\s*calc\(65%\s*\+/s);
     expect(css).toMatch(
-      /\.settings-options-panel,\s*\.settings-detail-scroll\s*\{[^}]*overflow-y:\s*auto/s
+      /\.settings-options-scroll,\s*\.settings-detail-scroll\s*\{[^}]*overflow-y:\s*auto/s
     );
   });
 });

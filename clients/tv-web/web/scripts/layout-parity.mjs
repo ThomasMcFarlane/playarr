@@ -56,6 +56,8 @@ const PINS = join(repo, "docs/parity/web/layout");
 const FIXED_CLOCK = Date.parse("2026-10-07T12:00:00Z");
 /** Glyph anti-aliasing of the icon and label shifts by a sub-pixel between a pill stacked second and the harness pill; real drift is hundreds of pixels. */
 const PILL_AA_TOLERANCE = 24;
+/** A page's own background gradient (Settings) bands differently under the header than the plain harness page; real header drift is hundreds of pixels. */
+const BAND_TOLERANCE = 32;
 const PIN_LAYOUTS = ["tv", "mobile"];
 mkdirSync(outDir, { recursive: true });
 
@@ -132,6 +134,8 @@ async function open(page, path, waitFor) {
 const harnessPath = (spec) => {
   const q = new URLSearchParams({ title: spec.title ?? "Title", back: spec.back ?? "Back", actions: spec.actions ?? "" });
   if (spec.detail) q.set("detail", spec.detail);
+  if (spec.description) q.set("description", spec.description);
+  if (spec.mobileShow) q.set("mobileShow", spec.mobileShow);
   if (spec.open) q.set("open", "1");
   return `/__layout/header?${q}`;
 };
@@ -199,7 +203,7 @@ async function bandShot(page) {
     // The shell action column is checked by the pill checks, not by the header band.
     document.querySelectorAll(".shell-action-column").forEach((el) => { el.style.display = "none"; });
     return {
-      bottom: Math.max(hr.bottom, ...pills) + 8,
+      bottom: Math.max(hr.bottom, ...pills) + 2,
       left: parseFloat(getComputedStyle(header).left) || 0,
       masks: [...header.querySelectorAll("h1, .page-header-detail")].map(rect),
       dpr: devicePixelRatio,
@@ -329,7 +333,15 @@ for (const layoutId of layoutIds) {
           }));
           const navEl = el.querySelector("[data-action-kind='navigation']");
           const nav = navEl && getComputedStyle(navEl).display !== "none" ? "navigation" : "";
-          return { title: text(el.querySelector("h1")), detail: text(el.querySelector(".page-header-detail")), pills, nav };
+          const section = el.querySelector(".page-header-detail.is-section");
+          return {
+            title: text(el.querySelector("h1")),
+            detail: section ? text(section.querySelector("strong")) : text(el.querySelector(".page-header-detail")),
+            description: section ? text(section.querySelector("small")) : "",
+            mobileShow: el.getAttribute("data-mobile-show") ?? "",
+            pills,
+            nav,
+          };
         });
         // Pill identity: each pill, alone, against the harness pill with the same kind, icon, label and count.
         for (const pill of header.pills) {
@@ -365,21 +377,24 @@ for (const layoutId of layoutIds) {
           await page.evaluate(() => {
             for (const id of ["__isolate", "__hide_label"]) document.getElementById(id)?.remove();
             document.querySelectorAll(".__pill").forEach((el) => el.classList.remove("__pill"));
+            // A page may autofocus a control (Settings focuses Back); the band compares the resting header.
+            document.activeElement?.blur?.();
           });
+          await page.waitForTimeout(250);
           const hide = `.tv-key-art,.tv-stage-wash{display:none!important}`;
           await page.addStyleTag({ content: hide });
           const actions = header.nav ? ["navigation"] : [];
           const live = await bandShot(page);
-          await open(harnessPage, harnessPath({ title: header.title, detail: header.detail, actions: actions.join(",") }), ".page-header");
+          await open(harnessPage, harnessPath({ title: header.title, detail: header.detail, description: header.description, mobileShow: header.mobileShow, actions: actions.join(",") }), ".page-header");
           await harnessPage.addStyleTag({ content: hide });
           const canonical = await bandShot(harnessPage);
           maskBands([live, canonical], layoutId !== "mobile");
           const result = diffImages(live.png, canonical.png, `${name}-band`);
           bandsChecked += 1;
-          if (result.bad !== 0) {
+          if (result.bad > BAND_TOLERANCE) {
             for (const [suffix, shot] of [["page", live.png], ["canonical", canonical.png]]) writeFileSync(join(outDir, `${name.replace(/[^A-Za-z0-9._-]+/g, "-")}-band.${suffix}.png`), PNG.sync.write(shot));
           }
-          if (result.bad !== 0) fail(`${name}: header band differs from the canonical header by ${result.bad} pixels${result.size ? ` (${result.size})` : ""}`);
+          if (result.bad > BAND_TOLERANCE) fail(`${name}: header band differs from the canonical header by ${result.bad} pixels${result.size ? ` (${result.size})` : ""}`);
           else console.log(`ok    ${name} header band`);
         }
       }

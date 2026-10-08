@@ -1,0 +1,1 @@
+- Web: Settings renders through the shared page layout: the header shows the section name over its description, phones show the section title, and the panels get the shared scroll-edge fade and the shared loading, empty and error states.

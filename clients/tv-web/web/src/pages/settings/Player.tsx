@@ -119,11 +119,7 @@ export function SettingsPlayerPage() {
     AUDIO_LANGUAGE_OPTIONS.find((option) => option.value === audioLanguage)?.label ?? "English";
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.playerPreferences.kicker")}
-      title={t("settings.playerPreferences.title")}
-      description={t("settings.playerPreferences.description")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <div className="player-default-group">
           <div className="player-default-heading">

@@ -690,3 +690,61 @@ body[data-input-mode="remote"] .tv-page-back {
   justify-items: center;
   gap: 1.4rem;
 }
+
+/*
+ * The two-line section detail (Settings): the section name over its description. On phones the header shows
+ * either the page title or this detail (data-mobile-show), never both.
+ */
+.page-header-detail.is-section {
+  min-width: 0;
+  max-width: min(calc(48 * var(--vw)), 680px);
+  display: grid;
+  gap: 0.22rem;
+  text-transform: none;
+}
+
+.page-header-detail.is-section strong {
+  overflow: hidden;
+  font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.86rem);
+  letter-spacing: 0.045em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.page-header-detail.is-section small {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: clamp(0.58rem, calc(0.66 * var(--vw)), 0.76rem);
+  font-weight: 480;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .tv-library-heading > .page-header-title-block > .page-header-detail.is-section {
+    display: grid;
+  }
+}
+
+@media (max-width: 760px),
+  (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
+  .tv-library-heading > .page-header-title-block > .page-header-detail.is-section {
+    display: grid;
+    max-width: calc(calc(100 * var(--vw)) - 250px);
+  }
+
+  .page-header[data-mobile-show="title"] > .page-header-title-block > .page-header-detail,
+  .page-header[data-mobile-show="detail"] h1 {
+    display: none;
+  }
+
+  .page-header[data-mobile-show="detail"] > .page-header-title-block > .page-header-detail.is-section {
+    max-width: calc(calc(100 * var(--vw)) - 150px);
+    display: grid;
+    padding-left: 0;
+    border-left: 0;
+  }
+}

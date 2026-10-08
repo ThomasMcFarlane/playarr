@@ -192,7 +192,7 @@ export function SettingsProfileAvatarPage() {
 
   if (!preference || !currentUserId) {
     return (
-      <SettingsSectionLayout kicker="" title="" description="">
+      <SettingsSectionLayout>
         <section className="card settings-card settings-card-wide">
           <p className="muted">{t("settings.profileAvatar.signInRequired")}</p>
         </section>
@@ -201,7 +201,7 @@ export function SettingsProfileAvatarPage() {
   }
 
   return (
-    <SettingsSectionLayout kicker="" title="" description="">
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide profile-avatar-settings">
         <div
           className="profile-avatar-preset-grid"

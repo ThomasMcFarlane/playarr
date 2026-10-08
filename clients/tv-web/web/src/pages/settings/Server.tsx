@@ -73,11 +73,7 @@ export function SettingsServerPage() {
   }
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.server.kicker")}
-      title={t("settings.server.title")}
-      description={t("settings.server.description")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <div className="connected-server-list" aria-label={t("settings.server.connectedServersLabel")}>
           {connectedServers.map((server) => (

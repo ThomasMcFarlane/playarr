@@ -11,11 +11,7 @@ export function SettingsLanguagePage() {
   const { showToast } = useToast();
 
   return (
-    <SettingsSectionLayout
-      kicker={t("settings.language.kicker")}
-      title={t("settings.language.title")}
-      description={t("settings.language.description")}
-    >
+    <SettingsSectionLayout>
       <section className="card settings-card settings-card-wide">
         <LanguageDropdown onSelect={() => showToast(t("settings.language.savedToast"))} />
         <p className="hint">

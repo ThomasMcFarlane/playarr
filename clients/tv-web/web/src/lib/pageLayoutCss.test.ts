@@ -39,13 +39,7 @@ export function selectors(css: string): string[] {
   return found;
 }
 
-const BASELINE: Record<string, string[]> = {
-  "styles/global.css": [
-    ".settings-workspace-page .tv-library-heading > .page-header-title-block > .settings-heading-detail",
-    ".settings-index-route .tv-library-heading > .page-header-title-block > .settings-heading-detail, .settings-detail-route .tv-library-heading h1",
-    ".settings-detail-route .tv-library-heading > .page-header-title-block > .settings-heading-detail",
-  ],
-};
+const BASELINE: Record<string, string[]> = {};
 
 describe("page layout CSS", () => {
   it("styles the page chrome only in styles/page-layout.css", () => {
