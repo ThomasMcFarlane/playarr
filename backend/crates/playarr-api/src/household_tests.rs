@@ -654,6 +654,117 @@ async fn daily_budget_is_counted_by_the_server_and_resets_next_local_day() {
 }
 
 #[tokio::test]
+async fn playback_crossing_the_daily_budget_stops_at_the_next_request() {
+    let (router, state) = test_state().await;
+    state.clock.set(saturday_noon());
+    let instance = Uuid::new_v4();
+    let work = seed_movie_with_tags(&state, "Movie Budget Crossing", &["rating:G"]).await;
+    let file = seed_playable(&state, work, instance).await;
+    let child = Uuid::new_v4();
+    seed_policy_user(&state, child, |p| {
+        p.library_allow = vec![instance];
+        p.household.daily_budget_minutes = Some(1);
+    })
+    .await;
+    let session = session_for(child, file.id);
+    state.app.session_registry.insert(session.clone());
+    // The capability URL carries no bearer token: playback that is already
+    // under way is still cut off once the budget is spent.
+    let url = format!(
+        "/api/v1/media/{}/stream?playback_session_id={}",
+        file.id, session.id
+    );
+    let mut first_block = None;
+    for step in 0..12 {
+        let (status, body) = call(&router, None, Method::GET, &url, None).await;
+        if status == StatusCode::OK {
+            state.clock.advance(Duration::seconds(10));
+        } else {
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            assert_eq!(body["details"]["reason"], "budget_exhausted");
+            first_block = Some(step);
+            break;
+        }
+    }
+    let step = first_block.expect("the budget must run out during playback");
+    assert!((5..=8).contains(&step), "blocked at request {step}");
+}
+
+#[tokio::test]
+async fn concurrent_devices_draw_on_one_budget_and_are_not_double_charged() {
+    let (router, state) = test_state().await;
+    state.clock.set(saturday_noon());
+    let instance = Uuid::new_v4();
+    let work = seed_movie_with_tags(&state, "Movie Two Devices", &["rating:G"]).await;
+    let file = seed_playable(&state, work, instance).await;
+    let child = Uuid::new_v4();
+    seed_policy_user(&state, child, |p| {
+        p.library_allow = vec![instance];
+        p.household.daily_budget_minutes = Some(1);
+    })
+    .await;
+    // Two devices, two sessions, one profile.
+    let device_a = mint_access_token(&state, child);
+    let device_b = mint_access_token(&state, child);
+    let stream = format!("/api/v1/media/{}/stream", file.id);
+
+    // The devices alternate every 10 s. If each device were charged on its
+    // own the budget would last half as long; if both were charged for the
+    // same instant it would last twice as long as a single device.
+    let mut blocked_at = None;
+    for step in 0..12 {
+        let token = if step % 2 == 0 { &device_a } else { &device_b };
+        let (status, body) = get(&router, token, &stream).await;
+        if status == StatusCode::OK {
+            state.clock.advance(Duration::seconds(10));
+        } else {
+            assert_eq!(body["details"]["reason"], "budget_exhausted");
+            blocked_at = Some(step);
+            break;
+        }
+    }
+    let step = blocked_at.expect("the shared budget must run out");
+    assert!((5..=8).contains(&step), "blocked at request {step}");
+
+    // Both devices see the same exhausted state, and neither can browse.
+    for token in [&device_a, &device_b] {
+        let (status, body) = get(&router, token, "/api/v1/household/status").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["state"], "budget_exhausted");
+        assert_eq!(
+            get(&router, token, "/api/v1/catalog").await.0,
+            StatusCode::FORBIDDEN
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_forward_clock_jump_on_the_server_closes_the_schedule_and_never_extends_it() {
+    let (router, state) = test_state().await;
+    let child = Uuid::new_v4();
+    seed_policy_user(&state, child, |p| {
+        p.access_schedule = Some(vec![saturday_window(8 * 60, 20 * 60)]);
+        p.household.daily_budget_minutes = Some(60);
+    })
+    .await;
+    let token = mint_access_token(&state, child);
+    state.clock.set(saturday_noon());
+    let (_, body) = get(&router, &token, "/api/v1/household/status").await;
+    assert_eq!(body["state"], "allowed");
+    assert_eq!(body["window_ends_at"], "2026-10-03T20:00:00Z");
+
+    // A jump forward past the window end flips the state on the next call;
+    // the remaining-time figure the client showed earlier is not honoured.
+    state.clock.advance(Duration::hours(9));
+    let (_, body) = get(&router, &token, "/api/v1/household/status").await;
+    assert_eq!(body["state"], "outside_schedule");
+    assert_eq!(
+        get(&router, &token, "/api/v1/catalog").await.0,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
 async fn status_endpoint_reports_remaining_time_without_trusting_the_client() {
     let (router, state) = test_state().await;
     state.clock.set(saturday_noon());
