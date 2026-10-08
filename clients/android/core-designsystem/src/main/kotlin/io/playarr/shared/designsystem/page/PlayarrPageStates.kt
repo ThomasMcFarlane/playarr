@@ -69,6 +69,10 @@ fun PlayarrEmptyState(spec: PlayarrEmptySpec) {
     }
 }
 
+/** [PlayarrEmptyState] for a plain message and optional description. */
+@Composable
+fun PlayarrEmptyState(message: String, description: String? = null) = PlayarrEmptyState(PlayarrEmptySpec(message, description))
+
 /** The one error state: the message in the danger colour and a retry action when one is offered. */
 @Composable
 fun PlayarrErrorState(spec: PlayarrErrorSpec, onRetry: (() -> Unit)?) {

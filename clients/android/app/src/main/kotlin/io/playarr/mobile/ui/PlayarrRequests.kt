@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -95,10 +98,10 @@ internal fun ExperienceRequestsScreen(
         isTelevision = isTelevision,
     ) {
         when (val current = state) {
-            ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.RequestsLoading))
-            is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+            ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.RequestsLoading))
+            is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
             is ParityLoad.Ready -> if (current.value.isEmpty()) {
-                ExperienceEmpty(
+                PlayarrEmptyState(
                     playarrString(PlayarrString.RequestsEmptyTitle),
                     playarrString(PlayarrString.RequestsEmptyDescription),
                 )

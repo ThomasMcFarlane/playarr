@@ -1,5 +1,10 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptySpec
+import io.playarr.shared.designsystem.page.PlayarrPageState
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import io.playarr.shared.designsystem.icons.PlayarrWebIcons
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
@@ -2354,7 +2359,7 @@ private fun ExperienceNavHost(
         }
         composable("downloads") {
             when (canDownload) {
-                null -> ExperienceLoading(playarrString(PlayarrString.DownloadsLoading))
+                null -> PlayarrLoadingState(playarrString(PlayarrString.DownloadsLoading))
                 false -> ExperienceNotFoundScreen()
                 true -> ExperienceDownloadsScreen(
                     serverUrl = serverUrl,
@@ -2533,11 +2538,11 @@ private fun ExperienceHomeScreen(
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     LiveRefreshEffect(viewModel.liveBus, HOME_LIVE_INTEREST, { viewModel.homeFetchStartedMs }, viewModel::refreshHome)
     when (val current = state) {
-        ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.HomePreparing))
-        is ExperienceLoad.Failed -> ExperienceFailure(current.message, viewModel::loadHome)
+        ExperienceLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.HomePreparing))
+        is ExperienceLoad.Failed -> PlayarrErrorState(current.message, viewModel::loadHome)
         is ExperienceLoad.Ready -> {
             if (current.value.isEmpty()) {
-                ExperienceEmpty(
+                PlayarrEmptyState(
                     playarrString(PlayarrString.HomeEmptyTitle),
                     playarrString(PlayarrString.HomeEmptyDescription),
                 )
@@ -3590,16 +3595,31 @@ private fun ExperienceLibraryScreen(
         { viewModel.libraryFetchStartedMs(kind) },
     ) { viewModel.refreshLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
-        ExperienceLoad.Loading -> ExperienceLoading(
-            playarrString(PlayarrString.LibraryLoading, "label" to plural),
-        )
-        is ExperienceLoad.Failed -> ExperienceFailure(state.message) { viewModel.loadLibrary(kind) }
+        ExperienceLoad.Loading -> PlayarrPageScaffold(
+            title = plural,
+            onBack = { navController.openExperienceTopLevel("home") },
+            isTelevision = isTelevision,
+            state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
+        ) {}
+        is ExperienceLoad.Failed -> PlayarrPageScaffold(
+            title = plural,
+            onBack = { navController.openExperienceTopLevel("home") },
+            isTelevision = isTelevision,
+            state = playarrErrorState(state.message) { viewModel.loadLibrary(kind) },
+        ) {}
         is ExperienceLoad.Ready -> {
             if (state.value.isEmpty()) {
-                ExperienceEmpty(
-                    playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
-                    playarrString(PlayarrString.LibraryEmptyDescription, "collection" to collection),
-                )
+                PlayarrPageScaffold(
+                    title = plural,
+                    onBack = { navController.openExperienceTopLevel("home") },
+                    isTelevision = isTelevision,
+                    state = PlayarrPageState.Empty(
+                        PlayarrEmptySpec(
+                            playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
+                            playarrString(PlayarrString.LibraryEmptyDescription, "collection" to collection),
+                        ),
+                    ),
+                ) {}
                 return
             }
             // Saved, so coming back from a title restores the card that last had focus.
@@ -4082,9 +4102,9 @@ private fun PhoneSearchContent(
             Box(Modifier.padding(top = (24.dp - topInset).coerceAtLeast(0.dp)).weight(1f).fillMaxWidth()) {
                 when (val current = state) {
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
-                    is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
+                    is ExperienceLoad.Failed -> PlayarrErrorState(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query_.isBlank()) {
-                        ExperienceEmpty(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                        PlayarrEmptyState(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
                     } else if (gamesOnly) {
                         DiscoveryExtrasSection(
                             query = query_.trim(),
@@ -4094,7 +4114,7 @@ private fun PhoneSearchContent(
                             webPhone = true,
                         )
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
-                        ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                        PlayarrEmptyState(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
@@ -4320,13 +4340,13 @@ private fun TelevisionSearchBody(
             Box(Modifier.padding(start = 96.dp, top = 172.8.dp, end = 80.6.dp).fillMaxSize()) {
                 when (val current = state) {
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
-                    is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
+                    is ExperienceLoad.Failed -> PlayarrErrorState(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query.isBlank()) {
-                        ExperienceEmpty(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                        PlayarrEmptyState(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
                     } else if (mediaFilter == PlayarrSearchMediaType.Game) {
                         DiscoveryExtrasSection(query = query.trim(), gamesOnly = true, navController = navController, modifier = Modifier.fillMaxSize())
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
-                        ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                        PlayarrEmptyState(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
                     } else {
                         // Web `data-tv-grid` with `data-tv-grid-edge-left=".tv-search input"`: index navigation over three columns, LEFT in
                         // the first column goes to the search field.
@@ -4918,8 +4938,21 @@ private fun ExperienceDetailScreen(
     val liveInterest = remember(workId) { setOf(LiveTarget(LiveArea.Work, workId)) }
     LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refresh)
     when (val current = state) {
-        ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.DetailLoadingDetails))
-        is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
+        // The header and Back stay up while the title loads or fails (owner decision Q4).
+        ExperienceLoad.Loading -> PlayarrPageScaffold(
+            title = "",
+            onBack = onBack,
+            isTelevision = isTelevision,
+            largeTitle = true,
+            state = PlayarrPageState.Loading(playarrString(PlayarrString.DetailLoadingDetails)),
+        ) {}
+        is ExperienceLoad.Failed -> PlayarrPageScaffold(
+            title = "",
+            onBack = onBack,
+            isTelevision = isTelevision,
+            largeTitle = true,
+            state = playarrErrorState(current.message) { viewModel.load(workId) },
+        ) {}
         is ExperienceLoad.Ready -> {
             val detail = current.value.detail
             val progressByMedia = current.value.progressByMedia
@@ -6255,7 +6288,7 @@ internal fun SeriesEpisodeBrowser(
     modifier: Modifier = Modifier,
 ) {
     if (seasons.isEmpty()) {
-        ExperienceEmpty(playarrString(PlayarrString.DetailNoPlayableMedia))
+        PlayarrEmptyState(playarrString(PlayarrString.DetailNoPlayableMedia))
         return
     }
     // Web series rules (PlayarrTvNavigation.kt): every season is a track; UP/DOWN land on the closest tile by x.
@@ -9191,52 +9224,8 @@ private fun serverOrigin(value: String): Triple<String, String, Int>? = runCatch
     )
 }.getOrNull()
 
-/** `internal` (not `private`): reused by `PlayarrDownloads.kt`'s Downloads screen -- Kotlin's `private` on a top-level declaration is file-scoped, not package-scoped. */
-@Composable
-internal fun ExperienceLoading(label: String) {
-    Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            PlayarrLogo()
-            CircularProgressIndicator(color = WebAccent)
-            Text(label, color = WebInkMuted, fontSize = 12.sp)
-        }
-    }
-}
 
-@Composable
-internal fun ExperienceFailure(message: PlayarrMessage, retry: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
-            Text(playarrText(message), color = MaterialTheme.colorScheme.error)
-            PlayarrButton(onClick = retry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
-        }
-    }
-}
 
-@Composable
-internal fun ExperienceEmpty(message: String, description: String? = null) {
-    Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                message,
-                color = if (description == null) WebInkMuted else WebInk,
-                fontWeight = if (description == null) null else FontWeight.SemiBold,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            description?.let {
-                Text(
-                    it,
-                    color = WebInkMuted,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun ExperienceNotFoundScreen() {

@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -103,10 +106,10 @@ internal fun ExperienceFoldersScreen(
         },
     ) {
         when (val roots = state.roots) {
-            FolderRootsLoad.Loading -> FoldersLoading()
-            is FolderRootsLoad.Failed -> FoldersFailed(roots.message, holder::loadRoots)
+            FolderRootsLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.FoldersLoading))
+            is FolderRootsLoad.Failed -> PlayarrErrorState(roots.message, holder::loadRoots)
             is FolderRootsLoad.Ready -> when {
-                roots.roots.isEmpty() -> ExperienceEmpty(
+                roots.roots.isEmpty() -> PlayarrEmptyState(
                     playarrString(PlayarrString.FoldersNoRootsTitle),
                     playarrString(PlayarrString.FoldersNoRootsDescription),
                 )
@@ -116,26 +119,6 @@ internal fun ExperienceFoldersScreen(
         }
     }
     if (root != null && url.panel == FolderPanel.Filters) FolderFiltersSheet(state.url, holder)
-}
-
-@Composable
-private fun FoldersLoading() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(22.dp), color = WebInkSoft, strokeWidth = 2.dp)
-            Text(playarrString(PlayarrString.FoldersLoading), color = WebInkMuted)
-        }
-    }
-}
-
-@Composable
-private fun FoldersFailed(message: PlayarrMessage, onRetry: () -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
-            Text(playarrText(message), color = MaterialTheme.colorScheme.error)
-            PlayarrButton(onClick = onRetry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
-        }
-    }
 }
 
 @Composable
@@ -175,8 +158,8 @@ private fun ColumnScope.FolderBrowser(
     val url = state.url
     FolderBreadcrumbs(root.name, url.path, (state.listing as? FolderListing.Ready), holder::openDirectory)
     when (val listing = state.listing) {
-        FolderListing.Idle, FolderListing.Loading -> FoldersLoading()
-        is FolderListing.Failed -> FoldersFailed(listing.message) { holder.openDirectory(url.path) }
+        FolderListing.Idle, FolderListing.Loading -> PlayarrLoadingState(playarrString(PlayarrString.FoldersLoading))
+        is FolderListing.Failed -> PlayarrErrorState(listing.message) { holder.openDirectory(url.path) }
         FolderListing.Missing -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
                 Text(playarrString(PlayarrString.FoldersMissingTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
@@ -188,7 +171,7 @@ private fun ColumnScope.FolderBrowser(
         is FolderListing.Ready -> if (listing.entries.isEmpty()) {
             val filtered = url.activeFilterCount > 0
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                ExperienceEmpty(
+                PlayarrEmptyState(
                     playarrString(if (filtered) PlayarrString.FoldersNoMatchTitle else PlayarrString.FoldersEmptyTitle),
                     playarrString(if (filtered) PlayarrString.FoldersNoMatchDescription else PlayarrString.FoldersEmptyDescription),
                 )

@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrActionIcon
 import io.playarr.shared.designsystem.page.PlayarrPageAction
 import io.playarr.shared.designsystem.icons.PlayarrWebIcons
@@ -203,16 +205,7 @@ private fun ExperienceCalendarScreen(
             CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         }
         when (val load = state.load) {
-            is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.padding(32.dp),
-                ) {
-                    Text(playarrText(load.message), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-                    PlayarrButton(onClick = holder::load) { Text(playarrString(PlayarrString.CommonTryAgain)) }
-                }
-            }
+            is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth()) { PlayarrErrorState(load.message, holder::load) }
             else -> {
                 if (ready != null) {
                     val failed = failedCalendarSources(ready.sources)
@@ -221,7 +214,7 @@ private fun ExperienceCalendarScreen(
                 val empty = !loading && items.isEmpty()
                 if (empty) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        ExperienceEmpty(
+                        PlayarrEmptyState(
                             playarrString(PlayarrString.CalendarEmptyTitle),
                             playarrString(PlayarrString.CalendarEmptyDescription),
                         )

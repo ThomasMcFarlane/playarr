@@ -2,6 +2,7 @@ package io.playarr.mobile.ui
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -43,5 +44,35 @@ class PlayarrPageChromeGuardTest {
                 .map { m -> "${f.name}@${m.range.first}" }.toList()
         }
         assertEquals("header pills come from PlayarrPageAction, not a hand-rolled Surface", emptyList<String>(), offenders)
+    }
+
+    /** One loading, empty and error family, owned by the page package (spec rule 2.7). */
+    @Test
+    fun `no state composables outside the page package`() {
+        val stateFun = Regex("""@Composable\s+(?:internal\s+|private\s+)?fun\s+(\w*(?:Loading|Failure|Failed|Empty)\w*)\(""")
+        // The pre-auth splash shown while the root view model resolves the session is registry-exempt.
+        val allowed = setOf("LoadingScreen")
+        val offenders = uiFiles().flatMap { f ->
+            stateFun.findAll(f.readText()).map { "${f.name}: ${it.groupValues[1]}" }.filter { it.substringAfter(": ") !in allowed }.toList()
+        }
+        assertEquals("use PlayarrLoadingState / PlayarrEmptyState / PlayarrErrorState", emptyList<String>(), offenders)
+    }
+
+    /** Library, detail pages and playlist detail keep their header and Back while loading or failed (owner decision Q4). */
+    @Test
+    fun `the header stays up while loading and on error`() {
+        fun body(file: String, marker: String, length: Int = 2600): String {
+            val text = File(uiDir(), file).readText()
+            return text.substring(text.indexOf(marker), minOf(text.length, text.indexOf(marker) + length))
+        }
+        listOf(
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            title = plural", 1200),
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            title = \"\"", 1200),
+            Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageScaffold(\n            title = \"\"", 1200),
+        ).forEach { (file, marker, length) ->
+            val text = body(file, marker, length)
+            assertTrue("$file $marker: loading and failure are states inside the scaffold", Regex("""PlayarrPageScaffold\(""").findAll(text).count() >= 2)
+            assertEquals("$file $marker", true, text.contains("PlayarrPageState.Loading(") && text.contains("playarrErrorState("))
+        }
     }
 }

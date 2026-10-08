@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -303,8 +306,8 @@ internal fun ExperienceGuardianApprovalsScreen(
             isTelevision = isTelevision,
         ) {
             when (val current = state) {
-                ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.GuardianApprovalsLoading))
-                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.GuardianApprovalsLoading))
+                is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::load)
                 is ParityLoad.Ready -> {
                     val pending = pendingGuardianApprovals(
                         current.value.approvals,
@@ -313,7 +316,7 @@ internal fun ExperienceGuardianApprovalsScreen(
                         Instant.now(),
                     )
                     if (pending.isEmpty()) {
-                        ExperienceEmpty(
+                        PlayarrEmptyState(
                             playarrString(PlayarrString.GuardianApprovalsEmptyTitle),
                             playarrString(PlayarrString.GuardianApprovalsEmptyDescription),
                         )

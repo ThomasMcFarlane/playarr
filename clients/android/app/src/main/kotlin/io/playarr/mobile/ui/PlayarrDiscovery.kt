@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrEmptyState
+import io.playarr.shared.designsystem.page.PlayarrErrorState
+import io.playarr.shared.designsystem.page.PlayarrLoadingState
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import androidx.compose.foundation.background
@@ -471,10 +474,10 @@ internal fun ExperienceWatchlistScreen(
     ) {
         DiscoveryMessageText(viewModel)
         when (val current = state) {
-            ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.WatchlistLoading))
-            is ParityLoad.Failed -> ParityFailure(current.message, viewModel::loadWatchlist)
+            ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.WatchlistLoading))
+            is ParityLoad.Failed -> PlayarrErrorState(current.message, viewModel::loadWatchlist)
             is ParityLoad.Ready -> if (current.value.isEmpty()) {
-                ExperienceEmpty(
+                PlayarrEmptyState(
                     playarrString(PlayarrString.WatchlistEmptyTitle),
                     playarrString(PlayarrString.WatchlistEmptyDescription),
                 )
