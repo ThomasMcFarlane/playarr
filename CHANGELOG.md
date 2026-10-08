@@ -272,6 +272,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- tvOS: the Filters and Calendar link buttons stack in one right-hand action column like the web shell, library and search cards use the web's pinned focus lift and shadow, with no focus ring.
 - Fire TV client: parity evidence (per-screen mismatch in light and dark, platform limits and open gaps) is documented under docs/parity/fire-tv.
 - Fire TV parity tooling: the device capture driver batches foreground-checked key presses, selects the theme reliably and covers the new screens; the live web capture script covers search, downloads, watchlist, requests, Playlists and music.
 - Fire TV client: Playlists follows the web TV layout (page copy, the Create and Filters tiles, one track of titles per playlist, and the web's empty state).

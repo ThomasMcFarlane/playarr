@@ -40,8 +40,9 @@ struct TVCalendarView: View {
         roundControl("\u{2190}", x: 1494.2, y: 67.2, size: 50) { Task { await model.step(-1) } }
         todayControl(x: 1549.9, y: 65.8) { Task { await model.goToToday() } }
         roundControl("\u{2192}", x: 1643.3, y: 67.2, size: 50) { Task { await model.step(1) } }
-        pill("Calendar link", symbol: "bell", x: 1718.3, width: 62.9)
-        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1781.2, width: 62)
+        // Side-panel buttons stack in the shell action column, in registration order.
+        pill("Calendar link", symbol: "bell", slot: 0)
+        pill("Filters", symbol: "line.3.horizontal.decrease", slot: 1)
 
         // Month button.
         HStack(spacing: 0) {
@@ -386,8 +387,8 @@ struct TVCalendarView: View {
         .placed(x: x, y: y, w: 87.8, h: 52.8)
     }
 
-    private func pill(_ label: String, symbol: String, x: CGFloat, width: CGFloat) -> some View {
-        TVHeaderPill(label: label, symbol: symbol, width: width)
-            .placed(x: x, y: 56.2, w: width, h: TVHeaderPill.height)
+    private func pill(_ label: String, symbol: String, slot: Int) -> some View {
+        TVHeaderPill(label: label, symbol: symbol, width: TVShellActionColumn.width)
+            .placed(x: TVShellActionColumn.x, y: TVShellActionColumn.y(slot: slot), w: TVShellActionColumn.width, h: TVHeaderPill.height)
     }
 }

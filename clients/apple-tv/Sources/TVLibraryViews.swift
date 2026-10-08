@@ -1025,9 +1025,11 @@ struct TVSearchView: View {
                     NavigationLink {
                         TVWorkDetailView(work: work, apiClient: environment.apiClient)
                     } label: {
-                        searchResultCard(work)
-                            .scaleEffect(selected ? 1.04 : 1)
-                            .offset(y: selected ? -6.25 : 0)
+                        searchResultCard(work, focused: selected)
+                            // Pinned web search focus: translateY(-6px) scale(1.015) over 230 ms, cubic-bezier(0.16, 1, 0.3, 1).
+                            .scaleEffect(selected ? 1.015 : 1)
+                            .offset(y: selected ? -6 : 0)
+                            .animation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.23), value: selected)
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
@@ -1043,12 +1045,17 @@ struct TVSearchView: View {
         .placed(x: 729.6, y: 172.8 - 20, w: 1190.4, h: 300, alignment: .topLeading)
     }
 
-    private func searchResultCard(_ work: Work) -> some View {
+    private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
                     .frame(width: 320.6, height: 180.3)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    // Focused search shadow: 0 22px 52px rgba(31, 14, 20, 0.28); the rest shadow is the card default.
+                    .shadow(
+                        color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(focused ? 0.28 : 0),
+                        radius: 26, y: 22
+                    )
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: 13, height: 13)
@@ -1190,8 +1197,9 @@ struct TVLibraryKindView: View {
 
                 filterLauncher
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 1920 - 1781.2 - 62)
-                    .padding(.top, 56.2)
+                    // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
+                    .padding(.trailing, TVShellActionColumn.edge)
+                    .padding(.top, TVShellActionColumn.top)
                     .zIndex(21)
             }
         }
@@ -1407,11 +1415,18 @@ struct TVLibraryKindView: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    // Pinned web values: rest 0 10 20 .14 + 0 3 8 .10; focused 0 24 48 .30 + 0 10 20 .20.
                     .shadow(
                         color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
-                            .opacity(isSelected && parityMode ? 0.3 : 0.14),
-                        radius: isSelected && parityMode ? 24 : 10,
-                        y: isSelected && parityMode ? 24 : 10
+                            .opacity(isSelected ? 0.3 : 0.14),
+                        radius: isSelected ? 24 : 10,
+                        y: isSelected ? 24 : 10
+                    )
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
+                            .opacity(isSelected ? 0.2 : 0.1),
+                        radius: isSelected ? 10 : 4,
+                        y: isSelected ? 10 : 3
                     )
                     // SPA fixture crops already include the pink unwatched disc.
                     if !artIncludesDot || TVParityArtwork.cardImage(forTitle: work.title) == nil {
@@ -1422,17 +1437,6 @@ struct TVLibraryKindView: View {
                             .padding(10.8)
                     }
                 }
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
-                        .stroke(
-                            // Parity: suppress focus stroke (full107 SPA-lift attempt
-                            // regressed episode 2.83%→3.81%). Production keeps lift.
-                            (!parityMode && isSelected)
-                                ? DesignTokens.Color.brandPrimary.opacity(0.9)
-                                : Color.clear,
-                            lineWidth: 2
-                        )
-                )
                 if showTitle {
                     // Fixture SPA crops do not include the title line; draw it.
                     Text(work.title)
@@ -1445,9 +1449,10 @@ struct TVLibraryKindView: View {
             }
             .frame(width: width, alignment: .leading)
             .opacity(isSelected || parityMode ? 1 : 0.92)
-            // Web: the focused card scales to 1.04 and lifts ~4.6px; production lifts 5px.
-            .scaleEffect(isSelected && parityMode ? 1.04 : 1)
-            .offset(y: isSelected ? (parityMode ? -4.6 : -5) : 0)
+            // Pinned web library focus: translateY(-5px) scale(1.015) over 260 ms, cubic-bezier(0.2, 0.8, 0.2, 1); no ring.
+            .scaleEffect(isSelected ? 1.015 : 1)
+            .offset(y: isSelected ? -5 : 0)
+            .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.26), value: isSelected)
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)

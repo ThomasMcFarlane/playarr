@@ -858,3 +858,15 @@ struct TVHeaderPill: View {
         )
     }
 }
+
+/// The web's shell action column (page-layout spec, rule 2.3): one column owned by the shell where every page's
+/// side-panel buttons stack, at the 30 September launcher position. At 1920x1080: 62 wide, right edge 12.48 px,
+/// top 151.2 px (`clamp(116px, 14 * viewport-unit, 164px)`), 13 px between stacked tiles.
+enum TVShellActionColumn {
+    static let width: CGFloat = 62
+    static let edge: CGFloat = 12.48
+    static let top: CGFloat = 151.2
+    static let gap: CGFloat = 13
+    static var x: CGFloat { 1920 - edge - width }
+    static func y(slot: Int) -> CGFloat { top + CGFloat(slot) * (TVHeaderPill.height + gap) }
+}
