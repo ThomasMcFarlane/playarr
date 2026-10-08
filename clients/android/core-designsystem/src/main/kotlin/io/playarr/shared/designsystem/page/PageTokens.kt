@@ -51,6 +51,12 @@ data class PlayarrPageMetrics(
     val focusRingWidth: Dp,
     /** `--page-focus-ring` offset. */
     val focusRingOffset: Dp,
+    /** `--shell-action-column-top`: top of the shell action column (television only; phones keep the header row). */
+    val shellColumnTop: Dp,
+    /** `--directory-controls-edge`: gap from the right screen edge to the shell action column. */
+    val shellColumnEdge: Dp,
+    /** Vertical gap between stacked tiles in the shell action column (`.page-header-stack`). */
+    val shellColumnGap: Dp,
 ) {
     /** `--page-header-height`: the row grows to the tile (owner ruling Q9). */
     val headerHeight: Dp get() = if (pillHeight > control) pillHeight else control
@@ -107,6 +113,10 @@ object PlayarrPageTokens {
         safeBottom = 96.dp,
         focusRingWidth = 3.dp,
         focusRingOffset = 2.dp,
+        // Web at 1920x1080: clamp(116, 14 vu, 164) = 151.2; clamp(5, 0.65 vw, 14) = 12.48; clamp(10, 1.2 vu, 16) = 12.96.
+        shellColumnTop = 151.2.dp,
+        shellColumnEdge = 12.48.dp,
+        shellColumnGap = 12.96.dp,
     )
 
     val Phone = PlayarrPageMetrics(
@@ -126,6 +136,10 @@ object PlayarrPageTokens {
         safeBottom = 72.dp,
         focusRingWidth = 2.dp,
         focusRingOffset = 3.dp,
+        // Phones keep the actions in the header row, a row of tiles left of the avatar.
+        shellColumnTop = 0.dp,
+        shellColumnEdge = 0.dp,
+        shellColumnGap = 8.dp,
     )
 
     fun of(formFactor: PlayarrFormFactor): PlayarrPageMetrics = if (formFactor == PlayarrFormFactor.Tv) Tv else Phone

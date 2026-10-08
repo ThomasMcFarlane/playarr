@@ -1,6 +1,5 @@
 package io.playarr.mobile.ui
 
-import io.playarr.shared.designsystem.page.LegacyPlacement
 import io.playarr.shared.designsystem.page.PlayarrBack
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
 import io.playarr.shared.designsystem.page.PlayarrErrorSpec
@@ -110,10 +109,6 @@ internal fun PlayarrPageScaffold(
     filters: PlayarrFilterAction? = null,
     /** Typed header actions (Create, Calendar link, ...); the header orders them and draws them as the one action pill. */
     actions: List<PlayarrPageAction> = emptyList(),
-    /** Hand-built panel buttons still passed by a screen not yet on [actions]. */
-    panelActions: (@Composable RowScope.() -> Unit)? = null,
-    /** Period navigation (previous / today / next) in the same right cluster, left of the panel buttons. */
-    trailingNav: (@Composable RowScope.() -> Unit)? = null,
     /**
      * False for pages whose body is a full-bleed hero (library, detail pages): the body fills the screen and
      * draws its own insets and padding, while the shared header (back, title, breadcrumb, actions) floats above.
@@ -129,8 +124,6 @@ internal fun PlayarrPageScaffold(
 ) {
     val backLabel = playarrString(PlayarrString.CommonBack)
     val actions = buildList {
-        if (trailingNav != null) add(PlayarrPageAction.LegacySlot("navigation", LegacyPlacement.Navigation, trailingNav))
-        if (panelActions != null) add(PlayarrPageAction.LegacySlot("panel", LegacyPlacement.Panel, panelActions))
         addAll(actions)
         if (filters != null) add(PlayarrPageAction.Filters(filters.label, filters.active, filters.badge, filters.onClick))
     }

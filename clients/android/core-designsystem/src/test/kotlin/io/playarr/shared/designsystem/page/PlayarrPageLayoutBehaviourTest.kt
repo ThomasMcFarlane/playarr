@@ -71,10 +71,33 @@ class PlayarrPageLayoutBehaviourTest {
     }
 
     @Test
-    fun filtersDrawsAfterTheSecondaryPillsWhateverOrderTheCallerGave() {
+    fun filtersDrawsLastInTheTvShellColumnWhateverOrderTheCallerGave() {
         compose.setContent {
-            GoldenFrame(Target.TvDark, 1920.dp, 150.dp) {
+            GoldenFrame(Target.TvDark, 1920.dp, 400.dp) {
                 CompositionLocalProvider(LocalPlayarrFormFactor provides PlayarrFormFactor.Tv) {
+                    PlayarrPageLayout(
+                        PlayarrPageId.Library,
+                        spec(
+                            PlayarrPageAction.Filters("Filters", false, 0) {},
+                            PlayarrPageAction.Panel("bell", "Calendar link", PlayarrActionIcon.Bell, false) {},
+                        ),
+                        PlayarrPageBody.Bleed,
+                    ) {}
+                }
+            }
+        }
+        val filters = compose.onNodeWithContentDescription("Filters").fetchSemanticsNode().boundsInRoot
+        val bell = compose.onNodeWithContentDescription("Calendar link").fetchSemanticsNode().boundsInRoot
+        // Television: one column at the right edge, panel openers above, Filters last, tiles aligned.
+        assertTrue("Filters is below the panel opener", filters.top > bell.bottom - 1f)
+        assertTrue("one column", filters.left == bell.left)
+    }
+
+    @Test
+    fun filtersDrawsRightmostInThePhoneHeaderRow() {
+        compose.setContent {
+            GoldenFrame(Target.PhoneLight, 390.dp, 150.dp) {
+                CompositionLocalProvider(LocalPlayarrFormFactor provides PlayarrFormFactor.Phone) {
                     PlayarrPageLayout(
                         PlayarrPageId.Library,
                         spec(
@@ -89,7 +112,6 @@ class PlayarrPageLayoutBehaviourTest {
         val filtersX = compose.onNodeWithContentDescription("Filters").fetchSemanticsNode().boundsInRoot.left
         val bellX = compose.onNodeWithContentDescription("Calendar link").fetchSemanticsNode().boundsInRoot.left
         assertTrue("Filters is rightmost", filtersX > bellX)
-        assertFalse(filtersX == bellX)
     }
 }
 

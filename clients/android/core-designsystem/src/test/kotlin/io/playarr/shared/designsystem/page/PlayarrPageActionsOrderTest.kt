@@ -24,13 +24,6 @@ class PlayarrPageActionsOrderTest {
         assertEquals(listOf(navigation, panel, link, status, filters), orderedForHeader(listOf(filters, panel, link, status, navigation)))
     }
 
-    @Test
-    fun legacySlotsFollowTheSameRanks() {
-        val nav = PlayarrPageAction.LegacySlot("nav", LegacyPlacement.Navigation) {}
-        val pills = PlayarrPageAction.LegacySlot("pills", LegacyPlacement.Panel) {}
-        assertEquals(listOf(nav, pills, filters), orderedForHeader(listOf(filters, pills, nav)))
-    }
-
     @Test(expected = IllegalArgumentException::class)
     fun atMostOneFilters() {
         orderedForHeader(listOf(filters, filters))

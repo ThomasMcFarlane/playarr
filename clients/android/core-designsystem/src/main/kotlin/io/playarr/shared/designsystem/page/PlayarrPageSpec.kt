@@ -64,21 +64,13 @@ sealed interface PlayarrPageAction {
     /** A non-interactive badge (Downloads offline). */
     data class Status(val id: String, val label: String) : PlayarrPageAction
 
-    /**
-     * Transitional: a hand-built cluster that screens still pass through the legacy `PlayarrPageScaffold` slots.
-     * Each screen moves onto the typed actions above in A2 and A6; the adapter and this case are deleted in A7.
-     */
-    data class LegacySlot(val id: String, val placement: LegacyPlacement, val content: @Composable RowScope.() -> Unit) : PlayarrPageAction
 }
 
-enum class LegacyPlacement { Navigation, Panel }
-
-/** The canonical header order: navigation, then panel/link/status/legacy-panel in the order given, then Filters. */
+/** The canonical header order: navigation, then panel/link/status in the order given, then Filters. */
 fun orderedForHeader(actions: List<PlayarrPageAction>): List<PlayarrPageAction> {
     require(actions.count { it is PlayarrPageAction.Filters } <= 1) { "A page has at most one Filters action" }
     fun rank(action: PlayarrPageAction): Int = when (action) {
         is PlayarrPageAction.Navigation -> 0
-        is PlayarrPageAction.LegacySlot -> if (action.placement == LegacyPlacement.Navigation) 0 else 1
         is PlayarrPageAction.Filters -> 2
         else -> 1
     }

@@ -69,6 +69,11 @@ fun PlayarrPageLayout(
     val phoneInsets = LocalPlayarrPhoneInsets.current()
     val headerInsets = if (panel || tv) Modifier else Modifier.windowInsetsPadding(phoneInsets)
     val actions = header?.actions.orEmpty()
+    // Television: the app shell owns one action column at the right edge (where the 30 September Filters tile sat); only the
+    // period navigation stays in the header row. Phones keep every action in the header row.
+    val ordered = orderedForHeader(actions)
+    val headerActions = if (tv) ordered.filter { it is PlayarrPageAction.Navigation } else ordered
+    val columnActions = if (tv) ordered - headerActions.toSet() else emptyList()
     Box(
         Modifier
             .fillMaxSize()
@@ -101,14 +106,15 @@ fun PlayarrPageLayout(
                     .align(Alignment.TopStart)
                     .then(headerInsets)
                     // The row centres its items on the action tile: Back drops by half the difference.
-                    .padding(start = metrics.start, top = if (actions.isNotEmpty()) metrics.headerTop + (metrics.headerHeight - metrics.control) / 2 else metrics.headerTop),
+                    .padding(start = metrics.start, top = if (headerActions.isNotEmpty() && !tv) metrics.headerTop + (metrics.headerHeight - metrics.control) / 2 else metrics.headerTop),
             )
-            if (actions.isNotEmpty()) {
+            if (headerActions.isNotEmpty()) {
                 PlayarrPageActions(
-                    actions = actions,
+                    actions = headerActions,
                     modifier = Modifier.align(Alignment.TopEnd).then(headerInsets),
                 )
             }
+            if (columnActions.isNotEmpty()) PlayarrShellActionColumn(columnActions, Modifier.align(Alignment.TopEnd))
         }
     }
 }
@@ -119,6 +125,7 @@ fun PlayarrPageLayout(
  */
 @Composable
 internal fun PlayarrPageActions(actions: List<PlayarrPageAction>, modifier: Modifier = Modifier) {
+    val tv = LocalPlayarrFormFactor.current == PlayarrFormFactor.Tv
     val metrics = PlayarrPageTokens.current()
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
@@ -129,17 +136,13 @@ internal fun PlayarrPageActions(actions: List<PlayarrPageAction>, modifier: Modi
     ) {
         orderedForHeader(actions).forEach { action ->
             when (action) {
-                is PlayarrPageAction.Navigation -> Row(Modifier.padding(end = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                is PlayarrPageAction.Navigation -> Row(Modifier.padding(end = if (tv) 0.dp else 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     action.items.forEach { item -> PlayarrNavButton(item) }
                 }
                 is PlayarrPageAction.Panel -> PlayarrActionPill(action.icon, action.label, action.onToggle, active = action.open)
                 is PlayarrPageAction.Link -> PlayarrActionPill(action.icon, action.label, action.onClick)
                 is PlayarrPageAction.Filters -> PlayarrActionPill(PlayarrActionIcon.Filters, action.label, action.onToggle, active = action.open, count = action.activeCount)
                 is PlayarrPageAction.Status -> PlayarrStatusBadge(action.label)
-                is PlayarrPageAction.LegacySlot -> when (action.placement) {
-                    LegacyPlacement.Navigation -> Row(Modifier.padding(end = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = action.content)
-                    LegacyPlacement.Panel -> Row(horizontalArrangement = Arrangement.spacedBy(0.dp), verticalAlignment = Alignment.CenterVertically, content = action.content)
-                }
             }
         }
     }
@@ -188,5 +191,29 @@ private fun PlayarrStatusBadge(label: String) {
         border = BorderStroke(1.dp, palette.pillBorder),
     ) {
         Text(label, fontSize = 12.sp, fontWeight = FontWeight(720), modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+    }
+}
+
+/**
+ * The shell action column (television): every page's side-panel and action pills stacked vertically at the right edge,
+ * panel openers above, Filters last (owner ruling, 8 October 2026; web `.shell-action-column`).
+ */
+@Composable
+private fun PlayarrShellActionColumn(actions: List<PlayarrPageAction>, modifier: Modifier = Modifier) {
+    val metrics = PlayarrPageTokens.current()
+    Column(
+        modifier.padding(top = metrics.shellColumnTop, end = metrics.shellColumnEdge),
+        verticalArrangement = Arrangement.spacedBy(metrics.shellColumnGap),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        actions.forEach { action ->
+            when (action) {
+                is PlayarrPageAction.Panel -> PlayarrActionPill(action.icon, action.label, action.onToggle, active = action.open)
+                is PlayarrPageAction.Link -> PlayarrActionPill(action.icon, action.label, action.onClick)
+                is PlayarrPageAction.Filters -> PlayarrActionPill(PlayarrActionIcon.Filters, action.label, action.onToggle, active = action.open, count = action.activeCount)
+                is PlayarrPageAction.Status -> PlayarrStatusBadge(action.label)
+                is PlayarrPageAction.Navigation -> Unit
+            }
+        }
     }
 }
