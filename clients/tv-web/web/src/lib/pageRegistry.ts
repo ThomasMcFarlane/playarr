@@ -3,7 +3,7 @@
  *
  * Every file under `src/pages` that renders a routed page is listed here, as one of:
  *   - `layout`: it renders `<PageLayout pageId=...>`, so it has the one canonical header, actions, body and states;
- *   - `unmigrated`: it still renders the legacy frame (`PageShell`, `TvStageShell`, `PageHeader` or `TvDetailHeading`
+ *   - `unmigrated`: it still renders the legacy frame (`PageHeader` directly
  *     directly). This list may only shrink: `pageRegistry.test.ts` fails when a listed file already uses
  *     `PageLayout`, and when the list grows past `MAX_UNMIGRATED`. It is empty when the migration is finished;
  *   - `exempt`: it has no standard header, with a reason the test checks against the source (`evidence`).

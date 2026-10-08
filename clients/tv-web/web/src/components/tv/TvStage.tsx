@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react";
 import { useScrollEdges } from "../../lib/useScrollEdges";
-import { PageHeader } from "../shell/PageHeader";
 import { LanguageDropdown } from "../LanguageDropdown";
 import { ThemeDropdown } from "../ThemeDropdown";
 
@@ -41,57 +40,6 @@ export function TvStageChrome({
         <LanguageDropdown className="tv-stage-chrome-language" />
       </div>
     </header>
-  );
-}
-
-export function TvDetailHeading({
-  backLabel,
-  className = "",
-  itemTitle,
-  onBack,
-  sectionTitle,
-}: {
-  backLabel: string;
-  className?: string;
-  itemTitle: string;
-  onBack: () => void;
-  sectionTitle: string;
-}) {
-  return (
-    <PageHeader
-      className={`tv-detail-heading${className ? ` ${className}` : ""}`}
-      title={sectionTitle}
-      backLabel={backLabel}
-      onBack={onBack}
-      detailClassName="tv-detail-heading-item"
-      detail={<strong>{itemTitle}</strong>}
-    />
-  );
-}
-
-export function TvStageShell({
-  className,
-  ariaLabel,
-  artwork,
-  artworkKey,
-  children,
-}: {
-  className: string;
-  ariaLabel: string;
-  artwork?: ReactNode;
-  artworkKey?: Key;
-  children: ReactNode;
-}) {
-  return (
-    <section className={className} aria-label={ariaLabel}>
-      {artwork !== undefined ? (
-        <div className="tv-key-art" key={artworkKey}>
-          {artwork}
-        </div>
-      ) : null}
-      <div className="tv-stage-wash" />
-      {children}
-    </section>
   );
 }
 

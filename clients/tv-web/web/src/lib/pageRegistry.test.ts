@@ -16,7 +16,7 @@ function pageFiles(dir = pagesDir, prefix = ""): string[] {
 }
 
 const source = (file: string) => readFileSync(join(pagesDir, file), "utf8");
-const usesLegacyFrame = (text: string) => /<(PageHeader|PageShell|TvStageShell|TvDetailHeading)\b/.test(text);
+const usesLegacyFrame = (text: string) => /<PageHeader\b/.test(text);
 
 describe("page registry", () => {
   it("registers every page file", () => {

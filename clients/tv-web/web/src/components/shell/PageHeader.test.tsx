@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { PageHeader } from "./PageHeader";
 
 const noop = () => undefined;
-const filters = (label: string) => ({ label, open: false, onToggle: noop, controls: "x-filters" });
+const filters = (label: string) => ({ kind: "filters" as const, label, open: false, onToggle: noop, controls: "x-filters" });
+const back = { label: "Back", to: "/" };
+const subscription = { kind: "panel" as const, id: "subscription", label: "Calendar subscription", icon: "bell" as const, open: false, onToggle: noop, controls: "sub" };
 
 function render(node: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);
@@ -20,14 +22,9 @@ function filterButton(markup: string): string {
 
 describe("PageHeader filters slot", () => {
   it("renders the identical Filters button for Movies-style and Calendar-style headers", () => {
-    const movies = render(<PageHeader title="Movies" backLabel="Back" filters={filters("Filters")} />);
+    const movies = render(<PageHeader title="Movies" back={back} actions={[filters("Filters")]} />);
     const calendar = render(
-      <PageHeader
-        title="Release Calendar"
-        backLabel="Back"
-        filters={filters("Filters")}
-        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: "bell" as const, open: false, onToggle: noop, controls: "sub" }]}
-      />
+      <PageHeader title="Release Calendar" back={back} actions={[subscription, filters("Filters")]} />
     );
     expect(filterButton(calendar)).toBe(filterButton(movies));
     expect(movies).toContain("btn btn-secondary ui-btn ui-btn--secondary ui-btn--md action-pill");
@@ -35,12 +32,7 @@ describe("PageHeader filters slot", () => {
 
   it("puts panel buttons in the same style directly before Filters (Playlists pattern)", () => {
     const markup = render(
-      <PageHeader
-        title="Release Calendar"
-        backLabel="Back"
-        filters={filters("Filters")}
-        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: "bell" as const, open: false, onToggle: noop, controls: "sub" }]}
-      />
+      <PageHeader title="Release Calendar" back={back} actions={[subscription, filters("Filters")]} />
     );
     const panel = markup.indexOf("data-panel-button");
     const filter = markup.indexOf("data-filters-button");
@@ -66,7 +58,7 @@ describe("PageHeader filters slot", () => {
   });
 
   it("renders the side-panel buttons outside the header row (the shell action column owns them)", () => {
-    const markup = render(<PageHeader title="Movies" backLabel="Back" filters={filters("Filters")} />);
+    const markup = render(<PageHeader title="Movies" back={back} actions={[filters("Filters")]} />);
     const header = /<header[\s\S]*?<\/header>/.exec(markup)?.[0] ?? "";
     expect(header).not.toContain("data-filters-button");
     expect(markup).toContain("data-filters-button");

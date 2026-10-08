@@ -4,17 +4,21 @@ import { describe, expect, it } from "vitest";
 import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
 import { ThemeProvider } from "../../lib/theme";
 import { THEME_OPTIONS } from "../ThemeDropdown";
-import { TvDetailHeading, TvStageChrome } from "./TvStage";
+import { MemoryRouter } from "react-router-dom";
+import { PageHeader } from "../shell/PageHeader";
+import { TvStageChrome } from "./TvStage";
 
-describe("TvDetailHeading", () => {
+describe("detail page heading", () => {
   it("uses the standard library-heading divider for the selected item", () => {
     const markup = renderToStaticMarkup(
-      <TvDetailHeading
-        backLabel="Back to Music"
-        sectionTitle="Music"
-        itemTitle="Sample Band"
-        onBack={() => undefined}
-      />
+      <MemoryRouter>
+        <PageHeader
+          variant="detail"
+          title="Music"
+          detail="Sample Band"
+          back={{ label: "Back to Music", onBack: () => undefined }}
+        />
+      </MemoryRouter>
     );
 
     expect(markup).toContain("<h1>Music</h1>");

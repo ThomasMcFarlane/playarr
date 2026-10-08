@@ -124,22 +124,15 @@ const inHeaderRow = (action: PageAction) => action.kind === "navigation" || acti
 export function PageHeaderActions({
   actions,
   actionsRef,
-  legacyNavigation,
-  legacyExtra,
 }: {
   actions: readonly PageAction[];
   actionsRef?: Ref<HTMLDivElement>;
-  /** Transitional: pages that still pass a node. Removed once W4 and W3 have migrated Calendar and Downloads. */
-  legacyNavigation?: ReactNode;
-  legacyExtra?: ReactNode;
 }) {
   const leading = orderPageActions(actions).filter(inHeaderRow);
-  if (!legacyNavigation && !legacyExtra && !leading.length) return null;
+  if (!leading.length) return null;
   return (
     <div ref={actionsRef} className="page-header-actions">
-      {legacyNavigation}
       {leading.map(renderAction)}
-      {legacyExtra}
     </div>
   );
 }

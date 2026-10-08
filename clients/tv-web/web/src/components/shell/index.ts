@@ -1,4 +1,4 @@
-export { PageHeader, type FiltersSlot, type PageHeaderProps, type PanelSlot } from "./PageHeader";
+export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { PageLayout, type PageLayoutProps, type PageLayoutState } from "./PageLayout";
 export { PageActions, orderPageActions, type NavigationItem, type PageAction } from "./PageActions";
 export { ActionPill, type ActionPillProps } from "./ActionPill";
@@ -6,10 +6,9 @@ export { ActionIconGlyph, type ActionIcon } from "./icons";
 export { ScrollArea, type ScrollAreaProps } from "./ScrollArea";
 export { EmptyState, ErrorState, LoadingState, type EmptyStateProps, type ErrorStateProps } from "./States";
 export { Drawer } from "./Drawer";
-export { PageShell } from "./PageShell";
 export { MasterDetail } from "./MasterDetail";
 export { SkeletonBlock, SkeletonLines } from "./Skeleton";
 export { ViewToggle, type ViewOption } from "./ViewToggle";
-export { DateRangeField, FilterSection, FiltersButton, FiltersDrawer, MultiSelect, PanelButton } from "./FiltersDrawer";
+export { DateRangeField, FilterSection, FiltersDrawer, MultiSelect } from "./FiltersDrawer";
 export { PeriodPicker } from "./PeriodPicker";
 export { ShellActionColumnProvider, ShellActionColumnSlot } from "./ShellActionColumn";

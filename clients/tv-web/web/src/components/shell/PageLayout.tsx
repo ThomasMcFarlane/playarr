@@ -1,6 +1,5 @@
 import type { Key, ReactNode } from "react";
 import type { PageId } from "../../lib/pageRegistry";
-import { PageActions, type PageAction } from "./PageActions";
 import { PageHeader, type PageHeaderProps } from "./PageHeader";
 import { EmptyState, ErrorState, LoadingState, type EmptyStateProps, type ErrorStateProps } from "./States";
 
@@ -12,9 +11,9 @@ export type PageLayoutState =
 export interface PageLayoutProps {
   /** Stable id: the registry key and `data-page-id`. */
   pageId: PageId;
-  /** `kind: "none"` is Home only (registry-checked): no back and no title, but still the standard actions. */
-  header: PageHeaderProps | { kind: "none"; actions?: PageAction[] };
-  /** `panel` is the rail-panel stage (TvStageShell); `bleed` is the padded frame (PageShell) for hero pages, Calendar and Folders. */
+  /** `kind: "none"` is Home only (registry-checked): no back, no title and no actions. */
+  header: PageHeaderProps | { kind: "none" };
+  /** `panel` is the rail-panel stage (the rail-panel stage); `bleed` is the padded frame (the padded frame) for hero pages, Calendar and Folders. */
   body?: "panel" | "bleed";
   /** Background art and wash, unchanged visuals. */
   backdrop?: { art?: ReactNode; artKey?: Key; wash?: boolean };
@@ -42,20 +41,11 @@ function StateView({ state }: { state: PageLayoutState }) {
 }
 
 /**
- * The one page frame for routed pages. It replaces `PageShell` and `TvStageShell`: the header is always rendered (so Back
+ * The one page frame for routed pages. The header is always rendered (so Back
  * is reachable while the page loads, fails or is empty) and the states render inside the body, never instead of the page.
  */
 export function PageLayout({ pageId, header, body = "panel", backdrop, state, children, ariaLabel, className, bodyClassName }: PageLayoutProps) {
-  const headerNode =
-    "kind" in header && header.kind === "none" ? (
-      header.actions?.length ? (
-        <header className="tv-library-heading page-header has-actions is-actions-only">
-          <PageActions actions={header.actions} />
-        </header>
-      ) : null
-    ) : (
-      <PageHeader {...(header as PageHeaderProps)} />
-    );
+  const headerNode = "kind" in header && header.kind === "none" ? null : <PageHeader {...(header as PageHeaderProps)} />;
   const content = state ? (
     body === "panel" ? (
       <div className="tv-rail-panel tv-library-grid-panel page-layout-state">

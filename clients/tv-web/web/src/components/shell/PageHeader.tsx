@@ -5,30 +5,6 @@ import { Button, ButtonLink } from "../ui";
 import { PageActionStack, PageHeaderActions, type PageAction } from "./PageActions";
 import type { ActionIcon } from "./icons";
 
-/** Legacy Filters slot, kept until the page that passes it migrates to `actions`. */
-export interface FiltersSlot {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  /** Id of the drawer this button controls. */
-  controls: string;
-  activeCount?: number;
-  buttonRef?: Ref<HTMLButtonElement>;
-  buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
-}
-
-/** Legacy panel opener, kept until the page that passes it migrates to `actions`. */
-export interface PanelSlot {
-  id: string;
-  label: string;
-  icon: ActionIcon;
-  open: boolean;
-  onToggle: () => void;
-  controls: string;
-  buttonRef?: Ref<HTMLButtonElement>;
-  buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
-}
-
 type BackProps = { label: string } & ({ to: string } | { onBack: () => void });
 
 export interface PageHeaderProps {
@@ -44,10 +20,10 @@ export interface PageHeaderProps {
   /** Back control: where it goes, and its accessible label. Home is the default destination. */
   back?: BackProps;
   /**
-   * The header actions, in any order: `PageActions` draws them navigation first, secondary pills next and Filters last.
-   * A node is still accepted while Downloads migrates (W3).
+   * The page's actions, in any order. The navigation group and status text draw in the header row; panel, link and Filters
+   * pills draw in the shell action column, Filters last (owner ruling 2026-10-08, Q1b).
    */
-  actions?: PageAction[] | ReactNode;
+  actions?: PageAction[];
   /** `detail` is the detail-page variant: the detail text is the item title, bold. */
   variant?: "page" | "detail";
   /** Ref to the back control (focus management). */
@@ -55,22 +31,6 @@ export interface PageHeaderProps {
   /** Extra attributes for the back control (focus hooks). */
   backProps?: HTMLAttributes<HTMLElement> & Record<`data-${string}`, string | boolean | undefined>;
 
-  /** @deprecated Use `back`. Kept until the page that passes it migrates. */
-  backLabel?: string;
-  /** @deprecated Use `back`. */
-  backTo?: string;
-  /** @deprecated Use `back`. */
-  onBack?: () => void;
-  /** @deprecated Use an `actions` filters entry. */
-  filters?: FiltersSlot;
-  /** @deprecated Use `actions` panel entries. */
-  panelButtons?: readonly PanelSlot[];
-  /** @deprecated Use an `actions` navigation entry. */
-  navigation?: ReactNode;
-  /** @deprecated A page may not restyle the header; removed as pages migrate (W2, W6). */
-  detailClassName?: string;
-  /** @deprecated A page may not restyle the header; removed as pages migrate (W2, W6). */
-  className?: string;
 }
 
 export interface SectionDetail {
@@ -80,10 +40,6 @@ export interface SectionDetail {
 
 function isSectionDetail(value: unknown): value is SectionDetail {
   return Boolean(value) && typeof value === "object" && !isValidElement(value) && "title" in (value as object);
-}
-
-function isActionList(value: unknown): value is PageAction[] {
-  return Array.isArray(value) && value.every((item) => item && typeof item === "object" && "kind" in item);
 }
 
 /** Width of the content itself, independent of how wide its (possibly wrapped) box currently is. */
@@ -108,25 +64,12 @@ export function PageHeader({
   variant = "page",
   backProps,
   backRef,
-  backLabel: legacyBackLabel,
-  backTo: legacyBackTo,
-  onBack: legacyOnBack,
-  filters,
-  panelButtons,
-  navigation,
-  detailClassName,
-  className,
 }: PageHeaderProps) {
-  const backLabel = back?.label ?? legacyBackLabel ?? "";
-  const backTo = back && "to" in back ? back.to : (legacyBackTo ?? "/");
-  const onBack = back && "onBack" in back ? back.onBack : legacyOnBack;
+  const backLabel = back?.label ?? "";
+  const backTo = back && "to" in back ? back.to : "/";
+  const onBack = back && "onBack" in back ? back.onBack : undefined;
   const isDetail = variant === "detail";
-  const pageActions: PageAction[] = [
-    ...(isActionList(actions) ? actions : []),
-    ...(panelButtons ?? []).map((panel): PageAction => ({ kind: "panel", ...panel })),
-    ...(filters ? [{ kind: "filters", ...filters } as PageAction] : []),
-  ];
-  const extraNode = isActionList(actions) ? null : (actions as ReactNode);
+  const pageActions: PageAction[] = actions ?? [];
   const headerRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const detailRef = useRef<HTMLSpanElement>(null);
@@ -172,14 +115,13 @@ export function PageHeader({
     };
   });
 
-  const hasActions = Boolean(extraNode || navigation || pageActions.some((action) => action.kind === "navigation" || action.kind === "status"));
+  const hasActions = Boolean(pageActions.some((action) => action.kind === "navigation" || action.kind === "status"));
   const classes = [
     "tv-library-heading",
     "page-header",
     isDetail ? "tv-detail-heading" : "",
     hasActions ? "has-actions" : "",
     wrapped && detail ? "is-detail-wrapped" : "",
-    className ?? "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -214,7 +156,7 @@ export function PageHeader({
         {detail ? (
           <span
             ref={detailRef}
-            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${isSectionDetail(detail) ? " is-section" : ""}${detailClassName ? ` ${detailClassName}` : ""}`}
+            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${isSectionDetail(detail) ? " is-section" : ""}`}
           >
             {isSectionDetail(detail) ? (
               <>
@@ -229,7 +171,7 @@ export function PageHeader({
           </span>
         ) : null}
       </div>
-      <PageHeaderActions actions={pageActions} actionsRef={actionsRef} legacyNavigation={navigation} legacyExtra={extraNode} />
+      <PageHeaderActions actions={pageActions} actionsRef={actionsRef} />
     </header>
     <PageActionStack actions={pageActions} />
     </>

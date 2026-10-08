@@ -347,9 +347,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   .tv-library-heading.has-actions {
     right: 72px;
   }
-  .tv-library-heading .page-header-actions.is-stacked {
-    flex-direction: row;
-  }
   .tv-library-heading.has-actions > .page-header-title-block > h1 {
     font-size: 1.1rem;
   }
@@ -364,12 +361,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
     padding: 0;
     border-radius: 14px;
   }
-}
-
-.page-header-actions.is-stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
 }
 
 /* Long page titles must not run into the shell clock sitting at the stage divider. */

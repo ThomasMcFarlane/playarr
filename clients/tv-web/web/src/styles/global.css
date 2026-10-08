@@ -7301,62 +7301,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   font-size: clamp(0.46rem, calc(0.52 * var(--vw)), 0.64rem);
 }
 
-.tv-home-rail-window {
-  position: relative;
-  isolation: isolate;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.tv-home-rail-window::before,
-.tv-home-rail-window::after {
-  content: "";
-  position: absolute;
-  z-index: 8;
-  top: 0;
-  bottom: 0;
-  width: clamp(32px, calc(3.6 * var(--vw)), 58px);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.tv-home-rail-window::before {
-  left: 0;
-  border-radius: 0 48% 48% 0;
-  background: radial-gradient(
-    ellipse 100% 88% at -28% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-home-rail-window::after {
-  right: 0;
-  border-radius: 48% 0 0 48%;
-  background: radial-gradient(
-    ellipse 100% 88% at 128% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
-}
-
-.tv-home-rail-window.can-scroll-left::before,
-.tv-home-rail-window.can-scroll-right::after {
-  opacity: 0.58;
-}
-
-:root[data-theme="dark"] .tv-home-rail-window.can-scroll-left::before,
-:root[data-theme="dark"] .tv-home-rail-window.can-scroll-right::after {
-  opacity: 0.5;
-}
-
 .tv-home-rail {
   display: flex;
   gap: clamp(14px, calc(1.3 * var(--vw)), 26px);
@@ -12098,7 +12042,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 
 /* Shared page frame, master-detail, skeleton and safe areas (components/shell). */
 .app-shell {
-  --page-safe-left: clamp(220px, calc(12 * var(--vw)), 260px);
 }
 
 .page-shell {

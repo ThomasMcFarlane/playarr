@@ -35,7 +35,7 @@ function code(file: string): string {
 
 const RULES = {
   /** A page frame or header used directly. Pages pass `header` to PageLayout. */
-  frame: /<(PageShell|TvStageShell|TvDetailHeading|PageHeader)\b/g,
+  frame: /<PageHeader\b/g,
   /** A header pill rendered by hand. Only PageActions renders pills. */
   pill: /<(FiltersButton|PanelButton|ActionPill)\b/g,
   /** Header chrome class names. */
@@ -50,10 +50,8 @@ const RULES = {
 type Rule = keyof typeof RULES;
 
 const BASELINE: Record<Rule, Record<string, number>> = {
-  /** Pages still on the legacy frame (the registry's unmigrated list) and its one wrapper component. */
-  frame: {
-    "components/tv/TvStage.tsx": 1,
-  },
+  /** None allowed: the migration is finished. */
+  frame: {},
   /** None allowed. */
   pill: {},
   /** TvStageChrome (the exempt Profiles and Clients pages). */
