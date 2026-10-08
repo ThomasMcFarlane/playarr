@@ -1,0 +1,1 @@
+- Web: restored the Home and detail rail edge fades (a dark box appeared at the right edge of rails that run off screen); the focused-card shadow fix returns separately.
