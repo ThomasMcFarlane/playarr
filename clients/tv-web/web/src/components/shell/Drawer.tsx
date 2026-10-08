@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type HTMLAttributes, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
 import { Button } from "../ui";
-import { browserDrawerCloseEnv, playDrawerClose, restoreOpenerFocus, snapshotDrawer } from "./drawerClose";
+import { browserDrawerCloseEnv, openerSelector, playDrawerClose, restoreOpenerFocusWhenReady, snapshotDrawer } from "./drawerClose";
 import { isBackKey } from "../../lib/backKey";
 
 const FOCUSABLE =
@@ -85,10 +85,13 @@ function DrawerPanel({
       const env = browserDrawerCloseEnv();
       const snapshot = snapshotDrawer(node);
       const opener = openerRef.current;
+      const selector = openerSelector(opener);
       // React StrictMode re-runs effects on mount; only a drawer that really went away animates out.
       queueMicrotask(() => {
         if (mountedRef.current) return;
-        playDrawerClose(snapshot, env, () => restoreOpenerFocus(opener, env.document));
+        playDrawerClose(snapshot, env, () =>
+          restoreOpenerFocusWhenReady(opener, selector, env.document, (callback) => window.requestAnimationFrame(callback))
+        );
       });
     };
   }, []);

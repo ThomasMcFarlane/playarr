@@ -5,7 +5,10 @@ import {
   DRAWER_CLOSING_CLASS,
   longestCssTime,
   playDrawerClose,
+  findOpener,
+  openerSelector,
   restoreOpenerFocus,
+  restoreOpenerFocusWhenReady,
   snapshotDrawer,
   type DrawerCloseEnv,
 } from "./drawerClose";
@@ -204,6 +207,54 @@ describe("drawer focus return", () => {
   });
 });
 
+describe("launcher lookup after a re-render", () => {
+  const launcher = (attrs: Record<string, string>) =>
+    ({ tagName: "BUTTON", getAttribute: (name: string) => attrs[name] ?? null }) as unknown as HTMLElement;
+
+  it("describes the launcher by what it controls, then by its label", () => {
+    expect(openerSelector(launcher({ "aria-controls": "filters-panel" }))).toBe('[aria-controls="filters-panel"]');
+    expect(openerSelector(launcher({ "aria-label": "Filters" }))).toBe('button[aria-label="Filters"]');
+    expect(openerSelector(launcher({}))).toBeNull();
+    expect(openerSelector(null)).toBeNull();
+  });
+
+  it("finds the replacement launcher when the original element was removed", () => {
+    const replacement = { focus: vi.fn() } as unknown as HTMLElement;
+    const gone = {} as HTMLElement;
+    const document = { contains: (node: unknown) => node === replacement, querySelector: () => replacement } as unknown as Document;
+    expect(findOpener(gone, '[aria-controls="x"]', document)).toBe(replacement);
+    expect(findOpener(gone, null, document)).toBeNull();
+  });
+
+  it("waits for a re-rendered page to mount the launcher, then focuses it", () => {
+    const focus = vi.fn();
+    const replacement = { focus } as unknown as HTMLElement;
+    let mounted = false;
+    const document = {
+      body: {},
+      documentElement: {},
+      activeElement: null as unknown,
+      contains: (node: unknown) => mounted && node === replacement,
+      querySelector: () => (mounted ? replacement : null),
+    } as unknown as Document;
+    (document as { activeElement: unknown }).activeElement = document.body;
+    const frames: Array<() => void> = [];
+    restoreOpenerFocusWhenReady({} as HTMLElement, '[aria-controls="x"]', document, (callback) => frames.push(callback));
+    expect(focus).not.toHaveBeenCalled();
+    mounted = true;
+    frames.shift()!();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it("stops waiting once the user has focused something else", () => {
+    const other = {};
+    const document = { body: {}, documentElement: {}, activeElement: other, contains: () => false, querySelector: () => null } as unknown as Document;
+    const requestFrame = vi.fn();
+    restoreOpenerFocusWhenReady({} as HTMLElement, '[aria-controls="x"]', document, requestFrame);
+    expect(requestFrame).not.toHaveBeenCalled();
+  });
+});
+
 describe("drawer closing styles", () => {
   const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8");
 
@@ -242,7 +293,7 @@ describe("drawer closing styles", () => {
 describe("Drawer component", () => {
   const source = readFileSync(new URL("./Drawer.tsx", import.meta.url), "utf8");
   it("plays the closing animation on unmount and returns focus afterwards", () => {
-    expect(source).toMatch(/playDrawerClose\(snapshot, env, \(\) => restoreOpenerFocus/);
+    expect(source).toMatch(/playDrawerClose\(snapshot, env, \(\) =>\s*restoreOpenerFocusWhenReady/);
     expect(source).not.toMatch(/opener\.focus/);
   });
 });

@@ -141,3 +141,50 @@ export function restoreOpenerFocus(opener: HTMLElement | null, doc: Document): v
   if (active && active !== doc.body && active !== doc.documentElement) return;
   opener.focus({ preventScroll: true });
 }
+
+/**
+ * A selector that finds the launcher again if its element is replaced. Browser Back re-renders the page, so
+ * the launcher the drawer was opened from can be a new element by the time the drawer has gone.
+ */
+export function openerSelector(opener: HTMLElement | null): string | null {
+  if (!opener || typeof opener.getAttribute !== "function") return null;
+  const quote = (value: string) => `"${value.replace(/["\\]/g, "\\$&")}"`;
+  const controls = opener.getAttribute("aria-controls");
+  if (controls) return `[aria-controls=${quote(controls)}]`;
+  const label = opener.getAttribute("aria-label");
+  if (label) return `${opener.tagName.toLowerCase()}[aria-label=${quote(label)}]`;
+  return null;
+}
+
+/** The launcher itself while it is still attached, otherwise its replacement, otherwise null. */
+export function findOpener(opener: HTMLElement | null, selector: string | null, doc: Document): HTMLElement | null {
+  if (opener && doc.contains(opener)) return opener;
+  if (!selector || typeof doc.querySelector !== "function") return null;
+  return doc.querySelector<HTMLElement>(selector);
+}
+
+/**
+ * Returns focus to the launcher after a drawer has closed, waiting a few frames for a re-rendered page to
+ * mount it. Gives up quietly once the user has focused something else or `maxFrames` have passed.
+ */
+export function restoreOpenerFocusWhenReady(
+  opener: HTMLElement | null,
+  selector: string | null,
+  doc: Document,
+  requestFrame: (callback: () => void) => unknown,
+  maxFrames = 90
+): void {
+  let frames = 0;
+  const attempt = () => {
+    const target = findOpener(opener, selector, doc);
+    if (target) {
+      restoreOpenerFocus(target, doc);
+      return;
+    }
+    const active = doc.activeElement;
+    if (active && active !== doc.body && active !== doc.documentElement) return;
+    frames += 1;
+    if (frames < maxFrames) requestFrame(attempt);
+  };
+  attempt();
+}
