@@ -20,32 +20,32 @@ captures (they show real library artwork).
 
 | Screen | Dark | Light | Status |
 | --- | ---: | ---: | --- |
-| home | 2.08% | 27.30% | open (light: the stage art is the dark-baked server image; web light uses the raw art at 40% opacity) |
-| movies | 3.51% | 27.95% | open (same light key-art cause) |
-| series | 4.28% | not measured | open |
-| film-detail | 25.38% | not re-measured | open (layout not yet rebuilt: no Download, Playback, watchlist or playlist actions, no Cast rail) |
-| series-detail | 18.90% | not re-measured | open (same) |
-| search | 1.00% | not re-measured | open (at the line) |
-| calendar | 2.78% | not re-measured | open |
-| settings | 1.92% | not re-measured | open |
-| settings-avatar | 4.54% | not re-measured | open |
-| settings-language | 1.67% | not re-measured | open |
+| home | 2.08% | 12.71% | open (light: the stage art is the dark-baked server image; web light uses the raw art at 40% opacity) |
+| movies | 3.51% | 7.10% | open (same light key-art cause) |
+| series | 4.28% | 7.80% | open |
+| film-detail | 25.38% | 7.08% | open (layout not yet rebuilt: no Download, Playback, watchlist or playlist actions, no Cast rail) |
+| series-detail | 18.90% | 11.82% | open (same) |
+| search | 1.00% | 1.02% | open (at the line) |
+| calendar | 2.78% | 2.75% | open |
+| settings | 1.92% | 3.35% | open |
+| settings-avatar | 4.54% | 7.10% | open |
+| settings-language | 1.67% | 2.96% | open |
 | settings-player | 2.61% | not re-measured | open |
-| settings-server | 2.75% | not re-measured | open |
-| settings-lock | 2.78% | not re-measured | open |
-| settings-invite | 4.69% | not re-measured | open |
-| settings-remote | 2.14% | not re-measured | open |
-| settings-latency | 1.69% | not re-measured | open |
-| settings-your-data | 3.52% | not measured | open |
+| settings-server | 2.75% | 3.92% | open |
+| settings-lock | 2.78% | 3.10% | open |
+| settings-invite | 4.69% | 5.68% | open |
+| settings-remote | 2.14% | 3.35% | open |
+| settings-latency | 1.69% | 2.98% | open |
+| settings-your-data | 3.52% | 4.44% | open |
 | watchlist | 0.49% | 0.61% | pass |
-| requests | 0.46% | 0.51% | pass |
-| profile-switcher | 6.09% | not re-measured | open (the light web capture was blank) |
+| requests | 0.46% | 2.65% | pass |
+| profile-switcher | 6.09% | 7.29% | open (the light web capture was blank) |
 | player-controls | 0.72% | not measured | pass (chrome regions only: top-right controls and the bottom bar; the video plane screenshots black) |
 | player-quality-menu | 0.82% | not measured | pass (chrome regions only) |
 | household-blocked | n/a | n/a | needs a restricted profile; the real device account is not one |
-| home-scrolled | 9.13% | not measured | open (rail viewport shift differs from web's track scroll) |
-| movies-scrolled | 4.28% | not measured | open (grid shifts like web once the fifth row is reached) |
-| settings-player-scrolled | 2.83% | not measured | open |
+| home-scrolled | 9.13% | 31.83% | open (rail viewport shift differs from web's track scroll) |
+| movies-scrolled | 4.28% | 49.46% | open (grid shifts like web once the fifth row is reached) |
+| settings-player-scrolled | 2.83% | 3.40% | open |
 | downloads | n/a | n/a | justified exception: offline storage is not possible on Roku |
 
 Where the figures stay high: Library and detail screens differ in live artwork decoding and the Library/Detail layouts are still the
@@ -76,3 +76,12 @@ titles cannot be reproduced). None of the screens is at or below 1% except where
 
 Captures are not committed: the device only produces JPEG screenshots ,
 and the report is reproducible with the commands above.
+
+
+## Light theme (measured 8 October, live web, same account)
+
+Light figures above come from one full run. Known causes of the high ones: Home and the Library key art (the server only bakes the dark
+stage image, the web draws the raw art in greyscale at 40% in light, so a `style=stage-light` bake is needed server-side), the scrolled
+states (the web scrolls rails with its own track algorithm, the Roku uses floating focus), and three capture flukes to repeat:
+watchlist (92%, a loading race), settings-player (the web capture is missing) and the player screens (the light web player capture did not
+reveal its controls). Household blocked needs a restricted profile, which the real device account is not, and stays a documented exception.
