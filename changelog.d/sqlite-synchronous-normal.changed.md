@@ -1,0 +1,1 @@
+- SQLite connections use synchronous NORMAL in WAL mode, so a commit no longer waits for a disk sync when the disk is busy with library scans (writes were measured at over a second). The database stays consistent after a crash; only the last few commits can be lost on power failure.

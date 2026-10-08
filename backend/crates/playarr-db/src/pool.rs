@@ -47,6 +47,14 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
                     format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
                 Box::pin(async move {
                     sqlx::query(&statement).execute(&mut *connection).await?;
+                    // In WAL mode NORMAL syncs the log at checkpoints instead of
+                    // on every commit. The database stays consistent after a
+                    // crash; only the last few commits can be lost on power
+                    // failure. Per-commit syncs were measured at over a second
+                    // when the disk was busy with library scans.
+                    sqlx::query("PRAGMA synchronous = NORMAL")
+                        .execute(&mut *connection)
+                        .await?;
                     Ok(())
                 })
             });
@@ -382,6 +390,11 @@ mod tests {
             .expect("read busy timeout");
         assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
         assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
+        let synchronous: i64 = sqlx::query_scalar("PRAGMA synchronous")
+            .fetch_one(&pool)
+            .await
+            .expect("read synchronous");
+        assert_eq!(synchronous, 1, "NORMAL on pooled connections");
         run_migrations(&pool)
             .await
             .expect("migrations must run against the freshly created file");
