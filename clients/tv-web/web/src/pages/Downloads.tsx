@@ -8,6 +8,7 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
+import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useOnlineStatus } from "../lib/useOnlineStatus";
 import { EditKeepUntilDrawer } from "../components/EditKeepUntilDrawer";
@@ -119,6 +120,8 @@ function findFocusedEpisode(detail: WorkDetail, mediaFileId: string): FocusedEpi
   return null;
 }
 
+type NavigationLayerLink = Pick<ReturnType<typeof useNavigationLayer>, "origin" | "captureLink">;
+
 function DownloadRow({
   record,
   t,
@@ -126,7 +129,9 @@ function DownloadRow({
   onRemove,
   onEdit,
   onFocusRow,
+  layer,
 }: {
+  layer: NavigationLayerLink;
   record: DownloadRecord;
   t: TFunc;
   onRetry: (id: string) => void;
@@ -149,7 +154,12 @@ function DownloadRow({
       data-navigation-focus-key={`downloads:${record.id}`}
       onFocus={() => onFocusRow(record.id)}
     >
-      <Link to={recordDetailRoute(record)} className="tv-download-row-copy">
+      <Link
+        to={recordDetailRoute(record)}
+        state={{ navigationOrigin: layer.origin }}
+        onClick={layer.captureLink}
+        className="tv-download-row-copy"
+      >
         <strong>{record.title}</strong>
         {record.subtitle ? <small>{record.subtitle}</small> : null}
         <span className="tv-download-row-meta">
@@ -240,6 +250,9 @@ export function DownloadsPage() {
     canDownload,
   } = useDownloads();
   useDocumentTitle(t("pages.downloads.title"));
+
+  // Back from a title opened out of the list lands on the same row (audit A19).
+  const navigationLayer = useNavigationLayer(`downloads:${downloads.length}`, true, canDownload === true);
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [focusedDetail, setFocusedDetail] = useState<WorkDetail | null>(null);
@@ -469,6 +482,7 @@ export function DownloadsPage() {
                         onRemove={remove}
                         onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
+                        layer={navigationLayer}
                       />
                     ))}
                   </ul>
@@ -488,6 +502,7 @@ export function DownloadsPage() {
                         onRemove={remove}
                         onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
+                        layer={navigationLayer}
                       />
                     ))}
                   </ul>
@@ -507,6 +522,7 @@ export function DownloadsPage() {
                         onRemove={remove}
                         onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
+                        layer={navigationLayer}
                       />
                     ))}
                   </ul>

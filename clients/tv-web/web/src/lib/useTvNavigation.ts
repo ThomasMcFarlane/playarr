@@ -1,4 +1,11 @@
-import { useEffect } from "react";
+import {
+  pickViewDefault,
+  regionOf,
+  shouldUpgradeFallbackFocus,
+  stageChromeBridge,
+  type ViewDefaultKind,
+} from "./viewDefaultFocus";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { NavigationOrigin } from "./navigationLayer";
 import {
@@ -1238,11 +1245,15 @@ function moveFocus(direction: Direction): void {
       ? active
       : null;
   if (!current) {
-    (
-      nodes.find((node) => node.hasAttribute("data-tv-focus-default")) ?? nodes[0]
-    )?.focus({
-      preventScroll: true,
-    });
+    // Nothing focused: start on the page's default, else its first control, else Back, and only then the shell
+    // (audit A8: the first arrow key used to land on the nav rail).
+    const pick = pickViewDefault(
+      nodes.map((node) => ({
+        region: regionOf(node),
+        explicit: node.hasAttribute("data-tv-focus-default"),
+      }))
+    );
+    (pick ? nodes[pick.index] : nodes[0])?.focus({ preventScroll: true });
     return;
   }
 
@@ -1275,8 +1286,13 @@ function moveFocus(direction: Direction): void {
   if (focusActiveAlphabet(current, direction, currentRect)) return;
   if (focusWithinScrollContainer(current, direction)) return;
 
+  // UP and DOWN inside the page never jump into the nav rail (an empty page used to send DOWN from Back to the
+  // rail); the rail is entered with LEFT.
+  const verticalMove = direction === "up" || direction === "down";
   const candidateEntries = entries.filter(
-    (entry) => !entry.element.closest(".app-user-identity")
+    (entry) =>
+      !entry.element.closest(".app-user-identity") &&
+      !(verticalMove && !mainNav && entry.element.closest(".app-nav"))
   );
   const verticalTrackNavigation = navigationWithinVerticalTracks(
     current,
@@ -1361,6 +1377,28 @@ function moveFocus(direction: Direction): void {
     if (pageScroller && pageScrollTop !== undefined) {
       holdScroll(pageScroller, { top: pageScrollTop, left: pageScrollLeft ?? 0 });
     }
+    return;
+  }
+
+  const chromeControls = document.querySelector<HTMLElement>(".tv-stage-chrome-controls");
+  const bridge = stageChromeBridge({
+    direction,
+    hasControls: chromeControls !== null,
+    inControls: chromeControls?.contains(current) ?? false,
+  });
+  if (bridge === "controls") {
+    chromeControls?.querySelector<HTMLElement>("button:not([disabled])")?.focus({ preventScroll: true });
+    return;
+  }
+  if (bridge === "content") {
+    const outside = nodes.filter((node) => !node.closest(".tv-stage-chrome"));
+    const pick = pickViewDefault(
+      outside.map((node) => ({
+        region: "content" as const,
+        explicit: node.hasAttribute("data-tv-focus-default"),
+      }))
+    );
+    (pick ? outside[pick.index] : undefined)?.focus({ preventScroll: true });
     return;
   }
 
@@ -1531,32 +1569,59 @@ export function useTvNavigation(
   navigationOrigin?: NavigationOrigin | null
 ): void {
   const navigate = useNavigate();
+  // The effect below must restart only on a route change. `navigate` changes identity with every location, and
+  // `navigationOrigin` is a fresh object on every App render (the minute clock), so both are read through a ref;
+  // restarting reset the default-focus state and yanked focus into the page up to a minute later (audit A1).
+  const latest = useRef({ navigate, requestedBackTo, hasOrigin: navigationOrigin != null });
+  latest.current = { navigate, requestedBackTo, hasOrigin: navigationOrigin != null };
 
   useEffect(() => {
     if (disabled) return;
 
     let focusHandled = false;
     let userInteracted = false;
-    const view = document.querySelector<HTMLElement>(".app-main") ?? document;
+    let autoFocused: { element: HTMLElement; kind: ViewDefaultKind } | null = null;
+    // Looked up on every scan: the shell can replace `.app-main` (loading shell to loaded page).
+    const currentView = () => document.querySelector<HTMLElement>(".app-main") ?? document;
     const focusViewDefault = () => {
       const activeElement = document.activeElement;
-      const defaultTarget = visibleFocusables(view).find((node) =>
-        node.hasAttribute("data-tv-focus-default")
+      // The page replaced the control it auto-focused (a loading tree swapped for the loaded one): focus fell to
+      // the body, so start again until the user acts.
+      if (autoFocused && !autoFocused.element.isConnected) {
+        autoFocused = null;
+        focusHandled = false;
+      }
+      // The cached focusable snapshot lags a tree swap by a frame; this scan runs inside that frame.
+      invalidateFocusableSnapshot();
+      const nodes = visibleFocusables(currentView());
+      const pick = pickViewDefault(
+        nodes.map((node) => ({
+          region: regionOf(node),
+          explicit: node.hasAttribute("data-tv-focus-default"),
+        }))
       );
+      const defaultTarget = pick ? nodes[pick.index] : undefined;
+      const upgrade = shouldUpgradeFallbackFocus({
+        autoKind: autoFocused && autoFocused.element === activeElement ? autoFocused.kind : null,
+        bestKind: pick?.kind ?? null,
+        userInteracted,
+      });
       if (
         !shouldAutoFocusViewDefault({
           activeElementAllowsViewFocus:
+            upgrade ||
             activeElement === document.body ||
             (activeElement instanceof HTMLElement &&
               activeElement.closest(".app-nav") !== null),
           defaultTargetAvailable: defaultTarget !== undefined,
-          focusHandled,
+          focusHandled: focusHandled && !upgrade,
           userInteracted,
         })
       ) {
         return;
       }
       focusHandled = true;
+      autoFocused = defaultTarget && pick ? { element: defaultTarget, kind: pick.kind } : null;
       defaultTarget?.focus({ preventScroll: true });
     };
 
@@ -1573,11 +1638,8 @@ export function useTvNavigation(
           event.preventDefault();
           return;
         }
-        const target = tvBackNavigationTarget(
-          routeKey,
-          requestedBackTo,
-          navigationOrigin != null
-        );
+        const { navigate, requestedBackTo, hasOrigin } = latest.current;
+        const target = tvBackNavigationTarget(routeKey, requestedBackTo, hasOrigin);
         if (target === null) return;
         event.preventDefault();
         if (target === -1) navigate(-1);
@@ -1605,17 +1667,30 @@ export function useTvNavigation(
     // dominant long-task source under 4K + CPU throttle while rails hydrate.
     let defaultFocusFrame = 0;
     const scheduleFocusViewDefault = () => {
-      // Never re-scan defaults during a remote hold — DOM mutations from
-      // virtualisation would schedule full focusable walks mid-key.
-      if (document.body.dataset.inputMode === "remote") return;
       if (defaultFocusFrame) return;
+      // Cheap exits first: a remote hold mutates the DOM (virtualisation) and must not trigger full focusable
+      // walks mid-key. Focus already placed by the page or the user needs no default. The check no longer skips
+      // everything in remote mode: a detail page opened with OK has to place its start focus when its data arrives.
+      const active = document.activeElement;
+      const free =
+        active === document.body ||
+        (active instanceof HTMLElement && active.closest(".app-nav") !== null) ||
+        (autoFocused !== null && (autoFocused.element === active || !autoFocused.element.isConnected));
+      if (!free || userInteracted) return;
+      // After the first placement only an upgrade can matter: the auto-focused Back or first control being
+      // replaced by something better, or the control vanishing.
+      const upgradeable =
+        autoFocused !== null &&
+        (!autoFocused.element.isConnected ||
+          (autoFocused.element === active && autoFocused.kind !== "explicit"));
+      if (focusHandled && !upgradeable) return;
       defaultFocusFrame = window.requestAnimationFrame(() => {
         defaultFocusFrame = 0;
         focusViewDefault();
       });
     };
     const defaultFocusObserver = new MutationObserver(scheduleFocusViewDefault);
-    defaultFocusObserver.observe(view, {
+    defaultFocusObserver.observe(document.body, {
       attributes: true,
       attributeFilter: ["data-tv-focus-default"],
       childList: true,
@@ -1631,5 +1706,5 @@ export function useTvNavigation(
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);
     };
-  }, [routeKey, disabled, navigate, navigationOrigin, requestedBackTo]);
+  }, [routeKey, disabled]);
 }

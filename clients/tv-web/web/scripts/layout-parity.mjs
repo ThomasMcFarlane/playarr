@@ -129,6 +129,10 @@ async function open(page, path, waitFor) {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(400);
+  // Pages start with focus on their default control (the header Back on an empty page); the pins compare the
+  // resting header, so drop that focus ring.
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.waitForTimeout(100);
 }
 
 const harnessPath = (spec) => {

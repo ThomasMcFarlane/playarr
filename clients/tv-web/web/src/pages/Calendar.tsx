@@ -72,7 +72,7 @@ import { IS_TV } from "../lib/clientPlatform";
 import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
-import { captureNavigationLayer } from "../lib/navigationLayer";
+import { captureNavigationLayer, useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
 import "./Calendar.css";
@@ -836,6 +836,9 @@ export function CalendarPage() {
     () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.name })),
     [data]
   );
+
+  // Back from a title or the player lands on the entry that was open (audit A19).
+  useNavigationLayer(`calendar:${items.length}:${view}`, !loading, !loading && data !== null);
 
   const selectedKey = focusSelected ?? urlState.selected;
   const selectedItem = items.find((item) => item.key === selectedKey) ?? null;

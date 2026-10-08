@@ -1,7 +1,8 @@
 import { smoothScrollIntoView } from "../../lib/smoothScroll";
+import { periodPickerMove } from "../../lib/periodPickerNav";
+import { isBackKey } from "../../lib/backKey";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../ui";
-import { isBackKey } from "../../lib/backKey";
 
 interface Props {
   /** Current anchor day (`YYYY-MM-DD`). */
@@ -75,15 +76,22 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
   }, [open, year]);
 
   function moveFocus(event: React.KeyboardEvent<HTMLElement>) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const list = event.currentTarget.parentElement?.parentElement;
-    const options = [...(list?.querySelectorAll<HTMLElement>("[role='option']") ?? [])];
-    const index = options.indexOf(event.currentTarget);
-    const next = options[index + (event.key === "ArrowDown" ? 1 : -1)];
-    if (next) {
-      event.preventDefault();
-      next.focus();
-    }
+    if (!event.key.startsWith("Arrow")) return;
+    // A focus trap: the global spatial navigation never sees these keys.
+    event.preventDefault();
+    event.stopPropagation();
+    const lists = [...(rootRef.current?.querySelectorAll<HTMLElement>("[role='listbox']") ?? [])].map((list) => [
+      ...list.querySelectorAll<HTMLElement>("[role='option']"),
+    ]);
+    const list = lists.findIndex((options) => options.includes(event.currentTarget));
+    if (list < 0) return;
+    const move = periodPickerMove(
+      event.key,
+      list,
+      lists[list]!.indexOf(event.currentTarget),
+      lists.map((options) => options.length)
+    );
+    if (move) lists[move.list]?.[move.index]?.focus();
   }
 
   return (
@@ -103,7 +111,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
         <span aria-hidden="true">▾</span>
       </Button>
       {open ? (
-        <div id={dialogId} className="period-picker-panel" role="dialog" aria-label={dialogLabel}>
+        <div id={dialogId} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel}>
           <ul role="listbox" aria-label={monthLabel} className="period-picker-list">
             {months.map((name, i) => (
               <li key={name} role="presentation">

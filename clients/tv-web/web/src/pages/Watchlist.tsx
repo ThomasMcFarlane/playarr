@@ -21,6 +21,7 @@ import {
   uniqueSourceKinds,
 } from "../lib/discovery";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 type State =
@@ -34,6 +35,12 @@ export function WatchlistPage() {
   const client = useApiClient();
   const [state, setState] = useState<State>({ status: "loading" });
   const [removeError, setRemoveError] = useState<string | null>(null);
+  // Back from an opened title or the player lands on the same row (audit A19).
+  const navigationLayer = useNavigationLayer(
+    state.status === "ready" ? `watchlist:${state.items.length}` : state.status,
+    true,
+    state.status === "ready"
+  );
   const [attempt, setAttempt] = useState(0);
 
   const liveRevision = useLiveRevision({ areas: ["watchlist"] });
@@ -121,7 +128,7 @@ export function WatchlistPage() {
           ) : (
             <ul className="tv-watchlist-list">
               {state.items.map((entry) => (
-                <WatchlistRow key={entry.title.title_key} entry={entry} onRemove={remove} />
+                <WatchlistRow key={entry.title.title_key} entry={entry} onRemove={remove} layer={navigationLayer} />
               ))}
             </ul>
           )}
@@ -143,9 +150,11 @@ function actionLabel(action: TitleAction, t: ReturnType<typeof useLanguage>["t"]
 export function WatchlistRow({
   entry,
   onRemove,
+  layer,
 }: {
   entry: WatchlistEntry;
   onRemove: (entry: WatchlistEntry) => void;
+  layer?: Pick<ReturnType<typeof useNavigationLayer>, "origin" | "captureLink">;
 }) {
   const { t } = useLanguage();
   const { title, actions } = entry;
@@ -158,7 +167,12 @@ export function WatchlistRow({
     <li className="media-card media-card-row tv-download-row tv-watchlist-row" data-navigation-focus-key={`watchlist:${key}`}>
       <div className="tv-download-row-copy">
         {detail ? (
-          <Link to={detail} data-navigation-focus-key={`watchlist:${key}:open`}>
+          <Link
+            to={detail}
+            state={layer ? { navigationOrigin: layer.origin } : undefined}
+            onClick={layer?.captureLink}
+            data-navigation-focus-key={`watchlist:${key}:open`}
+          >
             <strong>{title.title}</strong>
           </Link>
         ) : (
@@ -180,7 +194,13 @@ export function WatchlistRow({
         {primary && target ? (
           <Link
             to={target}
-            state={{ title: title.title, backTo: "/watchlist", mediaFileId: primary.media_file_id }}
+            state={{
+              title: title.title,
+              backTo: "/watchlist",
+              mediaFileId: primary.media_file_id,
+              ...(layer ? { navigationOrigin: layer.origin } : {}),
+            }}
+            onClick={layer?.captureLink}
             className="tv-watchlist-primary"
             data-tv-focus-default
             data-navigation-focus-key={`watchlist:${key}:primary`}

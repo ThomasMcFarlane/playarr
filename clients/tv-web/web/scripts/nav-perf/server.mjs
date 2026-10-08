@@ -29,7 +29,7 @@ addEventListener('keydown',e=>{cards[idx].style.outline='';const m={ArrowDown:3,
 </script></div></div></body></html>
 `;
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false, watchlist = 0 }) {
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -98,6 +98,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
           : [{ season, episodes: [{ episode, media_file_id: `mf-${work.id}` }] }] },
         available_on: [],
         media_files: [],
+        ...(work.kind === "movie" ? { media_file_id: `mf-${work.id}` } : {}),
       };
       if (detailDelayMs > 0) return void setTimeout(() => json(res, body), detailDelayMs);
       return json(res, body);
@@ -150,6 +151,13 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
         root, path, breadcrumbs: [{ name: "Root A", path: "" }, ...(path ? [{ name: path.split("/").pop(), path }] : [])],
         entries: path ? [] : [dir("Sub A"), dir("Sub B")], total: path ? 0 : 2, offset: 0, limit: 100,
       });
+    }
+    if (watchlist > 0 && p === "/api/v1/watchlist") {
+      return json(res, { items: catalogue.movie.slice(0, watchlist).map((w, i) => ({
+        title: { title_key: `key-${i}`, kind: "movie", title: w.title, year: 2020, external_refs: {}, sources: [{ source: "library", label: "Library", availability: "available", work_id: w.id }] },
+        in_watchlist: true,
+        actions: [{ action: "play", enabled: true, work_id: w.id, media_file_id: `mf-${w.id}` }],
+      })) });
     }
     if (p === "/api/v1/playlists" || p === "/api/v1/admin/playlists") return json(res, []);
     if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: canDownload, can_request: false });

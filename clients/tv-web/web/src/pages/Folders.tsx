@@ -25,7 +25,7 @@ import {
 import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
-import { captureNavigationLayer } from "../lib/navigationLayer";
+import { captureNavigationLayer, useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { usePanelParam } from "../lib/usePanelParam";
 import { usePageBack } from "../lib/pageBack";
@@ -209,10 +209,14 @@ export function FoldersPage() {
     });
   }
 
+  // Going up lands on the folder (or source) just left, not at the top of the list.
+  const focusAfterRef = useRef<string | null>(null);
   function goBack() {
     if (url.root && url.path) {
+      focusAfterRef.current = `folders:directory:${url.path}`;
       update({ path: parentFolderPath(url.path) });
     } else if (url.root && roots && roots.length > 1) {
+      focusAfterRef.current = `folders:root:${url.root}`;
       update({ root: null });
     } else {
       navigate(url.kind ? kindRoute(url.kind) : "/");
@@ -223,6 +227,22 @@ export function FoldersPage() {
     goBack();
     return true;
   });
+
+  const listReady = currentRoot ? listing.status === "ready" : rootsState.status === "ready";
+  // Back from a played file or a detail page restores the card; going up a level restores the folder just left.
+  useNavigationLayer(
+    `${url.root ?? ""}|${url.path}|${listing.status}|${rootsState.status}`,
+    listReady,
+    listReady
+  );
+  useEffect(() => {
+    const key = focusAfterRef.current;
+    if (!key || !listReady) return;
+    const target = document.querySelector<HTMLElement>(`[data-navigation-focus-key="${CSS.escape(key)}"]`);
+    if (!target) return;
+    focusAfterRef.current = null;
+    target.focus({ preventScroll: false });
+  }, [listReady, listing, rootsState]);
 
   const filterCount = activeFolderFilterCount(url);
   const sizeClass = `is-size-${url.size}`;
@@ -344,9 +364,10 @@ export function FoldersPage() {
             ) : (
               <>
                 <ul className={`folders-list ${url.view === "list" ? "folders-rows" : "folders-cover"}`} role="list">
-                  {listing.entries.map((entry) => (
+                  {listing.entries.map((entry, index) => (
                     <li key={`${entry.entry_type}:${entry.path}`}>
                       <EntryCard
+                        first={index === 0}
                         entry={entry}
                         view={url.view}
                         t={t}
@@ -490,9 +511,9 @@ export function RootChooser({
   return (
     <ScrollArea axis="vertical" scrollKey="folders:roots" className="folders-scroll" refreshKey={roots.length}>
       <ul className="folders-list folders-cover" role="list" aria-label={t("pages.folders.sources")}>
-        {roots.map((root) => (
+        {roots.map((root, index) => (
           <li key={root.id}>
-            <button type="button" className="media-card media-card-solid folders-card is-directory" onClick={() => onChoose(root.id)} data-navigation-focus-key={`folders:root:${root.id}`}>
+            <button type="button" className="media-card media-card-solid folders-card is-directory" data-tv-focus-default={index === 0 ? true : undefined} onClick={() => onChoose(root.id)} data-navigation-focus-key={`folders:root:${root.id}`}>
               <span className="folders-thumb">
                 <FolderGlyph />
               </span>
@@ -520,7 +541,9 @@ export function EntryCard({
   view,
   t,
   onOpen,
+  first = false,
 }: {
+  first?: boolean;
   entry: FolderEntry;
   view: FolderUrlState["view"];
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -554,6 +577,7 @@ export function EntryCard({
       className={`media-card media-card-solid folders-card ${isDirectory ? "is-directory" : "is-media"}${watched ? " is-watched" : ""}`}
       aria-label={label}
       data-navigation-focus-key={`folders:${entry.entry_type}:${entry.path}`}
+      data-tv-focus-default={first ? true : undefined}
       onClick={(event) => onOpen(event.currentTarget)}
     >
       <span className="folders-thumb">
