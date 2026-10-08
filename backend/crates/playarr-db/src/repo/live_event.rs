@@ -225,6 +225,37 @@ pub fn subscribe_wake() -> tokio::sync::watch::Receiver<u64> {
     WAKE.subscribe()
 }
 
+/// Change counters for caches that derive per-viewer answers from state the
+/// live events describe. Every published event bumps the library-wide counter
+/// (no user) or the counter of the one user it is for. A cache entry built at
+/// counters `(global, user)` is stale once either has moved.
+static GLOBAL_GENERATION: AtomicU64 = AtomicU64::new(0);
+static USER_GENERATIONS: LazyLock<Mutex<HashMap<Uuid, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// The `(library-wide, this user's)` change counters.
+pub fn change_generation(user_id: Uuid) -> (u64, u64) {
+    let user = USER_GENERATIONS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&user_id)
+        .copied()
+        .unwrap_or(0);
+    (GLOBAL_GENERATION.load(Ordering::Acquire), user)
+}
+
+fn bump_generation(user_id: Option<Uuid>) {
+    match user_id {
+        None => {
+            GLOBAL_GENERATION.fetch_add(1, Ordering::AcqRel);
+        }
+        Some(user) => {
+            let mut map = USER_GENERATIONS.lock().unwrap_or_else(|e| e.into_inner());
+            *map.entry(user).or_insert(0) += 1;
+        }
+    }
+}
+
 fn wake() {
     WAKE.send_modify(|v| *v = v.wrapping_add(1));
 }
@@ -265,6 +296,7 @@ impl LiveEventPublisher {
             tracing::warn!(%err, kind = event.kind, "failed to publish live event");
             return;
         }
+        bump_generation(event.user_id);
         wake();
         // Retention is enforced opportunistically so no extra job is needed.
         if self.published.fetch_add(1, Ordering::Relaxed) % 200 == 199 {
@@ -308,6 +340,44 @@ impl LiveEventPublisher {
 mod tests {
     use super::*;
     use crate::pool::test_sqlite_pool;
+
+    #[tokio::test]
+    async fn publishing_moves_the_matching_change_counters_only() {
+        let publisher = LiveEventPublisher::from_pool(test_sqlite_pool().await);
+        let (me, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let start = change_generation(me);
+        publisher
+            .publish(NewLiveEvent::for_user(
+                other,
+                kind::WATCH,
+                "work",
+                Uuid::new_v4(),
+                &["progress"],
+            ))
+            .await;
+        assert_eq!(change_generation(me).1, start.1);
+        publisher
+            .publish(NewLiveEvent::for_user(
+                me,
+                kind::WATCHLIST,
+                "work",
+                Uuid::new_v4(),
+                &["added"],
+            ))
+            .await;
+        assert_eq!(change_generation(me).1, start.1 + 1);
+        let global = change_generation(me).0;
+        publisher
+            .publish(NewLiveEvent::for_library(
+                kind::LIBRARY,
+                "work",
+                Uuid::new_v4(),
+                &["files"],
+                None,
+            ))
+            .await;
+        assert!(change_generation(me).0 > global);
+    }
 
     #[tokio::test]
     async fn insert_list_bounds_and_purge() {

@@ -75,9 +75,10 @@ pub use library_view::{
     NEWLY_RELEASED_VIEW_ID,
 };
 pub use live_event::{
-    kind as live_event_kind, subscribe_wake as subscribe_live_events, LiveEvent,
-    LiveEventPublisher, LiveEventRepo, NewLiveEvent, SqlxLiveEventRepo,
-    MAX_ROWS as LIVE_EVENT_MAX_ROWS, RETENTION_MS as LIVE_EVENT_RETENTION_MS,
+    change_generation as live_change_generation, kind as live_event_kind,
+    subscribe_wake as subscribe_live_events, LiveEvent, LiveEventPublisher, LiveEventRepo,
+    NewLiveEvent, SqlxLiveEventRepo, MAX_ROWS as LIVE_EVENT_MAX_ROWS,
+    RETENTION_MS as LIVE_EVENT_RETENTION_MS,
 };
 pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use media_language::{

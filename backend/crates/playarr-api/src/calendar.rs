@@ -535,21 +535,37 @@ pub async fn calendar_handler(
     let kinds = parse_kinds(params.kind.as_deref())?;
     let group_series_day = parse_group(params.group.as_deref())?;
     let allowed = viewer.allowed_libraries();
-    Ok(Json(
-        build_calendar(
-            &state,
-            allowed.as_deref(),
-            start,
-            end,
-            kinds.as_ref(),
-            params.source_instance_id,
-            CalendarOptions {
-                group_series_day,
-                viewer: Some(&viewer),
-            },
-        )
-        .await,
-    ))
+    // Per-viewer: the key carries the user and the libraries they may see. A
+    // hit is served without touching the database; live events for this user
+    // or the library, and any source refresh, make it stale.
+    let mut kind_names: Vec<String> = kinds.iter().flatten().map(|k| format!("{k:?}")).collect();
+    kind_names.sort();
+    let key = format!(
+        "{}|{:?}|{start}|{end}|{kind_names:?}|{group_series_day}|{:?}",
+        viewer.user_id, allowed, params.source_instance_id
+    );
+    let cache = &state.calendar_cache;
+    if let Some(hit) = cache.cached_response(&key, viewer.user_id) {
+        return Ok(Json((*hit).clone()));
+    }
+    let source_generation = cache.source_generation();
+    let change_generation = playarr_db::live_change_generation(viewer.user_id);
+    let response = build_calendar(
+        &state,
+        allowed.as_deref(),
+        start,
+        end,
+        kinds.as_ref(),
+        params.source_instance_id,
+        CalendarOptions {
+            group_series_day,
+            viewer: Some(&viewer),
+        },
+    )
+    .await;
+    let response = std::sync::Arc::new(response);
+    cache.store_response(key, source_generation, change_generation, response.clone());
+    Ok(Json((*response).clone()))
 }
 
 /// Lag statistic for one work, merged across every external id it carries.

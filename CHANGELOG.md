@@ -312,6 +312,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The calendar API keeps each viewer's built response for up to two minutes and rebuilds it as soon as a live event for that viewer or the library, or a source refresh, changes what it depends on. Repeat and revisited periods answer from memory.
 - Storybook: one interactive story per component with Controls for props and states; hover, focus-visible, active and focus-within come from the Pseudo states toolbar item (applied to the whole page, portals included).
 - Calendar builds read each work's detail once per request instead of three times, which cuts the time to resolve a month of releases.
 - Search and playback no longer wait on Radarr, Sonarr or Dubarr: lookups are served from a stale-while-revalidate cache with a short deadline, refreshed in the background, and users never see a source error for them.

@@ -83,6 +83,21 @@ pub struct CalendarCache {
     store: Option<SqlxCalendarSourceCacheRepo>,
     timing: RefreshTiming,
     wake: Notify,
+    /// Moves whenever a refresh stores new source data.
+    generation: std::sync::atomic::AtomicU64,
+    responses: Mutex<HashMap<String, CachedResponse>>,
+}
+
+/// How long a built response may be served without a rebuild. Live events and
+/// source refreshes invalidate sooner; this bounds changes that raise neither.
+const RESPONSE_TTL: Duration = Duration::from_secs(120);
+const RESPONSE_CAP: usize = 256;
+
+struct CachedResponse {
+    built: std::time::Instant,
+    source_generation: u64,
+    change_generation: (u64, u64),
+    response: std::sync::Arc<playarr_model::CalendarResponse>,
 }
 
 impl Default for CalendarCache {
@@ -141,7 +156,62 @@ impl CalendarCache {
             store,
             timing,
             wake: Notify::new(),
+            generation: std::sync::atomic::AtomicU64::new(0),
+            responses: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// A built response for `key`, if nothing it depends on has changed. The
+    /// key must name the viewer; `user_id` selects the change counters.
+    pub fn cached_response(
+        &self,
+        key: &str,
+        user_id: Uuid,
+    ) -> Option<std::sync::Arc<playarr_model::CalendarResponse>> {
+        let map = self.responses.lock().unwrap_or_else(|e| e.into_inner());
+        let hit = map.get(key)?;
+        let fresh = hit.built.elapsed() < RESPONSE_TTL
+            && hit.source_generation == self.generation.load(std::sync::atomic::Ordering::Acquire)
+            && hit.change_generation == playarr_db::live_change_generation(user_id);
+        fresh.then(|| hit.response.clone())
+    }
+
+    /// Stores a response built when the counters read `source_generation` and
+    /// `change_generation` (read them before building, so a change during the
+    /// build leaves the entry stale rather than wrongly fresh).
+    pub fn store_response(
+        &self,
+        key: String,
+        source_generation: u64,
+        change_generation: (u64, u64),
+        response: std::sync::Arc<playarr_model::CalendarResponse>,
+    ) {
+        let mut map = self.responses.lock().unwrap_or_else(|e| e.into_inner());
+        if map.len() >= RESPONSE_CAP && !map.contains_key(&key) {
+            map.retain(|_, v| v.built.elapsed() < RESPONSE_TTL);
+            if map.len() >= RESPONSE_CAP {
+                if let Some(oldest) = map
+                    .iter()
+                    .min_by_key(|(_, v)| v.built)
+                    .map(|(k, _)| k.clone())
+                {
+                    map.remove(&oldest);
+                }
+            }
+        }
+        map.insert(
+            key,
+            CachedResponse {
+                built: std::time::Instant::now(),
+                source_generation,
+                change_generation,
+                response,
+            },
+        );
+    }
+
+    pub fn source_generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -327,6 +397,8 @@ impl CalendarCache {
                 }
             }
             self.lock().chunks.insert((instance.id, month), entries);
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         }
 
         let now = Utc::now();
@@ -435,6 +507,47 @@ mod tests {
     use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn empty_response() -> Arc<playarr_model::CalendarResponse> {
+        let day = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        Arc::new(playarr_model::CalendarResponse {
+            start: day,
+            end: day,
+            entries: vec![],
+            sources: vec![],
+        })
+    }
+
+    #[test]
+    fn built_response_is_served_until_a_refresh_or_event_counter_moves() {
+        let cache = CalendarCache::new();
+        let user = Uuid::new_v4();
+        let store = |c: &CalendarCache| {
+            c.store_response(
+                "k".into(),
+                c.source_generation(),
+                playarr_db::live_change_generation(user),
+                empty_response(),
+            )
+        };
+        assert!(cache.cached_response("k", user).is_none());
+        store(&cache);
+        assert!(cache.cached_response("k", user).is_some());
+        // A source refresh storing new data makes it stale.
+        cache
+            .generation
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        assert!(cache.cached_response("k", user).is_none());
+        // An entry stored with counters read before a change is stale at once.
+        let before = playarr_db::live_change_generation(user);
+        cache.store_response(
+            "k".into(),
+            cache.source_generation(),
+            (before.0, before.1.wrapping_sub(1)),
+            empty_response(),
+        );
+        assert!(cache.cached_response("k", user).is_none());
+    }
 
     fn instance(url: String) -> SourceInstance {
         SourceInstance {

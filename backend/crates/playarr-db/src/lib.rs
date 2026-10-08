@@ -45,8 +45,8 @@ pub use repo::{
 };
 
 pub use repo::{
-    live_event_kind, subscribe_live_events, EventingDownloadTicketRepo, EventingMediaFileRepo,
-    EventingPlaylistRepo, EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
-    LiveEvent, LiveEventPublisher, LiveEventRepo, NewLiveEvent, SqlxLiveEventRepo,
-    LIVE_EVENT_MAX_ROWS, LIVE_EVENT_RETENTION_MS,
+    live_change_generation, live_event_kind, subscribe_live_events, EventingDownloadTicketRepo,
+    EventingMediaFileRepo, EventingPlaylistRepo, EventingWatchProgressRepo, EventingWatchlistRepo,
+    EventingWorkRepo, LiveEvent, LiveEventPublisher, LiveEventRepo, NewLiveEvent,
+    SqlxLiveEventRepo, LIVE_EVENT_MAX_ROWS, LIVE_EVENT_RETENTION_MS,
 };
