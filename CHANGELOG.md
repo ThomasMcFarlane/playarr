@@ -309,6 +309,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Calendar builds read each work's detail once per request instead of three times, which cuts the time to resolve a month of releases.
 - Search and playback no longer wait on Radarr, Sonarr or Dubarr: lookups are served from a stale-while-revalidate cache with a short deadline, refreshed in the background, and users never see a source error for them.
 - Merge train: batch landing (key mode) stacks up to six ready PRs with green own CI, tests them with one CI run and lands them with one fast-forward; red batches are halved to the culprit.
 - Calendar API logs how long enrichment and per-entry actions take per request, to find where the time goes.

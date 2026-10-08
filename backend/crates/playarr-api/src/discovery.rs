@@ -541,6 +541,12 @@ pub(crate) struct ResolveMemo {
     gate: tokio::sync::OnceCell<Option<std::sync::Arc<crate::household::HouseholdGate>>>,
     backend: tokio::sync::OnceCell<RequestBackend>,
     progress: tokio::sync::OnceCell<Vec<playarr_model::WatchProgress>>,
+    /// Work details read this request. The viewer's access does not change
+    /// within a request, so a title's detail is loaded (and its cached JSON
+    /// decoded) once however many steps need it.
+    details: tokio::sync::Mutex<
+        std::collections::HashMap<Uuid, Option<std::sync::Arc<playarr_catalog::WorkDetail>>>,
+    >,
 }
 
 impl ResolveMemo {
@@ -558,6 +564,30 @@ impl ResolveMemo {
             })
             .await
             .clone()
+    }
+
+    pub(crate) async fn detail(
+        &self,
+        state: &AppState,
+        viewer: &CatalogViewer,
+        id: Uuid,
+    ) -> Option<std::sync::Arc<playarr_catalog::WorkDetail>> {
+        if let Some(found) = self.details.lock().await.get(&id) {
+            return found.clone();
+        }
+        let allowed = viewer.allowed_libraries();
+        let gate = self.gate(state, viewer).await;
+        let loaded = state
+            .catalog
+            .get_by_id_with(
+                id,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
+            .await
+            .ok()
+            .map(std::sync::Arc::new);
+        self.details.lock().await.insert(id, loaded.clone());
+        loaded
     }
 
     async fn backend(&self, state: &AppState) -> RequestBackend {
@@ -586,8 +616,6 @@ async fn find_library_work(
     snap: &TitleSnapshot,
     memo: &ResolveMemo,
 ) -> Result<Option<Work>, ApiError> {
-    let allowed = viewer.allowed_libraries();
-    let gate = memo.gate(state, viewer).await;
     let mut ids: Vec<Uuid> = snap.work_id.into_iter().collect();
     for r in &snap.external_refs {
         if let Ok(Some(work)) = state
@@ -601,15 +629,8 @@ async fn find_library_work(
         }
     }
     for id in ids {
-        if let Ok(detail) = state
-            .catalog
-            .get_by_id_with(
-                id,
-                crate::household::access(allowed.as_deref(), gate.as_deref()),
-            )
-            .await
-        {
-            return Ok(Some(detail.work));
+        if let Some(detail) = memo.detail(state, viewer, id).await {
+            return Ok(Some(detail.work.clone()));
         }
     }
     Ok(None)
@@ -707,16 +728,7 @@ async fn build_action_context(
         return Ok(ctx);
     };
     ctx.library_work_id = Some(work.id);
-    let allowed = viewer.allowed_libraries();
-    let gate = memo.gate(state, viewer).await;
-    let detail = state
-        .catalog
-        .get_by_id_with(
-            work.id,
-            crate::household::access(allowed.as_deref(), gate.as_deref()),
-        )
-        .await
-        .ok();
+    let detail = memo.detail(state, viewer, work.id).await;
     let progress = memo.progress(state, viewer).await?;
     let for_work: Vec<_> = progress.iter().filter(|p| p.work_id == work.id).collect();
     // list_for_user is newest first.

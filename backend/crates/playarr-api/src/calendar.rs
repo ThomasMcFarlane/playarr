@@ -224,21 +224,15 @@ impl WorkFiles {
     }
 }
 
-async fn work_files(state: &AppState, viewer: &CatalogViewer, work_id: Uuid) -> WorkFiles {
-    let allowed = viewer.allowed_libraries();
-    let gate = state
-        .household
-        .gate_for(&viewer.policy, viewer.user_id)
-        .await;
-    let detail = state
-        .catalog
-        .get_by_id_with(
-            work_id,
-            crate::household::access(allowed.as_deref(), gate.as_deref()),
-        )
-        .await;
+async fn work_files(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    memo: &crate::discovery::ResolveMemo,
+    work_id: Uuid,
+) -> WorkFiles {
+    let detail = memo.detail(state, viewer, work_id).await;
     match detail {
-        Ok(detail) => match detail.children {
+        Some(detail) => match &detail.children {
             playarr_catalog::WorkChildren::Movie => WorkFiles::Movie(detail.media_file_id),
             playarr_catalog::WorkChildren::Series(seasons) => WorkFiles::Series(
                 seasons
@@ -258,7 +252,7 @@ async fn work_files(state: &AppState, viewer: &CatalogViewer, work_id: Uuid) -> 
             ),
             _ => WorkFiles::Other,
         },
-        Err(_) => WorkFiles::Other,
+        None => WorkFiles::Other,
     }
 }
 
@@ -364,7 +358,7 @@ async fn attach_actions(
     // Each distinct work's files are read once, concurrently.
     let work_ids: HashSet<Uuid> = candidates.iter().filter_map(|c| c.entry.work_id).collect();
     let files: HashMap<Uuid, WorkFiles> = futures::stream::iter(work_ids)
-        .map(|work_id| async move { (work_id, work_files(state, viewer, work_id).await) })
+        .map(|work_id| async move { (work_id, work_files(state, viewer, memo, work_id).await) })
         .buffer_unordered(8)
         .collect()
         .await;
