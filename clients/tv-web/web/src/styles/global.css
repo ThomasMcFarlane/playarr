@@ -30,10 +30,6 @@
   --header-height: clamp(78px, calc(8.5 * var(--viewport-unit)), 112px);
   --screen-x: clamp(28px, calc(4.5 * var(--vw)), 92px);
   --screen-y: clamp(24px, calc(3.5 * var(--viewport-unit)), 54px);
-  --focus-outline: #675961;
-  /* The ring painted around the focused card art / control, shared by Home, Library and the detail pages. */
-  --focus-ring-color: color-mix(in srgb, var(--accent, #c4a484) 90%, white);
-  --focus-ring-width: 3px;
   /*
    * Android TV's native WebView host overrides these from its measured
    * bounds because some WebView builds resolve viewport units to zero.
@@ -95,8 +91,7 @@
   color: #fff;
 }
 
-.tv-filter-drawer.media-context-drawer .drawer-close:hover:not(:disabled),
-.tv-filter-drawer.media-context-drawer .drawer-close:focus-visible {
+.tv-filter-drawer.media-context-drawer .drawer-close:hover:not(:disabled) {
   background: #fff;
   color: #120e11;
 }
@@ -193,9 +188,7 @@
   cursor: pointer;
 }
 
-.media-context-drawer .media-context-back:hover:not(:disabled),
-.media-context-drawer .media-context-back:focus-visible {
-  outline: 0;
+.media-context-drawer .media-context-back:hover:not(:disabled) {
   color: #fff;
   transform: scale(1.04);
 }
@@ -220,9 +213,7 @@
   color: #ff91aa;
 }
 
-.media-context-actions button:hover,
-.media-context-actions button:focus-visible {
-  outline: none;
+.media-context-actions button:hover {
   background: rgba(255, 255, 255, 0.16);
   transform: scale(1.035);
 }
@@ -256,15 +247,9 @@
   padding: 0 16px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
-  outline: 0;
   background: rgba(255, 255, 255, 0.075);
   color: #fff;
   font: inherit;
-}
-
-.playlist-context-form > input:focus {
-  border-color: #cf3157;
-  box-shadow: 0 0 0 4px rgba(207, 49, 87, 0.18);
 }
 
 .playlist-context-form .playlist-parent-dropdown {
@@ -332,7 +317,6 @@
   --success: #7fc09d;
   --shadow-soft: 0 24px 72px rgba(0, 0, 0, 0.3);
   --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
-  --focus-outline: #dfdcdd;
 }
 
 *,
@@ -412,8 +396,8 @@ video {
 }
 
 :focus-visible {
-  outline: 3px solid var(--focus-outline);
-  outline-offset: 7px;
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
 }
 
 body[data-input-mode="pointer"] :focus:not(:focus-visible) {
@@ -576,8 +560,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.theme-toggle:hover,
-.theme-toggle:focus-visible {
+.theme-toggle:hover {
   background: var(--surface-strong);
   color: var(--ink);
   transform: scale(1.1);
@@ -729,8 +712,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     border-color 180ms ease;
 }
 
-.btn:hover:not(:disabled),
-.btn:focus-visible:not(:disabled) {
+.btn:hover:not(:disabled) {
   transform: scale(1.055);
 }
 
@@ -774,12 +756,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     border-color 180ms ease,
     background-color 180ms ease,
     transform 220ms ease;
-}
-
-.input:focus {
-  border-color: var(--accent);
-  background: var(--surface-strong);
-  transform: scale(1.015);
 }
 
 .input.is-error {
@@ -877,20 +853,14 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     background-color 180ms ease;
 }
 
-.feature-play:hover,
-.feature-play:focus-visible {
+.feature-play:hover {
   transform: translateX(10px);
 }
 
-.feature-play:hover .feature-play-icon,
-.feature-play:focus-visible .feature-play-icon {
+.feature-play:hover .feature-play-icon {
   transform: scale(1.14) rotate(4deg);
   background: var(--accent);
   color: var(--on-accent);
-}
-
-.feature-play:focus-visible {
-  outline: none;
 }
 
 .home-feature-art {
@@ -1331,7 +1301,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .alphabet-link:hover,
-.alphabet-link:focus-visible,
 .alphabet-link.is-active {
   color: var(--ink);
   transform: scale(1.35);
@@ -1340,10 +1309,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 .alphabet-link.is-active {
   background: var(--ink);
   color: var(--bg);
-}
-
-.alphabet-link:focus-visible {
-  outline-offset: 2px;
 }
 
 .library-sentinel {
@@ -1393,8 +1358,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     transform 220ms ease;
 }
 
-.back-link:hover,
-.back-link:focus-visible {
+.back-link:hover {
   color: var(--ink);
   transform: translateX(-8px);
 }
@@ -1606,14 +1570,8 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .settings-option:hover,
-.settings-option:focus-visible,
 .settings-option.is-active {
   background: var(--surface-soft);
-  outline: none;
-}
-
-.settings-option:focus-visible {
-  box-shadow: inset 4px 0 0 var(--accent);
 }
 
 .settings-option-number {
@@ -1657,7 +1615,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .settings-option:hover .settings-option-arrow,
-.settings-option:focus-visible .settings-option-arrow,
 .settings-option.is-active .settings-option-arrow {
   color: var(--ink);
   transform: translateX(5px);
@@ -1746,7 +1703,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .theme-choice-button:hover,
-.theme-choice-button:focus-visible,
 .theme-choice-button.is-active {
   background: var(--ink);
   color: var(--bg);
@@ -1804,9 +1760,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .language-dropdown-trigger:hover,
-.language-dropdown-trigger:focus-visible,
 .language-dropdown-trigger[aria-expanded="true"] {
-  outline: 0;
   border-color: var(--accent);
   background: var(--surface-strong);
   transform: scale(1.02);
@@ -1872,7 +1826,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   width: 100%;
   min-width: 0;
   border: 0;
-  outline: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -1906,9 +1859,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .language-dropdown-option.is-highlighted,
-.language-dropdown-option:hover,
-.language-dropdown-option:focus-visible {
-  outline: 0;
+.language-dropdown-option:hover {
   background: var(--surface-soft);
 }
 
@@ -2025,9 +1976,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.68rem);
 }
 
-.player-default-button:hover,
-.player-default-button:focus-visible {
-  outline: 0;
+.player-default-button:hover {
   border-color: color-mix(in srgb, #cf3157 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
@@ -2095,9 +2044,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   text-transform: uppercase;
 }
 
-.player-language-button:hover,
-.player-language-button:focus-visible {
-  outline: 0;
+.player-language-button:hover {
   border-color: color-mix(in srgb, #cf3157 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
@@ -2287,9 +2234,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   white-space: nowrap;
 }
 
-.server-choice-option:hover,
-.server-choice-option:focus-visible {
-  outline: 0;
+.server-choice-option:hover {
   border-color: #cf3157;
   background: color-mix(in srgb, #cf3157 12%, var(--surface));
 }
@@ -2370,9 +2315,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   background: #cf3157;
 }
 
-.resume-chooser-option:hover,
-.resume-chooser-option:focus-visible {
-  outline: 0;
+.resume-chooser-option:hover {
   border-color: #cf3157;
   background: color-mix(in srgb, #cf3157 12%, var(--surface));
 }
@@ -2424,9 +2367,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .profile-avatar-preset:hover,
-.profile-avatar-preset:focus-visible,
 .profile-avatar-preset.is-active {
-  outline: 0;
   border-color: #cf3157;
   transform: scale(1.06);
 }
@@ -2532,9 +2473,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   cursor: pointer;
 }
 
-.profile-avatar-editor-close:hover,
-.profile-avatar-editor-close:focus-visible {
-  outline: 2px solid #cf3157;
+.profile-avatar-editor-close:hover {
   color: var(--ink);
 }
 
@@ -2944,8 +2883,7 @@ code {
   font-size: 1.4rem;
 }
 
-.toast-dismiss:hover,
-.toast-dismiss:focus-visible {
+.toast-dismiss:hover {
   background: var(--surface-soft);
   color: var(--ink);
 }
@@ -3131,10 +3069,7 @@ code {
 }
 
 .player-close:hover,
-.player-close:focus-visible,
-.player-minimise:hover,
-.player-minimise:focus-visible {
-  outline: 0;
+.player-minimise:hover {
   border-color: rgba(255, 255, 255, 0.58);
   background: rgba(255, 255, 255, 0.18);
   transform: scale(1.06);
@@ -3534,7 +3469,7 @@ code {
 }
 
 .player-shell-inline-music .player-controls {
-  top: calc(clamp(104px, calc(13 * var(--viewport-unit)), 142px) + clamp(330px, calc(50 * var(--viewport-unit)), 540px) - 92px);
+  top: calc(clamp(104px, calc(13 * var(--viewport-unit)), 142px) + clamp(330px, calc(50 * var(--viewport-unit)), 540px) - var(--music-controls-band));
   right: auto;
   bottom: auto;
   left: 50%;
@@ -3933,10 +3868,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     transform 220ms ease;
 }
 
-.player-btn:hover,
-.player-btn:focus-visible,
-body[data-input-mode="remote"] .player-btn:focus {
-  outline: 0;
+.player-btn:hover {
   background: rgba(255, 255, 255, 0.15);
   transform: scale(1.12);
 }
@@ -4063,10 +3995,7 @@ body[data-input-mode="remote"] .player-btn:focus {
 }
 
 .player-quality-button:hover,
-.player-quality-button:focus-visible,
-body[data-input-mode="remote"] .player-quality-button:focus,
 .player-quality-button[aria-expanded="true"] {
-  outline: 0;
   border: 0;
   background: rgba(255, 255, 255, 0.15);
   opacity: 1;
@@ -4159,10 +4088,7 @@ body[data-input-mode="remote"] .player-quality-button:focus,
     transform 180ms ease;
 }
 
-.player-quality-option:hover,
-.player-quality-option:focus-visible,
-body[data-input-mode="remote"] .player-quality-option:focus {
-  outline: 0;
+.player-quality-option:hover {
   background: rgba(255, 255, 255, 0.14);
   transform: scale(1.025);
 }
@@ -4313,9 +4239,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--ink-soft);
 }
 
-.quality-matrix.is-settings .quality-matrix-choice:hover,
-.quality-matrix.is-settings .quality-matrix-choice:focus-visible {
-  outline: 0;
+.quality-matrix.is-settings .quality-matrix-choice:hover {
   border-color: color-mix(in srgb, #cf3157 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
@@ -4355,10 +4279,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: #ffffff;
 }
 
-.quality-matrix.is-player .quality-matrix-choice:hover,
-.quality-matrix.is-player .quality-matrix-choice:focus-visible,
-body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:focus {
-  outline: 0;
+.quality-matrix.is-player .quality-matrix-choice:hover {
   border-color: rgba(255, 255, 255, 0.24);
   background: rgba(255, 255, 255, 0.15);
   transform: scale(1.025);
@@ -4445,9 +4366,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     transform 200ms ease;
 }
 
-.player-playlist-panel > header button:hover,
-.player-playlist-panel > header button:focus-visible {
-  outline: 0;
+.player-playlist-panel > header button:hover {
   background: rgba(255, 255, 255, 0.14);
   transform: scale(1.1);
 }
@@ -4507,9 +4426,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.player-playlist-item:hover,
-.player-playlist-item:focus-visible {
-  outline: 0;
+.player-playlist-item:hover {
   background: rgba(255, 255, 255, 0.14);
   transform: scale(1.025);
 }
@@ -5327,14 +5244,11 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   background: color-mix(in srgb, var(--ink) 78%, transparent);
 }
 
-.tv-alphabet button:focus-visible,
 .tv-alphabet button:hover {
-  outline: 0;
   color: var(--bg);
   transform: scale(1.18);
 }
 
-.tv-alphabet button:focus-visible::before,
 .tv-alphabet button:hover::before {
   width: 110%;
   background: var(--ink);
@@ -5641,9 +5555,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     transform 200ms ease;
 }
 
-.app-user-identity:hover,
-.app-user-identity:focus-visible {
-  outline: 0;
+.app-user-identity:hover {
   background: var(--ink);
   color: var(--bg);
   transform: translateY(-3px);
@@ -5664,8 +5576,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   color: #fff;
 }
 
-.app-user-identity:hover .app-user-avatar,
-.app-user-identity:focus-visible .app-user-avatar {
+.app-user-identity:hover .app-user-avatar {
   background: color-mix(in srgb, #cf3157 26%, var(--bg));
 }
 
@@ -5916,9 +5827,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   cursor: pointer;
 }
 
-.tv-filter-drawer > header > button:hover,
-.tv-filter-drawer > header > button:focus-visible {
-  outline: 0;
+.tv-filter-drawer > header > button:hover {
   background: var(--ink);
   color: var(--bg);
 }
@@ -5964,9 +5873,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 }
 
 .tv-filter-choice-grid button.is-active,
-.tv-filter-choice-grid button:hover,
-.tv-filter-choice-grid button:focus-visible {
-  outline: 0;
+.tv-filter-choice-grid button:hover {
   background: var(--ink);
   color: var(--bg);
   transform: scale(1.025);
@@ -6327,19 +6234,19 @@ body[data-input-mode="remote"] :is(.tv-title-card-art, .tv-home-card-art) {
 body[data-input-mode="remote"] .tv-search-result-art {
   transition: box-shadow 220ms ease, transform 230ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-body[data-input-mode="remote"] :is(.tv-title-card, .tv-search-result):not([data-remote-active]),
-body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card:not([data-remote-active]) {
+body[data-input-mode="remote"][data-remote-marker] :is(.tv-title-card, .tv-search-result):not([data-remote-active]),
+body[data-input-mode="remote"][data-remote-marker] .tv-home:not(.is-cover-view) .tv-home-card:not([data-remote-active]) {
   transform: none !important;
 }
-body[data-input-mode="remote"] .tv-title-card:not([data-remote-active]) .tv-title-card-art {
+body[data-input-mode="remote"][data-remote-marker] .tv-title-card:not([data-remote-active]) .tv-title-card-art {
   transform: none !important;
   box-shadow: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1) !important;
 }
-body[data-input-mode="remote"] .tv-home-card:not([data-remote-active]) .tv-home-card-art {
+body[data-input-mode="remote"][data-remote-marker] .tv-home-card:not([data-remote-active]) .tv-home-card-art {
   transform: none !important;
   box-shadow: 0 10px 22px rgba(56, 38, 33, 0.16), 0 3px 9px rgba(56, 38, 33, 0.1) !important;
 }
-body[data-input-mode="remote"] .tv-search-result:not([data-remote-active]) .tv-search-result-art {
+body[data-input-mode="remote"][data-remote-marker] .tv-search-result:not([data-remote-active]) .tv-search-result-art {
   transform: none !important;
   box-shadow: 0 12px 34px rgba(31, 14, 20, 0.16) !important;
 }
@@ -6590,11 +6497,15 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   padding-block: 0.72rem;
 }
 
-.tv-library-grid-panel.is-list .tv-title-card:hover,
-.tv-library-grid-panel.is-list .tv-title-card:focus-visible,
-.tv-library-grid-panel.is-list .tv-title-grid:focus-within .tv-title-card.is-selected {
+.tv-library-grid-panel.is-list .tv-title-card:hover {
   background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
   transform: translateX(5px);
+}
+
+/* Focus keeps the grid lift and art shadow (no fill, no sideways shift); the row only slides on hover. */
+.tv-library-grid-panel.is-list .tv-title-card:focus-visible,
+.tv-library-grid-panel.is-list .tv-title-grid:focus-within .tv-title-card.is-selected {
+  transform: translateY(-5px) scale(1.015);
 }
 
 .tv-library-grid-panel.is-list .tv-title-card-art {
@@ -7017,6 +6928,20 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   box-shadow: 0 12px 30px rgba(56, 38, 33, 0.08);
 }
 
+/*
+ * A collage playlist card is one unit: the stacked covers lift and cast their shadow together (a drop shadow follows the
+ * covers' outline; the empty placeholder keeps the plain art shadow). The selector outranks the remote-marker rules.
+ */
+html body[data-input-mode] .tv-playlist-directory-card.tv-title-card .tv-playlist-card-art.tv-title-card-art:not(.is-empty) {
+  box-shadow: none !important;
+  filter: drop-shadow(0 5px 5px rgba(56, 38, 33, 0.14));
+  transition: filter var(--card-art-duration) ease, transform var(--card-art-duration) ease;
+}
+
+html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-visible, [data-remote-active]) .tv-playlist-card-art.tv-title-card-art:not(.is-empty) {
+  filter: drop-shadow(0 12px 12px rgba(56, 38, 33, 0.3)) drop-shadow(0 5px 5px rgba(56, 38, 33, 0.2));
+}
+
 .tv-playlist-card-cover {
   border: 1px solid color-mix(in srgb, var(--line-strong) 76%, transparent);
 }
@@ -7103,9 +7028,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   height: clamp(20px, calc(1.7 * var(--vw)), 28px);
 }
 
-.tv-playlist-media-type-switch button:hover,
-.tv-playlist-media-type-switch button:focus-visible {
-  outline: 0;
+.tv-playlist-media-type-switch button:hover {
   border-color: color-mix(in srgb, #cf3157 76%, transparent);
   color: var(--ink);
   box-shadow: 0 0 0 4px color-mix(in srgb, #cf3157 16%, transparent);
@@ -7118,8 +7041,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: var(--bg);
 }
 
-.tv-playlist-media-type-switch button.is-active:hover,
-.tv-playlist-media-type-switch button.is-active:focus-visible {
+.tv-playlist-media-type-switch button.is-active:hover {
   color: var(--bg);
 }
 
@@ -7154,9 +7076,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: #ff668a;
 }
 
-.tv-playlist-feature-actions button:hover,
-.tv-playlist-feature-actions button:focus-visible {
-  outline: 0;
+.tv-playlist-feature-actions button:hover {
   background: var(--ink);
   color: var(--bg);
   transform: scale(1.05);
@@ -7175,7 +7095,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   padding: 0 clamp(15px, calc(1.3 * var(--vw)), 22px);
   border: 1px solid color-mix(in srgb, var(--line-strong) 74%, transparent);
   border-radius: 12px;
-  outline: 0;
   background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
   color: var(--ink);
   font: inherit;
@@ -7184,13 +7103,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     border-color 180ms ease,
     box-shadow 180ms ease,
     transform 180ms ease;
-}
-
-.tv-playlist-create-form input:focus,
-.tv-playlist-parent-select:focus {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, #cf3157 16%, transparent);
-  transform: scale(1.015);
 }
 
 .tv-playlist-parent-select {
@@ -7497,9 +7409,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   font-size: 0.85em;
 }
 
-.tv-detail-play:hover,
-.tv-detail-play:focus-visible {
-  outline: 0;
+.tv-detail-play:hover {
   background: #cf3157;
   color: #fff;
   transform: scale(1.06);
@@ -7548,9 +7458,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .tv-detail-playback-settings:hover,
-.tv-detail-playback-settings:focus-visible,
 .tv-detail-playback-settings[aria-expanded="true"] {
-  outline: 0;
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
   transform: scale(1.06);
@@ -7642,9 +7550,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: #fff;
 }
 
-.tv-playback-settings-actions button:hover,
-.tv-playback-settings-actions button:focus-visible {
-  outline: 0;
+.tv-playback-settings-actions button:hover {
   transform: scale(1.035);
 }
 
@@ -7805,8 +7711,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   height: 55%;
 }
 
-.tv-track-action:hover,
-.tv-track-action:focus-visible {
+.tv-track-action:hover {
   color: var(--ink);
   background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
   transform: scale(1.06);
@@ -7972,6 +7877,8 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   flex: 0 0 clamp(330px, calc(50 * var(--viewport-unit)), 540px);
   min-height: 0;
   padding-left: 0;
+  /* The inline transport sits in this band at the foot of the flow; the cover flow stays above it. */
+  padding-bottom: var(--music-controls-band);
 }
 
 .tv-music-browser.is-content {
@@ -8016,6 +7923,13 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   will-change: transform;
 }
 
+/* Desktop and TV: the card is centred in the space above the transport band, so the album, its label and the transport never overlap. */
+@media (min-width: 761px) {
+  .tv-music-album-cover-flow .tv-music-album-card {
+    top: 50%;
+  }
+}
+
 .tv-music-album-cover-flow .tv-music-album-card.is-distant {
   opacity: 0;
   pointer-events: none;
@@ -8032,6 +7946,19 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     translateY(-50%)
     rotateY(0)
     scale(1.12);
+}
+
+/* Focus lifts the selected album and deepens its shadow: no ring, no fill (the lift is added to the centring offset). */
+.tv-music-album-cover-flow .tv-music-album-card.is-selected:focus-visible {
+  transform:
+    translateX(-50%)
+    translateY(calc(-50% + var(--card-lift)))
+    rotateY(0)
+    scale(1.12);
+}
+
+.tv-music-album-cover-flow .tv-music-album-card:focus-visible .tv-title-card-art {
+  box-shadow: var(--card-shadow-focus);
 }
 
 .tv-music-album-cover-flow .tv-music-album-card .tv-title-card-art {
@@ -8142,9 +8069,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.tv-music-track-row:hover,
-.tv-music-track-row:focus-visible {
-  outline: 0;
+.tv-music-track-row:hover {
   background: color-mix(in srgb, #cf3157 22%, var(--surface-strong));
   transform: scale(1.012);
 }
@@ -8369,14 +8294,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     transform 220ms ease;
 }
 
-.tv-search-form:focus-within {
-  border-color: color-mix(in srgb, #cf3157 72%, transparent);
-  box-shadow:
-    0 24px 64px rgba(31, 14, 20, 0.18),
-    0 0 0 4px color-mix(in srgb, #cf3157 16%, transparent);
-  transform: scale(1.015);
-}
-
 .tv-search-input-icon {
   width: clamp(18px, calc(1.4 * var(--vw)), 24px);
   height: clamp(18px, calc(1.4 * var(--vw)), 24px);
@@ -8407,6 +8324,23 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   font-size: clamp(0.78rem, calc(0.92 * var(--vw)), 1.12rem);
 }
 
+/* The search field is a pill: when the input has focus the pill carries the theme ring (the input alone is only the text area). */
+.tv-search-form input:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
+}
+
+@supports selector(:has(a)) {
+  .tv-search-form input:focus-visible {
+    outline: 0;
+  }
+
+  .tv-search-form:has(input:focus-visible) {
+    outline: var(--page-focus-ring);
+    outline-offset: var(--page-focus-ring-offset);
+  }
+}
+
 .tv-search-form input::placeholder {
   color: var(--ink-muted);
 }
@@ -8433,14 +8367,11 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   background: transparent;
 }
 
-.tv-search-clear:hover,
-.tv-search-clear:focus-visible {
-  outline: 0;
+.tv-search-clear:hover {
   transform: scale(1.06);
 }
 
-.tv-search-clear:hover,
-.tv-search-clear:focus-visible {
+.tv-search-clear:hover {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
@@ -8493,9 +8424,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .tv-search-filter-toggle:hover,
-.tv-search-filter-toggle:focus-visible,
 .tv-search-filter-toggle.is-open {
-  outline: 0;
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   transform: scale(1.025);
 }
@@ -8565,9 +8494,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .tv-search-filter-row button:hover,
-.tv-search-filter-row button:focus-visible,
 .tv-search-filter-row button.is-active {
-  outline: 0;
   color: var(--ink);
   background: color-mix(in srgb, #cf3157 18%, var(--surface-strong));
   transform: scale(1.07);
@@ -9000,15 +8927,12 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .profile-avatar-button:hover,
-.profile-avatar-button:focus-visible,
 .profile-choice.is-selected .profile-avatar-button {
-  outline: 0;
   color: var(--ink);
   transform: translateY(-8px) scale(1.045);
 }
 
 .profile-avatar-button:hover .profile-avatar,
-.profile-avatar-button:focus-visible .profile-avatar,
 .profile-choice.is-selected .profile-avatar {
   box-shadow:
     0 22px 52px rgba(31, 14, 20, 0.18),
@@ -9095,16 +9019,13 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   white-space: nowrap;
 }
 
-.profile-action-button:hover,
-.profile-action-button:focus-visible {
-  outline: 0;
+.profile-action-button:hover {
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
   transform: scale(1.07);
 }
 
-.profile-sign-out-button:hover,
-.profile-sign-out-button:focus-visible {
+.profile-sign-out-button:hover {
   background: var(--danger);
   color: #ffffff;
 }
@@ -9152,9 +9073,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.profile-clients-link:hover,
-.profile-clients-link:focus-visible {
-  outline: 0;
+.profile-clients-link:hover {
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
   transform: scale(1.07);
@@ -9194,9 +9113,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     opacity 180ms ease;
 }
 
-.profile-update-button:hover,
-.profile-update-button:focus-visible {
-  outline: 0;
+.profile-update-button:hover {
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
   transform: scale(1.07);
@@ -9249,9 +9166,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   font-size: 1.25rem;
 }
 
-.profile-pin-close:hover,
-.profile-pin-close:focus-visible {
-  outline: 0;
+.profile-pin-close:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
   transform: scale(1.08);
@@ -9313,18 +9228,12 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   padding: 0.4rem 1rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 16px;
-  outline: 0;
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   font: 600 1.65rem/1 var(--mono);
   letter-spacing: 0.5em;
   text-align: center;
   text-indent: 0.5em;
-}
-
-.profile-pin-dialog input:focus {
-  border-color: #ff648b;
-  box-shadow: 0 0 0 4px rgba(207, 49, 87, 0.2);
 }
 
 .profile-pin-dialog form button,
@@ -9342,9 +9251,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: #fff;
 }
 
-.profile-pin-dialog form button:hover,
-.profile-pin-dialog form button:focus-visible {
-  outline: 0;
+.profile-pin-dialog form button:hover {
   background: #e13f68;
   transform: scale(1.035);
 }
@@ -9361,9 +9268,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: rgba(255, 255, 255, 0.62);
 }
 
-.profile-pin-sign-in:hover,
-.profile-pin-sign-in:focus-visible {
-  outline: 0;
+.profile-pin-sign-in:hover {
   color: #fff;
   transform: scale(1.04);
 }
@@ -9529,9 +9434,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 }
 
 .legal-navigation-link:hover,
-.legal-navigation-link:focus-visible,
 .legal-navigation-link.is-active {
-  outline: 0;
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
 }
@@ -9945,11 +9848,6 @@ html.is-native-scroll-root .profile-auth-scroll {
     overflow: hidden;
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
-  }
-
-  :focus-visible {
-    outline-width: 2px;
-    outline-offset: 3px;
   }
 
   .app-shell,
@@ -10492,6 +10390,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     min-height: 290px;
     flex-basis: 290px;
     padding-left: 0;
+    padding-bottom: 0;
   }
 
   .tv-music-album-cover-flow {
@@ -11217,9 +11116,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-detail-download:hover,
-.tv-detail-download:focus-visible,
 .tv-detail-download[aria-expanded="true"] {
-  outline: 0;
   background: color-mix(in srgb, var(--ink) 88%, transparent);
   color: var(--bg);
   transform: scale(1.06);
@@ -11320,8 +11217,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   transition: background 180ms ease;
 }
 
-.tv-download-row:hover,
-.tv-download-row:focus-within {
+.tv-download-row:hover {
   background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
 }
 
@@ -11390,15 +11286,12 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   transition: background 180ms ease, color 180ms ease;
 }
 
-.tv-download-row-actions button:hover,
-.tv-download-row-actions button:focus-visible {
-  outline: 0;
+.tv-download-row-actions button:hover {
   background: var(--ink);
   color: var(--bg);
 }
 
-.tv-download-row-actions .tv-download-row-remove:hover,
-.tv-download-row-actions .tv-download-row-remove:focus-visible {
+.tv-download-row-actions .tv-download-row-remove:hover {
   background: #cf3157;
   color: #fff;
 }
@@ -11534,12 +11427,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   min-height: 48px;
 }
 
-.end-screen-actions .btn:focus-visible,
-.end-screen-tile:focus-visible {
-  outline: 3px solid #ffffff;
-  outline-offset: 3px;
-}
-
 .end-screen-suggestions h3 {
   margin-bottom: 0.6rem;
   font-size: clamp(0.9rem, calc(1.2 * var(--vw)), 1.2rem);
@@ -11661,11 +11548,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   border-color: transparent;
   background: var(--accent);
   color: var(--on-accent);
-}
-.playback-health-panel .ui-btn:focus-visible,
-.playback-health-export:focus-visible {
-  outline: 3px solid #ffd27a;
-  outline-offset: 2px;
 }
 .playback-health-status { margin: 0; }
 .playback-health-status.is-error { color: #ffb4a8; }
@@ -11842,14 +11724,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   cursor: pointer;
 }
 
-.tv-watchlist-toggle:hover,
-.tv-watchlist-toggle:focus-visible,
-.tv-watchlist-primary:hover,
-.tv-watchlist-primary:focus-visible {
-  outline: 2px solid #cf3157;
-  outline-offset: 2px;
-}
-
 .tv-watchlist-toggle[aria-pressed="true"] {
   border-color: #cf3157;
 }
@@ -11924,10 +11798,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   color: inherit;
   font: inherit;
   cursor: pointer;
-}
-.household-blocked-button:focus-visible {
-  outline: 3px solid currentColor;
-  outline-offset: 3px;
 }
 .household-blocked-button:disabled {
   opacity: 0.6;
@@ -12010,12 +11880,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   color: var(--ink);
   color-scheme: light dark;
   font: inherit;
-}
-
-.filters-date-range input[type="date"]:focus-visible,
-.filters-date-clear:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
 }
 
 .filters-date-clear {
@@ -12222,12 +12086,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   border-radius: 50%;
 }
 
-/* The focus indicator is the theme ring, never a fill (docs/design/page-layout.md, section 5). Hover follows focus. */
-.ui-btn:focus-visible {
-  outline: var(--page-focus-ring);
-  outline-offset: var(--page-focus-ring-offset);
-}
-
 @media (hover: hover) {
   .ui-btn--secondary:hover:not(:disabled),
   .ui-btn--icon:hover:not(:disabled) {
@@ -12294,42 +12152,23 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   pointer-events: none;
 }
 
-/*
- * Title detail focus. Controls paint the ring on themselves. Media cards (episode, cast and similar-title tiles, all
- * `.tv-episode-card`) never take a ring: they lift with a soft shadow (owner ruling 2026-10-08, Q13). The ring tokens
- * are --focus-ring-color and --focus-ring-width.
- */
-.tv-detail :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
-  outline-offset: 4px;
-}
-
 /* Touch layouts: autofocus (programmatic focus reports :focus-visible) must not look focused. */
 @media (max-width: 760px) and (hover: none) {
   body:not([data-input-mode="remote"])
     .tv-detail
-    :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {
+    :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.media-card) {
     outline: 0;
   }
 }
 
-/* Player focus: every focused control shows the white ring, not only a fill. */
-.player-close:focus-visible,
-.player-minimise:focus-visible,
-.player-btn:focus-visible,
-.player-quality-button:focus-visible,
-.player-quality-option:focus-visible,
-.quality-matrix.is-player .quality-matrix-choice:focus-visible,
-.player-playlist-panel > header button:focus-visible,
-.player-playlist-item:focus-visible,
 body[data-input-mode="remote"] .player-close:focus,
 body[data-input-mode="remote"] .player-minimise:focus,
 body[data-input-mode="remote"] .player-btn:focus,
 body[data-input-mode="remote"] .player-quality-button:focus,
 body[data-input-mode="remote"] .player-quality-option:focus,
 body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:focus {
-  outline: 3px solid #ffffff;
-  outline-offset: 2px;
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
 }
 
 @media (max-width: 520px) {

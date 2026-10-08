@@ -262,6 +262,33 @@ function setRemoteActiveMarker(element: HTMLElement | null): void {
   }
   if (element && element !== markedElement) element.setAttribute("data-remote-active", "");
   markedElement = element;
+  // While a virtual marker exists, natively focused cards are stale (the marker is the one lifted card).
+  // With no marker, native focus is the only focus signal and must lift its card.
+  if (typeof document !== "undefined") {
+    if (element) document.body.dataset.remoteMarker = "";
+    else delete document.body.dataset.remoteMarker;
+  }
+}
+
+/**
+ * The virtual marker is only meaningful while focus stays in the grid or rail that owns it. When the marked card has
+ * left the page, or native focus lands outside the marker's scroll container (another page, a panel), drop the marker:
+ * otherwise `body[data-remote-marker]` would keep neutralising the lift of every natively focused card elsewhere.
+ */
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      if (!markedElement) return;
+      if (!markedElement.isConnected) {
+        setRemoteActiveMarker(null);
+        return;
+      }
+      const scope = markedElement.closest("[data-tv-scroll-container]");
+      if (scope && event.target instanceof Node && !scope.contains(event.target)) setRemoteActiveMarker(null);
+    },
+    true
+  );
 }
 
 function runPendingApply(): void {

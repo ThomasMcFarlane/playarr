@@ -513,7 +513,7 @@ export function RootChooser({
       <ul className="folders-list folders-cover" role="list" aria-label={t("pages.folders.sources")}>
         {roots.map((root) => (
           <li key={root.id}>
-            <button type="button" className="folders-card is-directory" onClick={() => onChoose(root.id)} data-navigation-focus-key={`folders:root:${root.id}`}>
+            <button type="button" className="media-card media-card-solid folders-card is-directory" onClick={() => onChoose(root.id)} data-navigation-focus-key={`folders:root:${root.id}`}>
               <span className="folders-thumb">
                 <FolderGlyph />
               </span>
@@ -572,7 +572,7 @@ export function EntryCard({
   return (
     <button
       type="button"
-      className={`folders-card ${isDirectory ? "is-directory" : "is-media"}${watched ? " is-watched" : ""}`}
+      className={`media-card media-card-solid folders-card ${isDirectory ? "is-directory" : "is-media"}${watched ? " is-watched" : ""}`}
       aria-label={label}
       data-navigation-focus-key={`folders:${entry.entry_type}:${entry.path}`}
       onClick={(event) => onOpen(event.currentTarget)}

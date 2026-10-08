@@ -290,7 +290,7 @@ function ItemRow({
     <li>
       <button
         type="button"
-        className={`calendar-entry calendar-availability-${itemAvailability(item)}${isGroup ? " calendar-entry-group" : ""}${selected ? " is-selected" : ""}`}
+        className={`media-card media-card-solid calendar-entry calendar-availability-${itemAvailability(item)}${isGroup ? " calendar-entry-group" : ""}${selected ? " is-selected" : ""}`}
         data-navigation-focus-key={`calendar:${item.key}`}
         aria-pressed={selected}
         onClick={(event) => onSelect(item, event.currentTarget)}
@@ -524,7 +524,7 @@ function MonthGrid({
                           <li key={item.key}>
                             <button
                               type="button"
-                              className={`calendar-chip calendar-availability-${itemAvailability(item)}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
+                              className={`media-card media-card-solid calendar-chip calendar-availability-${itemAvailability(item)}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
                               title={
                                 item.kind === "series"
                                   ? `${item.title} · ${t("pages.calendar.groupSummary", {

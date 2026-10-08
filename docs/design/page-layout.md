@@ -167,7 +167,7 @@ transition: background 180ms ease, color 180ms ease, transform 180ms ease;
 ```
 
 Deliberate departures from the 30 September rules, all owner decisions:
-- **Focus (Q2).** The reference filled with `--ink` and scaled 1.06 on `:focus-visible` and hover. Focus is now the theme focus ring (white in dark, ink in light; section 5, Q11) with **no fill**. The 1.06 scale is kept, drawn as a transform. Hover on pointer devices follows focus.
+- **Focus (Q2).** The reference filled with `--ink` and scaled 1.06 on `:focus-visible` and hover. Focus is now the theme focus ring (white in dark, ink in light; section 5, Q11) with **no fill, no glow and no scale** (owner, 8 October: one focus style system). The 1.06 scale stays on pointer hover only.
 - **Open state.** The ink fill for `is-active` (drawer open) is kept. It is not a focus state. Owner decision Q12 (8 October): the drawer-open state keeps its ink fill, and the focus ring draws on top when focused.
 - **Position (Q1b, 8 October).** Position is part of Q1. Every pill sits in the shell action column at the 30 September launcher position (right edge, below the header row), stacked vertically. Not in the header row, and not positioned per page.
 
@@ -341,7 +341,9 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
 
 1. **The focus indicator is a ring, never a fill** (owner decisions Q2, Q11). It is `--page-focus-ring`:
    - 3px of `--focus-ring-color`, offset 2px. The colour is white (`#ffffff`) in dark theme and the theme's `--ink` token (near-black) in light theme.
-   - Width, offset and the 1.06 scale are the same in both themes. There is no fill.
+   - Width and offset are the same in both themes. There is no fill, no glow and no scale: the focus indicator of a control is the ring and nothing else. Hover keeps its look.
+   - One implementation: `--page-focus-ring` and `--page-focus-ring-offset` in `styles/page-layout.css`, applied by the single global `:focus-visible` rule. No page stylesheet repeats the ring or overrides it for a whole page (the Calendar page-wide override and the Folders ring are gone). Surfaces that are dark in both themes (player, end screen, playback-health panel, media-context drawer, PIN dialog) recompute the token as white in their own scope.
+   - Inputs, chips and selects follow the same rule (the search field's pill carries the ring while its input has focus).
    - Phone, mobile and pointer use 2px with a 3px offset.
    - It is used on controls: Back, action pills, the navigation group, buttons, the scrubber. **No ink fill on focus.** Media cards are the exception (item 1a). The fills web has today go, which affects Back, `.page-filters-button`, `.tv-page-back` and `.ui-btn` hover/focus.
    - Light theme: a white ring would vanish on `--bg` `#f5f3f2` and `--surface-strong` `#ffffff`, so light uses the ink ring (Q11). Every place that used a literal white ring reads `--focus-ring-color` instead.
@@ -352,6 +354,8 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
    - Art shadow, rest: `0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1)` (home `0 10px 22px 0.16, 0 3px 9px 0.1`; search `0 12px 34px rgba(31, 14, 20, 0.16)`).
    - Art shadow, focused: `0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2)` (home `0 26px 52px 0.32, 0 11px 22px 0.22`; search `0 22px 52px rgba(31, 14, 20, 0.28)`).
    - The lift is a draw-time transform (no layout change, no z-index change), so spatial and focus search see the same bounds. Buttons, pills, Back and the scrubber keep the ring.
+   - **One class, one rule.** Every focusable card carries `media-card` (posters, thumbnails, episode and cast tiles, search results, playlist cards including the stacked collage as one unit, folder cards, music album and artist cards, calendar entries and chips, end-screen tiles, and the rows of Downloads, Watchlist and Requests as `media-card-row`). `styles/page-layout.css` holds the tokens (`--card-lift`, `--card-shadow-focus`, ...) and the shared rule; a card that is itself the visible box (`media-card-solid`) carries the shadow on itself, a card with art carries it on the art, and a collage playlist card casts it with a drop shadow so the stacked covers lift as one. Focus means `:focus-visible` (keyboard and D-pad) and the virtual remote marker `[data-remote-active]`; the remote-mode neutralisation of stale lifts applies only while a marker exists (`body[data-remote-marker]`), so a settled native focus always lifts its card.
+   - Guards: `styles/focusStyle.test.ts` (tokens, pinned values, class on every card, no ring or fill on cards, no fill or scale on controls) and `scripts/focus-style-e2e.mjs` (real keyboard focus, both themes, 1920x1080 and 1280x720).
 2. **D-pad order:**
    - nav rail → Back → (Right) navigation items → secondary pills → Filters.
    - **Down** from any header control enters the content. It goes to the restored focus key if there is one, otherwise to the first item.
@@ -360,7 +364,7 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
    - **Right** from Filters does nothing.
    - The title, detail and clock are never focusable.
 3. **Initial focus** on opening a page goes to content, never to the header. The exception is when the content is in a `LoadingState`, `EmptyState` or `ErrorState`: then it goes to the state's action (Retry) if there is one, otherwise to Back. The series page rule (next episode) is unchanged.
-4. **Focus never moves the header.** Header controls do not scale in a way that shifts siblings. The focus scale (1.06 on the action pill, 1.1 on Back) is drawn with `transform`/`graphicsLayer` only.
+4. **Focus never moves the header.** Header controls do not scale in a way that shifts siblings. Controls take no focus scale at all (hover still scales the action pill and Back, drawn with `transform`/`graphicsLayer` only).
 5. **Back** (the remote key) closes an open drawer or panel first, then navigates. This is the existing rule.
 6. **UP and DOWN between stacked horizontal rails are geometric** (Home rails, detail-page tracks, any stack of rails; owner rule 8 Oct). Native clients copy this exactly:
    - Take the on-screen horizontal centre `x` of the focused card, as drawn right now (after the rail's own scroll).
@@ -541,7 +545,7 @@ Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
 | Q3b | Customise Home | **Owner (8 October), overrides Q3:** Customise Home is not a pill in the header or the column. It is removed from Home and moves into Settings. | Recorded here; delivered in its own PR. |
 | Q9 | Header row height | **Owner:** the header row grows to fit the tile, and all items centre vertically on the tile. **Superseded by Q1b (8 October):** the tiles no longer sit in the header row, so the row keeps the Back-button height (`--page-control-height`) and its geometry is the 30 September one. | Rule 2.2 and the `--page-header-height` token. Back, title, clock and actions centre on the tile height. Each page's ⚑ list states the shift. |
 | Q10 | Back and period arrows | **Owner:** they stay round. Only the focus ring is added. | Rule 2.4 `icon` variant. They do not take the tile look. |
-| Q11 | Focus ring in the light theme | **Owner:** the ring is white (`#ffffff`) in dark theme and a near-black ink ring in light theme (the theme's ink token). Width, offset and the 1.06 scale are unchanged, with no fill. | Section 5.1 and the `--focus-ring-color` token. Wherever the spec said "literal white" or "white everywhere", it now reads as this theme-aware ring. |
+| Q11 | Focus ring in the light theme | **Owner:** the ring is white (`#ffffff`) in dark theme and a near-black ink ring in light theme (the theme's ink token). Width and offset are unchanged, with no fill and no scale. | Section 5.1 and the `--focus-ring-color` token. Wherever the spec said "literal white" or "white everywhere", it now reads as this theme-aware ring. |
 | Q12 | Drawer-open state | **Owner:** the drawer-open state keeps its ink fill. | Section 2.1. The ring draws on top when focused. |
 
 ## 10a. Motion (owner ruling, 8 October 2026)

@@ -2,17 +2,18 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("MusicDetail track list", () => {
-  it("keeps scaled focused tracks inside the scroll viewport", () => {
+  it("keeps scaled hovered tracks inside the scroll viewport", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const trackRowRule = css.match(
       /\.tv-music-track-row\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
     const highlightedTrackRule = css.match(
-      /(?<selectors>\.tv-music-track-row:hover,[^{]+)\{(?<declarations>[^}]*)\}/
+      /(?<selectors>\.tv-music-track-row:hover[^{]*)\{(?<declarations>[^}]*)\}/
     )?.groups;
 
     expect(trackRowRule).toContain("margin-inline: 0.75%");
-    expect(highlightedTrackRule?.selectors).toContain(".tv-music-track-row:focus-visible");
+    // Focus is the theme ring (no fill, no scale); only hover keeps the highlight and scale.
+    expect(highlightedTrackRule?.selectors).not.toContain(":focus-visible");
     expect(highlightedTrackRule?.selectors).not.toContain(".tv-music-track-row.is-selected");
     expect(highlightedTrackRule?.declarations).toContain("transform: scale(1.012)");
   });

@@ -256,7 +256,7 @@ function AlbumCoverFlow({
               key={album.album.id}
               id={`music-album-${album.album.id}`}
               type="button"
-              className={`tv-title-card tv-music-album-card${
+              className={`media-card tv-title-card tv-music-album-card${
                 isSelected ? " is-selected" : ""
               }${isPlaying ? " is-playing" : ""}${distance > 4 ? " is-distant" : ""}`}
               style={flowStyle}

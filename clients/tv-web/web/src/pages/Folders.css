@@ -92,11 +92,6 @@
   flex-direction: column;
 }
 
-.folders-card:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
-
 .folders-card:hover {
   border-color: var(--line-strong);
 }
@@ -218,11 +213,6 @@
   background: var(--surface-strong);
   color: var(--ink);
   font: inherit;
-}
-
-.folders-search:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
 }
 
 @media (max-width: 760px) {

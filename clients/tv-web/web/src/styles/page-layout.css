@@ -36,6 +36,20 @@
   --page-focus-ring-width: 3px;
   --page-focus-ring-offset: 2px;
   --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
+  /*
+   * Media card focus (docs/design/page-layout.md, section 5, item 1a): a soft shadow plus an animated lift, never a
+   * ring or a fill. Values pinned from commit de371253; per-surface variants (library grid, home, search) override the
+   * lift in global.css.
+   */
+  /* Height of the inline music transport band at the foot of the album flow (artist page). */
+  --music-controls-band: clamp(88px, calc(10 * var(--viewport-unit)), 108px);
+  --card-lift: -7px;
+  --card-lift-duration: 260ms;
+  --card-lift-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --card-art-scale: 1.025;
+  --card-art-duration: 240ms;
+  --card-shadow-rest: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1);
+  --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2);
   /* The scroll-edge fade (the rail-panel glow). */
   --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
   --page-edge-fade-opacity: 0.62;
@@ -44,6 +58,54 @@
 :root[data-theme="dark"] {
   --focus-ring-color: #ffffff;
   --page-edge-fade-opacity: 0.54;
+}
+
+/* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */
+.player-page,
+.end-screen,
+.playback-health-panel,
+.media-context-drawer,
+.profile-pin-dialog {
+  --focus-ring-color: #ffffff;
+  --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
+}
+
+/*
+ * Media cards (`.media-card`) never take a ring or a fill. On FOCUS (keyboard, D-pad: `:focus-visible`, and the
+ * virtual remote marker `[data-remote-active]`) they lift with a soft shadow; hover keeps its own look. The lift is a
+ * draw-time transform, so spatial and focus search measure the same bounds. Cards that own their art (`tv-title-card`,
+ * `tv-home-card`, `tv-episode-card`, `tv-search-result`) carry the art shadow in global.css; `.media-card-solid`
+ * cards (the card itself is the visible box) and `.media-card-row` rows carry the shadow themselves. Low specificity on
+ * purpose: per-surface lifts (library grid -5px, home -6px, search -6px) override the transform.
+ */
+.media-card:focus-visible,
+.media-card[data-remote-active] {
+  outline: 0;
+}
+
+:where(.media-card) {
+  transition:
+    transform var(--card-lift-duration) var(--card-lift-ease),
+    box-shadow var(--card-art-duration) ease;
+}
+
+:where(.media-card):is(:focus-visible, [data-remote-active]) {
+  transform: translateY(var(--card-lift));
+}
+
+:where(.media-card-solid):is(:focus-visible, [data-remote-active]),
+:where(.media-card-row):focus-within {
+  box-shadow: var(--card-shadow-focus);
+}
+
+:where(.media-card-row):focus-within {
+  transform: translateY(var(--card-lift));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.media-card) {
+    transition: box-shadow var(--card-art-duration) ease;
+  }
 }
 
 .app-shell {
@@ -199,16 +261,9 @@
     color 220ms ease;
 }
 
-/* Back stays round (owner decision Q10). Focus is the theme ring and the 1.1 scale, never a fill; hover follows focus. */
-.tv-page-back:hover,
-.tv-page-back:focus-visible {
-  outline: 0;
+/* Back stays round (owner decision Q10). Focus is the theme ring only: no fill, no scale. Hover keeps its scale. */
+.tv-page-back:hover {
   transform: scale(1.1);
-}
-
-.tv-page-back:focus-visible {
-  outline: var(--page-focus-ring);
-  outline-offset: var(--page-focus-ring-offset);
 }
 
 @media (max-width: 1100px), (max-height: 700px) {
@@ -320,20 +375,14 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 }
 
 /*
-* Focus (and hover) draw the ring and the 1.06 scale, never a fill. The open state (drawer shown) keeps the
-* ink fill. Dark theme: --ink is white, light theme: near-black ink.
-*/
-.ui-btn--secondary.action-pill:hover:not(:disabled),
-.ui-btn--secondary.action-pill:focus-visible {
+ * Focus draws the theme ring only: no fill, no glow, no scale. Hover keeps its look. The open state (drawer shown)
+ * keeps the ink fill. Dark theme: --ink is white, light theme: near-black ink.
+ */
+.ui-btn--secondary.action-pill:hover:not(:disabled) {
   background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
   border-color: color-mix(in srgb, var(--line) 68%, transparent);
   color: var(--ink);
   transform: scale(1.06);
-}
-
-.ui-btn.action-pill:focus-visible {
-  outline: var(--page-focus-ring);
-  outline-offset: var(--page-focus-ring-offset);
 }
 
 .ui-btn--secondary.action-pill.is-active {

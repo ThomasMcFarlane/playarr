@@ -221,7 +221,7 @@ const SearchResultCard = memo(function SearchResultCard({
         ref={setRef}
         to={playlistPageTarget(playlist, playlists ?? [])}
         state={linkState}
-        className={`tv-search-result is-playlist${isSelected ? " is-selected" : ""}`}
+        className={`media-card tv-search-result is-playlist${isSelected ? " is-selected" : ""}`}
         data-search-key={key}
         onClick={onCapture}
         data-navigation-focus-key={`search:${key}`}
@@ -261,7 +261,7 @@ const SearchResultCard = memo(function SearchResultCard({
       ref={setRef}
       to={detailRoute}
       state={linkState}
-      className={`tv-search-result${isSelected ? " is-selected" : ""}`}
+      className={`media-card tv-search-result${isSelected ? " is-selected" : ""}`}
       {...contextProps}
       data-search-key={key}
       onClick={onCapture}

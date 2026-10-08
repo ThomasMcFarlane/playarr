@@ -62,19 +62,14 @@ describe("player audit rules", () => {
     expect(page).toContain("retryNegotiation");
   });
 
-  it("every focused player control shows the white ring", () => {
-    const ring = css.slice(css.lastIndexOf("/* Player focus: every focused control"));
-    for (const selector of [
-      ".player-close:focus-visible",
-      ".player-minimise:focus-visible",
-      ".player-btn:focus-visible",
-      ".player-quality-button:focus-visible",
-      ".player-quality-option:focus-visible",
-      ".player-playlist-item:focus-visible",
-    ]) {
-      expect(ring).toContain(selector);
+  it("every focused player control shows the white ring, from the one shared token", () => {
+    const global = css;
+    const layout = read("../styles/page-layout.css");
+    // The player is always dark: its scope recomputes the ring token as white in both themes.
+    expect(layout).toMatch(/\.player-page,[^{]*\{\s*--focus-ring-color: #ffffff;\s*--page-focus-ring: [^;]+;/);
+    for (const selector of [".player-close", ".player-minimise", ".player-btn", ".player-quality-button", ".player-playlist-item"]) {
+      expect(global).not.toMatch(new RegExp(`${selector.replace(".", "\\.")}:focus-visible[^{]*\\{[^}]*(background|transform)`));
     }
-    expect(ring).toContain("outline: 3px solid #ffffff");
   });
 
   it("the Info panel shows the title, episode and synopsis and closes back to its opener", () => {

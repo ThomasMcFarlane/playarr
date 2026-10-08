@@ -244,7 +244,7 @@ export function EndScreen({
                 <button
                   key={work.id}
                   type="button"
-                  className="end-screen-tile"
+                  className="media-card end-screen-tile"
                   data-end-screen-tile
                   aria-label={t("pages.workDetail.openTitle", { title: work.title })}
                   onClick={() => onSelectSuggestion(detailRouteForWork(work))}

@@ -29,9 +29,10 @@ describe("series page opens on the next item to play", () => {
 });
 
 describe("title detail focus", () => {
-  it("keeps one ring token pair for controls", () => {
-    expect(css).toContain("--focus-ring-color: color-mix(in srgb, var(--accent, #c4a484) 90%, white);");
-    expect(css).toContain("--focus-ring-width: 3px;");
+  it("keeps one ring token set for controls (page-layout.css), not a second copy in global.css", () => {
+    expect(css).not.toContain("--focus-ring-color");
+    expect(css).not.toContain("--focus-outline");
+    expect(css).toMatch(/:focus-visible \{\s*outline: var\(--page-focus-ring\);\s*outline-offset: var\(--page-focus-ring-offset\);/);
   });
 
   it("gives media cards (episode, cast, similar title) a lift and shadow, never a ring (owner ruling 2026-10-08)", () => {
@@ -44,13 +45,10 @@ describe("title detail focus", () => {
     expect(css).toMatch(/\.tv-home-card\[data-remote-active\] \.tv-home-card-art \{\s*transform: scale\(1\.025\) !important;\s*box-shadow: 0 26px 52px/);
   });
 
-  it("paints the ring on every other control on the detail page, beating the per-control outline resets", () => {
-    expect(css).toMatch(
-      /\.tv-detail :is\(a, button, input, select, textarea, \[tabindex\]\):focus-visible:not\(\.tv-episode-card\) \{\s*outline: var\(--focus-ring-width\) solid var\(--focus-ring-color\);/
-    );
-    for (const selector of [".tv-detail-play:hover,\n.tv-detail-play:focus-visible", ".tv-track-action:hover,\n.tv-track-action:focus-visible"]) {
-      expect(css).toContain(selector);
-    }
+  it("paints the ring on controls from the one global rule: their focus rules carry no fill and no scale", () => {
+    expect(css).toMatch(/\.tv-detail-play:hover \{/);
+    expect(css).not.toMatch(/\.tv-detail-play:focus-visible/);
+    expect(css).not.toMatch(/\.tv-track-action:focus-visible/);
   });
 
   it("keeps touch autofocus quiet on phone layouts", () => {

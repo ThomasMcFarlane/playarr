@@ -64,12 +64,6 @@
   color: var(--bg);
 }
 
-.calendar-page button:focus-visible,
-.calendar-page input:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
-
 .calendar-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -673,10 +667,15 @@
   color: var(--bg);
 }
 
-.period-picker-option:hover,
-.period-picker-option:focus-visible {
+.period-picker-option:hover {
   outline: 2px solid var(--ink);
   outline-offset: -2px;
+}
+
+/* Inside a clipping list the ring sits inside the option. */
+.period-picker-option:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: -3px;
 }
 
 @media (max-width: 760px) {

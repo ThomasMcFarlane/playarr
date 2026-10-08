@@ -241,15 +241,12 @@
   text-transform: uppercase;
 }
 
-.client-platform:hover,
-.client-platform:focus-visible {
-  outline: 0;
+.client-platform:hover {
   color: var(--ink);
   transform: translateY(-8px) scale(1.045);
 }
 
-.client-platform:hover .client-platform-icon,
-.client-platform:focus-visible .client-platform-icon {
+.client-platform:hover .client-platform-icon {
   box-shadow:
     0 22px 52px rgba(31, 14, 20, 0.18),
     0 0 0 4px color-mix(in srgb, #cf3157 42%, transparent);

@@ -22,6 +22,8 @@ import {readFileSync} from 'node:fs';
 import * as path from 'node:path';
 import {colour, palettes, setActiveScheme} from './tokens';
 
+// `colour.focusOutline` is not compared: web retired --focus-outline for the one theme ring (--page-focus-ring: white in
+// dark theme, the ink in light theme, styles/page-layout.css). Fire TV adopts it when native parity resumes.
 const GLOBAL_CSS_PATH = path.resolve(__dirname, '../../../tv-web/web/src/styles/global.css');
 
 function readGlobalCss(): string {
@@ -52,7 +54,7 @@ describe('theme/tokens colour', () => {
   const declarations = extractDarkThemeDeclarations(readGlobalCss());
 
   const cssPropertyByColourKey: Record<
-    Exclude<keyof typeof colour, 'focusRing' | 'navAccent' | 'stageKicker'>,
+    Exclude<keyof typeof colour, 'focusRing' | 'navAccent' | 'stageKicker' | 'focusOutline'>,
     string
   > = {
     bg: 'bg',
@@ -70,7 +72,6 @@ describe('theme/tokens colour', () => {
     danger: 'danger',
     dangerSoft: 'danger-soft',
     success: 'success',
-    focusOutline: 'focus-outline',
   };
 
   it.each(Object.entries(cssPropertyByColourKey))(
@@ -121,7 +122,6 @@ describe('theme/tokens light palette', () => {
     danger: 'danger',
     dangerSoft: 'danger-soft',
     success: 'success',
-    focusOutline: 'focus-outline',
   };
 
   it.each(Object.entries(cssName))("palettes.light.%s matches the light theme's --%s", (key, property) => {

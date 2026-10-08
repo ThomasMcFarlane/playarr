@@ -651,7 +651,7 @@ const HomeRail = memo(function HomeRail({
                   mediaFileId,
                   navigationOrigin,
                 }}
-                className={`tv-home-card${
+                className={`media-card tv-home-card${
                   isActive && work.id === selectedId ? " is-selected" : ""
                 }${stackedPlan ? " is-stacked" : ""}`}
                 data-resume-stack={stackedPlan ? stackedPlan.options.length : undefined}

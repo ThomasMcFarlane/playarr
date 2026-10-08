@@ -1515,7 +1515,7 @@ function PlaylistDirectoryCard({
     <Link
       to={to}
       state={{ navigationOrigin }}
-      className={`tv-title-card tv-playlist-directory-card${
+      className={`media-card tv-title-card tv-playlist-directory-card${
         selected ? " is-selected" : ""
       }`}
       onClick={onNavigate}
@@ -1701,7 +1701,7 @@ function PlaylistMediaTrack({
               mediaFileId: audioTrack?.mediaFileId ?? undefined,
               navigationOrigin,
             }}
-            className={`tv-home-card${
+            className={`media-card tv-home-card${
               isActive && item.id === selectedId ? " is-selected" : ""
             }`}
             data-tv-focus-default={index === 0 && isActive ? true : undefined}

@@ -145,7 +145,7 @@ function DownloadRow({
 
   return (
     <li
-      className="tv-download-row"
+      className="media-card media-card-row tv-download-row"
       data-navigation-focus-key={`downloads:${record.id}`}
       onFocus={() => onFocusRow(record.id)}
     >

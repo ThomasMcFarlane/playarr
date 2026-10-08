@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: one focus style system. Controls (buttons, pills, inputs, chips, selects, the profile chip and avatar, Back) show the single theme ring (white in dark, ink in light) with no fill, glow or scale; media cards (including playlist collages, folders, music albums, calendar entries and the watchlist, requests and downloads rows) lift with the pinned soft shadow on keyboard and D-pad focus, never a ring. Playlist cards and stacked items now lift on focus (stale remote-marker neutralisation no longer cancels a settled focus). The three competing ring systems are gone.
+- Web: the music artist page keeps the album card, its label and the audio controls apart (no clipping, no overlap).
 - Web: BACK works the same everywhere. One shared helper covers Escape, Backspace, BrowserBack, Tizen and webOS codes; dialogs close without also leaving the page; nested Folders and a playlist's detail go up one level on the remote as on the on-screen Back.
 - Web player: watch progress is no longer written to the next item after a playlist advance, never writes position 0, and the offline progress queue no longer double-sends or retries rejected writes forever; Space and K no longer hijack focused buttons.
 - Web: restored the Home and detail rail edge fades (a dark box appeared at the right edge of rails that run off screen); the focused-card shadow fix returns separately.
@@ -2482,6 +2484,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: `focusStyle.test.ts` pins the ring token and the card-focus values and fails on a focusable card without `media-card`, a ringed or filled card, or a control with a fill, glow or scale on focus; `scripts/focus-style-e2e.mjs` (`pnpm run smoke:focus`) checks real keyboard focus in both themes at 1920x1080 and 1280x720.
 - Web: unit tests for the scroll engine, an audit that forbids direct scroll writes outside it, a Playwright motion check (`scripts/motion-e2e.mjs`), and frame-pacing numbers in the nav-perf harness.
 - Web: `scripts/drawer-close.mjs` (Playwright, run in CI) samples the drawer opening and closing animations and asserts they mirror in the TV, desktop and mobile layouts and both themes; unit tests cover the closing state.
 - Roku parity capture: a cold start moves the picker focus back to the first profile before pressing Select, so a remembered bottom-row focus can no longer sign the test device out.

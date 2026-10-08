@@ -92,7 +92,7 @@ export function requestStatusKey(status: RequestView["status"]) {
 export function RequestRow({ request }: { request: RequestView }) {
   const { t } = useLanguage();
   return (
-    <li className="tv-download-row tv-watchlist-row" data-navigation-focus-key={`requests:${request.id}`}>
+    <li className="media-card media-card-row tv-download-row tv-watchlist-row" data-navigation-focus-key={`requests:${request.id}`}>
       <div className="tv-download-row-copy">
         <strong>{request.title}</strong>
         <span className="tv-download-row-meta">

@@ -145,7 +145,7 @@ export function WatchlistRow({
   const explained = explainedDisabledActions(actions);
   const key = title.title_key;
   return (
-    <li className="tv-download-row tv-watchlist-row" data-navigation-focus-key={`watchlist:${key}`}>
+    <li className="media-card media-card-row tv-download-row tv-watchlist-row" data-navigation-focus-key={`watchlist:${key}`}>
       <div className="tv-download-row-copy">
         {detail ? (
           <Link to={detail} data-navigation-focus-key={`watchlist:${key}:open`}>

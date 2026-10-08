@@ -1403,7 +1403,7 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
     <Link
       to={`${routeBase}/${work.id}`}
       state={linkState}
-      className={`tv-title-card${isSelected ? " is-selected" : ""}${
+      className={`media-card tv-title-card${isSelected ? " is-selected" : ""}${
         view === "cover-flow"
           ? ` cover-flow-offset-${Math.abs(coverFlowOffset)}${
               coverFlowOffset < 0
