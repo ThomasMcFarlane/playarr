@@ -140,6 +140,9 @@ jobs:
       - name: Merge train logic tests
         run: scripts/ci/test-merge-train.sh
 
+      - name: Android main APK version tests
+        run: scripts/ci/test-android-main-version.sh
+
       - name: Release notes script tests
         run: node --test scripts/release-notes.test.mjs scripts/fold-fragments.test.mjs
 
@@ -325,6 +328,114 @@ jobs:
         env:
           TASKS: ${{ needs.changes.outputs.android_tasks }}
         run: ./gradlew $TASKS
+
+  # ---------------------------------------------------------------------
+  # Signed Android (TV and phone) APK from main, for testers. Full build on main only (never on
+  # pull requests, which cannot read the signing secrets and are covered by android-check above).
+  # It uses the release signing key of the `release-android` environment, which accepts main and
+  # the android-v* tags, and uploads the APK as a workflow artefact. Nothing is published to Play
+  # or to a GitHub Release. versionName is <version>-main.<commits>; versionCode rises with every
+  # commit and is above every release, so it installs over a release without uninstalling
+  # (scripts/ci/android-main-version.sh).
+  # ---------------------------------------------------------------------
+  android-apk:
+    name: Android signed APK (main)
+    needs: changes
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: release-android
+    permissions:
+      contents: read
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit count is the versionCode suffix.
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          latest_code=0
+          if manifest="$(curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/playarr-android.json")"; then
+            latest_code="$(jq -r '.version_code // 0' <<< "$manifest")"
+          else
+            echo "::warning::Could not read the latest release manifest; not comparing against it"
+          fi
+          scripts/ci/android-main-version.sh clients/android/version.properties "$(git rev-list --count HEAD)" "$latest_code" | tee -a "$GITHUB_OUTPUT"
+          echo "keystore_path=${{ runner.temp }}/playarr-android-release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: Restore release signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
+        run: |
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "Android release-signing secrets are not configured" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          chmod 600 "$ANDROID_KEYSTORE_PATH"
+
+      - name: Build signed APK
+        working-directory: clients/android
+        env:
+          PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
+          PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
+        run: ./gradlew :app:assembleSideloadRelease
+
+      - name: Verify and package APK
+        shell: bash
+        env:
+          EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          apk="$(find clients/android/app/build/outputs/apk/sideload/release -name '*.apk' -type f -print -quit)"
+          if [[ -z "$apk" ]]; then
+            echo "Signed APK output is missing" >&2
+            exit 1
+          fi
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
+          scripts/verify-android-release-apk.sh "$apk" "$apksigner" "$aapt" "$EXPECTED_ANDROID_SIGNING_CERT_SHA256" \
+            "io.playarr.mobile" "${{ steps.version.outputs.name }}" "${{ steps.version.outputs.code }}"
+          mkdir -p release
+          cp "$apk" release/playarr-android.apk
+          (cd release && sha256sum playarr-android.apk > SHA256SUMS)
+          printf '{"version_name":"%s","version_code":%s,"commit":"%s"}\n' \
+            "${{ steps.version.outputs.name }}" "${{ steps.version.outputs.code }}" "$GITHUB_SHA" > release/playarr-android-main.json
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "${{ steps.version.outputs.keystore_path }}"
+
+      - name: Upload APK artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playarr-android-main-${{ steps.version.outputs.name }}
+          path: release/
+          retention-days: 30
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------
   # iOS and tvOS validation runs on macos-latest through the manual
@@ -712,6 +823,7 @@ jobs:
       - changes
       - backend-check
       - android-check
+      - android-apk
       - xbox-check
       - harmony-check
       - tv-web-check
@@ -731,7 +843,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook openapi-contract-check; do
+          for job in changes backend-check android-check android-apk xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

@@ -36,6 +36,18 @@ applied by the multi-arch server publisher; the regional publisher uses immutabl
 | TestFlight | `ios-release.yml` | iOS and tvOS builds, after the release exists; then each build is added to the external TestFlight groups (below) |
 | Summary | inline | per-platform result table in the run summary |
 
+### Android APK from main
+
+Every push to `main` also builds a signed sideload APK in `ci.yml` (job `android-apk`, environment
+`release-android`) and uploads it as the workflow artefact `playarr-android-main-<version>-main.<commits>`
+(the APK, `SHA256SUMS` and `playarr-android-main.json`; kept 30 days). It is for testers and is never
+published to Google Play or a GitHub Release. The versionName is `<version.properties>-main.<commit count>`
+and the versionCode is `(major*1e4 + minor*1e2 + patch)*1e5 + commit count`, the Google Play formula, so it
+rises with every commit and is above every release (`scripts/ci/android-main-version.sh`). It installs over a
+release without uninstalling; a later release APK has a lower versionCode than a main build, so going back to
+a release needs an uninstall. Pull requests do not run this job (they cannot read the signing secrets);
+`android-check` covers them, affected-only.
+
 The server and the Android APK are required: without them no release is created. Any other platform
 that fails is left out of the release and marked in the summary. VIDAA uses the hosted Web App
 (`docs/clients/vidaa.md`), so it has no package. The per-platform workflows still run on their own
