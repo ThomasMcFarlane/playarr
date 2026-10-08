@@ -230,3 +230,36 @@ avatar 1.27, lock 1.52, player 2.1, remote 1.3 to 2.3 (it lists every device the
 server 2.8 to 3.7. This pass fixed the profile avatar (the scale and the ring came after a clipping shadow modifier), the glass pills'
 shadow, the theme and language selects, episode tile shadows (series detail 1.6 to 0.9 in light), chapter tile shadows, the quality
 menu's selected state (crimson) and header alignment, and the TV search Filters pill and preview position.
+
+## Re-baseline 8 October 2026 (deterministic references from #250)
+
+Measured on the Android TV emulator (1920x1080, 160 dp) against the refreshed `docs/parity/web/tv/{light,dark}` references (seeded art, new card lift), `diff.mjs --chrome-only`, fresh fixture, clock frozen to the fixture clock.
+
+| Screen | Dark | Light |
+| --- | ---: | ---: |
+| home | 0.91% | 1.38% |
+| movies | 0.65% | 1.42% |
+| series | 0.64% | 1.35% |
+| film-detail | 1.39% | 1.68% |
+| series-detail | 1.34% | 1.60% |
+| search | 0.74% | 0.82% |
+| calendar | 1.18% | 1.25% |
+| settings | 0.56% | 0.64% |
+| settings-avatar | 0.91% | 0.94% |
+| settings-language | 0.38% | 0.38% |
+| settings-player | 0.79% | 1.00% |
+| settings-server | 0.76% | 0.80% |
+| settings-lock | 0.35% | 0.41% |
+| settings-invite | 0.59% | 0.65% |
+| settings-remote | 0.66% | 0.81% |
+| settings-latency | 0.40% | 0.47% |
+| settings-your-data | 0.99% | 0.97% |
+| downloads | 0.41% | 0.75% |
+| watchlist | 0.35% | 0.35% |
+| requests | 0.32% | 0.32% |
+| player-controls | 0.67% | 0.67% |
+| player-quality-menu | 0.88% | 0.88% |
+| profile-switcher | 0.91% | 0.92% |
+| household-blocked | 0.33% | 0.33% |
+
+Over 1%: dark film-detail, series-detail, calendar; light home, movies, series, film-detail, series-detail, calendar, settings-player (1.00), search is under 1%. Movies and series now pass in dark and sit at about 1.4% in light. Scrolled Home rail: the gutter fade passes in both themes (edge strength 1.1 dark, 1.9 light). The fixture library is too small to scroll the Movies and Series grids.
