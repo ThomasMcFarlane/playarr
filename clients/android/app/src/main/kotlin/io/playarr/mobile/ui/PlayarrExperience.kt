@@ -3606,11 +3606,12 @@ private fun ExperienceLibraryScreen(
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
             PlayarrPageLayout(
                 pageId = PlayarrPageId.Library,
-                header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }, subtitle = playarrString(
+                header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }, // Web phone shows no detail line on library pages; television keeps the count.
+                subtitle = if (isTelevision) playarrString(
                     PlayarrString.LibraryCollectionCount,
                     "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(state.value.size),
                     "collection" to collection,
-                ).uppercase(language.locale), filters = PlayarrFilterAction(
+                ).uppercase(language.locale) else null, filters = PlayarrFilterAction(
                     label = playarrString(PlayarrString.LibraryFilters),
                     active = filtersOpen,
                     badge = languageSelection.audio.size + languageSelection.subtitle.size,

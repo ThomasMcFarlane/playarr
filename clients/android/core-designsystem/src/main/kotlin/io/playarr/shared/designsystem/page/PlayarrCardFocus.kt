@@ -51,6 +51,9 @@ object PlayarrCardMotions {
 data class PlayarrCardShadowLayer(val offsetY: Dp, val blur: Dp, val color: Color)
 
 object PlayarrCardShadows {
+    /** The action tile (`.action-pill`) and Filters launcher: `0 14px 36px rgba(56,38,33,.08)`. */
+    val ActionTile = listOf(PlayarrCardShadowLayer(14.dp, 36.dp, Color(0xFF382621).copy(alpha = 0.08f)))
+
     private val Warm = Color(0xFF382621)
     private val Rose = Color(0xFF1F0E14)
 
