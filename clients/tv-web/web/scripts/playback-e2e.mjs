@@ -12,7 +12,10 @@
 //   3. assert `video.currentTime` advances, the stream was set up exactly once
 //      (the regression behind row 456: the engine was torn down and rebuilt on
 //      every token-provider change, so Shaka fetched a segment and never played);
-//   4. kill the fixture server (SIGKILL) mid-playback, wait for the inline
+//   4. open the audio menu, choose the Dubarr dub and assert the sound really
+//      changes (row 196): each fixture audio track is a pure tone at a distinct
+//      frequency, measured in the page with a WebAudio analyser on the <video>;
+//   5. kill the fixture server (SIGKILL) mid-playback, wait for the inline
 //      "Reconnecting" card, restart the server, and assert playback resumes
 //      past the point where it stalled with the same `<video>` still mounted.
 //
@@ -36,7 +39,7 @@ const webRoot = resolve(here, "..");
 const repoRoot = resolve(webRoot, "../../..");
 const fixtureScripts = join(repoRoot, "scripts/fixtures");
 const { login } = await import(join(fixtureScripts, "api.mjs"));
-const { FIXTURE_PASSWORD, MOVIES } = await import(join(fixtureScripts, "catalog.mjs"));
+const { FIXTURE_PASSWORD, MOVIES, TONE_HZ } = await import(join(fixtureScripts, "catalog.mjs"));
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -222,6 +225,64 @@ try {
   check("the stream is set up once (engine not rebuilt)", started.mediaSources <= 1, `MediaSource objects created: ${started.mediaSources}`);
   check("no media error and no error card while playing", started.error === null && !started.fatalCard, JSON.stringify(started));
   await page.screenshot({ path: join(artifacts, "playing.png") });
+
+  step("switching to the dub through the audio menu and measuring the tone");
+  await page.evaluate(() => {
+    const v = document.querySelector("video");
+    const ctx = new AudioContext();
+    const source = ctx.createMediaElementSource(v);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 8192;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    window.__tone = () => {
+      const bins = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatFrequencyData(bins);
+      let best = 0;
+      for (let i = 1; i < bins.length; i++) if (bins[i] > bins[best]) best = i;
+      return { hz: (best * ctx.sampleRate) / analyser.fftSize, db: bins[best] };
+    };
+    return ctx.resume();
+  });
+  const nearestTone = (hz) => Object.entries(TONE_HZ).sort((a, b) => Math.abs(a[1] - hz) - Math.abs(b[1] - hz))[0][0];
+  const dominantTone = async () => {
+    const samples = [];
+    for (let i = 0; i < 6; i++) {
+      samples.push(await page.evaluate(() => window.__tone()));
+      await sleep(150);
+    }
+    const loud = samples.filter((s) => s.db > -90);
+    return loud.length ? nearestTone(loud[loud.length - 1].hz) : "silent";
+  };
+  const toneBefore = await dominantTone();
+  check("before the switch the original audio plays (English tone)", toneBefore === "eng", `measured ${toneBefore}`);
+  await page.mouse.move(640, 400);
+  await page.getByRole("button", { name: /audio/i }).first().click();
+  const dubItem = page.getByRole("menuitemradio", { name: /German/i });
+  await dubItem.first().waitFor({ timeout: 10_000 }).catch(async () => {
+    await page.screenshot({ path: join(artifacts, "audio-menu-missing.png") });
+    logs.push(`[e2e] menu items: ${JSON.stringify(await page.getByRole("menuitemradio").allInnerTexts())}`);
+  });
+  check("the audio menu lists the dub with its language and codec", (await dubItem.count()) === 1 && /German · AAC/.test(await dubItem.innerText()), await dubItem.allInnerTexts().then((x) => x.join("|")));
+  // The audio switch opens a new server session at an offset, so the <video>
+  // clock restarts near zero; the scrubber reports the source position.
+  const sourceTime = () => page.evaluate(() => Number(document.querySelector('[role="slider"][aria-valuenow]')?.getAttribute("aria-valuenow") ?? NaN));
+  const timeBeforeSwitch = await sourceTime();
+  await dubItem.click();
+  let toneAfter = "silent";
+  try {
+    await waitFor("the dub tone", async () => ((toneAfter = await dominantTone()) === "deu" ? true : undefined), 30_000, 500);
+  } catch {
+    /* reported below */
+  }
+  check("after choosing the dub the audible tone becomes the dub's (German tone)", toneAfter === "deu", `measured ${toneAfter}`);
+  const afterSwitch = await video();
+  await page.mouse.move(640, 400);
+  const timeAfterSwitch = await sourceTime();
+  console.log(`    source position before switch ${timeBeforeSwitch.toFixed(2)} s, after ${timeAfterSwitch.toFixed(2)} s`);
+  check("the audio switch keeps the playback position (no restart from zero)", timeAfterSwitch >= timeBeforeSwitch - 1, `before=${timeBeforeSwitch} after=${timeAfterSwitch}`);
+  check("playback continues after the audio switch", !afterSwitch.paused && afterSwitch.error === null && !afterSwitch.fatalCard, JSON.stringify(afterSwitch));
+  await page.screenshot({ path: join(artifacts, "dub-selected.png") });
 
   step("killing the fixture server mid-playback");
   await killServer();
