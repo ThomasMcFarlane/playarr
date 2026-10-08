@@ -101,13 +101,18 @@ export function PlaybackHealthPanel({
   const client = useApiClient();
   const testRef = useRef<ConnectionTestHandle | null>(null);
   const throughputRef = useRef<number | undefined>(undefined);
+  // The player passes a fresh `getSessionId` on every render (progress ticks included), so it is read
+  // through a ref: listing it as a dependency re-fetched the report several times a second and left
+  // the panel flickering between "Checking this playback" and its findings.
+  const getSessionIdRef = useRef(getSessionId);
+  getSessionIdRef.current = getSessionId;
   const [state, setState] = useState<ReportState>({ status: "loading" });
   const [test, setTest] = useState<TestState>({ status: "idle" });
   const [detail, setDetail] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    const sessionId = getSessionId();
+    const sessionId = getSessionIdRef.current();
     if (!sessionId) {
       setState({ status: "error", message: t("components.playbackHealth.noSession") });
       return () => undefined;
@@ -131,7 +136,7 @@ export function PlaybackHealthPanel({
     return () => {
       cancelled = true;
     };
-  }, [capabilities, client, getSessionId, t, videoRef]);
+  }, [capabilities, client, t, videoRef]);
 
   useEffect(() => load(), [load]);
 

@@ -17,6 +17,7 @@
     "smoke:rails": "node scripts/rail-geometry-e2e.mjs",
     "smoke:focus": "node scripts/focus-style-e2e.mjs",
     "test:playback-e2e": "node scripts/playback-e2e.mjs",
+    "test:playback-health-e2e": "node scripts/playback-health-e2e.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist",
