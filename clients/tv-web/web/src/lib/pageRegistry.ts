@@ -36,17 +36,17 @@ export type PageCoverage =
 
 export const PAGE_REGISTRY: readonly PageCoverage[] = [
   { file: "Calendar.tsx", mode: "unmigrated", pageId: "calendar", routes: ["calendar"], urls: ["/calendar"], step: "W4" },
-  { file: "Downloads.tsx", mode: "unmigrated", pageId: "downloads", routes: ["downloads"], urls: ["/downloads"], step: "W3" },
+  { file: "Downloads.tsx", mode: "layout", pageId: "downloads", routes: ["downloads"], urls: ["/downloads"] },
   // `/folders` is a web and Android surface for now; other clients are parked, so it is not in
   // COMPLETE_CLIENT_SHELL_ROUTES yet.
   { file: "Folders.tsx", mode: "unmigrated", pageId: "folders", routes: [], urls: ["/folders"], step: "W4" },
   { file: "Library.tsx", mode: "layout", pageId: "library", routes: ["series", "movies", "sites", "music"], urls: ["/movies", "/series"] },
   { file: "MusicDetail.tsx", mode: "unmigrated", pageId: "music-detail", routes: ["music-detail"], urls: [], step: "W6" },
   { file: "Playlists.tsx", mode: "layout", pageId: "playlists", routes: ["playlists"], urls: ["/playlists"] },
-  { file: "Requests.tsx", mode: "unmigrated", pageId: "requests", routes: ["requests"], urls: ["/requests"], step: "W3" },
+  { file: "Requests.tsx", mode: "layout", pageId: "requests", routes: ["requests"], urls: ["/requests"] },
   { file: "Search.tsx", mode: "layout", pageId: "search", routes: ["search"], urls: ["/search"] },
   { file: "settings/Index.tsx", mode: "unmigrated", pageId: "settings", routes: ["settings"], urls: ["/settings"], step: "W5" },
-  { file: "Watchlist.tsx", mode: "unmigrated", pageId: "watchlist", routes: ["watchlist"], urls: ["/watchlist"], step: "W3" },
+  { file: "Watchlist.tsx", mode: "layout", pageId: "watchlist", routes: ["watchlist"], urls: ["/watchlist"] },
   {
     file: "WorkDetail.tsx",
     mode: "unmigrated",
@@ -100,4 +100,4 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
 ];
 
 /** The ratchet: a literal, lowered by the PR that migrates a page; the test fails when more pages are listed than this. */
-export const MAX_UNMIGRATED = 8;
+export const MAX_UNMIGRATED = 5;
