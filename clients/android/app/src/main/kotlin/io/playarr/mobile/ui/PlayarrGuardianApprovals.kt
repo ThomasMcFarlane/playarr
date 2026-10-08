@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
 import io.playarr.shared.designsystem.page.PlayarrLoadingState
@@ -301,6 +302,7 @@ internal fun ExperienceGuardianApprovalsScreen(
     }
     Box(Modifier.fillMaxSize()) {
         PlayarrPageScaffold(
+            pageId = PlayarrPageId.GuardianApprovals,
             title = playarrString(PlayarrString.GuardianApprovalsTitle),
             onBack = onBack,
             isTelevision = isTelevision,

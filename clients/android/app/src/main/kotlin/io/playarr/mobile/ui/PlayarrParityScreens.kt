@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.RailPreferencesRequest
@@ -432,6 +433,7 @@ internal fun ExperiencePlaylistsScreen(
     val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
         PlayarrPageScaffold(
+            pageId = PlayarrPageId.Playlists,
             title = playarrString(PlayarrString.PlaylistsTitle),
             onBack = { navController.openExperienceTopLevel("home") },
             isTelevision = isTelevision,
@@ -946,12 +948,14 @@ internal fun ExperiencePlaylistDetailScreen(
     LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refreshInPlace)
     when (val current = state) {
         ParityLoad.Loading -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.PlaylistDetail,
             title = "",
             onBack = onBack,
             isTelevision = isTelevision,
             state = PlayarrPageState.Loading(playarrString(PlayarrString.PlaylistsLoading)),
         ) {}
         is ParityLoad.Failed -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.PlaylistDetail,
             title = "",
             onBack = onBack,
             isTelevision = isTelevision,
@@ -960,6 +964,7 @@ internal fun ExperiencePlaylistDetailScreen(
         is ParityLoad.Ready -> {
             val value = current.value
             PlayarrPageScaffold(
+                pageId = PlayarrPageId.PlaylistDetail,
                 title = value.root.name,
                 subtitle = playarrString(
                     if (value.tracks.size == 1) PlayarrString.PlaylistsTrackCountOne else PlayarrString.PlaylistsTrackCountOther,
@@ -3164,6 +3169,7 @@ internal fun ExperienceParitySettingsScreen(
     }
     if (isTelevision) {
         PlayarrPageScaffold(
+            pageId = PlayarrPageId.Settings,
             title = playarrString(PlayarrString.SettingsTitle),
             onBack = onBack,
             isTelevision = true,
@@ -3188,6 +3194,7 @@ internal fun ExperienceParitySettingsScreen(
         return
     }
     PlayarrPageScaffold(
+        pageId = PlayarrPageId.Settings,
         title = playarrString(PlayarrString.SettingsTitle),
         subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
         onBack = { if (!wideScreen && picked != null) picked = null else onBack() },
