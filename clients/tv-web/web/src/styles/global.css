@@ -7363,17 +7363,13 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  /*
-   * The focused card lifts and casts a soft shadow (about 50px of blur, 26px down). A scroller clips to its padding box,
-   * so the room for the shadow is padding that a negative margin takes back: the cards stay exactly where they were.
-   */
-  padding: 44px clamp(22px, calc(2.4 * var(--vw)), 46px) 80px 36px;
-  margin: -26px 0 -80px -36px;
+  padding: 18px clamp(22px, calc(2.4 * var(--vw)), 46px) 24px 8px;
+  margin: 0 0 -24px -8px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
-  scroll-padding-inline: 36px clamp(22px, calc(2.4 * var(--vw)), 46px);
+  scroll-padding-inline: 8px clamp(22px, calc(2.4 * var(--vw)), 46px);
   scroll-behavior: auto;
   scrollbar-width: none;
 }
@@ -7902,11 +7898,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   max-width: none;
   margin-left: calc(-1 * var(--tv-track-left-fade));
   overflow: hidden;
-  /* Clip sideways only, so the focused card's shadow can spread above and below the track. */
-  overflow-x: clip;
-  overflow-y: visible;
-  /* `overflow: clip` is not a block formatting context; keep the track's negative margins inside the window. */
-  display: flow-root;
 }
 
 .tv-media-track-window::after {
@@ -7963,15 +7954,14 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  /* Room for the focused card's lift and soft shadow, taken back by the negative margins (see .tv-home-rail). */
-  padding: 44px clamp(22px, calc(2.4 * var(--vw)), 46px) 80px
-    calc(var(--tv-track-left-fade) + 36px);
-  margin: -26px 0 -80px -36px;
+  padding: 18px clamp(22px, calc(2.4 * var(--vw)), 46px) 24px
+    calc(var(--tv-track-left-fade) + 8px);
+  margin: 0 0 -24px -8px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
-  scroll-padding-inline: calc(var(--tv-track-left-fade) + 36px)
+  scroll-padding-inline: calc(var(--tv-track-left-fade) + 8px)
     clamp(22px, calc(2.4 * var(--vw)), 46px);
   scroll-behavior: smooth;
   scrollbar-width: none;

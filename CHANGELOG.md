@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: restored the Home and detail rail edge fades (a dark box appeared at the right edge of rails that run off screen); the focused-card shadow fix returns separately.
 - Calendar: a slow or unreachable *arr source now times out after 4 s instead of 10 s, is not retried for 30 s, and its last good entries stand in while it is down.
 - Web: titles show their release year everywhere (library preview and cards, downloads, search, detail, admin work detail), never the year they were added to the library; with no release date no year is shown. One shared helper replaces the divergent copies, and the calendar's legacy watchlist and request snapshot no longer uses an episode's air year.
 - Web: right-side panels (Filters, Calendar link, Create playlist, playback settings, download quality, context menus) now close with the exact reverse of their opening animation (same duration, mirrored easing, slide out to the right) on every close path, and focus returns to the launcher afterwards. Reduced-motion users get an immediate close.
