@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: a focused card's soft shadow and lift are no longer clipped to a box by the Home, detail and search rails; the rails keep their positions, edge fades and horizontal scrolling.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - tvOS library hero title wraps over lines like the web heading.
 - Roku: Home rails scroll like the web track (the focused card ends 34 px further right than a whole-card step, and lines up with the track start when moving back), and the first Right press from the first card now moves to the second card every time.
