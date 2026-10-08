@@ -271,6 +271,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: parity evidence (per-screen mismatch in light and dark, platform limits and open gaps) is documented under docs/parity/fire-tv.
 - Fire TV parity tooling: the device capture driver batches foreground-checked key presses, selects the theme reliably and covers the new screens; the live web capture script covers search, downloads, watchlist, requests, Playlists and music.
 - Fire TV client: Playlists follows the web TV layout (page copy, the Create and Filters tiles, one track of titles per playlist, and the web's empty state).
 - Fire TV client: the settings panels show the server's own name and the signed-in user, use the web's pill buttons and field colour, and the avatar chooser no longer draws a ring round unselected avatars.
