@@ -65,6 +65,15 @@ export function Stage({artUri, accessToken, children}: StageProps): React.ReactE
             resizeMode="cover"
             fallback={<LegacyArt uri={artUri} accessToken={accessToken} dark={dark} surface={surface} />}
           />
+          {/* The web masks the cropped image box: solid to 72% of its width, then to transparent. */}
+          <LinearGradient
+            style={StyleSheet.absoluteFill}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 0}}
+            colors={[clear(surface), clear(surface), surface]}
+            locations={[0, 0.72, 1]}
+            pointerEvents="none"
+          />
         </Box>
       ) : null}
       <LinearGradient

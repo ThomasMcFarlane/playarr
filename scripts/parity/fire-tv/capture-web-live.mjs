@@ -69,9 +69,14 @@ const SCREENS = [
   { id: "home", path: "/" },
   { id: "movies", path: "/movies" },
   { id: "series", path: "/series" },
+  { id: "movies-filters", path: "/movies?panel=filters" },
   { id: "film-detail", path: "/movies", click: ".tv-title-card" },
   { id: "series-detail", path: "/series", click: ".tv-title-card" },
   { id: "calendar", path: "/calendar" },
+  { id: "calendar-week", path: "/calendar?view=week" },
+  { id: "calendar-month", path: "/calendar?view=month" },
+  { id: "calendar-filters", path: "/calendar?panel=filters" },
+  { id: "calendar-link", path: "/calendar?panel=link" },
   { id: "search", path: "/search", type: { selector: "input[type=search], input[type=text]", text: "fast" } },
   { id: "playlists", path: "/playlists" },
   { id: "music", path: "/music" },
@@ -123,7 +128,7 @@ async function capture(theme, screen) {
       reducedMotion: "reduce",
       colorScheme: theme,
       locale: spec.determinism.locale,
-      timezoneId: spec.determinism.timezone,
+      timezoneId: process.env.PARITY_TZ || spec.determinism.timezone, // set PARITY_TZ to the device's time zone so release times read the same
     });
     await context.addInitScript(
       ({ base, s, dev, theme }) => {
