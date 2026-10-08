@@ -2,6 +2,8 @@ package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.page.PlayarrCardMotions
 import io.playarr.shared.designsystem.page.mediaCardLift
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
@@ -3552,27 +3554,21 @@ private fun ExperienceLibraryScreen(
         { viewModel.libraryFetchStartedMs(kind) },
     ) { viewModel.refreshLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
-        ExperienceLoad.Loading -> PlayarrPageScaffold(
+        ExperienceLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
-            title = plural,
-            onBack = { navController.openExperienceTopLevel("home") },
-            isTelevision = isTelevision,
+            header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
             state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
         ) {}
-        is ExperienceLoad.Failed -> PlayarrPageScaffold(
+        is ExperienceLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
-            title = plural,
-            onBack = { navController.openExperienceTopLevel("home") },
-            isTelevision = isTelevision,
+            header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
             state = playarrErrorState(state.message) { viewModel.loadLibrary(kind) },
         ) {}
         is ExperienceLoad.Ready -> {
             if (state.value.isEmpty()) {
-                PlayarrPageScaffold(
+                PlayarrPageLayout(
                     pageId = PlayarrPageId.Library,
-                    title = plural,
-                    onBack = { navController.openExperienceTopLevel("home") },
-                    isTelevision = isTelevision,
+                    header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
                     state = PlayarrPageState.Empty(
                         PlayarrEmptySpec(
                             playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
@@ -3608,23 +3604,19 @@ private fun ExperienceLibraryScreen(
                 if (descending) sorted.reversed() else sorted
             }
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
-            PlayarrPageScaffold(
+            PlayarrPageLayout(
                 pageId = PlayarrPageId.Library,
-                title = plural,
-                subtitle = playarrString(
+                header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }, subtitle = playarrString(
                     PlayarrString.LibraryCollectionCount,
                     "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(state.value.size),
                     "collection" to collection,
-                ).uppercase(language.locale),
-                onBack = { navController.openExperienceTopLevel("home") },
-                isTelevision = isTelevision,
-                padBody = false,
-                filters = PlayarrFilterAction(
+                ).uppercase(language.locale), filters = PlayarrFilterAction(
                     label = playarrString(PlayarrString.LibraryFilters),
                     active = filtersOpen,
                     badge = languageSelection.audio.size + languageSelection.subtitle.size,
                     onClick = { filtersOpen = true },
-                ),
+                )),
+                body = PlayarrPageBody.Bleed,
             ) {
             Box(modifier = Modifier.fillMaxSize().background(WebSurface)) {
         HeroBackdropStack {
@@ -3821,19 +3813,14 @@ private fun ExperienceSearchScreen(
         )
         is ExperienceLoad.Failed -> playarrString(PlayarrString.SearchZeroResults)
     }
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Search,
-        title = playarrString(PlayarrString.SearchTitle),
-        subtitle = if (isTelevision) resultStatus else null,
-        onBack = { navController.openExperienceTopLevel("home") },
-        isTelevision = isTelevision,
-        filters = PlayarrFilterAction(
+        header = playarrPageHeader(title = playarrString(PlayarrString.SearchTitle), onBack = { navController.openExperienceTopLevel("home") }, subtitle = if (isTelevision) resultStatus else null, filters = PlayarrFilterAction(
             label = playarrString(PlayarrString.SearchFilters),
             onClick = { filtersOpen = !filtersOpen },
             active = filtersOpen,
-        ),
-        padBody = false,
-        largeTitle = true,
+        ), largeTitle = true),
+        body = PlayarrPageBody.Bleed,
     ) {
         if (isTelevision) {
             TelevisionSearchBody(
@@ -3875,7 +3862,7 @@ private fun ExperienceSearchScreen(
                 navController = navController,
                 onContext = { contextWork = it },
             )
-            return@PlayarrPageScaffold
+            return@PlayarrPageLayout
         }
         val filterPanel: @Composable () -> Unit = {
             if (filtersOpen) {
@@ -3954,7 +3941,7 @@ private fun ExperienceSearchScreen(
                 navController = navController,
                 selectedWork = selectedWork,
             )
-            return@PlayarrPageScaffold
+            return@PlayarrPageLayout
         }
     }
     contextWork?.let { work ->
@@ -4901,20 +4888,14 @@ private fun ExperienceDetailScreen(
     LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refresh)
     when (val current = state) {
         // The header and Back stay up while the title loads or fails (owner decision Q4).
-        ExperienceLoad.Loading -> PlayarrPageScaffold(
+        ExperienceLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.Detail,
-            title = "",
-            onBack = onBack,
-            isTelevision = isTelevision,
-            largeTitle = true,
+            header = playarrPageHeader(title = "", onBack = onBack, largeTitle = true),
             state = PlayarrPageState.Loading(playarrString(PlayarrString.DetailLoadingDetails)),
         ) {}
-        is ExperienceLoad.Failed -> PlayarrPageScaffold(
+        is ExperienceLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.Detail,
-            title = "",
-            onBack = onBack,
-            isTelevision = isTelevision,
-            largeTitle = true,
+            header = playarrPageHeader(title = "", onBack = onBack, largeTitle = true),
             state = playarrErrorState(current.message) { viewModel.load(workId) },
         ) {}
         is ExperienceLoad.Ready -> {
@@ -4940,14 +4921,10 @@ private fun ExperienceDetailScreen(
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
             var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
-            PlayarrPageScaffold(
+            PlayarrPageLayout(
                 pageId = PlayarrPageId.Detail,
-                title = detail.work.kind.playarrPluralLabel(),
-                subtitle = if (isTelevision) detail.work.title else null,
-                largeTitle = true,
-                onBack = onBack,
-                isTelevision = isTelevision,
-                padBody = false,
+                header = playarrPageHeader(title = detail.work.kind.playarrPluralLabel(), onBack = onBack, subtitle = if (isTelevision) detail.work.title else null, largeTitle = true),
+                body = PlayarrPageBody.Bleed,
             ) {
             Box(Modifier.fillMaxSize()) {
                 val artistChildren = detail.children as? WorkChildren.Artist

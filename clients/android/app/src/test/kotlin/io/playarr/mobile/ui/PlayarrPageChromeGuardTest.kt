@@ -66,12 +66,12 @@ class PlayarrPageChromeGuardTest {
             return text.substring(text.indexOf(marker), minOf(text.length, text.indexOf(marker) + length))
         }
         listOf(
-            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Library,\n            title = plural", 1200),
-            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.Detail,\n            title = \"\"", 1200),
-            Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageScaffold(\n            pageId = PlayarrPageId.PlaylistDetail,\n            title = \"\"", 1200),
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageLayout(\n            pageId = PlayarrPageId.Library,\n            header = playarrPageHeader(title = plural", 1200),
+            Triple("PlayarrExperience.kt", "ExperienceLoad.Loading -> PlayarrPageLayout(\n            pageId = PlayarrPageId.Detail,\n            header = playarrPageHeader(title = \"\"", 1200),
+            Triple("PlayarrParityScreens.kt", "ParityLoad.Loading -> PlayarrPageLayout(\n            pageId = PlayarrPageId.PlaylistDetail,\n            header = playarrPageHeader(title = \"\"", 1200),
         ).forEach { (file, marker, length) ->
             val text = body(file, marker, length)
-            assertTrue("$file $marker: loading and failure are states inside the scaffold", Regex("""PlayarrPageScaffold\(""").findAll(text).count() >= 2)
+            assertTrue("$file $marker: loading and failure are states inside the page layout", Regex("""PlayarrPageLayout\(""").findAll(text).count() >= 2)
             assertEquals("$file $marker", true, text.contains("PlayarrPageState.Loading(") && text.contains("playarrErrorState("))
         }
     }
@@ -84,22 +84,15 @@ class PlayarrPageChromeGuardTest {
         assertEquals("read the gutter from playarrPageMetrics()", emptyList<String>(), offenders)
     }
 
-    /** Hero pages name their registry id instead of the legacy placeholder. */
+    /** Every page renders through the page layout and names its registry id (the legacy id and the scaffold adapter are gone). */
     @Test
-    fun `library search and detail pages are registered`() {
-        val text = File(uiDir(), "PlayarrExperience.kt").readText()
-        val calls = Regex("""PlayarrPageScaffold\(\s*pageId = PlayarrPageId\.(\w+)""").findAll(text).map { it.groupValues[1] }.toList()
-        assertTrue("Library, Search and Detail ids present: $calls", calls.containsAll(listOf("Library", "Search", "Detail")))
-        assertEquals("every Experience scaffold call names its page", 0, Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(text).count())
-    }
-
-    /** List pages register with the page package too; none is left on the legacy id. */
-    @Test
-    fun `no legacy page ids`() {
-        val allowed = setOf("PlayarrPageScaffold.kt")
-        val offenders = uiFiles().filter { it.name !in allowed }.flatMap { f ->
-            Regex("""PlayarrPageScaffold\((?!\s*pageId)""").findAll(f.readText()).map { "${f.name}@${it.range.first}" }.toList()
+    fun `every page layout call names its page and the scaffold adapter is gone`() {
+        val offenders = uiFiles().flatMap { f ->
+            Regex("""PlayarrPageLayout\((?!\s*pageId)""").findAll(f.readText()).map { "${f.name}@${it.range.first}" }.toList()
         }
         assertEquals("pass pageId = PlayarrPageId.<page>", emptyList<String>(), offenders)
+        assertEquals("PlayarrPageScaffold is deleted", emptyList<String>(), uiFiles().filter { Regex("""PlayarrPageScaffold\(""").containsMatchIn(it.readText()) }.map { it.name })
+        val registry = uiFiles().flatMap { f -> Regex("""PlayarrPageId\.(\w+)""").findAll(f.readText()).map { it.groupValues[1] }.toList() }.toSet()
+        assertTrue("Library, Search, Detail, Calendar and Settings are registered: $registry", registry.containsAll(listOf("Library", "Search", "Detail", "Calendar", "Settings")))
     }
 }

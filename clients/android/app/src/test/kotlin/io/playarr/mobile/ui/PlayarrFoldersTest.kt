@@ -240,10 +240,10 @@ class PlayarrFoldersTest {
     }
 
     @Test
-    fun `the folders screen renders through the shared scaffold and shared buttons`() {
+    fun `the folders screen renders through the shared page layout and shared buttons`() {
         val dir = File("src/main/kotlin/io/playarr/mobile/ui").takeIf { it.isDirectory } ?: File("app/src/main/kotlin/io/playarr/mobile/ui")
         val text = File(dir, "PlayarrFolders.kt").readText()
-        assertTrue(text.contains("PlayarrPageScaffold("))
+        assertTrue(text.contains("PlayarrPageLayout("))
         assertTrue(text.contains("PlayarrFiltersSheet("))
         assertFalse("raw Material buttons", Regex("""(^|[^A-Za-z.])(Button|OutlinedButton|TextButton|IconButton)\(""", RegexOption.MULTILINE).containsMatchIn(text))
     }

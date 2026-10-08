@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Keeps every routed screen on the shared page frame. A new `Experience*Screen` composable must either
- * render through [PlayarrPageScaffold] (back, title, actions, bottom-left safe area; `padBody = false`
+ * render through [PlayarrPageLayout] (back, title, actions, bottom-left safe area; `padBody = false`
  * for full-bleed hero pages such as Library and the detail screens) or be listed below with a reason, so
  * pages cannot drift from the canonical layout. Settings, playlist detail, Library and detail pages are
  * no longer exempt (TASKS rows 222, 224, 225).
@@ -45,9 +45,9 @@ class PlayarrPageScaffoldRegistryTest {
         }
         assertTrue("expected to discover the screen composables", screens.size >= 12)
         val bypassing = screens.filter { (name, body) ->
-            name !in exempt && !body.contains("PlayarrPageScaffold(")
+            name !in exempt && !body.contains("PlayarrPageLayout(")
         }.keys
-        assertEquals("screens bypassing PlayarrPageScaffold (add it, or exempt with a reason)", emptySet<String>(), bypassing)
+        assertEquals("screens bypassing PlayarrPageLayout (add it, or exempt with a reason)", emptySet<String>(), bypassing)
         exempt.forEach { (name, reason) -> assertTrue("$name needs a reason", reason.length > 10) }
     }
 
@@ -61,7 +61,7 @@ class PlayarrPageScaffoldRegistryTest {
     @Test
     fun `the calendar uses the shared scaffold, filters sheet, master-detail and skeleton`() {
         val calendar = uiSources().first { it.name == "PlayarrCalendar.kt" }.readText()
-        listOf("PlayarrPageScaffold(", "PlayarrFiltersSheet(", "PlayarrMasterDetail(", "PlayarrSkeleton(", "PlayarrViewToggle(").forEach {
+        listOf("PlayarrPageLayout(", "PlayarrFiltersSheet(", "PlayarrMasterDetail(", "PlayarrSkeleton(", "PlayarrViewToggle(").forEach {
             assertTrue("calendar must use $it", calendar.contains(it))
         }
     }

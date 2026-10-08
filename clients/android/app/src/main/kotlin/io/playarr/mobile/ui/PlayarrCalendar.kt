@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrNavItem
@@ -191,21 +193,15 @@ private fun ExperienceCalendarScreen(
             PlayarrNavItem("next", playarrString(PlayarrString.CalendarNext), PlayarrActionIcon.Next, onClick = holder::next),
         ),
     )
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Calendar,
-        title = playarrString(PlayarrString.CalendarTitle),
-        onBack = onBack,
-        isTelevision = isTelevision,
-        filters = PlayarrFilterAction(
+        header = playarrPageHeader(title = playarrString(PlayarrString.CalendarTitle), onBack = onBack, filters = PlayarrFilterAction(
             label = filtersLabel,
             active = state.panel == CalendarPanel.Filters,
             badge = state.filters.activeCount,
             onClick = { holder.openPanel(CalendarPanel.Filters) },
-        ),
-        padBody = !(isTelevision && state.mode == CalendarViewMode.Agenda),
-        actions = if (isTelevision) listOf(navigation, bellAction) else listOf(bellAction),
-        // Phones are too narrow for five header actions beside the back button and title: the period
-        // navigation moves into the period row below the header there.
+        ), actions = if (isTelevision) listOf(navigation, bellAction) else listOf(bellAction)),
+        body = if (!(isTelevision && state.mode == CalendarViewMode.Agenda)) PlayarrPageBody.Panel else PlayarrPageBody.Bleed,
     ) {
         if (!isTelevision) {
             PhoneCalendarHeader(state, language.locale, holder) { jumpOpen = true }

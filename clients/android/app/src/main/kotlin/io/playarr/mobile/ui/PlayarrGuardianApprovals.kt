@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
@@ -301,11 +303,9 @@ internal fun ExperienceGuardianApprovalsScreen(
         }
     }
     Box(Modifier.fillMaxSize()) {
-        PlayarrPageScaffold(
+        PlayarrPageLayout(
             pageId = PlayarrPageId.GuardianApprovals,
-            title = playarrString(PlayarrString.GuardianApprovalsTitle),
-            onBack = onBack,
-            isTelevision = isTelevision,
+            header = playarrPageHeader(title = playarrString(PlayarrString.GuardianApprovalsTitle), onBack = onBack),
         ) {
             when (val current = state) {
                 ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.GuardianApprovalsLoading))

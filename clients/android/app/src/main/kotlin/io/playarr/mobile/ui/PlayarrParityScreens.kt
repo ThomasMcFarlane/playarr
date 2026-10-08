@@ -1,6 +1,8 @@
 package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.page.mediaCardLift
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.data.model.RailPreferenceEntry
@@ -433,20 +435,16 @@ internal fun ExperiencePlaylistsScreen(
     var createBusy by remember { mutableStateOf(false) }
     val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
-        PlayarrPageScaffold(
+        PlayarrPageLayout(
             pageId = PlayarrPageId.Playlists,
-            title = playarrString(PlayarrString.PlaylistsTitle),
-            onBack = { navController.openExperienceTopLevel("home") },
-            isTelevision = isTelevision,
-            filters = PlayarrFilterAction(
+            header = playarrPageHeader(title = playarrString(PlayarrString.PlaylistsTitle), onBack = { navController.openExperienceTopLevel("home") }, filters = PlayarrFilterAction(
                 label = playarrString(PlayarrString.LibraryFilters),
                 onClick = { filtering = true },
                 active = filtering,
                 badge = listOf(visibility != PlaylistVisibility.All, order != PlaylistOrder.Ascending).count { it },
-            ),
-            actions = listOf(
+            ), actions = listOf(
                 PlayarrPageAction.Link("create-playlist", playarrString(PlayarrString.PlaylistsCreate), PlayarrActionIcon.Add) { creating = true },
-            ),
+            )),
         ) {
             when (val current = state) {
                 ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.PlaylistsPreparing))
@@ -948,38 +946,30 @@ internal fun ExperiencePlaylistDetailScreen(
     val liveInterest = remember(playlistId) { setOf(LiveTarget(LiveArea.Playlist, playlistId), LiveTarget(LiveArea.Work)) }
     LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refreshInPlace)
     when (val current = state) {
-        ParityLoad.Loading -> PlayarrPageScaffold(
+        ParityLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.PlaylistDetail,
-            title = "",
-            onBack = onBack,
-            isTelevision = isTelevision,
+            header = playarrPageHeader(title = "", onBack = onBack),
             state = PlayarrPageState.Loading(playarrString(PlayarrString.PlaylistsLoading)),
         ) {}
-        is ParityLoad.Failed -> PlayarrPageScaffold(
+        is ParityLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.PlaylistDetail,
-            title = "",
-            onBack = onBack,
-            isTelevision = isTelevision,
+            header = playarrPageHeader(title = "", onBack = onBack),
             state = playarrErrorState(current.message) { viewModel.load(playlistId) },
         ) {}
         is ParityLoad.Ready -> {
             val value = current.value
-            PlayarrPageScaffold(
+            PlayarrPageLayout(
                 pageId = PlayarrPageId.PlaylistDetail,
-                title = value.root.name,
-                subtitle = playarrString(
+                header = playarrPageHeader(title = value.root.name, onBack = onBack, subtitle = playarrString(
                     if (value.tracks.size == 1) PlayarrString.PlaylistsTrackCountOne else PlayarrString.PlaylistsTrackCountOther,
                     "count" to value.tracks.size,
-                ).uppercase(LocalPlayarrLanguage.current.locale),
-                onBack = onBack,
-                isTelevision = isTelevision,
-                actions = if (value.root.isSystem) {
+                ).uppercase(LocalPlayarrLanguage.current.locale), actions = if (value.root.isSystem) {
                     emptyList()
                 } else {
                     listOf(
                         PlayarrPageAction.Link("create-sub-playlist", playarrString(PlayarrString.PlaylistsCreateSubPlaylist), PlayarrActionIcon.Add) { creatingUnder = value.root },
                     )
-                },
+                }),
             ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().padding(top = 8.dp),
@@ -3169,13 +3159,10 @@ internal fun ExperienceParitySettingsScreen(
         }
     }
     if (isTelevision) {
-        PlayarrPageScaffold(
+        PlayarrPageLayout(
             pageId = PlayarrPageId.Settings,
-            title = playarrString(PlayarrString.SettingsTitle),
-            onBack = onBack,
-            isTelevision = true,
-            padBody = false,
-            backActive = true,
+            header = playarrPageHeader(title = playarrString(PlayarrString.SettingsTitle), onBack = onBack, backActive = true),
+            body = PlayarrPageBody.Bleed,
         ) {
             TvSettingsBody(
                 section = section,
@@ -3194,19 +3181,14 @@ internal fun ExperienceParitySettingsScreen(
         invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
         return
     }
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Settings,
-        title = playarrString(PlayarrString.SettingsTitle),
-        subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
-        onBack = { if (!wideScreen && picked != null) picked = null else onBack() },
-        isTelevision = isTelevision,
-        padBody = !showIndex,
-        largeTitle = showIndex,
-        backActive = showIndex,
+        header = playarrPageHeader(title = playarrString(PlayarrString.SettingsTitle), onBack = { if (!wideScreen && picked != null) picked = null else onBack() }, subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale), largeTitle = showIndex, backActive = showIndex),
+        body = if (!showIndex) PlayarrPageBody.Panel else PlayarrPageBody.Bleed,
     ) {
     if (showIndex) {
         PhoneSettingsIndex(onOpen = { picked = it })
-        return@PlayarrPageScaffold
+        return@PlayarrPageLayout
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = isTelevision || maxWidth >= 760.dp

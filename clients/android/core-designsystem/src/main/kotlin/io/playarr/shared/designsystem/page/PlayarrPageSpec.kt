@@ -10,9 +10,6 @@ import androidx.compose.runtime.Immutable
 enum class PlayarrPageId {
     Home, Library, Search, Calendar, Folders, Downloads, Watchlist, Requests, GuardianApprovals,
     Playlists, PlaylistDetail, Settings, Detail, MusicDetail, Household,
-
-    /** Pages still on the legacy `PlayarrPageScaffold` adapter. Leaves with the adapter (A7). */
-    Legacy,
 }
 
 enum class PlayarrPageBody {

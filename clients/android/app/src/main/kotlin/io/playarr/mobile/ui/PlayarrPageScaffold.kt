@@ -91,60 +91,36 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /*
- * Transitional adapter. Every routed screen still calls [PlayarrPageScaffold]; it now only builds a header spec and
- * delegates to the shared page layout in `core-designsystem` (`PlayarrPageLayout`). Screens move onto the typed
- * `PlayarrPageAction`s as the migration proceeds (docs/design/page-layout.md section 8) and this adapter goes in A7.
+ * Screens render through `PlayarrPageLayout` in `core-designsystem` (docs/design/page-layout.md section 8): they name their
+ * page, describe the header with [playarrPageHeader] and pass the body. The layout owns the frame, the header, the actions
+ * and the states, and PlayarrPageChromeGuardTest keeps screens from drawing their own.
  */
 
+/** Builds a page's header spec: Back (with its localised label), title, detail, and the ordered typed actions. */
 @Composable
-internal fun PlayarrPageScaffold(
+internal fun playarrPageHeader(
     title: String,
     onBack: () -> Unit,
-    isTelevision: Boolean,
-    modifier: Modifier = Modifier,
-    /** The page's registry id; pages not yet migrated pass nothing and stay [PlayarrPageId.Legacy]. */
-    pageId: PlayarrPageId = PlayarrPageId.Legacy,
     subtitle: String? = null,
     /** The page's Filters action; drawn by the one shared page header so every page matches. */
     filters: PlayarrFilterAction? = null,
-    /** Typed header actions (Create, Calendar link, ...); the header orders them and draws them as the one action pill. */
+    /** Typed header actions (Create, Calendar link, period navigation, ...); the header orders and draws them. */
     actions: List<PlayarrPageAction> = emptyList(),
-    /**
-     * False for pages whose body is a full-bleed hero (library, detail pages): the body fills the screen and
-     * draws its own insets and padding, while the shared header (back, title, breadcrumb, actions) floats above.
-     */
-    padBody: Boolean = true,
-    /** Loading, empty or failed: replaces [content] inside the frame, so the header and Back stay up (owner decision Q4). */
-    state: PlayarrPageState? = null,
     /** Web phone: the 21.6 px header title used by Search and the detail pages (library headers use 17.6 px). */
     largeTitle: Boolean = false,
     /** Web phone: draw the back button in its focused (inverted, 1.055x) state, as the settings index does. */
     backActive: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val backLabel = playarrString(PlayarrString.CommonBack)
-    val actions = buildList {
+): PlayarrPageHeaderSpec = PlayarrPageHeaderSpec(
+    title = title,
+    detail = subtitle,
+    back = PlayarrBack(playarrString(PlayarrString.CommonBack), onBack),
+    actions = buildList {
         addAll(actions)
         if (filters != null) add(PlayarrPageAction.Filters(filters.label, filters.active, filters.badge, filters.onClick))
-    }
-    Box(modifier) {
-        PlayarrPageLayout(
-            pageId = pageId,
-            header = PlayarrPageHeaderSpec(
-                title = title,
-                detail = subtitle,
-                back = PlayarrBack(backLabel, onBack),
-                actions = actions,
-                backActive = backActive,
-                largeTitle = largeTitle,
-            ),
-            body = if (padBody) PlayarrPageBody.Panel else PlayarrPageBody.Bleed,
-            state = state,
-        ) {
-            content()
-        }
-    }
-}
+    },
+    backActive = backActive,
+    largeTitle = largeTitle,
+)
 
 /** The state of a page's Filters action. */
 internal data class PlayarrFilterAction(

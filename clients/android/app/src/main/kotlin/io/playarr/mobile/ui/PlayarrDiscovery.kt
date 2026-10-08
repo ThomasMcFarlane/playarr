@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
@@ -468,11 +470,9 @@ internal fun ExperienceWatchlistScreen(
         { viewModel.watchlistFetchStartedMs },
         viewModel::refreshWatchlist,
     )
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Watchlist,
-        title = playarrString(PlayarrString.WatchlistTitle),
-        onBack = onBack,
-        isTelevision = isTelevision,
+        header = playarrPageHeader(title = playarrString(PlayarrString.WatchlistTitle), onBack = onBack),
     ) {
         DiscoveryMessageText(viewModel)
         when (val current = state) {

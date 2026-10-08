@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.component.PlayarrButton
@@ -253,12 +255,9 @@ internal fun ExperienceDownloadsScreen(
             ?.takeIf { it.work.id == entry.workId }
             ?.let { resolveDownloadFocusedPreview(it, entry.mediaFileId) }
     }
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Downloads,
-        title = playarrString(PlayarrString.DownloadsTitle),
-        subtitle = if (isOnline) null else playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
-        onBack = onBack,
-        isTelevision = isTelevision,
+        header = playarrPageHeader(title = playarrString(PlayarrString.DownloadsTitle), onBack = onBack, subtitle = if (isOnline) null else playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale)),
     ) {
         Text(
             playarrString(

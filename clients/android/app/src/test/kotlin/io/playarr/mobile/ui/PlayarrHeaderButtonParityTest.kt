@@ -46,16 +46,16 @@ class PlayarrHeaderButtonParityTest {
         val scaffold = ui("PlayarrPageScaffold.kt")
         val actions = pageSource("PlayarrPageLayout.kt")
         assertTrue("page Filters is drawn by the one action pill", actions.contains("PlayarrActionPill(PlayarrActionIcon.Filters"))
-        assertTrue("the scaffold hands Filters to the page layout", scaffold.contains("PlayarrPageAction.Filters("))
+        assertTrue("the header spec hands Filters to the page layout", scaffold.contains("PlayarrPageAction.Filters("))
         val calendar = ui("PlayarrCalendar.kt")
         val header = calendar.substring(calendar.indexOf("val bellAction"), calendar.indexOf("val navigation = "))
         assertTrue("Calendar link is a typed panel action", header.contains("PlayarrPageAction.Panel("))
         assertTrue("with the bell glyph from the one icon map", header.contains("PlayarrActionIcon.Bell"))
-        assertTrue("Calendar Filters goes through the scaffold", calendar.contains("filters = PlayarrFilterAction("))
+        assertTrue("Calendar Filters goes through the header spec", calendar.contains("filters = PlayarrFilterAction("))
         listOf("Surface(", "OutlinedButton(", "FilterChip(", "PlayarrButton(", "PlayarrHeaderButton(").forEach {
             assertTrue("the calendar header must not hand-draw its buttons with $it", !header.contains(it))
         }
-        // Every page that has Filters hands the scaffold a PlayarrFilterAction; none draws a launcher of its own.
+        // Every page that has Filters hands the header spec a PlayarrFilterAction; none draws a launcher of its own.
         val others = listOf("PlayarrExperience.kt", "PlayarrFolders.kt", "PlayarrParityScreens.kt")
         others.forEach { assertTrue("$it must pass filters = PlayarrFilterAction(", ui(it).contains("PlayarrFilterAction(")) }
         assertEquals(emptyList<String>(), others.filter { ui(it).contains("Icons.Outlined.Tune") })

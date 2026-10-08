@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
@@ -93,11 +95,9 @@ internal fun ExperienceRequestsScreen(
 ) {
     val state by viewModel.requests.collectAsState()
     LaunchedEffect(Unit) { viewModel.load() }
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Requests,
-        title = playarrString(PlayarrString.RequestsTitle),
-        onBack = onBack,
-        isTelevision = isTelevision,
+        header = playarrPageHeader(title = playarrString(PlayarrString.RequestsTitle), onBack = onBack),
     ) {
         when (val current = state) {
             ParityLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.RequestsLoading))

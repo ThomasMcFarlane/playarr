@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
 import io.playarr.shared.designsystem.page.PlayarrErrorState
@@ -90,13 +92,9 @@ internal fun ExperienceFoldersScreen(
         rootCount > 1 -> playarrString(PlayarrString.FoldersChooseRoot)
         else -> null
     }
-    PlayarrPageScaffold(
+    PlayarrPageLayout(
         pageId = PlayarrPageId.Folders,
-        title = playarrString(PlayarrString.FoldersTitle),
-        subtitle = detail,
-        onBack = { if (!holder.up(rootCount)) onBack() },
-        isTelevision = isTelevision,
-        filters = if (root == null) {
+        header = playarrPageHeader(title = playarrString(PlayarrString.FoldersTitle), onBack = { if (!holder.up(rootCount)) onBack() }, subtitle = detail, filters = if (root == null) {
             null
         } else {
             PlayarrFilterAction(
@@ -105,7 +103,7 @@ internal fun ExperienceFoldersScreen(
                 badge = url.activeFilterCount,
                 onClick = { holder.openPanel(FolderPanel.Filters) },
             )
-        },
+        }),
     ) {
         when (val roots = state.roots) {
             FolderRootsLoad.Loading -> PlayarrLoadingState(playarrString(PlayarrString.FoldersLoading))
