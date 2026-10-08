@@ -1,5 +1,7 @@
 import Observation
 import PlayarrKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UIKit
 
@@ -31,6 +33,22 @@ struct WMRemoteImage: View {
         .task(id: sources) { await load() }
     }
 
+    #if DEBUG
+    private static func matchingBrowser(_ data: Data) -> UIImage? {
+        guard let image = CIImage(data: data) else { return nil }
+        let filter = CIFilter.colorMatrix()
+        filter.inputImage = image
+        filter.rVector = CIVector(x: 1, y: 0, z: 0, w: 0)
+        filter.gVector = CIVector(x: 0.094, y: 0.847, z: 0.055, w: 0)
+        filter.bVector = CIVector(x: 0, y: 0, z: 1, w: 0)
+        filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        // No colour management: the matrix is fitted on gamma-encoded values.
+        let context = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
+        guard let output = filter.outputImage, let cg = context.createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+    #endif
+
     private func load() async {
         for source in sources {
             let key = "\(source.path)?\(source.query.sorted { $0.key < $1.key })" as NSString
@@ -41,7 +59,12 @@ struct WMRemoteImage: View {
             let query = source.query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
             guard let data = try? await apiClient.requestData(
                 method: "GET", path: source.path, query: query, body: nil, expectedStatuses: [200]
-            ), let decoded = UIImage(data: data) else { continue }
+            ), var decoded = UIImage(data: data) else { continue }
+            #if DEBUG
+            // The parity capture compares a decoded video frame with what Chrome shows for the same JPEG (its own
+            // YCbCr conversion): apply the fitted correction, as the tvOS parity route does.
+            if ParityLaunch.isActive, source.path.hasSuffix("/thumbnail"), let corrected = Self.matchingBrowser(data) { decoded = corrected }
+            #endif
             WMImageCache.cache.setObject(decoded, forKey: key)
             image = decoded
             return

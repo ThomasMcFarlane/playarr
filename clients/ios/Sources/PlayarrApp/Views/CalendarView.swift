@@ -88,6 +88,13 @@ struct CalendarView: View {
         let sameYear = utc.component(.year, from: start) == utc.component(.year, from: end)
         formatter.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
         let first = formatter.string(from: start)
+        if sameYear {
+            // The web wraps the range after the end month, leaving the year on its own line.
+            formatter.dateFormat = "d MMM"
+            let last = formatter.string(from: end)
+            formatter.dateFormat = "yyyy"
+            return "\(first) \u{2013} \(last)\n\(formatter.string(from: end))"
+        }
         formatter.dateFormat = "d MMM yyyy"
         return "\(first) \u{2013} \(formatter.string(from: end))"
     }
@@ -143,26 +150,11 @@ struct CalendarView: View {
             WMText("Release Calendar", 17.6, 580, lh: 26.4, ls: -0.792)
                 .frame(height: 38)
                 .offset(x: 68, y: top)
-            Button { showingSubscription = true } label: {
-                Image(systemName: "link")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(WM.inkSoft)
-                    .frame(width: 44, height: 38)
-                    .background(WM.chip.opacity(0.66), in: Capsule())
-                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .offset(x: 230, y: top)
-            Button { showingFilters = true } label: {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(WM.inkSoft)
-                    .frame(width: 44, height: 38)
-                    .background(WM.chip.opacity(0.66), in: Capsule())
-                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .offset(x: 274, y: top)
+            // The shell action buttons, at the web's phone positions (x 228 and 280, 44 pt tiles, 14 pt from the top).
+            PlayarrHeaderPill(label: "Calendar link", systemImage: "bell", iconOnly: true) { showingSubscription = true }
+                .offset(x: 228, y: WM.topInset)
+            PlayarrHeaderPill(label: "Filters", systemImage: "slider.horizontal.3", iconOnly: true) { showingFilters = true }
+                .offset(x: 280, y: WM.topInset)
 
             Menu {
                 Picker("View", selection: Binding(
