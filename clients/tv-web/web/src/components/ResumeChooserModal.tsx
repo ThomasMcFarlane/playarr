@@ -1,3 +1,4 @@
+import { isBackKey } from "../lib/backKey";
 import { useEffect, useRef } from "react";
 import type { ResumeOption, ResumePlan } from "@playarr-tv/api-client";
 import { Button } from "./ui";
@@ -27,9 +28,7 @@ export function ResumeChooserModal({
   useEffect(() => {
     firstButtonRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "BrowserBack" && event.key !== "GoBack") {
-        return;
-      }
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onCancel();

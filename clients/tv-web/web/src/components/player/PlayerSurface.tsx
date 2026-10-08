@@ -1,3 +1,4 @@
+import { isBackKey } from "../../lib/backKey";
 import {
   Fragment,
   useCallback,
@@ -1328,11 +1329,7 @@ export function PlayerSurface({
             }
             if (
               event.key === "ArrowLeft" ||
-              event.key === "Escape" ||
-              event.key === "BrowserBack" ||
-              event.key === "GoBack" ||
-              event.keyCode === 10009 ||
-              event.keyCode === 461
+              isBackKey(event)
             ) {
               event.preventDefault();
               event.stopPropagation();

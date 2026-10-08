@@ -81,8 +81,8 @@ describe("calendar scroll and focus contract", () => {
   });
 
   it("closes the entry sheet on Back and keeps touch targets at 44px", () => {
-    expect(page).toContain('"BrowserBack"');
-    expect(page).toContain("10009");
+    expect(page).toContain("isBackKey(event)");
+    expect(page).toContain("isBackKey");
     expect(css).toMatch(/\.calendar-filter-chip[^{]*\{[^}]*min-height: 44px/s);
   });
 });

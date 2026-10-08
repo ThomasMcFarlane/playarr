@@ -1,3 +1,4 @@
+import { isBackKey } from "../lib/backKey";
 import {
   useCallback,
   useMemo,
@@ -304,11 +305,7 @@ export function usePlaylistContextMenu({
             onClose={close}
             onKeyDown={(event) => {
               const back =
-                event.key === "Escape" ||
-                event.key === "BrowserBack" ||
-                event.key === "GoBack" ||
-                event.keyCode === 10009 ||
-                event.keyCode === 461;
+                isBackKey(event);
               if (back || event.key === "ArrowLeft") {
                 event.preventDefault();
                 event.stopPropagation();

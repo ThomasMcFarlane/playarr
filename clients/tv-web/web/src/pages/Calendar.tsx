@@ -74,6 +74,7 @@ import { captureNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
 import "./Calendar.css";
+import { isBackKey } from "../lib/backKey";
 
 /**
  * A scroll viewport inside the shared rail edge window: the web fade (`.tv-scroll-edge-window`) shows on each
@@ -725,15 +726,7 @@ function DetailSheet({
   useEffect(() => {
     closeRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key !== "Escape" &&
-        event.key !== "BrowserBack" &&
-        event.key !== "GoBack" &&
-        event.keyCode !== 10009 &&
-        event.keyCode !== 461
-      ) {
-        return;
-      }
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onClose();

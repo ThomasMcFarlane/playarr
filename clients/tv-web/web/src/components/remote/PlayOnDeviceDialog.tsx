@@ -1,3 +1,4 @@
+import { isBackKey } from "../../lib/backKey";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RemoteTarget } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
@@ -54,7 +55,7 @@ export function PlayOnDeviceDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "BrowserBack" && event.key !== "GoBack") return;
+      if (!isBackKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onClose();

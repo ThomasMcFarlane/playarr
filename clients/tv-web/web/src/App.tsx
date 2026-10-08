@@ -1,3 +1,4 @@
+import { isBackKey } from "./lib/backKey";
 import {
   useCallback,
   useEffect,
@@ -176,16 +177,6 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = PRODUCT_NAV_GROUPS.map((group) => ({
     };
   }),
 }));
-
-function isBackKey(event: KeyboardEvent): boolean {
-  return (
-    event.key === "Escape" ||
-    event.key === "BrowserBack" ||
-    event.key === "GoBack" ||
-    event.keyCode === 10009 ||
-    event.keyCode === 461
-  );
-}
 
 /**
  * The sidebar/header chrome, shared by every authenticated route (a React

@@ -1,3 +1,4 @@
+import { isBackKey } from "../lib/backKey";
 import { useEffect, useRef, useState } from "react";
 import type { JoinedWorkSource } from "../lib/joinedServers";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -36,10 +37,9 @@ export function ServerChoiceModal({
   useEffect(() => {
     firstButtonRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "BrowserBack" && event.key !== "GoBack") {
-        return;
-      }
+      if (!isBackKey(event)) return;
       event.preventDefault();
+      event.stopPropagation();
       onCancel();
     };
     window.addEventListener("keydown", handleKeyDown, true);

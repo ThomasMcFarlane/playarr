@@ -55,6 +55,7 @@ import {
   SpinnerIcon,
 } from "../components/player/PlayerIcons";
 import { Button } from "../components/ui";
+import { isBackKey } from "../lib/backKey";
 
 export interface PlayerLocationState {
   /** Server that owns the selected media file; omitted for the primary server. */
@@ -540,11 +541,7 @@ function PlayerPageInner({
     const handleBackKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
+        isBackKey(event);
       if (!isBack) return;
       const webkitDocument = document as Document & {
         webkitFullscreenElement?: Element | null;

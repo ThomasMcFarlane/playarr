@@ -35,7 +35,7 @@ describe("drawer audit", () => {
   it("gives every Drawer the shared icon-button close", () => {
     const text = readFileSync(join(src, DRAWER), "utf8");
     expect(text).toMatch(/<Button[^>]*variant="icon"[^>]*drawer-close/s);
-    expect(text).toMatch(/Escape/);
+    expect(text).toMatch(/isBackKey/);
     expect(text).toMatch(/Tab/);
   });
 

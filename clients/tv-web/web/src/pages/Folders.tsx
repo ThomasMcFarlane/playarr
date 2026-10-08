@@ -1,3 +1,4 @@
+import { usePageBack } from "../lib/pageBack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -217,6 +218,11 @@ export function FoldersPage() {
       navigate(url.kind ? kindRoute(url.kind) : "/");
     }
   }
+
+  usePageBack(() => {
+    goBack();
+    return true;
+  });
 
   const filterCount = activeFolderFilterCount(url);
   const sizeClass = `is-size-${url.size}`;

@@ -1,3 +1,4 @@
+import { isBackKey } from "../lib/backKey";
 import {
   useCallback,
   useEffect,
@@ -1056,11 +1057,7 @@ export function useMediaContextMenu({
         }}
         onKeyDown={(event) => {
           const isBack =
-            event.key === "Escape" ||
-            event.key === "BrowserBack" ||
-            event.key === "GoBack" ||
-            event.keyCode === 10009 ||
-            event.keyCode === 461;
+            isBackKey(event);
           if (isBack || event.key === "ArrowLeft") {
             event.preventDefault();
             event.stopPropagation();

@@ -31,6 +31,7 @@ import {
   type AndroidTvUpdateState,
 } from "../lib/androidTvUpdate";
 import { IS_TV, PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import { isBackKey } from "../lib/backKey";
 
 interface ProfileLocationState {
   backTo?: unknown;
@@ -283,11 +284,7 @@ export function ProfilesPage(
     const frame = window.requestAnimationFrame(() => pinInputRef.current?.focus());
     const handleBack = (event: KeyboardEvent) => {
       const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
+        isBackKey(event);
       if (!isBack) return;
       event.preventDefault();
       event.stopPropagation();

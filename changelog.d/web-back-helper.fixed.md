@@ -1,0 +1,1 @@
+- Web: BACK works the same everywhere. One shared helper covers Escape, Backspace, BrowserBack, Tizen and webOS codes; dialogs close without also leaving the page; nested Folders and a playlist's detail go up one level on the remote as on the on-screen Back.

@@ -29,7 +29,7 @@ addEventListener('keydown',e=>{cards[idx].style.outline='';const m={ArrowDown:3,
 </script></div></div></body></html>
 `;
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false }) {
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -128,6 +128,29 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       return json(res, body);
     }
     if (p === "/api/v1/calendar/feed") return json(res, { active: false, created_at: null, last_used_at: null });
+    if (playlists > 0 && p === "/api/v1/playlists") {
+      const now = new Date().toISOString();
+      return json(res, Array.from({ length: playlists }, (_, i) => ({
+        id: `00000000-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`, name: `Test list ${i + 1}`, is_system: false,
+        media_type: "video", parent_playlist_id: null, owner_user_id: userId, created_at: now, updated_at: now,
+      })));
+    }
+    if (playlists > 0 && /^\/api\/v1\/playlists\/[^/]+\/items$/.test(p)) return json(res, []);
+    if (folders && p === "/api/v1/folders/roots") {
+      return json(res, { roots: ["Root A", "Root B"].map((name, i) => ({
+        id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`, source_instance_id: "00000000-0000-4000-8000-000000000300",
+        source_name: "Source", library_kind: "movie", name, available: true, scan_status: "idle", item_count: 2,
+      })) });
+    }
+    if (folders && /^\/api\/v1\/folders\/roots\/[^/]+\/browse$/.test(p)) {
+      const path = q.get("path") ?? "";
+      const root = { id: p.split("/")[5], source_instance_id: "00000000-0000-4000-8000-000000000300", source_name: "Source", library_kind: "movie", name: "Root A", available: true, scan_status: "idle", item_count: 2 };
+      const dir = (name) => ({ name, path: path ? `${path}/${name}` : name, entry_type: "directory", item_count: 1 });
+      return json(res, {
+        root, path, breadcrumbs: [{ name: "Root A", path: "" }, ...(path ? [{ name: path.split("/").pop(), path }] : [])],
+        entries: path ? [] : [dir("Sub A"), dir("Sub B")], total: path ? 0 : 2, offset: 0, limit: 100,
+      });
+    }
     if (p === "/api/v1/playlists" || p === "/api/v1/admin/playlists") return json(res, []);
     if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: canDownload, can_request: false });
     unknown.add(`${req.method} ${p}`);

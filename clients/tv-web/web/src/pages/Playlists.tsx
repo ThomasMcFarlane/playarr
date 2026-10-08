@@ -1,3 +1,4 @@
+import { usePageBack } from "../lib/pageBack";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
 import {
@@ -53,6 +54,7 @@ import { MoviesIcon, MusicIcon } from "../components/NavIcons";
 import { SearchablePlaylistSelect } from "../components/SearchablePlaylistSelect";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
 import { Button } from "../components/ui";
+import { isBackKey } from "../lib/backKey";
 
 interface ResolvedPlaylistItem {
   id: string;
@@ -796,11 +798,7 @@ export function PlaylistsPage() {
 
   function handleDrawerKeyDown(event: KeyboardEvent<HTMLElement>) {
     const isBack =
-      event.key === "Escape" ||
-      event.key === "BrowserBack" ||
-      event.key === "GoBack" ||
-      event.keyCode === 10009 ||
-      event.keyCode === 461;
+      isBackKey(event);
     if (isBack) {
       event.preventDefault();
       event.stopPropagation();
@@ -981,6 +979,15 @@ export function PlaylistsPage() {
     params.delete("playlist");
     setSearchParams(params);
   }
+
+  usePageBack(
+    requestedPlaylistId
+      ? () => {
+          leavePlaylistDetail();
+          return true;
+        }
+      : null
+  );
 
   if (pageState.status !== "ready") {
     // The header and Back stay up while the playlists load or fail.
