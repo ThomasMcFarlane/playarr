@@ -72,6 +72,8 @@ const SCREENS = [
   { id: "series-detail", path: "/series", click: ".tv-title-card" },
   { id: "calendar", path: "/calendar" },
   { id: "search", path: "/search", type: { selector: "input[type=search], input[type=text]", text: "fast" } },
+  { id: "playlists", path: "/playlists" },
+  { id: "music", path: "/music" },
   { id: "downloads", path: "/downloads" },
   { id: "watchlist", path: "/watchlist" },
   { id: "requests", path: "/requests" },
