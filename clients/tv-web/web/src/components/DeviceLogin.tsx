@@ -22,6 +22,7 @@ import {
 } from "../lib/hostedDeviceLink";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
+import { classifyPairingFailure, retryTransientPairing } from "../lib/pairingRetry";
 import { QrCode } from "./QrCode";
 import { Button } from "./ui";
 
@@ -83,8 +84,9 @@ export function directDeviceLoginConnection(
   };
 }
 
-function isExpiredCodeError(reason: unknown): boolean {
-  return reason instanceof Error && /\bexpired\b/i.test(reason.message);
+/** Whole seconds left until `deadline`, at least one so a retry still makes its single expiry check. */
+function remainingSeconds(deadline: number, now = Date.now()): number {
+  return Math.max(1, Math.ceil((deadline - now) / 1000));
 }
 
 export function DeviceLogin({
@@ -212,10 +214,17 @@ export function DeviceLogin({
       ) {
         const platform =
           PLAYARR_CLIENT_PLATFORM as HostedLinkClientPlatform;
-        const code = await requestHostedDeviceLink(platform);
+        const code = await retryTransientPairing(
+          () => requestHostedDeviceLink(platform),
+          { signal: controller.signal }
+        );
         if (cancelled) return;
         showCode(code, HOSTED_LINK_CLAIM_REDEMPTION_GRACE_MS);
-        const claim = await pollHostedDeviceLink(code, { signal: controller.signal });
+        // Network blips and 5xx answers retry quietly against the same code (its own deadline still applies).
+        const claim = await retryTransientPairing(
+          () => pollHostedDeviceLink(code, { signal: controller.signal }),
+          { signal: controller.signal }
+        );
         if (cancelled) return;
         clearExpiryTimers();
         const serverUrl = publicIpv4RelayUrl(claim.server_url);
@@ -230,16 +239,21 @@ export function DeviceLogin({
             "X-Playarr-Client-Version": __APP_VERSION__,
           },
         });
-        const token = await pollForToken(
-          serverClient,
-          {
-            deviceCode: claim.server_device_code,
-            userCode: claim.user_code,
-            verificationUri: code.verificationUri,
-            verificationUriComplete: code.verificationUriComplete,
-            expiresInSeconds: MAX_DEVICE_CODE_LIFETIME_SECONDS,
-            intervalSeconds: 0,
-          },
+        const tokenDeadline = Date.now() + MAX_DEVICE_CODE_LIFETIME_MS;
+        const token = await retryTransientPairing(
+          () =>
+            pollForToken(
+              serverClient,
+              {
+                deviceCode: claim.server_device_code,
+                userCode: claim.user_code,
+                verificationUri: code.verificationUri,
+                verificationUriComplete: code.verificationUriComplete,
+                expiresInSeconds: remainingSeconds(tokenDeadline),
+                intervalSeconds: 0,
+              },
+              { signal: controller.signal }
+            ),
           { signal: controller.signal }
         );
         completeAuthentication(token, { serverUrl, serverUrls });
@@ -249,15 +263,22 @@ export function DeviceLogin({
       if (!directClient) {
         throw new Error("Brokered device login could not start.");
       }
-      const code = await requestDeviceCode(
-        directClient,
-        PLAYARR_CLIENT_PLATFORM
+      const code = await retryTransientPairing(
+        () => requestDeviceCode(directClient, PLAYARR_CLIENT_PLATFORM),
+        { signal: controller.signal }
       );
       if (cancelled) return;
       showCode(code);
-      const token = await pollForToken(directClient, code, {
-        signal: controller.signal,
-      });
+      const codeDeadline = deviceCodeExpiresAt(code);
+      const token = await retryTransientPairing(
+        () =>
+          pollForToken(
+            directClient,
+            { ...code, expiresInSeconds: remainingSeconds(codeDeadline) },
+            { signal: controller.signal }
+          ),
+        { signal: controller.signal }
+      );
       completeAuthentication(
         token,
         directServerUrl
@@ -269,7 +290,7 @@ export function DeviceLogin({
       );
     })().catch((reason: unknown) => {
       if (!cancelled) {
-        if (isExpiredCodeError(reason)) {
+        if (classifyPairingFailure(reason) === "expired") {
           renewCode();
         } else {
           clearExpiryTimers();

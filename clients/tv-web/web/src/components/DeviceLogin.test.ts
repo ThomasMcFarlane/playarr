@@ -98,4 +98,14 @@ describe("DeviceLogin countdown", () => {
     expect(source).toContain('"X-Playarr-Client-Platform"');
     expect(source).toContain('"X-Playarr-Client-Version"');
   });
+
+  it("retries network blips quietly and only shows denial or unexpected failures", () => {
+    const source = readFileSync(new URL("./DeviceLogin.tsx", import.meta.url), "utf8");
+
+    // Every network phase goes through the shared quiet-retry helper (2 s doubling to 30 s).
+    expect(source.match(/retryTransientPairing\(/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(source).toContain('classifyPairingFailure(reason) === "expired"');
+    // The error chrome is reached only from the final catch, never from a transient failure.
+    expect(source.match(/setError\(/g)?.length).toBe(2);
+  });
 });

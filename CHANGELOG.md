@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: QR sign-in retries network blips and server errors silently (2 s doubling to 30 s, keeping the current code while it is valid) instead of showing an error with Try again; only denial or an unexpected failure shows it.
 - Web: live update frames (and resyncs, reconnect gaps and fallback polls) now also drop the matching stored query copies immediately, so screens opened from the stale-while-revalidate cache after a change on another device never show an old copy first.
 - Storybook: the theme toolbar now drives the whole preview (canvas, docs page and its canvas toolbar use the app `--bg` and surface tokens), and the Storybook manager defaults to dark.
 - Web: every page opens with focus in the page (movie detail on Play, empty pages on Back), the start focus is no longer reset once a minute, Downloads, Watchlist, Calendar and Folders restore focus on return, and the profile-switcher selects and calendar period picker work with the remote.
