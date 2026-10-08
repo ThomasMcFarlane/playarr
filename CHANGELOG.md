@@ -272,6 +272,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: text uses fractional sizes, so widths match the web's; Home cards sit on the web's pixel positions, the right edge masks like the web's, and the hero art is the server's greyscale `stage` bake.
+- Server: the artwork `style` query accepts `stage-light`, the light-theme key-art look (greyscale, contrast 0.88, brightness 1.1, opacity 0.4 baked into alpha).
 - Android: Playlists Create, the Calendar link and Search Filters are now typed header actions drawn by the one action pill (the 30 September Filters tile) instead of hand-built buttons; Search's Filters moves from the body into the header slot. Back and every pill show the theme focus ring (white in dark, ink in light) with no fill, and on phones the Back button centres on the action tile.
 - Web: Library, Playlists and Search now render through the shared page layout (one header, one scroll area with the edge fade); no visible change other than the shared fade on the Search results.
 - tvOS: the Filters and Calendar link buttons stack in one right-hand action column like the web shell, library and search cards use the web's pinned focus lift and shadow, with no focus ring.

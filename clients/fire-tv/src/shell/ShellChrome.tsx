@@ -255,7 +255,7 @@ function ProfileChip({profileId, name, version, onPress}: ProfileChipProps): Rea
       <Text
         style={[
           textRun(8, 700, {letterSpacing: 0.32, mono: true}),
-          {position: 'absolute', left: sw(66.3), top: sw(1050.5), color: colour.inkMuted, fontSize: sw(8)},
+          {position: 'absolute', left: sw(66.3), top: sw(1048.5), color: colour.inkMuted, fontSize: sw(8)},
         ]}
       >
         {`v${version}`}

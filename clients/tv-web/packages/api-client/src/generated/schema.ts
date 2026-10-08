@@ -11465,7 +11465,7 @@ export interface operations {
     album_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
                 style?: string | null;
             };
             header?: never;
@@ -11544,7 +11544,7 @@ export interface operations {
     episode_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
                 style?: string | null;
             };
             header?: never;
@@ -11623,7 +11623,7 @@ export interface operations {
     work_artwork_handler: {
         parameters: {
             query?: {
-                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                /** @description Named bake: `original` (default), `stage` (dark TV key-art greyscale blend) or `stage-light` (the light-theme blend). */
                 style?: string | null;
             };
             header?: never;
