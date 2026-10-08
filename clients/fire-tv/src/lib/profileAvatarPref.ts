@@ -23,12 +23,18 @@ export function profileAvatarScope(apiBaseUrl: string, userId: string): string {
   return JSON.stringify([apiBaseUrl.replace(/\/$/, ''), userId]);
 }
 
-function readAll(): Record<string, {kind: string; preset?: string}> {
+export type StoredAvatar = {kind: 'preset'; preset: ProfileAvatarPresetId} | {kind: 'custom'; dataUrl: string};
+
+function isJpegDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^data:image\/jpeg;base64,/i.test(value);
+}
+
+function readAll(): Record<string, {kind: string; preset?: string; dataUrl?: string}> {
   if (typeof localStorage === 'undefined') return {};
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, {kind: string; preset?: string}>) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, {kind: string; preset?: string; dataUrl?: string}>) : {};
   } catch {
     return {};
   }
@@ -40,10 +46,22 @@ export function readStoredAvatarPreset(scope: string): ProfileAvatarPresetId | u
   return entry?.kind === 'preset' && isPresetId(entry.preset) ? entry.preset : undefined;
 }
 
-export function writeAvatarPreset(scope: string, preset: ProfileAvatarPresetId): void {
+/** The stored avatar for a user: a preset, or the custom photo saved to the profile (shown here, chosen on another device). */
+export function readStoredAvatar(scope: string): StoredAvatar | undefined {
+  const entry = readAll()[scope];
+  if (entry?.kind === 'preset' && isPresetId(entry.preset)) return {kind: 'preset', preset: entry.preset};
+  if (entry?.kind === 'custom' && isJpegDataUrl(entry.dataUrl)) return {kind: 'custom', dataUrl: entry.dataUrl};
+  return undefined;
+}
+
+function writeStored(scope: string, value: StoredAvatar): void {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({...readAll(), [scope]: {kind: 'preset', preset}}));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({...readAll(), [scope]: value}));
   listeners.forEach((listener) => listener());
+}
+
+export function writeAvatarPreset(scope: string, preset: ProfileAvatarPresetId): void {
+  writeStored(scope, {kind: 'preset', preset});
 }
 
 /** Loads the account's avatar from the server into this device's store. */
@@ -52,6 +70,8 @@ export async function syncAvatarPreset(client: ApiClient, apiBaseUrl: string, us
   const preference = remote.preference;
   if (preference && preference.kind === 'preset' && isPresetId(preference.value)) {
     writeAvatarPreset(profileAvatarScope(apiBaseUrl, userId), preference.value);
+  } else if (preference && preference.kind === 'custom' && isJpegDataUrl(preference.value)) {
+    writeStored(profileAvatarScope(apiBaseUrl, userId), {kind: 'custom', dataUrl: preference.value});
   }
 }
 

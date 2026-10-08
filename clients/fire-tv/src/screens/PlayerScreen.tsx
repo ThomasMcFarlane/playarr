@@ -85,6 +85,9 @@ export interface PlayerLaunchOptions {
   startPositionSeconds?: number;
   /** Shown in the transport bar while real work metadata is unavailable (there is none here -- the caller usually already has the title from whatever screen launched playback). */
   title?: string;
+  /** The saved quality for the file: its id and the transcoding profile (`null` or missing plays the original). */
+  qualityId?: string;
+  profile?: string | null;
 }
 
 export interface PlayerScreenHandle {
@@ -382,7 +385,7 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
     setFocusedControl('play');
     setMenu(null);
     setSeekTarget(null);
-    setQuality({id: 'original'});
+    setQuality(options?.profile ? {id: options.qualityId ?? 'original', profile: options.profile} : {id: 'original'});
     setMediaFileId(id);
     setLaunchOptions(options ?? {});
     setVisible(true);

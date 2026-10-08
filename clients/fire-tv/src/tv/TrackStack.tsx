@@ -35,6 +35,8 @@ export interface TrackItem {
   title: string;
   /** People tracks put the role under the name instead of before it. */
   stacked?: boolean;
+  /** A headshot: cropped at 20% from the top, as the web does (`.tv-person-art img`). */
+  person?: boolean;
   initials?: string;
   progress?: WatchProgress;
   unseenDot?: boolean;
@@ -154,7 +156,7 @@ function TrackCard({item, x, token, selected, preferred, onFocus}: {item: TrackI
       <MediaFocus focused={selected} width={CARD_W} height={CARD_H} radius={13.44}>
         <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft, alignItems: 'center', justifyContent: 'center'}}>
           {item.art ? (
-            <ArtworkImage uri={item.art} accessToken={token} style={{position: 'absolute', left: 0, top: 0, width: '100%', height: '100%'}} resizeMode="cover" />
+            <ArtworkImage uri={item.art} accessToken={token} style={{position: 'absolute', left: 0, top: 0, width: '100%', height: '100%'}} resizeMode="cover" focalY={item.person ? 0.2 : undefined} />
           ) : item.initials ? (
             <T size={28} weight={600} color={colour.inkMuted}>
               {item.initials}

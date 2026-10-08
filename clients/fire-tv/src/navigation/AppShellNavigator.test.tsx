@@ -285,7 +285,7 @@ describe('AppShellNavigator player wiring', () => {
     const tree = await renderShellOn(ROUTES.musicDetail, {workId: 'w2'}, playerHandleRef);
 
     await act(async () => {
-      tree.root.findByProps({accessibilityLabel: 'Play Opening Track'}).props.onPress();
+      tree.root.findAllByProps({accessibilityLabel: 'Opening Track'})[0]!.props.onPress();
     });
 
     expect(show).toHaveBeenCalledWith('mf-track-1');

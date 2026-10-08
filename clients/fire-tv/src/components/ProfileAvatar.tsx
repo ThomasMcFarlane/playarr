@@ -18,12 +18,12 @@
  * variant is out of scope here.
  */
 import React, {useEffect, useState} from 'react';
-import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
+import {Image, StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 import LinearGradient from '@amazon-devices/react-linear-gradient';
 import Svg, {Circle, Defs, Path, RadialGradient, Stop} from '@amazon-devices/react-native-svg';
 import {pickProfileAvatarPreset, PROFILE_AVATAR_PRESETS, type ProfileAvatarPresetId} from './profileAvatarPresets';
 import {useApiBaseUrl} from '../api/ApiClientProvider';
-import {profileAvatarScope, readStoredAvatarPreset, subscribeProfileAvatars} from '../lib/profileAvatarPref';
+import {profileAvatarScope, readStoredAvatar, subscribeProfileAvatars, type StoredAvatar} from '../lib/profileAvatarPref';
 
 export interface ProfileAvatarProps {
   /** The profile this avatar represents -- its id alone determines which of the six presets renders, via `pickProfileAvatarPreset`. */
@@ -197,12 +197,20 @@ export function ProfileAvatar(props: ProfileAvatarProps): React.ReactElement {
   const {profileId, presetId, size = DEFAULT_SIZE, style} = props;
   const [apiBaseUrl] = useApiBaseUrl();
   const scope = profileAvatarScope(apiBaseUrl, profileId);
-  const [stored, setStored] = useState<ProfileAvatarPresetId | undefined>(() => readStoredAvatarPreset(scope));
+  const [stored, setStored] = useState<StoredAvatar | undefined>(() => readStoredAvatar(scope));
   useEffect(() => {
-    setStored(readStoredAvatarPreset(scope));
-    return subscribeProfileAvatars(() => setStored(readStoredAvatarPreset(scope)));
+    setStored(readStoredAvatar(scope));
+    return subscribeProfileAvatars(() => setStored(readStoredAvatar(scope)));
   }, [scope]);
-  const chosen = presetId ?? stored;
+  if (!presetId && stored?.kind === 'custom') {
+    return (
+      <View style={[styles.root, {width: size, height: size}, style]}>
+        <Image source={{uri: stored.dataUrl}} style={{width: size, height: size}} resizeMode="cover" />
+        <AvatarHighlight size={size} />
+      </View>
+    );
+  }
+  const chosen = presetId ?? (stored?.kind === 'preset' ? stored.preset : undefined);
   const preset = chosen ? PROFILE_AVATAR_PRESETS.find((candidate) => candidate.id === chosen) ?? pickProfileAvatarPreset(profileId) : pickProfileAvatarPreset(profileId);
 
   return (

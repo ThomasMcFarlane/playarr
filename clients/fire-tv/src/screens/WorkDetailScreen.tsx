@@ -22,6 +22,8 @@ import {useTheme} from '../theme/ThemeProvider';
 import {BalancedT, Box, T, u} from '../tv/kit';
 import {PageHeader} from '../tv/PageHeader';
 import {Sheet, SheetOption} from '../tv/Sheet';
+import {PlaybackSettingsDrawer, launchQuality} from './PlaybackSettingsDrawer';
+import type {MediaPlaybackOptions} from '@playarr-tv/api-client';
 import {RailFrost, Stage} from '../tv/Stage';
 import {TrackStack, type Track} from '../tv/TrackStack';
 import {useAccessToken} from './LibraryScreen';
@@ -47,6 +49,9 @@ export interface WorkDetailRouteParams {
 export interface PlayOptions {
   startPositionSeconds?: number;
   title?: string;
+  /** The saved quality for the file: its id and the transcoding profile (`null` plays the original). */
+  qualityId?: string;
+  profile?: string | null;
 }
 
 export interface WorkDetailScreenProps {
@@ -159,7 +164,12 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
   const [selection, setSelection] = useState<{season: number; episode: string | null} | null>(null);
   const [focus, setFocus] = useState<{track: number; item: number} | null>(null);
   const [playlistSheet, setPlaylistSheet] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocused, setSettingsFocused] = useState(false);
+  const [savedOptions, setSavedOptions] = useState<MediaPlaybackOptions | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const playbackOptions = useAsyncData<MediaPlaybackOptions>(() => client.getMediaPlaybackOptions(movieMediaFileId as string), [client, movieMediaFileId], {enabled: movieMediaFileId !== null});
+  const effectiveOptions = savedOptions ?? (playbackOptions.status === 'ready' ? playbackOptions.data : null);
 
   const play = useCallback(
     (mediaFileId: string | null | undefined, options?: PlayOptions) => {
@@ -310,6 +320,7 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
           title: credit.person.name,
           small: credit.character?.trim() || credit.job?.trim() || credit.department?.trim() || undefined,
           stacked: true,
+          person: true,
         };
       }),
     });
@@ -360,8 +371,9 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
           movieActions={
             work.kind === 'movie' ? (
               <PillRow top={37.8}>
+                {playMediaFileId ? <Pill glyph={'\u2637'} label={t('pages.workDetail.playbackButtonLabel')} onPress={() => setSettingsOpen(true)} focusable={!settingsFocused} /> : null}
                 {playMediaFileId ? (
-                  <Pill primary glyph="play" label={moviePlayLabel} onPress={() => play(playMediaFileId, {title: work.title})} hasTVPreferredFocus />
+                  <Pill primary glyph="play" label={moviePlayLabel} onPress={() => play(playMediaFileId, {title: work.title, ...launchQuality(effectiveOptions)})} hasTVPreferredFocus focusable={!settingsFocused} />
                 ) : (
                   <Pill primary disabled label={t('pages.workDetail.unavailable')} />
                 )}
@@ -390,6 +402,19 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
       onFocus={setFocus}
       initial={initialTrack >= 0 ? {track: initialTrack, item: initialItem} : null}
     >
+      {settingsOpen && movieMediaFileId ? (
+        <PlaybackSettingsDrawer
+          mediaFileId={movieMediaFileId}
+          options={effectiveOptions}
+          state={playbackOptions.status === 'ready' ? {status: 'ready', options: playbackOptions.data} : playbackOptions.status === 'error' ? {status: 'error', message: playbackOptions.message} : {status: 'loading'}}
+          onSaved={setSavedOptions}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsFocused(false);
+          }}
+          onFocused={() => setSettingsFocused(true)}
+        />
+      ) : null}
       {playlistSheet ? (
         <PlaylistSheet
           workId={work.id}
@@ -475,7 +500,7 @@ function PillRow({top, children}: {top: number; children: React.ReactNode}): Rea
 }
 
 /** The web's `.tv-detail-play` (primary) and `.tv-detail-download` (secondary) pills. */
-function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {label: string; glyph?: string; primary?: boolean; disabled?: boolean; onPress?: () => void; hasTVPreferredFocus?: boolean}): React.ReactElement {
+function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus, focusable = true}: {label: string; glyph?: string; primary?: boolean; disabled?: boolean; onPress?: () => void; hasTVPreferredFocus?: boolean; focusable?: boolean}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
   const bg = primary ? (focused ? '#cf3157' : colour.ink) : focused ? mix(colour.ink, 0.88) : mix(colour.surfaceStrong, 0.72);
@@ -486,6 +511,7 @@ function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
+      focusable={focusable}
       hasTVPreferredFocus={hasTVPreferredFocus}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
