@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrPageId
+import io.playarr.shared.designsystem.page.playarrPageMetrics
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
 import io.playarr.shared.designsystem.page.PlayarrPageState
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
@@ -2709,7 +2711,7 @@ private fun ExperienceStage(
         }
         }
         if (isTelevision) {
-            Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 28.dp), contentAlignment = Alignment.TopStart) {
+            Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 28.dp), contentAlignment = Alignment.TopStart) {
                 feature()
             }
             Box(
@@ -2723,53 +2725,6 @@ private fun ExperienceStage(
                 Box(Modifier.padding(top = 58.dp + webPhoneInsets().asPaddingValues().calculateTopPadding()).fillMaxSize().background(phoneHomePanelBrush()))
                 rails()
             }
-        }
-    }
-}
-
-/**
- * Web `.tv-detail-heading`: glass back button, large section title, hairline
- * divider and breadcrumb. Television only; phones keep the floating back button.
- */
-@Composable
-internal fun PlayarrPageHeader(
-    title: String,
-    subtitle: String?,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.padding(start = 154.dp, top = 56.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PlayarrIconButton(onClick = onBack, contentDescription = playarrString(PlayarrString.CommonBack), modifier = Modifier.size(50.dp).glass(CircleShape, WebGlass.Control)) {
-            Icon(
-                Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = null,
-                tint = WebInk,
-                modifier = Modifier.size(20.dp))
-        }
-        Text(
-            title,
-            color = WebInk,
-            fontSize = 34.sp,
-            fontWeight = FontWeight(580),
-            letterSpacing = (-1.5).sp,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 23.dp),
-        )
-        if (!subtitle.isNullOrBlank()) {
-            Box(Modifier.padding(horizontal = 22.dp).width(1.dp).height(16.dp).background(WebInkMuted.copy(alpha = 0.45f)))
-            Text(
-                subtitle,
-                color = WebInkMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight(680),
-                letterSpacing = 0.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 110.dp),
-            )
         }
     }
 }
@@ -3596,12 +3551,14 @@ private fun ExperienceLibraryScreen(
     ) { viewModel.refreshLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
         ExperienceLoad.Loading -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.Library,
             title = plural,
             onBack = { navController.openExperienceTopLevel("home") },
             isTelevision = isTelevision,
             state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
         ) {}
         is ExperienceLoad.Failed -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.Library,
             title = plural,
             onBack = { navController.openExperienceTopLevel("home") },
             isTelevision = isTelevision,
@@ -3610,6 +3567,7 @@ private fun ExperienceLibraryScreen(
         is ExperienceLoad.Ready -> {
             if (state.value.isEmpty()) {
                 PlayarrPageScaffold(
+                    pageId = PlayarrPageId.Library,
                     title = plural,
                     onBack = { navController.openExperienceTopLevel("home") },
                     isTelevision = isTelevision,
@@ -3649,6 +3607,7 @@ private fun ExperienceLibraryScreen(
             }
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
             PlayarrPageScaffold(
+                pageId = PlayarrPageId.Library,
                 title = plural,
                 subtitle = playarrString(
                     PlayarrString.LibraryCollectionCount,
@@ -3685,7 +3644,7 @@ private fun ExperienceLibraryScreen(
                 }
         }
                 if (isTelevision) {
-                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true, FeatureCopyStyle.Library) }
+                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true, FeatureCopyStyle.Library) }
                 }
                 Column(
                     modifier = Modifier
@@ -3861,6 +3820,7 @@ private fun ExperienceSearchScreen(
         is ExperienceLoad.Failed -> playarrString(PlayarrString.SearchZeroResults)
     }
     PlayarrPageScaffold(
+        pageId = PlayarrPageId.Search,
         title = playarrString(PlayarrString.SearchTitle),
         subtitle = if (isTelevision) resultStatus else null,
         onBack = { navController.openExperienceTopLevel("home") },
@@ -4940,6 +4900,7 @@ private fun ExperienceDetailScreen(
     when (val current = state) {
         // The header and Back stay up while the title loads or fails (owner decision Q4).
         ExperienceLoad.Loading -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.Detail,
             title = "",
             onBack = onBack,
             isTelevision = isTelevision,
@@ -4947,6 +4908,7 @@ private fun ExperienceDetailScreen(
             state = PlayarrPageState.Loading(playarrString(PlayarrString.DetailLoadingDetails)),
         ) {}
         is ExperienceLoad.Failed -> PlayarrPageScaffold(
+            pageId = PlayarrPageId.Detail,
             title = "",
             onBack = onBack,
             isTelevision = isTelevision,
@@ -4977,6 +4939,7 @@ private fun ExperienceDetailScreen(
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
             var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
             PlayarrPageScaffold(
+                pageId = PlayarrPageId.Detail,
                 title = detail.work.kind.playarrPluralLabel(),
                 subtitle = if (isTelevision) detail.work.title else null,
                 largeTitle = true,
@@ -5057,7 +5020,7 @@ private fun ExperienceDetailScreen(
                     Box(Modifier.fillMaxSize().heroScrim(isTelevision))
         }
                     if (isTelevision) {
-                        Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
+                        Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
                         Surface(
                             modifier = Modifier.fillMaxWidth(0.55f).fillMaxHeight(0.62f).align(Alignment.CenterEnd).padding(end = 52.dp),
                             color = WebSurfaceStrong.copy(alpha = 0.88f),
@@ -5321,9 +5284,9 @@ private fun ExperienceVideoDetailContent(
         if (isTelevision) {
             Column(
                 Modifier
-                    .width(455.dp + 154.dp + 28.dp)
+                    .width(455.dp + playarrPageMetrics(true).start + 28.dp)
                     .fillMaxHeight()
-                    .padding(start = 154.dp, top = 259.dp, end = 28.dp, bottom = 64.dp),
+                    .padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 28.dp, bottom = 64.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 VideoDetailCopy(
@@ -7022,7 +6985,7 @@ private fun ExperienceMusicDetailContent(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = if (isTelevision) 118.dp else 16.dp,
+                start = playarrPageMetrics(isTelevision).start,
                 end = if (isTelevision) 64.dp else 16.dp,
                 top = if (isTelevision) 130.dp else 92.dp,
                 bottom = if (isTelevision) 118.dp else 110.dp,

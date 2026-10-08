@@ -135,3 +135,6 @@ object PlayarrPageTokens {
     @ReadOnlyComposable
     fun current(): PlayarrPageMetrics = of(LocalPlayarrFormFactor.current)
 }
+
+/** The page measurements for the form factor: screens read gutters and insets here and carry no literal of their own. */
+fun playarrPageMetrics(isTelevision: Boolean): PlayarrPageMetrics = if (isTelevision) PlayarrPageTokens.Tv else PlayarrPageTokens.Phone
