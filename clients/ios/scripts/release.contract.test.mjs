@@ -34,3 +34,13 @@ test('the marketing version falls back to version.properties, not a hard-coded d
   assert.doesNotMatch(workflow, /:-1\.0\.0/);
   assert.doesNotMatch(workflow, /tag version or 1\.0\.0/);
 });
+
+test('the external TestFlight group step runs after the draft step, reads the variable and never fails the upload', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/ios-release.yml', import.meta.url), 'utf8');
+  const step = workflow.slice(workflow.indexOf('- name: Add the build to the external TestFlight groups'));
+  assert.ok(workflow.indexOf('Prepare App Store draft version') < workflow.indexOf('Add the build to the external TestFlight groups'));
+  assert.match(step, /TESTFLIGHT_EXTERNAL_GROUP_IDS: \$\{\{ vars\.TESTFLIGHT_EXTERNAL_GROUP_IDS \}\}/);
+  assert.match(step, /continue-on-error: true/);
+  assert.match(step, /--plan/);
+  assert.doesNotMatch(step, /0c41229a/);
+});

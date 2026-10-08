@@ -4,6 +4,10 @@
 # After a real (non-dry-run) upload, a final step prepares the App Store Connect draft version:
 # it renames the editable draft to the marketing version and attaches the processed build. It only
 # prepares a draft; it never submits for review, so publishing stays a manual App Store Connect action.
+# A further step adds each build to the EXTERNAL TestFlight groups listed in the repository variable
+# TESTFLIGHT_EXTERNAL_GROUP_IDS (comma-separated; App Store Connect cannot auto-distribute to external
+# groups) and submits it for beta app review. A dry run only logs what it would do. A failure there is
+# reported in the summary and never fails the uploaded build.
 name: Apple signed release
 
 on:
@@ -60,6 +64,10 @@ on:
         type: boolean
         required: false
         default: false
+    outputs:
+      external_distribution:
+        description: Markdown list of the external TestFlight group distribution results
+        value: ${{ jobs.signed-testflight.outputs.external_distribution }}
 
 permissions:
   contents: read
@@ -74,6 +82,8 @@ jobs:
     environment: release-ios
     runs-on: macos-latest
     timeout-minutes: 90
+    outputs:
+      external_distribution: ${{ steps.external.outputs.report }}
     steps:
       - name: Validate the request
         env:
@@ -189,3 +199,42 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/asc-venv"
           "$RUNNER_TEMP/asc-venv/bin/pip" install --quiet 'pyjwt>=2.8,<3' 'cryptography>=42'
           "$RUNNER_TEMP/asc-venv/bin/python" clients/ios/scripts/asc_prepare_version.py
+
+      - name: Add the build to the external TestFlight groups
+        id: external
+        # Also runs after a dry run (read-only, logs the calls it would make) and after a failed draft step.
+        # Never fails the job: problems are warnings plus lines in the release summary.
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 50
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          TESTFLIGHT_EXTERNAL_GROUP_IDS: ${{ vars.TESTFLIGHT_EXTERNAL_GROUP_IDS }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -uo pipefail
+          # Answer export compliance to match ITSAppUsesNonExemptEncryption in both Info.plist files.
+          export ENCRYPTION_EXEMPT=true
+          for plist in clients/ios/Resources/Info.plist clients/apple-tv/Supporting/Info.plist; do
+            /usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$plist" | grep -qx false || ENCRYPTION_EXEMPT=false
+          done
+          # What to Test: the Google Play release notes for this version, else a generic line.
+          notes_file="clients/android/fastlane/metadata/android/en-GB/changelogs/$MARKETING_VERSION.txt"
+          WHATS_NEW="$([[ -s "$notes_file" ]] && cat "$notes_file" || true)"
+          export WHATS_NEW
+          export DISTRIBUTION_SUMMARY="$RUNNER_TEMP/external-distribution.md"
+          python3 -m venv "$RUNNER_TEMP/asc-venv-groups" \
+            && "$RUNNER_TEMP/asc-venv-groups/bin/pip" install --quiet 'pyjwt>=2.8,<3' 'cryptography>=42' \
+            || echo '::warning::Could not install the App Store Connect client dependencies'
+          flag=''
+          [[ "$DRY_RUN" == true ]] && flag='--plan'
+          # shellcheck disable=SC2086
+          "$RUNNER_TEMP/asc-venv-groups/bin/python" clients/ios/scripts/asc_distribute_testflight.py $flag \
+            || echo '::warning::External TestFlight distribution script failed'
+          {
+            echo 'report<<EOF_REPORT'
+            cat "$DISTRIBUTION_SUMMARY" 2>/dev/null || echo '- WARNING: external TestFlight distribution produced no report'
+            echo 'EOF_REPORT'
+          } >> "$GITHUB_OUTPUT"

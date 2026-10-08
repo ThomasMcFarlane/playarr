@@ -393,6 +393,7 @@ jobs:
           WEB_DEPLOYED: ${{ needs.web.outputs.deployed }}
           WEB_SHA: ${{ needs.web.outputs.sha }}
           PLAY_CODE: ${{ needs.play.outputs.version_code || needs.prepare.outputs.play_code }}
+          EXTERNAL_TESTFLIGHT: ${{ needs.apple.outputs.external_distribution }}
         run: |
           set -euo pipefail
           owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
@@ -418,6 +419,14 @@ jobs:
             echo "| playarr.app (web) | $(mark "$(result web)") | https://playarr.app | version $VERSION, commit ${WEB_SHA:0:8}, deployed: ${WEB_DEPLOYED:-n/a} (false: a newer commit was already live, or dry run) |"
             echo "| GitHub Release | $(mark "$(result release)") | ${RELEASE_URL:-} | |"
           } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${EXTERNAL_TESTFLIGHT:-}" ]]; then
+            {
+              echo
+              echo "### External TestFlight groups$dry"
+              echo
+              echo "$EXTERNAL_TESTFLIGHT"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           cat "$GITHUB_STEP_SUMMARY"
           # Fail the run if anything required or any store publish failed, so it is visible.
           for job in prepare server android release play apple web; do

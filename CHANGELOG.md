@@ -161,6 +161,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Release: after each iOS and tvOS TestFlight upload the pipeline now adds the build to the external TestFlight groups listed in the `TESTFLIGHT_EXTERNAL_GROUP_IDS` repository variable, sets export compliance and "What to Test" notes, and submits it for beta app review; failures show in the release summary without failing the upload.
 - Web: Storybook gains dialog, toast, avatar, watch-state, period picker, master-detail and player-control stories; the watch-state overlay marks now have role=img.
 - Web: a public Storybook at `/storybook` shows the real components and styles in light and dark, at TV, desktop and mobile layouts, with focus, hover, open, disabled, loading, empty and error states. CI builds it and runs a render and accessibility smoke over every story.
 - iOS and Apple TV Home now render the server-computed, localised `/api/v1/home/rails` shelves, falling back to the previous client-built rails on older servers.

@@ -33,7 +33,7 @@ applied by the multi-arch server publisher; the regional publisher uses immutabl
 | HarmonyOS | `harmony-ci.yml` | `playarr-harmony-<version>-unsigned.hap` (no AppGallery signing material yet) |
 | GitHub Release | inline | release `v<version>` with every package above, a combined `SHA256SUMS` and `playarr-<version>-CHANGELOG.md` |
 | Google Play | `android-play-internal.yml` | closed-testing (alpha) track, after the release exists |
-| TestFlight | `ios-release.yml` | iOS and tvOS builds, after the release exists |
+| TestFlight | `ios-release.yml` | iOS and tvOS builds, after the release exists; then each build is added to the external TestFlight groups (below) |
 | Summary | inline | per-platform result table in the run summary |
 
 The server and the Android APK are required: without them no release is created. Any other platform
@@ -47,6 +47,19 @@ that were not already there at the previous `v*` tag. The GitHub Release body is
 (`--summary`: a few entries per category, a count of the rest, and the artefact table); the full notes
 are attached to the release as `playarr-<version>-CHANGELOG.md`, which keeps the body inside GitHub's
 125,000-character limit.
+
+## External TestFlight groups
+
+App Store Connect cannot auto-distribute to external groups, so after each upload `ios-release.yml`
+runs `clients/ios/scripts/asc_distribute_testflight.py`. iOS and tvOS share one App Store Connect app
+record, so one group receives both platforms' builds. The group ids live in the repository variable
+`TESTFLIGHT_EXTERNAL_GROUP_IDS` (comma-separated; add an id to add a group, nothing is committed). For
+each platform the script waits for the build to process, answers export compliance to match
+`ITSAppUsesNonExemptEncryption` when the build has no answer, creates the en-US "What to Test" notes from
+the Google Play release notes for the version, adds the build to each group and submits it for beta app
+review (an "already submitted" reply is fine). A dry run only logs the calls it would make. A failure is a
+warning and a line under "External TestFlight groups" in the release summary; it never fails the
+uploaded build. It never submits an App Store version for review.
 
 ## Version numbers
 
