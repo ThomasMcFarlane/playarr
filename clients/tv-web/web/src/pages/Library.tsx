@@ -62,6 +62,7 @@ import {
   type SortOrder,
 } from "../lib/libraryView";
 import { usePanelParam } from "../lib/usePanelParam";
+import { releaseYear } from "../lib/workYear";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
@@ -945,7 +946,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         <p className="tv-provider">{selected.genres[0] ?? singular}</p>
         <h2>{selected.title}</h2>
         <p className="tv-preview-meta">
-          <span>{new Date(selected.added_at).getFullYear()}</span>
+          {releaseYear(selected) !== null ? <span>{releaseYear(selected)}</span> : null}
           <span>{selected.genres.slice(0, 2).join(" · ") || singular}</span>
         </p>
         <p className="tv-preview-overview">
@@ -1415,8 +1416,12 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
         <strong>{work.title}</strong>
         <span className="tv-list-card-meta">
           {work.genres.slice(0, 2).join(" · ") || singular}
-          <i aria-hidden="true" />
-          {new Date(work.added_at).getFullYear()}
+          {releaseYear(work) !== null ? (
+            <>
+              <i aria-hidden="true" />
+              {releaseYear(work)}
+            </>
+          ) : null}
         </span>
       </span>
     </Link>

@@ -1,5 +1,6 @@
 import { setScrollInstant, settledScrollOffset, smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
 import { Drawer, PageLayout } from "../components/shell";
+import { releaseYear } from "../lib/workYear";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { snapshotFromWork } from "../lib/discovery";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -428,12 +429,6 @@ function formatDetailDate(value: string): string | null {
   }).format(date);
 }
 
-function releaseYear(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : String(date.getUTCFullYear());
-}
-
 function relatedWorkScore(target: Work, candidate: Work): number {
   const targetGenres = new Set(
     target.genres.map((genre) => genre.trim().toLocaleLowerCase())
@@ -444,12 +439,8 @@ function relatedWorkScore(target: Work, candidate: Work): number {
     0
   );
   const sameKind = target.kind === candidate.kind ? 1 : 0;
-  const targetReleaseYear = releaseYear(target.release_date);
-  const candidateReleaseYear = releaseYear(candidate.release_date);
-  const targetYear = targetReleaseYear ? Number(targetReleaseYear) : Number.NaN;
-  const candidateYear = candidateReleaseYear
-    ? Number(candidateReleaseYear)
-    : Number.NaN;
+  const targetYear = releaseYear(target) ?? Number.NaN;
+  const candidateYear = releaseYear(candidate) ?? Number.NaN;
   const yearProximity =
     Number.isFinite(targetYear) && Number.isFinite(candidateYear)
       ? Math.max(0, 5 - Math.abs(targetYear - candidateYear) / 5)
@@ -1754,7 +1745,7 @@ export function WorkDetailPage() {
       ? selectedEpisode?.episode.air_date ?? work.release_date
       : work.release_date ?? work.added_at;
   const detailDate = detailDateValue ? formatDetailDate(detailDateValue) : null;
-  const detailYear = releaseYear(work.release_date);
+  const detailYear = releaseYear(work);
   const detailDateLabel =
     episodic && selectedEpisode?.episode.air_date
       ? t("pages.workDetail.dateAired")

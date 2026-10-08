@@ -34,6 +34,7 @@ import { PageLayout, ScrollArea } from "../components/shell";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { yearOfDate } from "../lib/workYear";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import { CachedAlbumArtworkImage, CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -72,9 +73,8 @@ function formatDuration(
 }
 
 function albumLabel(album: AlbumDetail): string {
-  return album.album.release_date
-    ? String(new Date(album.album.release_date).getUTCFullYear())
-    : album.album.album_type.replace("_", " ");
+  const year = yearOfDate(album.album.release_date);
+  return year !== null ? String(year) : album.album.album_type.replace("_", " ");
 }
 
 function circularOffset(index: number, selectedIndex: number, count: number): number {

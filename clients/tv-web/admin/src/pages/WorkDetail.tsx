@@ -10,6 +10,7 @@ import {
 } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { releaseYear } from "../lib/releaseYear";
 import { KIND_LABELS } from "../components/PosterCard";
 import {
   CachedAlbumArtworkImage,
@@ -37,11 +38,6 @@ function availabilityLabel(availability: Availability): string {
 function formatDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-}
-
-function formatYear(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  return String(new Date(iso).getFullYear());
 }
 
 function formatRuntime(ms: number | null | undefined): string | null {
@@ -121,7 +117,7 @@ export function WorkDetailPage() {
 
   const { work } = detail;
   const releaseDate = formatDate(work.release_date);
-  const year = formatYear(work.release_date) ?? String(new Date(work.added_at).getFullYear());
+  const year = releaseYear(work.release_date);
   const runtime = formatRuntime(detail.runtime_ms);
 
   return (
@@ -146,7 +142,7 @@ export function WorkDetailPage() {
                 {availabilityLabel(work.availability)}
               </span>
               <span>{KIND_LABELS[work.kind]}</span>
-              <span>{year}</span>
+              {year ? <span>{year}</span> : null}
               {runtime && <span>{runtime}</span>}
               {!work.monitored && (
                 <span className="badge badge-pill badge-neutral">Unmonitored</span>

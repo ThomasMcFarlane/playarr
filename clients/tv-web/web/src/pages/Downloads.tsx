@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { DownloadKeepUntilPolicy, DownloadRecord } from "../lib/downloadsDb";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { formatBytes } from "../lib/formatBytes";
+import { releaseYear } from "../lib/workYear";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -97,12 +98,6 @@ function workDetailKindLabel(work: Work, t: TFunc): string {
     default:
       return work.kind;
   }
-}
-
-function workReleaseYear(work: Work): string | null {
-  const source = work.release_date ?? work.added_at;
-  const date = new Date(source);
-  return Number.isNaN(date.getTime()) ? null : String(date.getUTCFullYear());
 }
 
 /** Resolves which episode (if any) a download's `mediaFileId` plays within a fetched `WorkDetail` -- `null` for movies/sites-without-a-match, or while the detail is still an in-flight/failed fetch. */
@@ -399,8 +394,8 @@ export function DownloadsPage() {
                     ).padStart(2, "0")}`}
                   </span>
                 ) : null}
-                {workReleaseYear(focusedPreview.detail.work) ? (
-                  <span>{workReleaseYear(focusedPreview.detail.work)}</span>
+                {releaseYear(focusedPreview.detail.work) !== null ? (
+                  <span>{releaseYear(focusedPreview.detail.work)}</span>
                 ) : null}
                 <span>
                   {focusedPreview.detail.work.genres.slice(0, 2).join(" · ") ||

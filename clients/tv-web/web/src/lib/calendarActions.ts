@@ -68,6 +68,7 @@ export function legacySnapshot(entry: CalendarEntry): TitleSnapshot {
     title: entry.title,
     poster_url: entry.poster_url ?? null,
     work_id: entry.work_id ?? null,
-    year: Number(entry.date.slice(0, 4)) || null,
+    // An episode's date is its air date, not the series' release year, so only movies and albums carry one.
+    year: kind === "movie" || kind === "artist" ? Number(entry.date.slice(0, 4)) || null : null,
   };
 }

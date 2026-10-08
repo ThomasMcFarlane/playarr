@@ -5,6 +5,7 @@
  * routes, labels and a primary action so every surface behaves the same.
  */
 import type { TranslationKey } from "./i18n/translations";
+import { releaseYear } from "./workYear";
 import type {
   DiscoveryKind,
   DiscoveryTitle,
@@ -66,7 +67,7 @@ export function snapshotFromWork(work: Work): TitleSnapshot {
   return {
     kind: discoveryKindForWork(work.kind),
     title: work.title,
-    year: work.release_date ? new Date(work.release_date).getUTCFullYear() : null,
+    year: releaseYear(work),
     work_id: work.id,
     external_refs: work.external_refs,
     poster_url: poster?.url ?? null,

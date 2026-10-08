@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: titles show their release year everywhere (library preview and cards, downloads, search, detail, admin work detail), never the year they were added to the library; with no release date no year is shown. One shared helper replaces the divergent copies, and the calendar's legacy watchlist and request snapshot no longer uses an episode's air year.
 - Web: right-side panels (Filters, Calendar link, Create playlist, playback settings, download quality, context menus) now close with the exact reverse of their opening animation (same duration, mirrored easing, slide out to the right) on every close path, and focus returns to the launcher afterwards. Reduced-motion users get an immediate close.
 - Web: a focused card's soft shadow and lift are no longer clipped to a box by the Home, detail and search rails; the rails keep their positions, edge fades and horizontal scrolling.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.

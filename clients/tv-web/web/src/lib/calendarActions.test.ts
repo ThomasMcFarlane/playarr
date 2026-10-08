@@ -93,6 +93,8 @@ describe("legacySnapshot", () => {
   it("maps media kinds to discovery kinds for servers without snapshots", () => {
     expect(legacySnapshot(entry(undefined, { media_kind: "movie" })).kind).toBe("movie");
     expect(legacySnapshot(entry(undefined, { media_kind: "album" })).kind).toBe("artist");
-    expect(legacySnapshot(entry(undefined)).year).toBe(2026);
+    expect(legacySnapshot(entry(undefined, { media_kind: "movie" })).year).toBe(2026);
+    // An episode's date is its air date, so the series gets no year rather than the air year.
+    expect(legacySnapshot(entry(undefined)).year).toBeNull();
   });
 });
