@@ -1,5 +1,9 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.LocalPlayarrFormFactor
+import io.playarr.shared.designsystem.page.LocalPlayarrPhoneInsets
+import io.playarr.shared.designsystem.page.LocalPlayarrWebTextStyle
+import io.playarr.shared.designsystem.page.PlayarrFormFactor
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
@@ -477,7 +481,14 @@ fun PlayarrApp(
         PlayarrThemePreference.Light -> false
         PlayarrThemePreference.Dark -> true
     }
-    CompositionLocalProvider(LocalPlayarrLanguage provides language) {
+    // Static locals recompose their whole subtree when the value changes, so the insets provider is created once.
+    val phoneInsets: @Composable () -> androidx.compose.foundation.layout.WindowInsets = remember { { webPhoneInsets() } }
+    CompositionLocalProvider(
+        LocalPlayarrLanguage provides language,
+        LocalPlayarrFormFactor provides if (isTelevision) PlayarrFormFactor.Tv else PlayarrFormFactor.Phone,
+        LocalPlayarrPhoneInsets provides phoneInsets,
+        LocalPlayarrWebTextStyle provides WebTextStyle,
+    ) {
         Surface(modifier = Modifier.fillMaxSize(), color = PlayarrBackground, contentColor = Color.White) {
             when (val current = state) {
                 RootState.Loading -> LoadingScreen()

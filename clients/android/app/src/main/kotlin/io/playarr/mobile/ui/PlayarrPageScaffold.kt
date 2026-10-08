@@ -1,5 +1,15 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.LegacyPlacement
+import io.playarr.shared.designsystem.page.PlayarrActionIcon
+import io.playarr.shared.designsystem.page.PlayarrBack
+import io.playarr.shared.designsystem.page.PlayarrPageAction
+import io.playarr.shared.designsystem.page.PlayarrPageBody
+import io.playarr.shared.designsystem.page.PlayarrPageHeaderSpec
+import io.playarr.shared.designsystem.page.PlayarrPageId
+import io.playarr.shared.designsystem.page.PlayarrPageLayout
+import io.playarr.shared.designsystem.page.PlayarrActionPill
+import io.playarr.shared.designsystem.icons.PlayarrWebIcons
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -79,32 +89,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /*
- * Shared page frame for every routed Android screen (web `PageShell`/`PageHeader` parity):
- * back button top-left, large title, hairline divider + breadcrumb, right-side actions (Filters,
- * then secondary panel buttons stacked below it), and a body that stays clear of the profile chip
- * pinned bottom-left. PlayarrPageScaffoldRegistryTest keeps new screens from bypassing it.
+ * Transitional adapter. Every routed screen still calls [PlayarrPageScaffold]; it now only builds a header spec and
+ * delegates to the shared page layout in `core-designsystem` (`PlayarrPageLayout`). Screens move onto the typed
+ * `PlayarrPageAction`s as the migration proceeds (docs/design/page-layout.md section 8) and this adapter goes in A7.
  */
-
-/** Web header icon button fill and ring (`a.ui-btn--icon`): surface-strong at .7 and a hairline ring, per theme. */
-@Composable
-private fun webHeaderIconFill(): Color = WebSurfaceStrong.copy(alpha = 0.7f)
-
-@Composable
-private fun webHeaderIconRing(): Color =
-    if (WebSurface.luminance() < 0.5f) Color(0x27DFDCDD) else WebInk.copy(alpha = 0.1838f)
-
-/** Web `.page-header-detail` divider, per theme. */
-@Composable
-internal fun webHeaderDivider(): Color =
-    if (WebSurface.luminance() < 0.5f) Color(0x3BDFDCDD) else WebInk.copy(alpha = 0.28f)
-
-/** Space the body reserves at the bottom so nothing renders under the bottom-left profile chip. */
-internal fun playarrPageSafeBottom(isTelevision: Boolean): Dp = if (isTelevision) 96.dp else 72.dp
-
-/** Left edge of page content: clears the 118 dp navigation rail on television. */
-internal fun playarrPageStart(isTelevision: Boolean): Dp = if (isTelevision) 154.dp else 16.dp
-
-internal fun playarrPageEnd(isTelevision: Boolean): Dp = if (isTelevision) 72.dp else 16.dp
 
 @Composable
 internal fun PlayarrPageScaffold(
@@ -113,7 +101,7 @@ internal fun PlayarrPageScaffold(
     isTelevision: Boolean,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    /** The page's Filters action; rendered by the one shared [PlayarrHeaderActions] so every page matches. */
+    /** The page's Filters action; drawn by the one shared page header so every page matches. */
     filters: PlayarrFilterAction? = null,
     /** Panel buttons (Create, Calendar link, ...) in a row immediately left of Filters. */
     panelActions: (@Composable RowScope.() -> Unit)? = null,
@@ -130,48 +118,26 @@ internal fun PlayarrPageScaffold(
     backActive: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(webPhoneInsets())
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(WebSurface)
-            .then(if (isTelevision || !padBody) Modifier else Modifier.windowInsetsPadding(webPhoneInsets())),
-    ) {
-        Column(
-            if (padBody) {
-                Modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = playarrPageStart(isTelevision),
-                        end = playarrPageEnd(isTelevision),
-                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp),
-                        bottom = playarrPageSafeBottom(isTelevision),
-                    )
-            } else {
-                Modifier.fillMaxSize()
-            },
-            content = content,
-        )
-        PlayarrPageHeaderRow(
-            title = title,
-            subtitle = subtitle,
-            onBack = onBack,
-            isTelevision = isTelevision,
-            largeTitle = largeTitle,
-            backActive = backActive,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .then(headerInsets)
-                .padding(start = if (isTelevision) 154.dp else 16.dp, top = if (isTelevision) (if (filters != null || panelActions != null || trailingNav != null) 67.dp else 56.dp) else 2.dp),
-        )
-        if (filters != null || panelActions != null || trailingNav != null) {
-            PlayarrHeaderActions(
-                isTelevision = isTelevision,
-                filters = filters,
-                panelActions = panelActions,
-                trailingNav = trailingNav,
-                modifier = Modifier.align(Alignment.TopEnd).then(headerInsets),
-            )
+    val backLabel = playarrString(PlayarrString.CommonBack)
+    val actions = buildList {
+        if (trailingNav != null) add(PlayarrPageAction.LegacySlot("navigation", LegacyPlacement.Navigation, trailingNav))
+        if (panelActions != null) add(PlayarrPageAction.LegacySlot("panel", LegacyPlacement.Panel, panelActions))
+        if (filters != null) add(PlayarrPageAction.Filters(filters.label, filters.active, filters.badge, filters.onClick))
+    }
+    Box(modifier) {
+        PlayarrPageLayout(
+            pageId = PlayarrPageId.Legacy,
+            header = PlayarrPageHeaderSpec(
+                title = title,
+                detail = subtitle,
+                back = PlayarrBack(backLabel, onBack),
+                actions = actions,
+                backActive = backActive,
+                largeTitle = largeTitle,
+            ),
+            body = if (padBody) PlayarrPageBody.Panel else PlayarrPageBody.Bleed,
+        ) {
+            content()
         }
     }
 }
@@ -185,271 +151,19 @@ internal data class PlayarrFilterAction(
 )
 
 /**
- * The one right-hand header cluster, one row: [trailingNav] (previous / today / next), then [panelActions]
- * (Create, Calendar link, ...), then Filters last, so Filters sits in the identical spot on every page.
- * Pages never place their own Filters launcher; PlayarrPageScaffoldRegistryTest compares Calendar with Library.
- */
-@Composable
-internal fun PlayarrHeaderActions(
-    isTelevision: Boolean,
-    filters: PlayarrFilterAction?,
-    modifier: Modifier = Modifier,
-    panelActions: (@Composable RowScope.() -> Unit)? = null,
-    trailingNav: (@Composable RowScope.() -> Unit)? = null,
-) {
-    Row(
-        // On phones the profile chip is pinned top-right, so the cluster stops short of it.
-        modifier.padding(end = if (isTelevision) 76.8.dp else 72.dp, top = if (isTelevision) 56.dp else 2.dp),
-        // Web TV: the period arrows sit 25 px before the panel pills, which touch the Filters pill.
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (trailingNav != null) Row(Modifier.padding(end = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = trailingNav)
-        if (panelActions != null) Row(horizontalArrangement = Arrangement.spacedBy(0.dp), verticalAlignment = Alignment.CenterVertically, content = panelActions)
-        if (filters != null) {
-            PlayarrHeaderButton(
-                label = filters.label,
-                icon = PlayarrWebIcons.Filters,
-                isTelevision = isTelevision,
-                active = filters.active,
-                badge = filters.badge,
-                onClick = filters.onClick,
-            )
-        }
-    }
-}
-
-/** Where a header breadcrumb goes relative to the title. */
-internal enum class PlayarrSubtitlePlacement { None, Inline, Wrapped }
-
-/**
- * Pure placement rule: the breadcrumb stays on the title line only when it fits between the end of the
- * title block and the start of the clock's reserved area; otherwise it wraps beneath the title.
- */
-internal fun decideSubtitlePlacement(
-    hasSubtitle: Boolean,
-    titleEndPx: Int,
-    subtitleWidthPx: Int,
-    separatorPx: Int,
-    reservedStartPx: Int?,
-): PlayarrSubtitlePlacement = when {
-    !hasSubtitle -> PlayarrSubtitlePlacement.None
-    reservedStartPx == null -> PlayarrSubtitlePlacement.Inline
-    titleEndPx + separatorPx + subtitleWidthPx <= reservedStartPx -> PlayarrSubtitlePlacement.Inline
-    else -> PlayarrSubtitlePlacement.Wrapped
-}
-
-/** Start of the shell clock's reserved area on television (the clock is drawn at 558.1 dp, top 68.2 dp, as web). */
-internal val PlayarrClockReservedStart = 550.dp
-
-/**
- * Back + title + breadcrumb row. The title is truncated before the clock; the breadcrumb sits on the
- * title line behind a vertical divider when it fits before the clock, else wraps under the title behind a
- * horizontal rule, so it never renders beneath the clock/date.
- */
-@Composable
-internal fun PlayarrPageHeaderRow(
-    title: String,
-    subtitle: String?,
-    onBack: () -> Unit,
-    isTelevision: Boolean,
-    modifier: Modifier = Modifier,
-    /** Absolute x (from the screen's left edge) where this row starts; used to measure against the clock. */
-    startInset: Dp = if (isTelevision) 154.dp else 16.dp,
-    largeTitle: Boolean = false,
-    backActive: Boolean = false,
-) {
-    val backLabel = playarrString(PlayarrString.CommonBack)
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val reservedStartPx = if (isTelevision) with(density) { (PlayarrClockReservedStart - startInset).roundToPx() } else null
-    androidx.compose.ui.layout.SubcomposeLayout(modifier) { constraints ->
-        val loose = androidx.compose.ui.unit.Constraints()
-        val backSize = (if (isTelevision) 50.dp else 42.dp).roundToPx()
-        val backHeight = (if (isTelevision) 50.dp else 38.dp).roundToPx()
-        val gap = (if (isTelevision) 23.dp else 10.dp).roundToPx()
-        val back = subcompose("back") {
-            if (isTelevision) {
-                PlayarrIconButton(
-                    onClick = onBack,
-                    contentDescription = backLabel,
-                    size = PlayarrButtonSize.Large,
-                    variant = PlayarrButtonVariant.Ghost,
-                    // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
-                    modifier = Modifier
-                        // Settings opens with the back button focused: web fills it with the ink colour, scales it 1.056
-                        // and draws the 3 px ink focus outline 2 px outside it (`.ui-btn:focus-visible`).
-                        .then(if (backActive) Modifier.drawBehind {
-                            drawCircle(WebInk, radius = 29.9.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
-                        } else Modifier)
-                        .then(if (backActive) Modifier.graphicsLayer { scaleX = 1.056f; scaleY = 1.056f } else Modifier)
-                        .background(if (backActive) WebInk else webHeaderIconFill(), CircleShape)
-                        .then(if (backActive) Modifier else Modifier.border(1.dp, webHeaderIconRing(), CircleShape)),
-                ) {
-                    Text("\u2190", color = if (backActive) WebBackground else WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
-                }
-            } else {
-                PlayarrPhoneHeaderPill(onClick = onBack, contentDescription = backLabel, active = backActive, focusScale = if (backActive) 1.055f else 1f, shape = WebEllipseShape) {
-                    // Web draws the arrow as the text glyph "←" at 12.8 px, weight 720.
-                    Text("←", color = if (backActive) WebBackground else WebInkSoft, fontSize = 12.8.sp, fontWeight = FontWeight(720))
-                }
-            }
-        }.first().measure(androidx.compose.ui.unit.Constraints.fixed(backSize, backHeight))
-        val titleMax = ((reservedStartPx ?: constraints.maxWidth) - back.width - gap).coerceAtLeast(0)
-        val titleP = subcompose("title") {
-            Text(
-                title,
-                color = WebInk,
-                fontSize = if (isTelevision) 34.sp else if (largeTitle) 21.6.sp else 17.6.sp,
-                fontWeight = FontWeight(580),
-                letterSpacing = if (isTelevision) (-1.5).sp else if (largeTitle) (-0.972).sp else (-0.792).sp,
-                lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else if (largeTitle) 32.4.sp else 26.4.sp,
-                style = if (isTelevision) androidx.compose.material3.LocalTextStyle.current else WebTextStyle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.semantics { heading() },
-            )
-        }.first().measure(loose.copy(maxWidth = titleMax.coerceAtMost(constraints.maxWidth)))
-        val separator = (if (isTelevision) 47.04.dp else 10.dp).roundToPx()
-        val titleEnd = back.width + gap + titleP.width
-        val probe = subtitle?.let {
-            subcompose("probe") { PlayarrBreadcrumbText(it, phone = !isTelevision) }.first().measure(loose)
-        }
-        val placement = decideSubtitlePlacement(subtitle != null, titleEnd, probe?.width ?: 0, separator, reservedStartPx)
-        val inline = if (placement == PlayarrSubtitlePlacement.Inline) {
-            subcompose("inline") {
-                if (isTelevision) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.padding(horizontal = 23.04.dp).width(1.dp).height(50.dp).background(WebDivider))
-                        PlayarrBreadcrumbText(subtitle!!)
-                    }
-                } else {
-                    // Web `.page-header-detail`: 1 px divider the full 38 px header height, 14 px padding, 10 px after the title.
-                    Row(Modifier.height(38.dp).padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(1.dp).fillMaxHeight().background(WebDivider))
-                        Spacer(Modifier.width(14.dp))
-                        PlayarrBreadcrumbText(subtitle!!, phone = true)
-                    }
-                }
-            }.first().measure(loose)
-        } else {
-            null
-        }
-        val wrapped = if (placement == PlayarrSubtitlePlacement.Wrapped) {
-            subcompose("wrapped") {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(WebInkMuted.copy(alpha = 0.45f)))
-                    PlayarrBreadcrumbText(subtitle!!, phone = !isTelevision)
-                }
-            }.first().measure(loose.copy(maxWidth = (constraints.maxWidth - back.width - gap).coerceAtLeast(0).coerceAtMost((titleP.width + 160.dp.roundToPx()).coerceAtLeast(titleP.width))))
-        } else {
-            null
-        }
-        val rowHeight = maxOf(back.height, titleP.height)
-        val width = maxOf(titleEnd + (inline?.width ?: 0), back.width + gap + (wrapped?.width ?: 0))
-        val height = rowHeight + (wrapped?.let { it.height + 6.dp.roundToPx() } ?: 0)
-        layout(width.coerceAtMost(constraints.maxWidth.coerceAtLeast(width)), height) {
-            back.placeRelative(0, (rowHeight - back.height) / 2)
-            titleP.placeRelative(back.width + gap, (rowHeight - titleP.height) / 2)
-            inline?.placeRelative(titleEnd, (rowHeight - inline.height) / 2)
-            wrapped?.placeRelative(back.width + gap, rowHeight + 6.dp.roundToPx())
-        }
-    }
-}
-
-@Composable
-private fun PlayarrBreadcrumbText(text: String, phone: Boolean = false) {
-    Text(
-        text,
-        color = WebInkMuted,
-        fontSize = if (phone) 8.sp else 11.136.sp,
-        fontWeight = FontWeight(680),
-        letterSpacing = if (phone) 0.36.sp else 0.501.sp,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
- * The header launcher (Filters, Calendar link, Create, ...) on every page: the library Filters launcher as the web
- * drew it before the shared page shell and still draws it in `.page-filters-button`. A 14 dp tile with the glyph
- * above a small bold label (icon only, 44 dp square, on phones), glass fill, hairline border and a soft shadow.
- * Focus draws the ring (white in dark, ink in light) at 1.06x and never fills the tile; the open state keeps the ink fill.
+ * Header action in the shared tile style (Filters, Calendar subscription, Create, ...). A thin call into the page
+ * package's one action pill, for screens that still build their own action row (removed with the adapter, A7).
  */
 @Composable
 internal fun PlayarrHeaderButton(
     label: String,
-    icon: ImageVector,
-    isTelevision: Boolean,
+    icon: PlayarrActionIcon,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
     badge: Int = 0,
 ) {
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    val focusScale = if (focused) 1.06f else 1f
-    val shape = RoundedCornerShape(14.dp)
-    androidx.compose.runtime.CompositionLocalProvider(
-        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
-    ) {
-        androidx.compose.material3.Surface(
-            onClick = onClick,
-            interactionSource = source,
-            modifier = modifier
-                .then(if (isTelevision) Modifier.widthIn(min = 62.dp).height(72.dp) else Modifier.size(44.dp))
-                .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-                .shadow(14.dp, shape, clip = false, ambientColor = Color(0x14382621), spotColor = Color(0x14382621))
-                .then(
-                    if (focused) {
-                        // Web focus outline: 3 px solid, offset 2 px, following the tile's rounded shape.
-                        Modifier.drawBehind {
-                            val grow = 3.5.dp.toPx()
-                            drawRoundRect(
-                                color = WebInk,
-                                topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
-                                size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx() + grow),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                )
-                .semantics { contentDescription = label },
-            shape = shape,
-            // Focus draws the ring only; the open state (panel shown) keeps the ink fill.
-            color = if (active) WebInk else WebSurfaceStrong.copy(alpha = 0.78f),
-            contentColor = if (active) WebBackground else if (focused) WebInk else WebInkMuted,
-            border = androidx.compose.foundation.BorderStroke(1.dp, WebLauncherBorder),
-        ) {
-            if (isTelevision) {
-                Column(
-                    Modifier.padding(horizontal = 4.dp, vertical = 7.2.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(5.6.dp, Alignment.CenterVertically),
-                ) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Text(label, fontSize = 8.256.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.165.sp, maxLines = 1)
-                    if (badge > 0) {
-                        Surface(color = WebAccent, shape = CircleShape) {
-                            Text(
-                                badge.toString(),
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp),
-                            )
-                        }
-                    }
-                }
-            } else {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-    }
+    PlayarrActionPill(icon = icon, label = label, onClick = onClick, modifier = modifier, active = active, count = badge)
 }
 
 /**
@@ -659,57 +373,6 @@ internal fun PlayarrSkeleton(modifier: Modifier = Modifier, shape: androidx.comp
         label = "skeletonAlpha",
     )
     Box(modifier.alpha(alpha).background(WebSurfaceSoft, shape))
-}
-
-/** Web phone header pill (`.ui-btn--md`): 38 px tall, 1 px translucent border, fully rounded, 70% surface. */
-@Composable
-internal fun PlayarrPhoneHeaderPill(
-    onClick: () -> Unit,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    width: Dp = 42.dp,
-    active: Boolean = false,
-    focusScale: Float = 1f,
-    shape: androidx.compose.ui.graphics.Shape = CircleShape,
-    content: @Composable () -> Unit,
-) {
-    androidx.compose.runtime.CompositionLocalProvider(
-        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
-    ) {
-        Surface(
-            onClick = onClick,
-            modifier = modifier.size(width, 38.dp).graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-                .then(
-                    if (focusScale > 1f) {
-                        // Web focus outline: 3 px solid, offset 2 px, following the element's elliptical shape.
-                        Modifier.drawBehind {
-                            val grow = 3.5.dp.toPx()
-                            drawOval(
-                                color = WebInk,
-                                topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
-                                size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                )
-                .semantics { this.contentDescription = contentDescription },
-            shape = shape,
-            color = if (active) WebInk else WebSurfaceStrong.copy(alpha = 0.7f),
-            contentColor = if (active) WebBackground else WebInkSoft,
-            border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
-        ) {
-            Box(contentAlignment = Alignment.Center) { content() }
-        }
-    }
-}
-
-/** CSS `border-radius: 50%` on a non-square box is an ellipse, not a pill. */
-internal val WebEllipseShape = object : androidx.compose.ui.graphics.Shape {
-    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: LayoutDirection, density: androidx.compose.ui.unit.Density) =
-        androidx.compose.ui.graphics.Outline.Generic(androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height)) })
 }
 
 /**

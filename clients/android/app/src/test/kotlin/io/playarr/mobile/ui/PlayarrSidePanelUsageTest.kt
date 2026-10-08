@@ -15,6 +15,9 @@ class PlayarrSidePanelUsageTest {
     private val bannedPopOuts = listOf("ModalBottomSheet(", "AlertDialog(", "DatePickerDialog(", "BasicAlertDialog(")
     private val closeIcon = Regex("""Icons\.(Outlined|Default|Filled|Rounded)\.Close""")
 
+    private fun pageDir(): File = File("../core-designsystem/src/main/kotlin/io/playarr/shared/designsystem/page").takeIf { it.isDirectory }
+        ?: File("core-designsystem/src/main/kotlin/io/playarr/shared/designsystem/page")
+
     private fun uiFiles(): List<File> {
         val dir = File("src/main/kotlin/io/playarr/mobile/ui").takeIf { it.isDirectory }
             ?: File("app/src/main/kotlin/io/playarr/mobile/ui")
@@ -41,10 +44,11 @@ class PlayarrSidePanelUsageTest {
     fun `the shared panel carries footer actions and the pages with Filters share one header cluster`() {
         val scaffold = uiFiles().first { it.name == "PlayarrPageScaffold.kt" }.readText()
         assertTrue(scaffold.contains("footer: (@Composable RowScope.() -> Unit)? = null"))
-        assertTrue(scaffold.contains("fun PlayarrHeaderActions("))
-        // Calendar and Library both pass `filters = PlayarrFilterAction(...)` to the scaffold, which draws:
-        // the same composable draws Filters on both, so bounds are identical by construction.
-        assertTrue(scaffold.contains("PlayarrHeaderActions("))
+        val layout = File(pageDir(), "PlayarrPageLayout.kt").readText()
+        assertTrue(layout.contains("fun PlayarrPageActions("))
+        // Calendar and Library both pass `filters = PlayarrFilterAction(...)` to the scaffold, which hands it to the page
+        // layout: the same composable draws Filters on both, so bounds are identical by construction.
+        assertTrue(scaffold.contains("PlayarrPageAction.Filters("))
         val calendar = uiFiles().first { it.name == "PlayarrCalendar.kt" }.readText()
         val library = uiFiles().first { it.name == "PlayarrExperience.kt" }.readText()
         assertTrue(calendar.contains("filters = PlayarrFilterAction("))

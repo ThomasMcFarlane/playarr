@@ -140,6 +140,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android: the shared page components (page layout, header, ordered header actions, the one action pill, edge fades with scroll containers, loading, empty and error states) now live in `core-designsystem`, with Roborazzi screenshot goldens for television and phone in both themes and unit tests for the action order and icon handling. The existing page scaffold is an adapter over them. No visual change (header bands identical to main on television and phone, light and dark).
 - Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Fire TV client: light and dark themes with the web palettes (the Appearance screen now switches them live without resetting navigation; "System" is dark on a TV), and static Nunito Sans and JetBrains Mono instances, because Vega ignores font weight for variable fonts.

@@ -2,6 +2,7 @@ package io.playarr.mobile.ui
 
 import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.RailPreferencesRequest
+import io.playarr.shared.designsystem.page.PlayarrActionIcon
 import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
@@ -437,8 +438,7 @@ internal fun ExperiencePlaylistsScreen(
             panelActions = {
                 PlayarrHeaderButton(
                     label = playarrString(PlayarrString.PlaylistsCreate),
-                    icon = Icons.Outlined.Add,
-                    isTelevision = isTelevision,
+                    icon = PlayarrActionIcon.Add,
                     onClick = { creating = true },
                 )
             },
@@ -961,8 +961,7 @@ internal fun ExperiencePlaylistDetailScreen(
                     {
                         PlayarrHeaderButton(
                             label = playarrString(PlayarrString.PlaylistsCreateSubPlaylist),
-                            icon = Icons.Outlined.Add,
-                            isTelevision = isTelevision,
+                            icon = PlayarrActionIcon.Add,
                             onClick = { creatingUnder = value.root },
                         )
                     }

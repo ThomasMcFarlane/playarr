@@ -1,4 +1,4 @@
-package io.playarr.mobile.ui
+package io.playarr.shared.designsystem.icons
 
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
@@ -41,7 +41,7 @@ private class IconSpec(val name: String, val strokeWidth: Float = 1.8f, val view
     }
 }
 
-internal object PlayarrWebIcons {
+object PlayarrWebIcons {
     /** `.tv-empty-state-art` "details" graphic (48 x 32 viewport) drawn at 44 x 29.3. */
     val EmptyDetails: ImageVector by lazy {
         IconSpec("WebEmptyDetails", 1.8f, 48f, 32f, 44f, 29.3f).stroke(

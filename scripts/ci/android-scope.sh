@@ -77,6 +77,8 @@ tasks=":app:testSideloadDebugUnitTest :app:assembleSideloadDebug :app:lintSidelo
 for m in $(tr ' ' '\n' <<<"$set" | sort -u); do
   [ "$m" = app ] && continue
   tasks=":$m:testDebugUnitTest :$m:lintDebug $tasks"
+  # core-designsystem holds the Roborazzi goldens of the shared page components (docs/design/page-layout.md 7.3).
+  [ "$m" = core-designsystem ] && tasks=":$m:verifyRoborazziDebug $tasks"
 done
 echo "android=true"
 echo "android_tasks=$tasks"

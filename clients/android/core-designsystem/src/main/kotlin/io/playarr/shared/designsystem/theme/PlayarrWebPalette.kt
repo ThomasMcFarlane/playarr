@@ -33,6 +33,22 @@ data class PlayarrWebPalette(
      */
     val focusRing: Color get() = if (dark) Color.White else ink
 
+    /** `--danger`: the one error colour. */
+    val danger: Color get() = if (dark) Color(0xFFEE9297) else Color(0xFFA8464C)
+
+    /** A hairline the web draws as a translucent line colour: light ink on dark, dark ink on light, alpha per CSS. */
+    fun hairline(darkAlpha: Float, lightAlpha: Float): Color =
+        if (dark) Color(0xFFDFDCDD).copy(alpha = darkAlpha) else Color(0xFF382621).copy(alpha = lightAlpha)
+
+    /** Web `a.ui-btn--icon` ring and round header buttons. */
+    val pillBorder: Color get() = hairline(0.1527f, 0.1838f)
+
+    /** Web `.page-filters-button` border: `--line` at 68%. */
+    val launcherBorder: Color get() = hairline(0.0747f, 0.0952f)
+
+    /** Web `.page-header-detail` divider. */
+    val divider: Color get() = hairline(0.23f, 0.28f)
+
     companion object {
         val Dark = PlayarrWebPalette(
             dark = true,

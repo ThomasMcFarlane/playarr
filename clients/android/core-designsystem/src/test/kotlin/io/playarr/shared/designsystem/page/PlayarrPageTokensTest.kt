@@ -11,7 +11,7 @@ class PlayarrPageTokensTest {
         val tv = PlayarrPageTokens.of(PlayarrFormFactor.Tv)
         assertEquals(56.dp, tv.headerTop)
         assertEquals(154.dp, tv.start)
-        assertEquals(72.dp, tv.headerEnd)
+        assertEquals(76.8.dp, tv.headerEnd)
         assertEquals(50.dp, tv.control)
         assertEquals(62.dp, tv.pillWidth)
         assertEquals(72.dp, tv.pillHeight)

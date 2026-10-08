@@ -92,7 +92,8 @@ object PlayarrPageTokens {
     val Tv = PlayarrPageMetrics(
         headerTop = 56.dp,
         start = 154.dp,
-        headerEnd = 72.dp,
+        // Web `--page-end` is clamp(24px, 4vw, 96px): 76.8 at the 1920 reference.
+        headerEnd = 76.8.dp,
         bodyEnd = 72.dp,
         control = 50.dp,
         controlWidth = 50.dp,

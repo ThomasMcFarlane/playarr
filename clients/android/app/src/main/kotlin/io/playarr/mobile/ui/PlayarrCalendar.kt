@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.page.PlayarrActionIcon
+import io.playarr.shared.designsystem.icons.PlayarrWebIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -168,8 +170,7 @@ private fun ExperienceCalendarScreen(
     val panelActions: @Composable RowScope.() -> Unit = {
             PlayarrHeaderButton(
                 label = playarrString(PlayarrString.CalendarLinkTitle),
-                icon = PlayarrWebIcons.Bell,
-                isTelevision = isTelevision,
+                icon = PlayarrActionIcon.Bell,
                 active = state.panel == CalendarPanel.Subscription,
                 onClick = { holder.openPanel(CalendarPanel.Subscription) },
             )
@@ -178,8 +179,7 @@ private fun ExperienceCalendarScreen(
         // Web phone: the subscription bell is the same icon-only launcher as Filters, beside it.
         PlayarrHeaderButton(
             label = playarrString(PlayarrString.CalendarLinkTitle),
-            icon = PlayarrWebIcons.Bell,
-            isTelevision = false,
+            icon = PlayarrActionIcon.Bell,
             active = state.panel == CalendarPanel.Subscription,
             onClick = { holder.openPanel(CalendarPanel.Subscription) },
         )
