@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryCache, type ApiClient, type WorkDetail } from "@playarr-tv/api-client";
+import type { DetailsPersistence, StoredDetail } from "./detailsStore";
 import { CURRENT_START_DELAY_MS, FocusedDetails, NEIGHBOUR_DWELL_MS } from "./focusedDetails";
 
 interface Call {
@@ -156,5 +157,111 @@ describe("FocusedDetails", () => {
     details.release();
     expect(calls.every((call) => call.signal?.aborted)).toBe(true);
     expect(details.scheduler.stats()).toEqual({ current: 0, running: 0, queued: 0 });
+  });
+});
+
+function fakeDisk(initial: Record<string, StoredDetail> = {}) {
+  const rows = new Map<string, StoredDetail>(Object.entries(initial));
+  const calls: string[] = [];
+  const disk: DetailsPersistence = {
+    get: async (scope, id) => {
+      calls.push(`get ${scope} ${id}`);
+      return rows.get(`${scope}/${id}`);
+    },
+    put: async (scope, id, data, _tags, at) => {
+      calls.push(`put ${scope} ${id}`);
+      rows.set(`${scope}/${id}`, { data, at });
+    },
+    invalidate: async (scope, tags) => {
+      calls.push(`invalidate ${scope} ${tags ? tags.join("+") : "all"}`);
+      rows.clear();
+    },
+    purgeExcept: async (scope) => {
+      calls.push(`purgeExcept ${scope}`);
+    },
+  };
+  return { disk, rows, calls };
+}
+
+describe("FocusedDetails persistence", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("paints a stored detail from disk as a first paint and revalidates it", async () => {
+    const { client, calls } = fakeClient();
+    const { disk } = fakeDisk({ "profile-a/a": { data: { id: "a", from: "disk" } as unknown as WorkDetail, at: Date.now() - 3_600_000 } });
+    const details = new FocusedDetails(client, undefined, disk);
+    const seen = vi.fn();
+    details.subscribe("a", seen);
+    details.focus("a");
+    await flush();
+    expect((details.peek("a")?.data as unknown as { from: string }).from).toBe("disk");
+    expect(seen).toHaveBeenCalled();
+    // The disk copy is an hour old: it is shown, and the network request still follows.
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    expect(calls.map((call) => call.id)).toEqual(["a"]);
+  });
+
+  it("does not fetch for a disk copy that is still fresh", async () => {
+    const { client, calls } = fakeClient();
+    const { disk } = fakeDisk({ "profile-a/a": { data: { id: "a" } as unknown as WorkDetail, at: Date.now() - 1000 } });
+    const details = new FocusedDetails(client, undefined, disk);
+    details.focus("a");
+    await flush();
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("discards a disk read that a live event overtook", async () => {
+    const { client, queries } = fakeClient();
+    const { disk } = fakeDisk({ "profile-a/a": { data: { id: "a" } as unknown as WorkDetail, at: Date.now() - 3_600_000 } });
+    const details = new FocusedDetails(client, undefined, disk);
+    details.focus("a");
+    queries.invalidate(["progress"]);
+    await flush();
+    expect(details.peek("a")).toBeUndefined();
+  });
+
+  it("writes a fetched detail through to disk", async () => {
+    const { client, calls } = fakeClient();
+    const { disk, rows } = fakeDisk();
+    const details = new FocusedDetails(client, undefined, disk);
+    details.focus("a");
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    calls[0]!.resolve();
+    await flush();
+    expect(rows.has("profile-a/a")).toBe(true);
+  });
+
+  it("drops the stored rows a live event touches, and other accounts' rows on a scope change", async () => {
+    const { client, queries } = fakeClient();
+    const { disk, calls } = fakeDisk();
+    new FocusedDetails(client, undefined, disk);
+    queries.invalidate(["watchlist"]);
+    queries.invalidate();
+    queries.setScope("profile-b");
+    queries.setScope(undefined);
+    expect(calls).toEqual([
+      "invalidate profile-a watchlist",
+      "invalidate profile-a all",
+      "purgeExcept profile-b",
+      "purgeExcept undefined",
+    ]);
+  });
+
+  it("keeps working when the disk store fails", async () => {
+    const { client, calls } = fakeClient();
+    const broken: DetailsPersistence = {
+      get: () => Promise.reject(new Error("blocked")),
+      put: () => Promise.reject(new Error("full")),
+      invalidate: () => Promise.reject(new Error("x")),
+      purgeExcept: () => Promise.reject(new Error("x")),
+    };
+    const details = new FocusedDetails(client, undefined, broken);
+    details.focus("a");
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    calls[0]!.resolve();
+    await flush();
+    expect(details.peek("a")?.data).toEqual({ id: "a" });
   });
 });

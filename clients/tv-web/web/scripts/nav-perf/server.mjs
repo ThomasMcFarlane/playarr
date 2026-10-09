@@ -37,6 +37,8 @@ export function mockRuntimeMinutes(id) {
 const removedWatchlist = new Set();
 
 export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false, watchlist = 0 }) {
+  /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
+  let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -107,7 +109,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
         media_files: [],
         ...(work.kind === "movie" ? { media_file_id: `mf-${work.id}`, runtime_ms: mockRuntimeMinutes(work.id) * 60_000 } : {}),
       };
-      if (detailDelayMs > 0) return void setTimeout(() => json(res, body), detailDelayMs);
+      if (detailDelay > 0) return void setTimeout(() => json(res, body), detailDelay);
       return json(res, body);
     }
     if (p === "/api/v1/playback/progress" && progressDelayMs > 0 && !delivered) {
@@ -202,5 +204,5 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     }
   });
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
-  return { server, port: server.address().port, unknown, close: () => new Promise((r) => server.close(r)) };
+  return { server, port: server.address().port, unknown, setDetailDelay: (ms) => { detailDelay = ms; }, close: () => new Promise((r) => server.close(r)) };
 }
