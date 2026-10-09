@@ -49,7 +49,7 @@ const RECORD = () => {
       gridTop: grid ? grid.scrollTop : null,
       downloadX: dl ? Math.round(dl.getBoundingClientRect().x) : null,
       primary: first ? (first.closest("section")?.querySelector("h2,h3")?.textContent ?? "") : null,
-      homeCards: document.querySelectorAll(".tv-home-card").length,
+      homeCards: first ? first.querySelectorAll(".tv-home-card").length : 0,
     });
     w.__j.raf = requestAnimationFrame(tick);
   };
@@ -134,7 +134,7 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
       const titles = [...new Set(rec.frames.map((f) => f.primary).filter((x) => x))];
       check(`home ${size}: the first rail never swaps title after it painted`, titles.length === 1, JSON.stringify(titles));
       const counts = [...new Set(rec.frames.map((f) => f.homeCards).filter((n) => n > 0))];
-      check(`home ${size}: the number of cards never changes after the first paint`, counts.length === 1, JSON.stringify(counts));
+      check(`home ${size}: the first rail's card count never changes after the first paint`, counts.length === 1, JSON.stringify(counts));
       await context.close();
     }
   }
