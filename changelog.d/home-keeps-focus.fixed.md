@@ -1,1 +1,0 @@
-- Web: Home no longer snaps back to the first rail when its rail set changes after the viewer has moved on (a rail appearing or going a few seconds after first paint): the stack now stays centred on the rail the viewer is on. `nav-home-hold-e2e` checks marker and scroll stay put for 5 s after settling, warm and on a cold start.

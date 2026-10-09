@@ -1,1 +1,0 @@
-- Web: the Library A to Z rail is one column again. The 44px letters (WCAG 2.5.5) no longer wrap into two or three columns when they do not fit the stage; the column scrolls instead, with the shared soft edge fade at the top and bottom (present from first paint, no boxes), and the focused or highlighted letter is always scrolled smoothly into view. Owner request 2026-10-10.

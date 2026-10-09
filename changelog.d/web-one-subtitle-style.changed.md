@@ -1,1 +1,0 @@
-- Web: every page header subtitle now uses the one small media-page subtitle style (Calendar, Settings and its sections, Playlists, Search, Library, Folders, film, series and music pages). The bold item-title style, the two-line Settings section detail and the divider are gone.
