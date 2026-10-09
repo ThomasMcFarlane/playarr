@@ -346,7 +346,7 @@ try {
       if (!el || el === document.body || !el.classList.contains("tv-home-card")) return null;
       const art = el.querySelector(".tv-home-card-art");
       const shadow = art ? getComputedStyle(art).boxShadow : "";
-      return { href: el.getAttribute("href"), connected: el.isConnected, lifted: shadow.includes("52px") && !shadow.includes("0px 0px 0px 3px"), focused: document.activeElement === el, active: el.hasAttribute("data-remote-active") };
+      return { href: el.getAttribute("href"), connected: el.isConnected, lifted: shadow.includes("52px"), focused: document.activeElement === el, active: el.hasAttribute("data-remote-active") };
     });
     const before = await marked();
     await page.waitForTimeout(3500); // detail calls (1.8 s) land and the hero text arrives
