@@ -19,6 +19,7 @@ import {
 
 interface FakeScroller extends HTMLElement {
   writes: number[];
+  behaviourAtWrite: Array<string | undefined>;
 }
 
 function fakeScroller(): FakeScroller {
@@ -28,12 +29,14 @@ function fakeScroller(): FakeScroller {
   return {
     isConnected: true,
     writes,
+    behaviourAtWrite: [] as Array<string | undefined>,
     get scrollTop() {
       return top;
     },
     set scrollTop(value: number) {
       top = value;
       writes.push(value);
+      (this as unknown as { behaviourAtWrite: Array<string | undefined> }).behaviourAtWrite.push(style.get("scroll-behavior"));
     },
     scrollLeft: 0,
     style: {
@@ -202,6 +205,25 @@ describe("instant helpers", () => {
     setScrollInstant(el, { top: 50 });
     expect(isSmoothScrolling(el)).toBe(false);
     expect(el.scrollTop).toBe(50);
+  });
+});
+
+describe("setScrollInstant and CSS scroll-behavior", () => {
+  it("writes with scroll-behavior auto (a smooth CSS scroller would glide) and hands the property back", () => {
+    const el = fakeScroller();
+    setScrollInstant(el, { top: 500 });
+    expect(el.behaviourAtWrite).toEqual(["auto"]);
+    // Nothing left set once no glide is running, so the stylesheet's own behaviour applies again.
+    expect(isSmoothScrolling(el)).toBe(false);
+  });
+
+  it("keeps auto while a glide on the other axis is still running", () => {
+    const el = fakeScroller();
+    smoothScrollTo(el, { left: 300 });
+    advance(16);
+    setScrollInstant(el, { top: 40 });
+    expect(el.behaviourAtWrite.at(-1)).toBe("auto");
+    expect(isSmoothScrolling(el)).toBe(true);
   });
 });
 

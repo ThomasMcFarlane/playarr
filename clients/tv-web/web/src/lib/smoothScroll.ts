@@ -281,14 +281,20 @@ export function setScrollInstant(
   el: HTMLElement,
   target: { left?: number; top?: number }
 ): void {
+  // The scroller's own CSS may say `scroll-behavior: smooth` (the library grid, the rails): the write would then glide
+  // from wherever the scroller is (the top, on a Back restore) instead of landing at once, and every re-apply of the
+  // same target restarted that glide. Force `auto` for the write, as the eased scroll does, then hand it back.
   if (target.left !== undefined) {
     cancelAxis(el, "left");
+    el.style.setProperty("scroll-behavior", "auto");
     write(el, "left", target.left);
   }
   if (target.top !== undefined) {
     cancelAxis(el, "top");
+    el.style.setProperty("scroll-behavior", "auto");
     write(el, "top", target.top);
   }
+  release(el);
 }
 
 /**

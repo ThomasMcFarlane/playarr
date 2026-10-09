@@ -2,6 +2,7 @@ import type { ApiClient, WorkDetail } from "@playarr-tv/api-client";
 import { DetailsScheduler, isAbortError } from "./detailsQueue";
 import { sharedDetailsStore, type DetailsPersistence } from "./detailsStore";
 import { isNavigating } from "./navigationActivity";
+import { prefetchResumePlan } from "./resumePlan";
 
 /** The tags a stored work detail depends on (same as `useWork` and `prefetchWorkDetail`). */
 const DETAIL_TAGS = ["catalog", "progress", "watchlist"] as const;
@@ -147,6 +148,12 @@ export class FocusedDetails {
       if (this.disk && scope !== undefined && stored?.data === detail) {
         void this.disk.put(scope, id, detail, DETAIL_TAGS, stored.at).catch(() => undefined);
       }
+      // A series detail also paints its Resume button in the first frame when its plan is already stored. The
+      // current (high-priority) focus does not wait for it; a background job does, so the lane's limit covers it.
+      if (detail?.work?.kind === "series") {
+        const plan = prefetchResumePlan(this.client, id);
+        if (priority === "low") await plan;
+      }
       return detail;
     };
   }
@@ -186,7 +193,10 @@ export class FocusedDetails {
     // Background work waits for the dwell (the neighbours of the new focus replace the wanted set then).
     if (this.resolveNear) this.scheduler.setPaused(true);
     this.scheduleNear();
-    if (this.isFresh(id)) return;
+    if (this.isFresh(id)) {
+      this.warmResumePlan(id);
+      return;
+    }
     this.hydrate(id);
     const hadCopy = this.peek(id) !== undefined;
     this.startTimer = setTimeout(
@@ -203,6 +213,11 @@ export class FocusedDetails {
       },
       hadCopy ? 0 : CURRENT_START_DELAY_MS
     );
+  }
+
+  /** A stored series detail whose resume plan is not stored yet: fetch the plan (the detail page paints it at once). */
+  private warmResumePlan(id: string): void {
+    if (this.peek(id)?.data?.work?.kind === "series") void prefetchResumePlan(this.client, id);
   }
 
   /** The neighbours to prefetch once focus has rested. `resolve` runs after the dwell, off the key path. */

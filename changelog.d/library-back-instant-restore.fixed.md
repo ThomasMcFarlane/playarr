@@ -1,0 +1,1 @@
+- Web: Back to a title deep in the Library restores the saved scroll position at once. The restore used to be a smooth glide from the top on a scroller whose stylesheet sets `scroll-behavior: smooth`, which sometimes left the grid near the top (or short of the title) with focus on a title far below.

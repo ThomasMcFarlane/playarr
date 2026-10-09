@@ -1,0 +1,1 @@
+- Web: opening a series from the Library paints the detail page complete in its first frame, with the Resume button in place and no skeleton, as movies already did. The series' resume plan is now prefetched with its detail while focus rests on the card.

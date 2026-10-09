@@ -1,4 +1,5 @@
 import type {
+  ApiClient,
   SeasonDetail,
   ResumeOption,
   ResumeOptionKind,
@@ -8,6 +9,24 @@ import type {
 import type { PlayerPlaylistItem } from "../components/player/PlayerSurface";
 import type { PlayerLocationState } from "../pages/Player";
 import type { TranslationKey } from "./i18n/translations";
+
+/** The query-cache key of a series' resume plan (shared by the detail page and the focus prefetch). */
+export const resumePlanKey = (seriesId: string) => `resume-plan:${seriesId}`;
+/** What a resume plan depends on: watch history and the catalogue. */
+export const RESUME_PLAN_TAGS = ["progress", "catalog"] as const;
+
+/**
+ * Warms the query cache with a series' resume plan, so opening the detail paints the Resume button in its first
+ * frame instead of holding its place with a skeleton until the request returns. A no-op while the cache is off and
+ * when one is stored or already loading; a failure (an older server has no plan) is left to the page.
+ */
+export function prefetchResumePlan(client: ApiClient, seriesId: string): Promise<void> {
+  const { queries } = client;
+  if (!queries.enabled) return Promise.resolve();
+  return queries
+    .fetch(resumePlanKey(seriesId), () => client.getResumePlan(seriesId), { tags: RESUME_PLAN_TAGS, ttlMs: 30_000 })
+    .then(() => undefined, () => undefined);
+}
 
 type TFunc = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
