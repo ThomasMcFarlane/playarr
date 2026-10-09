@@ -33,18 +33,23 @@ export async function boot(serverOptions = {}) {
     results.push({ name, ok });
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  -- ${detail}`}`);
   };
-  async function open(path, { width = 1920, height = 1080, theme = "dark" } = {}) {
+  /** `queryCache: true` signs in with a token that names the user (a JWT `sub`), which is what turns the client's
+   * query cache on; the default opaque token keeps it off, as the older scripts expect. */
+  async function open(path, { width = 1920, height = 1080, theme = "dark", queryCache = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height } });
+    const accessToken = queryCache
+      ? `e30.${Buffer.from(JSON.stringify({ sub: USER_ID, exp: Math.floor(Date.now() / 1000) + 86_400 })).toString("base64url")}.sig`
+      : "t";
     await context.addInitScript(
-      ({ base, userId }) => {
+      ({ base, userId, accessToken }) => {
         try {
           localStorage.setItem("playarr:apiBaseUrl", base);
-          const session = { accessToken: "t", refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
+          const session = { accessToken, refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
           localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "e2e", apiBaseUrl: base, userId, name: "E2E", deviceId: "d", session }]));
           localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "e2e", apiBaseUrl: base, userId }));
         } catch {}
       },
-      { base, userId: USER_ID }
+      { base, userId: USER_ID, accessToken }
     );
     const page = await context.newPage();
     const errors = [];

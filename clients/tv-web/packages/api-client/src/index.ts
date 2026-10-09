@@ -30,7 +30,7 @@ import createFetchClient, { type Client, type Middleware } from "openapi-fetch";
 import type { components, paths } from "./generated/schema";
 import { QueryCache, tagsForMutation } from "./queryCache";
 
-export { QueryCache, tagsForMutation, type QueryTag } from "./queryCache";
+export { QueryCache, tagsForMutation, type QueryInvalidation, type QueryTag } from "./queryCache";
 
 export type { paths, components } from "./generated/schema";
 
@@ -1792,8 +1792,18 @@ export class ApiClient {
     );
   }
 
-  async getWork(id: string): Promise<WorkDetail> {
-    return this.unwrap(await this.raw.GET("/api/v1/catalog/{id}", { params: { path: { id } } }));
+  /**
+   * One work's detail. `signal` cancels the request (a card the remote has already left); `priority` is the
+   * browser's fetch priority hint, so the focused card's detail is not queued behind background loads.
+   */
+  async getWork(id: string, options: { signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {}): Promise<WorkDetail> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/catalog/{id}", {
+        params: { path: { id } },
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.priority ? ({ priority: options.priority } as Record<string, unknown>) : {}),
+      })
+    );
   }
 
   /** Cast and crew for one work, in source billing/department order. */

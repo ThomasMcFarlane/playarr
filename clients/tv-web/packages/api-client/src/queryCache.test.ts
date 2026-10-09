@@ -170,3 +170,75 @@ describe("ApiClient and the query cache", () => {
     expect(new URL(url).searchParams.has("w")).toBe(false);
   });
 });
+
+describe("QueryCache abortable reads", () => {
+  const open = () => {
+    const cache = new QueryCache();
+    cache.setScope("profile-a");
+    return cache;
+  };
+
+  it("aborts the request when its only caller walks away, and stores nothing", async () => {
+    const cache = open();
+    let seen: AbortSignal | undefined;
+    const gate = new Promise<string>(() => undefined);
+    const controller = new AbortController();
+    const pending = cache.fetch("work:1", (signal) => ((seen = signal), gate), { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(seen?.aborted).toBe(true);
+    expect(cache.peek("work:1")).toBeUndefined();
+  });
+
+  it("keeps a shared request alive for a caller without a signal", async () => {
+    const cache = open();
+    const slow = deferred<string>();
+    let seen: AbortSignal | undefined;
+    const background = new AbortController();
+    const prefetch = cache.fetch("work:1", (signal) => ((seen = signal), slow.promise), { signal: background.signal });
+    const screen = cache.fetch("work:1", () => Promise.resolve("never called"));
+    background.abort();
+    await expect(prefetch).rejects.toMatchObject({ name: "AbortError" });
+    expect(seen?.aborted).toBe(false);
+    slow.resolve("detail");
+    expect(await screen).toBe("detail");
+    expect(cache.peek("work:1")?.data).toBe("detail");
+  });
+
+  it("aborts a shared request only when every abortable caller has left", async () => {
+    const cache = open();
+    let seen: AbortSignal | undefined;
+    const a = new AbortController();
+    const b = new AbortController();
+    const first = cache.fetch("k", (signal) => ((seen = signal), new Promise<string>(() => undefined)), { signal: a.signal });
+    const second = cache.fetch("k", () => Promise.resolve("x"), { signal: b.signal });
+    a.abort();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    expect(seen?.aborted).toBe(false);
+    b.abort();
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(seen?.aborted).toBe(true);
+  });
+
+  it("rejects at once for a signal that is already aborted", async () => {
+    const cache = open();
+    const loader = vi.fn(async () => "a");
+    await expect(cache.fetch("k", loader, { signal: AbortSignal.abort() })).rejects.toMatchObject({ name: "AbortError" });
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it("tells listeners what was dropped, and when the scope changed", () => {
+    const cache = open();
+    const seen: Array<{ tags: readonly string[] | undefined; scopeChange: boolean }> = [];
+    cache.onInvalidate((event) => seen.push(event));
+    cache.invalidate(["progress"]);
+    cache.invalidate();
+    cache.setScope("profile-b");
+    expect(seen).toEqual([
+      { tags: ["progress"], scopeChange: false },
+      { tags: undefined, scopeChange: false },
+      { tags: undefined, scopeChange: true },
+    ]);
+    expect(cache.currentScope).toBe("profile-b");
+  });
+});

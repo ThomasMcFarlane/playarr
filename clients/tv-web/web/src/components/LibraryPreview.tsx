@@ -4,12 +4,15 @@ import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { PreviewStore } from "../lib/previewStore";
 import { yearRangeLabel } from "../lib/workYear";
+import { runtimeLabel } from "../lib/detailMeta";
+import { useFocusedDetail } from "../lib/useFocusedDetails";
 
 /**
  * The left preview of a library page. It shows the work the remote is on right now (the store), or the page's
  * settled selection before the first move. Everything comes from the list response, so it never waits on a
  * detail request, and it changes in place: no remount, so the text is never blank and the enter animation does
- * not replay on every key.
+ * not replay on every key. The extended fields (the runtime) fill in when the item's detail is stored, which the
+ * details prefetch makes near-instant; until then the line simply has no runtime.
  */
 export function LibraryPreview({
   store,
@@ -23,6 +26,7 @@ export function LibraryPreview({
   const { t } = useLanguage();
   const work = useSyncExternalStore(store.subscribe, store.get, store.get) ?? fallback;
   const year = yearRangeLabel(work);
+  const runtime = runtimeLabel(useFocusedDetail(work.id), t);
   return (
     <aside className="tv-library-preview">
       <p className="tv-provider">{work.genres[0] ?? singular}</p>
@@ -30,6 +34,7 @@ export function LibraryPreview({
       <p className="tv-preview-meta">
         {year !== null ? <span>{year}</span> : null}
         <span>{work.genres.slice(0, 2).join(" · ") || singular}</span>
+        {runtime !== null ? <span data-detail-field="runtime">{runtime}</span> : null}
       </p>
       <p className="tv-preview-overview">{work.overview ?? t("pages.library.noSynopsis")}</p>
     </aside>

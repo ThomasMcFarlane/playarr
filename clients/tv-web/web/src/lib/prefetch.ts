@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { ApiClient, Work } from "@playarr-tv/api-client";
-import { prefetchHomeRails, prefetchWorkDetail } from "@playarr-tv/api-client/react";
+import { prefetchHomeRails } from "@playarr-tv/api-client/react";
+import { focusedDetailsFor } from "./focusedDetails";
 import { prefetchWorkArtwork } from "./artwork";
 import { useApiClient } from "./ApiClientProvider";
 import {
@@ -15,10 +16,13 @@ import {
 /** How long a card must hold focus before its detail and hero art are fetched ahead of a click. */
 export const DWELL_PREFETCH_MS = 200;
 
-/** Fetches what opening `work` will need: its detail and its full-screen backdrop. */
+/**
+ * Fetches what opening `work` will need: its detail (as the current, high-priority request, which supersedes
+ * the previous one: see `FocusedDetails`) and its full-screen backdrop.
+ */
 export function prefetchWorkOpen(client: ApiClient, work: Pick<Work, "id" | "images">): void {
   if (!client.queries.enabled) return;
-  prefetchWorkDetail(client, work.id);
+  focusedDetailsFor(client).focus(work.id);
   prefetchWorkArtwork(client, work, ["backdrop", "poster"], 1920);
 }
 

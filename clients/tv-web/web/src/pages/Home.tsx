@@ -28,6 +28,8 @@ import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { useDwellPrefetch } from "../lib/prefetch";
+import { railNeighbours, railsByDistance } from "../lib/detailNeighbours";
+import { useFocusedDetailsController } from "../lib/useFocusedDetails";
 import {
   isNavigationLayerRestoring,
   useNavigationLayer,
@@ -338,6 +340,23 @@ export function HomePage() {
     rails[0]?.items[0];
   // The selected card's detail page and hero art are fetched once focus has dwelt on it.
   useDwellPrefetch(selected ?? NO_WORK, Boolean(selected));
+  // Details follow the remote at once; neighbours (three either side, and the cards of the rails above and
+  // below) are prefetched after the focus rests, and every rail is warmed on idle time.
+  const details = useFocusedDetailsController();
+  const detailFocusRef = useRef<{ rail: HomeRailId; id: string } | null>(null);
+  const detailRailsRef = useRef(rails);
+  detailRailsRef.current = rails;
+  useEffect(() => {
+    details.setNear(() => {
+      const at = detailFocusRef.current;
+      return at ? railNeighbours(detailRailsRef.current, at.rail, at.id) : [];
+    });
+    details.setWarm(() => {
+      const at = detailFocusRef.current;
+      return at ? railsByDistance(detailRailsRef.current, at.rail, at.id) : [];
+    });
+    return () => details.release();
+  }, [details]);
   const selectedOnDeck =
     activeRail === "primary" && selected ? onDeckByWork.get(selected.id) : undefined;
   const isLoading =
@@ -395,6 +414,8 @@ export function HomePage() {
   function focusFromRail(rail: HomeRailId, id: string, section: HTMLElement) {
     const enteredNewRail = focusedRailRef.current !== rail;
     focusedRailRef.current = rail;
+    detailFocusRef.current = { rail, id };
+    details.focus(id);
     const remote = document.body.dataset.inputMode === "remote";
     // Debounce stage selection under remote holds so React does not re-render
     // the whole home stage on every key (dominant lag on limited TV CPUs).
