@@ -1164,7 +1164,7 @@ export function CalendarPage() {
         className="calendar-page calendar-view-agenda tv-library tv-directory"
         ariaLabel={t("pages.calendar.title")}
         backdrop={agendaArt ?? { artKey: "calendar-agenda" }}
-        header={{ ...pageHeader, detail: periodPicker }}
+        header={isPhone ? pageHeader : { ...pageHeader, detail: periodPicker }}
       >
         {loading ? (
           <DetailsSkeleton />
@@ -1177,6 +1177,7 @@ export function CalendarPage() {
           refreshKey={`${items.length}:${loading}`}
           contentClassName="calendar-agenda-content"
         >
+          {isPhone ? <div className="calendar-header">{periodPicker}</div> : null}
           {stateMessage ?? (
             <DaySections
               days={loading ? skeletonDays() : groups}
