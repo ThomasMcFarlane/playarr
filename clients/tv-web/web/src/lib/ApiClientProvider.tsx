@@ -46,6 +46,7 @@ import {
   createJoinedApiClient,
   type ConnectedServerClient,
 } from "./joinedServers";
+import { clearProfileDirectory } from "./profileDirectoryCache";
 import { useLanguage } from "./i18n/LanguageProvider";
 
 const browserFetch = createLocalNetworkFetch();
@@ -852,6 +853,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       clearActiveProfileMarker();
       activeProfileRef.current = undefined;
       clearJoinedServerRegistry();
+      clearProfileDirectory();
       setAuthFailed(false);
       setCurrentUserId(undefined);
       setCurrentUserName(undefined);
@@ -1156,6 +1158,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         );
       }
       clearJoinedServerRegistry();
+      clearProfileDirectory();
       applyApiBaseUrl(targetApiBaseUrl);
     },
     [applyApiBaseUrl, persistProfileSession, storedProfileSessions]
@@ -1201,6 +1204,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         toStoredSession(response)
       );
       clearJoinedServerRegistry();
+      clearProfileDirectory();
     },
     [apiBaseUrl, persistProfileSession, storedProfileSessions]
   );
@@ -1220,6 +1224,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         return next;
       });
       clearJoinedServerRegistry();
+      clearProfileDirectory();
     },
     [apiBaseUrl]
   );
@@ -1292,6 +1297,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         session
       );
       clearJoinedServerRegistry();
+      clearProfileDirectory();
       setAuthFailed(false);
       setCurrentUserId(userId);
       setCurrentUserName(undefined);
@@ -1389,6 +1395,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         }
         window.localStorage.setItem(CURRENT_USER_NAME_STORAGE_KEY, target.name);
         clearJoinedServerRegistry();
+        clearProfileDirectory();
         setCurrentUserId(userId);
         setCurrentUserName(target.name);
         setAuthFailed(false);
@@ -1466,6 +1473,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     clearActiveProfileMarker();
     activeProfileRef.current = undefined;
     clearJoinedServerRegistry();
+    clearProfileDirectory();
     if (activeProfile) {
       setStoredProfileSessions((stale) => {
         const existing = freshStoredProfileSessions(stale, activeProfile.apiBaseUrl);
@@ -1493,6 +1501,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         clearActiveProfileMarker();
         activeProfileRef.current = undefined;
         clearJoinedServerRegistry();
+        clearProfileDirectory();
         setAuthFailed(false);
         setCurrentUserId(undefined);
         setCurrentUserName(undefined);

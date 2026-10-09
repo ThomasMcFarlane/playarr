@@ -1,0 +1,1 @@
+- Web: the "Who's watching?" picker no longer shows profiles left over from another or deleted account before the real list arrives. It shows the current account's tile with skeletons, the profile directory is cached per account and server and cleared on sign-out and switch, and tiles that arrive late no longer jump in.
