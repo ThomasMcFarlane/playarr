@@ -158,6 +158,10 @@ on a personal account do not get.
   row; an existing row number replaces that row in place). The merge train folds them into
   `TASKS.md` when the PR lands. See `tasks.d/README.md`. Validate with
   `node scripts/fold-fragments.mjs --check`.
+- When a PR merges, the `Board sync` workflow (`scripts/board-sync.mjs`) opens a `board-sync/pr-<n>` PR
+  with fragments that flip rows naming it from "PR open" or "in review" to "done (PR #n merged <date>)",
+  or to "in progress" while other listed PRs are open. A fragment that says "PR open" must name its PR
+  number (`PR open: #123`); `fold-fragments.mjs --check` enforces it.
 - Work in other repositories (for example Dubarr) is not tracked on this board; remove such rows
   with a `remove: <row-number>` fragment.
 - Add every newly discovered unit of work as a task row (fragment) immediately, using the numbered

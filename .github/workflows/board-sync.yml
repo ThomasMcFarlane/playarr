@@ -1,0 +1,61 @@
+# Board auto-sync: when a PR is merged, flip the TASKS.md rows that name it (scripts/board-sync.mjs).
+# The flip is a tasks.d/ fragment on a small `board-sync/pr-<n>` PR labelled `ready`, so the merge train
+# lands and folds it like any other PR. Nothing here pushes to main or edits TASKS.md.
+name: Board sync
+
+on:
+  # Runs this file from main and never executes PR code.
+  pull_request_target:
+    types: [closed]
+
+concurrency:
+  group: board-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Flip rows for the merged PR
+    if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'board-sync/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Write the fragments
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: |
+          open=$(gh pr list --state open --limit 200 --json number --jq '[.[].number]|join(",")')
+          rows=$(node scripts/board-sync.mjs --pr "$PR" --date "${MERGED_AT%%T*}" --open "$open")
+          echo "rows=$(echo $rows)" >> "$GITHUB_OUTPUT"
+      - name: Open the board PR and mark it ready
+        if: steps.sync.outputs.rows != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ROWS: ${{ steps.sync.outputs.rows }}
+        run: |
+          set -euo pipefail
+          br="board-sync/pr-$PR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$br"
+          git add tasks.d
+          git commit -m "docs(board): rows $ROWS follow the merge of #$PR"
+          node scripts/fold-fragments.mjs --check
+          git push --force-with-lease origin "$br"
+          url=$(gh pr create --base main --head "$br" --title "docs(board): rows $ROWS follow the merge of #$PR" \
+            --body "Automatic board sync for #$PR (scripts/board-sync.mjs). Fragments only; the merge train folds them.")
+          gh pr edit "$url" --add-label ready
