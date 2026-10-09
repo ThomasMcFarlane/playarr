@@ -298,6 +298,9 @@ export function useMediaContextMenu({
   const playlistBackRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<number | undefined>(undefined);
   const longPressTriggeredRef = useRef(false);
+  // The card whose Enter keydown is still held. A release that lands on another card (the page changed under
+  // the key: a cached page mounts and takes focus within the press) belongs to what was pressed, not to this card.
+  const pressedRef = useRef<EventTarget | null>(null);
   const confirmHeldRef = useRef(false);
   const suppressNextKeyboardClickRef = useRef(false);
   const suppressClickTimerRef = useRef<number | undefined>(undefined);
@@ -951,6 +954,7 @@ export function useMediaContextMenu({
         clearLongPress();
         longPressTriggeredRef.current = false;
         const origin = event.currentTarget;
+        pressedRef.current = origin;
         longPressTimerRef.current = window.setTimeout(() => {
           longPressTriggeredRef.current = true;
           open(item, origin, true);
@@ -971,6 +975,9 @@ export function useMediaContextMenu({
           longPressTriggeredRef.current = false;
           return;
         }
+        const pressedHere = pressedRef.current === event.currentTarget;
+        pressedRef.current = null;
+        if (!pressedHere) return;
         if (!longPressTriggeredRef.current) {
           event.currentTarget.click();
         } else {
@@ -980,7 +987,10 @@ export function useMediaContextMenu({
         }
         longPressTriggeredRef.current = false;
       },
-      onBlur: clearLongPress,
+      onBlur: () => {
+        pressedRef.current = null;
+        clearLongPress();
+      },
     }),
     [clearLongPress, disarmOriginRelease, open, suppressReleaseClick]
   );

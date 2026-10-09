@@ -21,6 +21,9 @@ import {
 /** How long a card must hold focus before its detail and hero art are fetched ahead of a click. */
 export const DWELL_PREFETCH_MS = 200;
 
+/** How long a nav item must hold focus before its page's first-screen data is fetched. */
+export const NAV_DWELL_PREFETCH_MS = 150;
+
 /**
  * Fetches what opening `work` will need: its detail (as the current, high-priority request, which supersedes
  * the previous one: see `FocusedDetails`) and its full-screen backdrop.
@@ -55,9 +58,9 @@ const LIBRARY_ROUTES: Record<string, LibraryKind> = {
 };
 
 /** The sections warmed at idle once Home has loaded, most likely first. A fixed list is the bound. */
-export const IDLE_WARM_ROUTES: readonly string[] = ["/movies", "/series", "/music"];
+export const IDLE_WARM_ROUTES: readonly string[] = ["/movies", "/series", "/music", "/calendar", "/watchlist", "/playlists"];
 /** Pause between two idle warm-ups, so the sections never queue up behind each other or a click. */
-export const IDLE_WARM_GAP_MS = 1500;
+export const IDLE_WARM_GAP_MS = 800;
 
 function calendarFirstWindow(language: string): { start: string; end: string } {
   const view = defaultCalendarView({

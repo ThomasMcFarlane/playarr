@@ -69,11 +69,14 @@ describe("warmSectionsAtIdle", () => {
     const stop = warmSectionsAtIdle(client, "en");
     expect(api.browseCatalog).not.toHaveBeenCalled();
     vi.advanceTimersByTime(IDLE_WARM_GAP_MS * (IDLE_WARM_ROUTES.length + 3));
-    expect(api.browseCatalog).toHaveBeenCalledTimes(IDLE_WARM_ROUTES.length);
+    expect(api.browseCatalog).toHaveBeenCalledTimes(IDLE_WARM_ROUTES.filter((r) => /^\/(movies|series|music)$/.test(r)).length);
+    expect(api.listWatchlist).toHaveBeenCalledTimes(1);
+    expect(api.listPlaylists).toHaveBeenCalledTimes(1);
+    expect(api.getCalendar).toHaveBeenCalledTimes(1);
     stop();
     const again = warmSectionsAtIdle(client, "en");
     again();
     vi.advanceTimersByTime(IDLE_WARM_GAP_MS * 10);
-    expect(api.browseCatalog).toHaveBeenCalledTimes(IDLE_WARM_ROUTES.length);
+    expect(api.browseCatalog).toHaveBeenCalledTimes(3);
   });
 });

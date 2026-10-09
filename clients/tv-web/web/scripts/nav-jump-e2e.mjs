@@ -9,7 +9,7 @@
 //     (the wait for On Deck is counted from the rails being ready, not from mount),
 //   - Home rails and the Library grid keep their cards across a Back, a same-path revisit and a section switch.
 //   - the first visit of a section after a short nav dwell (Calendar, Playlists, Watchlist, Series, Music), and of
-//     Movies and Series after Home's idle warm-up, renders from the warmed cache with no skeleton frame.
+//     every section after Home's idle warm-up, renders from the warmed cache with no skeleton frame.
 // Runs at 1920x1080 and 1280x720, both themes, keyboard only.
 //   node scripts/nav-jump-e2e.mjs [--no-build] [--dist dir] [--only text]
 import { boot, opt, root } from "./e2e-common.mjs";
@@ -146,7 +146,26 @@ const slowServer = await startServer({
   distDir: opt("dist", join(root, "dist")), movies: 60, series: 20, artists: 20, onDeck: 0, playlists: 2, playlistItems: 3, watchlist: 4,
   listDelayMs: 700, calendarDelayMs: 700,
 });
+/** Counts API reads in flight (the event stream and remote long polls stay open by design and are ignored). */
+const trackRequests = (page) => {
+  const state = { open: 0 };
+  const counted = (request) => /\/api\/v1\//.test(request.url()) && !/\/(events|remote)\b/.test(request.url());
+  page.on("request", (r) => { if (counted(r)) state.open += 1; });
+  page.on("requestfinished", (r) => { if (counted(r)) state.open -= 1; });
+  page.on("requestfailed", (r) => { if (counted(r)) state.open -= 1; });
+  return state;
+};
+/** Waits (bounded) until no API read has been in flight for 400 ms: the dwell's prefetch has landed. */
+const settled = async (page, state) => {
+  let quiet = 0;
+  for (let waited = 0; waited < 12000 && quiet < 400; waited += 100) {
+    await page.waitForTimeout(100);
+    quiet = state.open <= 0 ? quiet + 100 : 0;
+  }
+};
 const navTo = async (page, href) => {
+  // Home takes initial focus once it has settled; wait for that so it cannot pull focus off the nav item mid-dwell.
+  await page.waitForFunction(() => Boolean(document.activeElement?.closest?.(".tv-home-card")), null, { timeout: 8000 }).catch(() => undefined);
   await page.evaluate((h) => document.querySelector(`.app-nav a[href='${h}']`)?.focus(), href);
 };
 for (const [w, h] of [[1920, 1080], [1280, 720]]) {
@@ -154,11 +173,13 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
     const size = `${w}x${h} ${theme}`;
     // ---- First visit after a nav dwell: the section renders from the warmed cache, never through a skeleton.
     if (!only || "first-visit-dwell".includes(only)) {
-      const { context, page } = await open("/", { width: w, height: h, theme, server: slowServer });
+      // Save-data switches the idle warm-up off, so each section below is warmed by its own dwell alone.
+      const saveData = () => Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+      const { context, page } = await open("/", { width: w, height: h, theme, server: slowServer, init: saveData });
       if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
       await page.waitForSelector(".tv-home-card", { timeout: 8000 });
-      // Hold still before any idle warm-up starts, so each section below is warmed by its own dwell alone.
       await page.waitForTimeout(300);
+      const requests = trackRequests(page);
       for (const [name, href, ready] of [
         ["calendar", "/calendar", "[data-page-id='calendar']"],
         ["playlists", "/playlists", ".tv-title-card, .tv-home-card, .tv-media-track, [data-tv-track-id]"],
@@ -167,11 +188,13 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
         ["music", "/music", ".tv-title-card"],
       ]) {
         await navTo(page, href);
-        // Dwell (200 ms) plus the slow, sequential answers (700 ms each): by the time Enter is pressed the cache holds the page.
-        await page.waitForTimeout(2300);
+        // The dwell fires the prefetch (150 ms); wait for its slow answers to land before pressing Enter.
+        await page.waitForTimeout(400);
+        await settled(page, requests);
         await page.evaluate(RECORD);
+        console.log("   active before Enter:", name, await page.evaluate(() => document.activeElement?.className?.toString().slice(0, 40)));
         await page.keyboard.press("Enter");
-        await page.waitForSelector(ready, { timeout: 8000 });
+        await page.waitForSelector(ready, { timeout: 8000 }).catch((error) => { console.log(`   timeout waiting for ${name} at ${new Date().toISOString()} path ${page.url()}`); throw error; });
         await page.waitForTimeout(600);
         const rec = await stop(page);
         const skeleton = rec.frames.filter((f) => f.skeleton).length;
@@ -182,16 +205,16 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
       }
       await context.close();
     }
-    // ---- Idle warm-up: after Home has loaded, Movies and Series are warm without anyone having focused them.
+    // ---- Idle warm-up: after Home has loaded, every nav section is warm without anyone having focused them.
     if (!only || "first-visit-idle".includes(only)) {
       const { context, page } = await open("/", { width: w, height: h, theme, server: slowServer });
       if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
       await page.waitForSelector(".tv-home-card", { timeout: 8000 });
-      await page.waitForTimeout(9000);
-      for (const href of ["/movies", "/series"]) {
+      await page.waitForTimeout(11000);
+      for (const [href, ready] of [["/movies", ".tv-title-card"], ["/series", ".tv-title-card"], ["/music", ".tv-title-card"], ["/calendar", "[data-page-id='calendar']"], ["/watchlist", ".tv-watchlist-list"], ["/playlists", ".tv-media-track, .tv-title-card, [data-tv-track-id]"]]) {
         await page.evaluate(RECORD);
         await page.evaluate((target) => document.querySelector(`.app-nav a[href='${target}']`)?.click(), href);
-        await page.waitForSelector(".tv-title-card", { timeout: 8000 });
+        await page.waitForSelector(ready, { timeout: 8000 });
         await page.waitForTimeout(500);
         const rec = await stop(page);
         const skeleton = rec.frames.filter((f) => f.skeleton).length;
