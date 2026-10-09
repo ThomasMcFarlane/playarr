@@ -31,7 +31,7 @@ import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { createPreviewStore, type PreviewStore } from "../lib/previewStore";
 import { useRemoteMarkerFollow } from "../lib/remoteMarkerFollow";
-import { useDwellPrefetch } from "../lib/prefetch";
+import { useDwellPrefetch, warmSectionsAtIdle } from "../lib/prefetch";
 import { railNeighbours, railsByDistance } from "../lib/detailNeighbours";
 import { useFocusedDetail, useFocusedDetailsController } from "../lib/useFocusedDetails";
 import { runtimeLabel } from "../lib/detailMeta";
@@ -302,6 +302,12 @@ export function HomePage() {
       railsState.status === "error") &&
     siteState.status !== "idle" &&
     siteState.status !== "loading";
+  // Home has painted: warm the likeliest next sections while the browser is idle, so their first visit renders
+  // from the cache instead of a skeleton. Bounded, low priority, dropped when Home goes away.
+  useEffect(() => {
+    if (!homeDataSettled) return;
+    return warmSectionsAtIdle(client, language);
+  }, [homeDataSettled, client, language]);
   // The wait for On Deck is counted from the moment the rails themselves are ready, not from mount: on a cold
   // start the page mounts long before the first request can go out (sign-in refresh, version probe), and a
   // deadline counted from mount ran out before On Deck had even been asked for. Home then painted "Start

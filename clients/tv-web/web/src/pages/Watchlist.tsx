@@ -23,6 +23,7 @@ import {
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { loadWatchlist, peekWatchlist } from "../lib/watchlistData";
 
 type State =
   | { status: "loading" }
@@ -33,7 +34,11 @@ export function WatchlistPage() {
   const { t } = useLanguage();
   useDocumentTitle(t("pages.watchlist.title"));
   const client = useApiClient();
-  const [state, setState] = useState<State>({ status: "loading" });
+  // Stale-while-revalidate on the first render: a watchlist the cache holds (warmed from the nav) paints at once.
+  const [state, setState] = useState<State>(() => {
+    const stored = peekWatchlist(client);
+    return stored ? { status: "ready", items: stored } : { status: "loading" };
+  });
   const [removeError, setRemoveError] = useState<string | null>(null);
   // Back from an opened title or the player lands on the same row (audit A19).
   const navigationLayer = useNavigationLayer(
@@ -46,19 +51,29 @@ export function WatchlistPage() {
   const liveRevision = useLiveRevision({ areas: ["watchlist"] });
   useEffect(() => {
     let cancelled = false;
-    void client
-      .listWatchlist()
-      .then((response) => {
-        if (!cancelled) setState({ status: "ready", items: response.items });
+    void loadWatchlist(client)
+      .then((items) => {
+        if (cancelled) return;
+        // Revalidating a copy painted from the cache keeps that copy when nothing changed.
+        setState((current) =>
+          current.status === "ready" && JSON.stringify(current.items) === JSON.stringify(items)
+            ? current
+            : { status: "ready", items }
+        );
       })
       .catch((error: unknown) => {
         if (!cancelled && liveRevision === 0) {
-          setState({
-            status: "error",
-            message: discoveryUnsupportedByServer(error)
-              ? t("discovery.serverUnsupported")
-              : describeApiError(error),
-          });
+          // A failed revalidation keeps a copy that is already on screen.
+          setState((current) =>
+            current.status === "ready"
+              ? current
+              : {
+                  status: "error",
+                  message: discoveryUnsupportedByServer(error)
+                    ? t("discovery.serverUnsupported")
+                    : describeApiError(error),
+                }
+          );
         }
       });
     return () => {

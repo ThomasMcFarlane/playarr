@@ -196,11 +196,19 @@ function AppShell() {
   const localeTag = localeTagFor(language);
   // Focusing a nav item for a moment warms the page behind it; moving on cancels.
   const navPrefetchTimer = useRef(0);
-  const startNavPrefetch = (path: string) => {
+  const navPrefetchCancel = useRef<() => void>(() => undefined);
+  const cancelNavPrefetch = () => {
     window.clearTimeout(navPrefetchTimer.current);
-    navPrefetchTimer.current = window.setTimeout(() => prefetchRoute(client, path, language), DWELL_PREFETCH_MS);
+    // Leaving the item before its requests finish drops them; whatever a page joined meanwhile keeps running.
+    navPrefetchCancel.current();
+    navPrefetchCancel.current = () => undefined;
   };
-  const cancelNavPrefetch = () => window.clearTimeout(navPrefetchTimer.current);
+  const startNavPrefetch = (path: string) => {
+    cancelNavPrefetch();
+    navPrefetchTimer.current = window.setTimeout(() => {
+      navPrefetchCancel.current = prefetchRoute(client, path, language);
+    }, DWELL_PREFETCH_MS);
+  };
   const {
     authFailed,
     connectedServers,

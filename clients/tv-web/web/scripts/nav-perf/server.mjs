@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0 }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -52,6 +52,13 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     // Optional: Home's rail and site-browse calls answer late (a cold start where the first request goes out late).
     if (railsDelayMs > 0 && !delivered && (p === "/api/v1/home/rails" || (p === "/api/v1/catalog" && q.get("kind") === "site"))) {
       return void setTimeout(() => handleApi(url, req, res, true), railsDelayMs);
+    }
+    // Optional: the first-screen lists of the nav sections (library pages, playlists, watchlist) answer late, so a
+    // first visit without a warmed cache shows its skeleton for a while.
+    if (listDelayMs > 0 && !delivered && req.method === "GET" && (
+      (p === "/api/v1/catalog" && q.get("kind") !== "site") || p === "/api/v1/watchlist" || /^\/api\/v1\/playlists(\/|$)/.test(p)
+    )) {
+      return void setTimeout(() => handleApi(url, req, res, true), listDelayMs);
     }
     if (p === "/api/v1/auth/login") {
       return json(res, { access_token: "nav-perf-token", refresh_token: "nav-perf-refresh", expires_in: 86400, token_type: "Bearer", user_id: userId });

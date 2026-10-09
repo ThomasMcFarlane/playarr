@@ -215,13 +215,18 @@ export function prefetchWorkDetail(client: ApiClient, workId: string): void {
 }
 
 /** Warms Home's rails (same key as `useHomeRails`). */
-export function prefetchHomeRails(client: ApiClient, params: { lang?: string; library?: "movie" | "series" | "artist" } = {}): void {
+export function prefetchHomeRails(
+  client: ApiClient,
+  params: { lang?: string; library?: "movie" | "series" | "artist" } = {},
+  signal?: AbortSignal
+): void {
   const { queries } = client;
   if (!queries.enabled) return;
   void queries
-    .fetch(`home:${JSON.stringify(params)}`, () => client.getHomeRails(params), {
+    .fetch(`home:${JSON.stringify(params)}`, (flight) => client.getHomeRails(params, { signal: flight, priority: "low" }), {
       tags: ["catalog", "progress", "watchlist"],
       ttlMs: 15_000,
+      signal,
     })
     .catch(() => undefined);
 }
@@ -238,13 +243,14 @@ export function calendarCacheKey(start: string, end: string): string {
  * Warms the query cache with a calendar window (the neighbouring period) so stepping to it paints
  * from the stored copy. A no-op while the cache is off and when one is stored or already loading.
  */
-export function prefetchCalendar(client: ApiClient, window: { start: string; end: string }): void {
+export function prefetchCalendar(client: ApiClient, window: { start: string; end: string }, signal?: AbortSignal): void {
   const { queries } = client;
   if (!queries.enabled) return;
   void queries
-    .fetch(calendarCacheKey(window.start, window.end), () => client.getCalendar(window), {
+    .fetch(calendarCacheKey(window.start, window.end), (flight) => client.getCalendar(window, { signal: flight, priority: "low" }), {
       tags: CALENDAR_QUERY_TAGS,
       ttlMs: 60_000,
+      signal,
     })
     .catch(() => undefined);
 }

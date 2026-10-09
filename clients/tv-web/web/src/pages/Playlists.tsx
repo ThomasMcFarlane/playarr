@@ -1,5 +1,10 @@
 import { DetailsPanel } from "../components/DetailsPanel";
-import { mapWithLimit } from "../lib/mapWithLimit";
+import {
+  loadPlaylistTracks,
+  peekPlaylistTracks,
+  type PlaylistTrack,
+  type ResolvedPlaylistItem,
+} from "../lib/playlistsData";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
 import {
@@ -24,7 +29,6 @@ import {
   type PlaylistResponse,
   type WatchProgress,
   type Work,
-  type WorkDetail,
 } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
@@ -58,23 +62,6 @@ import { Button } from "../components/ui";
 import { isBackKey } from "../lib/backKey";
 import { usePageBack } from "../lib/pageBack";
 
-interface ResolvedPlaylistItem {
-  id: string;
-  work: Work;
-  audioTrack?: {
-    id: string;
-    title: string;
-    albumTitle: string;
-    mediaFileId: string | null;
-    runtimeMs: number;
-  };
-}
-
-interface PlaylistTrack {
-  playlist: PlaylistResponse;
-  items: ResolvedPlaylistItem[];
-}
-
 type PageState =
   | { status: "loading" }
   | { status: "ready"; tracks: PlaylistTrack[] }
@@ -90,30 +77,6 @@ type CreateState =
 
 function detailRoute(work: Work): string {
   return work.kind === "artist" ? `/music/${work.id}` : `/playlists/${work.id}`;
-}
-
-function resolveAudioTrack(detail: WorkDetail, trackId: string) {
-  if (
-    typeof detail.children !== "object" ||
-    detail.children === null ||
-    !("Artist" in detail.children)
-  ) {
-    return undefined;
-  }
-  for (const album of detail.children.Artist) {
-    const track = album.tracks.find((candidate) => candidate.track.id === trackId);
-    if (track) {
-      return {
-        id: track.track.id,
-        title: track.track.title,
-        albumTitle: album.album.title,
-        mediaFileId: track.media_file_id ?? null,
-        runtimeMs:
-          track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
-      };
-    }
-  }
-  return undefined;
 }
 
 function orderPlaylistTracks(
@@ -199,11 +162,6 @@ function descendantPlaylistTracks(
   return descendants;
 }
 
-/** Most playlist and work reads in flight at once while the directory loads. */
-const LOAD_CONCURRENCY = 6;
-/** A playlist's items read this recently are reused (live events drop them sooner). */
-const ITEMS_TTL_MS = 5_000;
-
 /** Playlist directory plus an in-route playlist detail surface. */
 export function PlaylistsPage() {
   const { t } = useLanguage();
@@ -215,7 +173,12 @@ export function PlaylistsPage() {
   const requestedPlaylistId = searchParams.get("playlist");
   const requestedTrackId = searchParams.get("track");
   const returnOrigin = navigationOriginFromState(location.state);
-  const [pageState, setPageState] = useState<PageState>({ status: "loading" });
+  // Stale-while-revalidate on the first render: a directory the cache holds (warmed from the nav) paints its
+  // rows in the first frame, and the load below revalidates it in place.
+  const [seedTracks] = useState(() => peekPlaylistTracks(client));
+  const [pageState, setPageState] = useState<PageState>(() =>
+    seedTracks ? { status: "ready", tracks: seedTracks } : { status: "loading" }
+  );
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDirectoryId, setSelectedDirectoryId] = useState<string | null>(
     null
@@ -223,7 +186,11 @@ export function PlaylistsPage() {
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [selectedByTrack, setSelectedByTrack] = useState<
     Record<string, string | null>
-  >({});
+  >(() =>
+    Object.fromEntries(
+      (seedTracks ?? []).map((track) => [track.playlist.id, track.items[0]?.id ?? null])
+    )
+  );
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(() => {
     const value = searchParams.get("visibility");
@@ -261,75 +228,14 @@ export function PlaylistsPage() {
     let cancelled = false;
     const load = async () => {
       try {
-        const playlists = await client.listPlaylists();
-        // One request per playlist and per distinct work is unavoidable until the server batches them, so
-        // bound the fan-out, share playlist item reads with the query cache and report what failed.
-        let failures = 0;
-        let firstFailure: unknown;
-        const noteFailure = (error: unknown) => {
-          failures += 1;
-          firstFailure ??= error;
-        };
-        const itemGroups = await mapWithLimit(
-          playlists,
-          LOAD_CONCURRENCY,
-          async (playlist) => {
-            try {
-              return await client.queries.fetch(
-                `playlists:items:${playlist.id}`,
-                () => client.listPlaylistItems(playlist.id),
-                { tags: ["playlists", "catalog"], ttlMs: ITEMS_TTL_MS }
-              );
-            } catch (error) {
-              noteFailure(error);
-              return [];
-            }
-          },
-          () => cancelled
-        );
+        const loaded = await loadPlaylistTracks(client, { isCancelled: () => cancelled });
         if (cancelled) return;
-        const workIds = [
-          ...new Set(itemGroups.flat().map((item) => item.work_id)),
-        ];
-        const details = await mapWithLimit(
-          workIds,
-          LOAD_CONCURRENCY,
-          async (workId): Promise<WorkDetail | null> => {
-            try {
-              return await client.getWork(workId);
-            } catch (error) {
-              noteFailure(error);
-              return null;
-            }
-          },
-          () => cancelled
-        );
-        if (cancelled) return;
+        const { tracks, failures, playlistCount, workCount } = loaded;
         // Nothing at all could be read: that is an error (with Retry), not an empty library.
-        if (failures > 0 && failures >= playlists.length + workIds.length) throw firstFailure;
+        if (failures > 0 && failures >= playlistCount + workCount) throw loaded.firstFailure;
         if (failures > 0 && livePlaylistsRevision === 0) {
           showToast(t("pages.playlists.partialLoadToast"));
         }
-        const detailById = new Map(
-          details
-            .filter((detail): detail is WorkDetail => detail !== null)
-            .map((detail) => [detail.work.id, detail])
-        );
-        const tracks = playlists.map((playlist, index) => ({
-          playlist,
-          items: [...(itemGroups[index] ?? [])]
-            .sort((left, right) => left.position - right.position)
-            .flatMap((item) => {
-              const detail = detailById.get(item.work_id);
-              if (!detail) return [];
-              const audioTrack = item.track_id
-                ? resolveAudioTrack(detail, item.track_id)
-                : undefined;
-              if (item.track_id && !audioTrack) return [];
-              return [{ id: item.id, work: detail.work, audioTrack }];
-            }),
-        }));
-        if (cancelled) return;
         // A live refresh keeps the user's current track selection where it still exists.
         setSelectedByTrack((current) =>
           Object.fromEntries(
@@ -342,7 +248,12 @@ export function PlaylistsPage() {
             ])
           )
         );
-        setPageState({ status: "ready", tracks });
+        // Revalidating a copy painted from the cache keeps that copy when nothing changed.
+        setPageState((current) =>
+          current.status === "ready" && JSON.stringify(current.tracks) === JSON.stringify(tracks)
+            ? current
+            : { status: "ready", tracks }
+        );
       } catch (error: unknown) {
         if (!cancelled && livePlaylistsRevision === 0) {
           setPageState({ status: "error", message: describeApiError(error) });
