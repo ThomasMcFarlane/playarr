@@ -287,11 +287,46 @@ try {
     await context.close();
   }
 
+  // ---- The date range is a real button in the shell action column (not the subtitle) and opens the month/year jump ----
+  for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+    const tag = `${viewport.width}`;
+    const { context, page } = await open("week", viewport);
+    const where = await page.evaluate(() => {
+      const b = document.querySelector("[data-range-button]");
+      const filters = document.querySelector("[data-filters-button]");
+      return {
+        tag: b?.tagName, inColumn: Boolean(b && document.querySelector("[data-shell-action-column]")?.contains(b)),
+        text: b?.textContent?.trim(), above: Boolean(b && filters && b.getBoundingClientRect().bottom <= filters.getBoundingClientRect().top),
+        subtitle: document.querySelector(".page-header-detail")?.textContent ?? null,
+        navInHeader: document.querySelectorAll(".page-header [data-action-kind='navigation'] button").length,
+        fits: b ? b.querySelector("span").scrollWidth <= b.querySelector("span").clientWidth + 1 : false,
+      };
+    });
+    check(`range button (${tag}): a real button in the shell action column above Filters`, where.tag === "BUTTON" && where.inColumn && where.above, JSON.stringify(where));
+    check(`range button (${tag}): shows the compact range, the subtitle is empty and Previous/Today/Next stay in the header`, /^5\s?[\u2013-]\s?11\s?Oct$/.test(where.text ?? "") && !where.subtitle && where.navInHeader === 3 && where.fits, JSON.stringify(where));
+    await page.locator("[data-range-button]").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".period-picker-panel");
+    await page.waitForTimeout(300);
+    const panel = await page.evaluate(() => {
+      const p = document.querySelector(".period-picker-panel").getBoundingClientRect();
+      const b = document.querySelector("[data-range-button]").getBoundingClientRect();
+      return { expanded: document.querySelector("[data-range-button]").getAttribute("aria-expanded"), inside: Boolean(document.activeElement?.closest(".period-picker-panel")), left: p.right <= b.left + 1, onScreen: p.left >= 0 && p.bottom <= innerHeight + 1 };
+    });
+    check(`range button (${tag}): Enter opens the month/year jump beside the button, focus inside`, panel.expanded === "true" && panel.inside && panel.left && panel.onScreen, JSON.stringify(panel));
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(600);
+    const after = await page.evaluate(() => ({ date: new URL(location.href).searchParams.get("date"), open: Boolean(document.querySelector(".period-picker-panel")), focus: document.activeElement?.matches("[data-range-button]") }));
+    check(`range button (${tag}): choosing a month changes the period, closes the jump and returns focus`, after.date && after.date !== "2026-10-07" && !after.open && after.focus, JSON.stringify(after));
+    await context.close();
+  }
+
   // ---- Audit K19: the range label announces once the period stops changing ----
   {
     const { context, page } = await open("week", { width: 1920, height: 1080 });
     const live = page.locator(".period-picker [aria-live='polite']");
-    check("range label: the live region is outside the trigger button", (await page.locator(".period-picker-trigger [aria-live]").count()) === 0 && (await live.count()) === 1);
+    check("range label: the live region is outside the range button", (await page.locator("[data-range-button] [aria-live]").count()) === 0 && (await live.count()) === 1);
     const seen = [];
     await page.exposeFunction("__rangeSeen", (text) => seen.push(text));
     await page.evaluate(() => {

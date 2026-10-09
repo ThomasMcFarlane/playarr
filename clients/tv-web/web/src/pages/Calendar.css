@@ -17,13 +17,6 @@
   gap: 0.5rem;
 }
 
-.calendar-range {
-  min-width: 10ch;
-  margin: 0;
-  font-weight: 640;
-  font-variant-numeric: tabular-nums;
-}
-
 /*
  * The body frame fills the space under the header and never scrolls itself: the scrollers inside it do
  * (month and week tracks, week day columns, the agenda list), each in a plain edge-fade window.
@@ -452,16 +445,12 @@
   position: relative;
 }
 
-.period-picker-trigger .calendar-range {
-  margin: 0;
-  font-size: clamp(1rem, calc(1.3 * var(--vw)), 1.5rem);
-}
-
 .period-picker-panel {
-  position: absolute;
+  /* Opens beside the range button in the shell action column. */
+  position: fixed;
   z-index: var(--z-popover);
-  top: calc(100% + 8px);
-  left: 0;
+  top: var(--shell-action-column-top);
+  right: calc(var(--directory-controls-edge) + var(--directory-controls-width) + 12px);
   display: flex;
   gap: 0.5rem;
   padding: 0.6rem;
@@ -517,6 +506,11 @@
 @media (max-width: 760px) {
   .calendar-nav-inline {
     display: flex;
+  }
+
+  .period-picker-panel {
+    top: calc(var(--mobile-top-inset, 14px) + 56px);
+    right: 12px;
   }
 }
 

@@ -193,6 +193,18 @@ export function formatRangeLabel(view: CalendarView, anchor: Day, firstDay: numb
   return `${short.format(parseDay(range.start))} – ${withYear.format(parseDay(range.end))}`;
 }
 
+/**
+ * The short range shown on the shell action button ("6 – 12 Oct", "Oct 2026"), locale-aware; the full label from
+ * {@link formatRangeLabel} is announced by the period picker once it settles.
+ */
+export function formatRangeButtonLabel(view: CalendarView, anchor: Day, firstDay: number, locale: string): string {
+  if (view === "month") {
+    return utcFormatter(locale, { month: "short", year: "numeric" }).format(parseDay(anchor));
+  }
+  const range = visibleRange(view, anchor, firstDay);
+  return utcFormatter(locale, { day: "numeric", month: "short" }).formatRange(parseDay(range.start), parseDay(range.end));
+}
+
 function entryTime(entry: CalendarEntry): Date | null {
   return releaseInstant(entry);
 }
@@ -800,6 +812,8 @@ export function CalendarPage() {
   stepperRef.current ??= createAnchorStepper();
   const stepAnchor = (direction: -1 | 1) => setAnchor(stepperRef.current!.step(view, anchor, direction));
   const panel = urlState.panel;
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const rangeButtonRef = useRef<HTMLButtonElement>(null);
 
   const updateParams = useCallback(
     (mutate: (params: URLSearchParams) => URLSearchParams) => {
@@ -938,6 +952,7 @@ export function CalendarPage() {
 
   // Phones hide the stage's left panel (as on Library), so an agenda selection opens the sheet there.
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
+  const rangeButtonLabel = formatRangeButtonLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const activeCount = activeFilterCount(filters);
   const selectProps: SelectHandlers = { selectedKey: view === "agenda" ? (detailItem?.key ?? null) : (selectedItem?.key ?? null), onSelect: stableSelect };
@@ -1048,6 +1063,17 @@ export function CalendarPage() {
                 ],
               },
             ]),
+        {
+          kind: "panel",
+          id: "range",
+          label: rangeButtonLabel,
+          icon: "calendar",
+          open: jumpOpen,
+          onToggle: () => setJumpOpen((v) => !v),
+          controls: "calendar-period-jump",
+          buttonRef: rangeButtonRef,
+          buttonProps: { "data-range-button": true },
+        },
         {
           kind: "panel",
           id: "subscription",
@@ -1176,6 +1202,10 @@ export function CalendarPage() {
     <PeriodPicker
       value={anchor}
       label={rangeLabel}
+      open={jumpOpen}
+      onOpenChange={setJumpOpen}
+      triggerRef={rangeButtonRef}
+      id="calendar-period-jump"
       locale={locale}
       view={view}
       dialogLabel={t("pages.calendar.jumpTitle")}
@@ -1194,7 +1224,7 @@ export function CalendarPage() {
         className="calendar-page calendar-view-agenda tv-library tv-directory"
         ariaLabel={t("pages.calendar.title")}
         backdrop={agendaArt ?? { artKey: "calendar-agenda" }}
-        header={isPhoneWidth ? pageHeader : { ...pageHeader, detail: periodPicker }}
+        header={pageHeader}
       >
         {loading ? (
           <DetailsSkeleton />
@@ -1228,6 +1258,7 @@ export function CalendarPage() {
             />
           )}
         </ListPanel>
+        {isPhoneWidth ? null : periodPicker}
         {drawers}
         {selectedItem && isPhoneWidth && urlState.selected ? (
           <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>

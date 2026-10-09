@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageLayout, type ActionIcon, type PageAction } from "../components/shell";
 
-const ICONS: readonly ActionIcon[] = ["filters", "bell", "add", "customise", "prev", "next", "back"];
+const ICONS: readonly ActionIcon[] = ["filters", "bell", "add", "customise", "calendar", "prev", "next", "back"];
 const noop = () => undefined;
 
 /**

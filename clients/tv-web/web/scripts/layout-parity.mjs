@@ -54,8 +54,8 @@ const referenceFrom = opt("reference-from", "");
 const outDir = resolve(opt("out", join(tmpdir(), "layout-parity")));
 const PINS = join(repo, "docs/parity/web/layout");
 const FIXED_CLOCK = Date.parse("2026-10-07T12:00:00Z");
-/** Glyph anti-aliasing of the icon and label shifts by a sub-pixel between a pill stacked second and the harness pill; real drift is hundreds of pixels. */
-const PILL_AA_TOLERANCE = 24;
+/** Glyph anti-aliasing of the label shifts by a sub-pixel between a pill stacked second and the harness pill, and grows with the label length (a long label such as "Calendar link" reaches about 55 pixels); a wrong icon or label differs by 150 or more. */
+const PILL_AA_TOLERANCE = 64;
 /** A page's own background gradient (Settings) bands differently under the header than the plain harness page; real header drift is hundreds of pixels. */
 const BAND_TOLERANCE = 32;
 const PIN_LAYOUTS = ["tv", "mobile"];
