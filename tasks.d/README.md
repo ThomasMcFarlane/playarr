@@ -9,7 +9,7 @@ section: Heading text of the "## " epic the row belongs to
 ```
 
 The row has the eight canonical columns `ID | Task | Status | Owner | Branch | Depends | ETA | Notes`.
-Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `done`. Branch,
+Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `parked`, `done`. Branch,
 Depends and ETA may be empty (write a single space between the pipes). ETA is
 `YYYY-MM-DD HH:MM <timezone>`. Do not pad cells and write a literal pipe as `\|`. A row with status
 `in_review` must name its PR (`PR open: #123`) in Notes. A fragment in the former five-column shape
@@ -28,5 +28,5 @@ Depends and ETA may be empty (write a single space between the pipes). ETA is
 - ETA rule: every `in_progress` and `in_review` row needs an ETA (for `in_review`, the expected merge).
   `node scripts/fold-fragments.mjs --check` fails when one is missing and only warns when it is already
   in the past (a hard failure would break CI as time passes), so update or move the row. Rows nobody is
-  working are `todo` (Owner empty), `blocked` or `blocked_on_owner`, with no ETA. The board mod computes
+  working are `todo` (Owner empty), `blocked`, `blocked_on_owner` or `parked`, with no ETA. The board mod computes
   and shows the epic ETA itself.

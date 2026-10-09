@@ -1,7 +1,7 @@
 // Shared helpers for the TASKS.md board ("epic tables"): one `## ` heading per epic and one table per
 // epic with exactly the header below. Used by fold-fragments.mjs and board-sync.mjs.
 export const HEADER = ['ID', 'Task', 'Status', 'Owner', 'Branch', 'Depends', 'ETA', 'Notes'];
-export const STATUSES = ['todo', 'in_progress', 'in_review', 'blocked', 'blocked_on_owner', 'done'];
+export const STATUSES = ['todo', 'in_progress', 'in_review', 'blocked', 'blocked_on_owner', 'parked', 'done'];
 export const HEADER_LINE = `| ${HEADER.join(' | ')} |`;
 export const SEPARATOR_LINE = `|${HEADER.map(() => '---').join('|')}|`;
 export const ETA_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2} (?:[A-Z]{2,5}|[+-]\d{2}:\d{2})$/;
@@ -35,7 +35,8 @@ export const legacyStatus = (status) => {
   if (/^(done except|client side done|partly done)/.test(l)) return 'in_progress';
   if (/^root cause fixed.*blocked/.test(l)) return 'blocked';
   if (/^(done|implemented|configured|root cause fixed|dropped|won't fix|won't do|not applicable)\b/.test(l)) return 'done';
-  if (/^blocked on owner/.test(l) || /^paused/.test(l)) return 'blocked_on_owner';
+  if (/^(paused|parked)\b/.test(l)) return 'parked';
+  if (/^blocked on owner/.test(l)) return 'blocked_on_owner';
   if (/^(blocked|on hold)/.test(l)) return 'blocked';
   if (/^in review\b/.test(l) || /\bpr open\b/.test(l)) return 'in_review';
   if (/^in progress/.test(l)) return 'in_progress';
@@ -95,7 +96,8 @@ export const etaInstant = (eta) => {
   return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - off * 60000;
 };
 
-// Open rows (in_progress, in_review) must carry an ETA; the mod computes the epic ETA itself.
+// Open rows (in_progress, in_review) must carry an ETA; the mod computes the epic ETA itself. `parked`
+// (owner-paused work) needs no ETA and is excluded from it, like `blocked` and `todo`.
 export const OPEN_STATUSES = ['in_progress', 'in_review'];
 
 // For an open row: an error when the ETA is missing or malformed, a warning when it is already past.
