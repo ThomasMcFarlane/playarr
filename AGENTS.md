@@ -161,11 +161,11 @@ on a personal account do not get.
   number replaces that row in place). The merge train folds them into `TASKS.md` when the PR lands.
   See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
-- Set the ETA column on every row you are actively working (`YYYY-MM-DD HH:MM ICT`; the board zone is
-  ICT, Asia/Bangkok). Leave it empty for paused or on-hold work: that is unscheduled, not late. Each
-  `## ` epic with open rows shows `ETA: <latest open-row ETA> (n open)` (UK time alongside) right under
-  its heading, or `ETA: not set (n open)`. The fold computes that line on every task fold; never
-  hand-edit it.
+- Every `in_progress` and `in_review` row carries an ETA (`YYYY-MM-DD HH:MM ICT`; the board zone is
+  ICT, Asia/Bangkok; for `in_review` it is the expected merge). `fold-fragments.mjs --check` fails on a
+  missing ETA and warns on a past one: revise it as soon as it slips. Work nobody is doing is `todo`
+  (Owner empty), `blocked` or `blocked_on_owner`, never a stale `in_progress`. The board mod computes
+  the epic ETA itself; do not add ETA lines under headings.
 - A PR merged directly (`gh pr merge --squash`) skips the train, so the `Fold board` workflow
   (`fold-board.yml`, `scripts/fold-main.sh`) folds any pending fragments on every push to `main`, committing
   as the train's identity (`Merge-Train: yes`) with the deploy key. Fragments never sit unfolded for long.

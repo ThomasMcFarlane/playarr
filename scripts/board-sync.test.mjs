@@ -13,14 +13,14 @@ const board = `# Tasks
 ## Active
 
 ${H}
-| 1 | One | in_review | a | | | | Lands in #50. |
-| 2 | Two | in_review | a | | | | Uses PR 50 and #51. |
-| 3 | Three | in_progress | a | | | | PR open: #50 and #51 open. |
-| 4 | Four | in_progress | a | | | | PR open: #60. |
+| 1 | One | in_review | a | | | 2099-01-01 00:00 ICT | Lands in #50. |
+| 2 | Two | in_review | a | | | 2099-01-01 00:00 ICT | Uses PR 50 and #51. |
+| 3 | Three | in_progress | a | | | 2099-01-01 00:00 ICT | PR open: #50 and #51 open. |
+| 4 | Four | in_progress | a | | | 2099-01-01 00:00 ICT | PR open: #60. |
 | 5 | Five | done | a | | | | PR #40 merged 2026-10-01; mentions #50 |
-| 6 | Six | in_progress | a | | | | Folded into #50. |
-| 7 | Seven | in_progress | a | | | | Web done; names #50 in passing. |
-| 8 | Eight | in_review | a | | | | Names nothing relevant (#99). |
+| 6 | Six | in_progress | a | | | 2099-01-01 00:00 ICT | Folded into #50. |
+| 7 | Seven | in_progress | a | | | 2099-01-01 00:00 ICT | Web done; names #50 in passing. |
+| 8 | Eight | in_review | a | | | 2099-01-01 00:00 ICT | Names nothing relevant (#99). |
 `;
 
 const sync = (args, fragments = {}) => {
@@ -98,8 +98,8 @@ test('--check rejects an in_review fragment that names no PR, a new row without 
     fs.rmSync(path.join(root, 'tasks.d', name));
     return r;
   };
-  assert.notEqual(check('1.md', '| 1 | One | in_review | a | | | | n |\n').status, 0);
-  assert.equal(check('1.md', '| 1 | One | in_review | a | | | | PR open: #50 |\n').status, 0);
+  assert.notEqual(check('1.md', '| 1 | One | in_review | a | | | 2099-01-01 00:00 ICT | n |\n').status, 0);
+  assert.equal(check('1.md', '| 1 | One | in_review | a | | | 2099-01-01 00:00 ICT | PR open: #50 |\n').status, 0);
   assert.notEqual(check('1.md', '| 1 | One | doing | a | | | | n |\n').status, 0);
   assert.notEqual(check('1.md', '| 1 | One | todo | a | | | tomorrow | n |\n').status, 0);
   assert.equal(check('1.md', '| 1 | One | todo | a | | | 2026-10-10 14:00 ICT | n |\n').status, 0);

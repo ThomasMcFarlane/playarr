@@ -79,14 +79,7 @@ export const rowProblems = (c) => {
   return p;
 };
 
-// ---- epic ETA ----------------------------------------------------------------------------------
-// The board shows, under every `## ` epic heading that has open rows, `ETA: <latest open-row ETA>
-// (n open)`. The fold recomputes it; nobody edits it by hand. The board zone is ICT, with the UK
-// time alongside; zone conversion uses the real tz database rules (Intl), so BST/GMT follow the date.
-export const BOARD_ZONE = 'Asia/Bangkok';
-export const BOARD_ZONE_LABEL = 'ICT';
-export const UK_ZONE = 'Europe/London';
-export const EPIC_ETA_RE = /^ETA: /;
+// ---- ETA instants ------------------------------------------------------------------------------
 // Fixed offsets in minutes for the zone abbreviations an ETA may carry (rows may also use +HH:MM).
 const ZONE_OFFSETS = { ICT: 420, UTC: 0, GMT: 0, BST: 60, CET: 60, CEST: 120, EST: -300, EDT: -240, PST: -480, PDT: -420, JST: 540, IST: 330, SGT: 480 };
 
@@ -102,44 +95,16 @@ export const etaInstant = (eta) => {
   return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - off * 60000;
 };
 
-// "YYYY-MM-DD HH:MM <abbr>" for an instant in an IANA zone (abbr is BST or GMT for London).
-const fmtZone = (ms, zone, abbr) => {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
-    timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
-  const a = abbr ?? new Intl.DateTimeFormat('en-GB', { timeZone: zone, timeZoneName: 'short' }).formatToParts(new Date(ms)).find((x) => x.type === 'timeZoneName').value;
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${a}`;
-};
+// Open rows (in_progress, in_review) must carry an ETA; the mod computes the epic ETA itself.
+export const OPEN_STATUSES = ['in_progress', 'in_review'];
 
-// The `ETA:` line for a set of open-row ETAs (strings, possibly empty) and their count.
-export const epicEtaLine = (etas, open) => {
-  const best = etas.map(etaInstant).filter((x) => x !== null).reduce((a, b) => (a === null || b > a ? b : a), null);
-  if (best === null) return `ETA: not set (${open} open)`;
-  return `ETA: ${fmtZone(best, BOARD_ZONE, BOARD_ZONE_LABEL)} (${fmtZone(best, UK_ZONE)}) (${open} open)`;
-};
-
-// Returns the board lines with the epic ETA line recomputed for every `## ` heading: removed where
-// present, then inserted directly under the heading when the epic's table has open (not done) rows.
-export const withEpicEtas = (lines) => {
-  const out = [];
-  let i = 0;
-  while (i < lines.length) {
-    const l = lines[i];
-    out.push(l);
-    i++;
-    if (!l.startsWith('## ')) continue;
-    while (i < lines.length && EPIC_ETA_RE.test(lines[i])) i++; // drop the old line
-    let end = i;
-    while (end < lines.length && !lines[end].startsWith('## ')) end++;
-    const etas = [];
-    let open = 0;
-    for (let j = i; j < end; j++) {
-      if (!lines[j].startsWith('|') || isSeparator(lines[j])) continue;
-      const c = parseCells(lines[j]);
-      if (!c || c.length !== 8 || c[0] === 'ID' || !STATUSES.includes(c[2])) continue;
-      if (c[2] !== 'done') { open++; etas.push(c[6]); }
-    }
-    if (open) out.push(epicEtaLine(etas, open));
-  }
-  return out;
+// For an open row: an error when the ETA is missing or malformed, a warning when it is already past.
+export const openRowEta = (c, now = Date.now()) => {
+  if (!OPEN_STATUSES.includes(c[2])) return {};
+  if (!c[6]) return { error: `${c[2]} row needs an ETA (YYYY-MM-DD HH:MM <timezone>)` };
+  if (!ETA_RE.test(c[6])) return {};
+  const t = etaInstant(c[6]);
+  if (t === null) return { error: `ETA "${c[6]}" has an unknown timezone` };
+  if (t < now) return { warning: `ETA ${c[6]} is in the past; update it or move the row out of ${c[2]}` };
+  return {};
 };

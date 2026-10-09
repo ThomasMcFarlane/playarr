@@ -18,19 +18,20 @@
 //                                      table (the section is created at the top if missing).
 //                                      A line `remove: <row-number>` deletes that row from the board
 //                                      (a fragment may hold only remove lines; a missing row is an error).
-//                                      Each task fold also rewrites the `ETA: <latest open-row ETA> (n open)` line
-//                                      under every "## " heading that has open rows (ICT, UK time alongside).
 //
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
-import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, withEpicEtas } from './lib/board.mjs';
+import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const root = path.resolve(args.find((a) => !a.startsWith('--')) ?? '.');
 const CATS = ['added', 'changed', 'fixed', 'removed', 'security', 'deprecated', 'documentation', 'performance', 'testing'];
 const errors = [];
+const warnings = [];
+// FOLD_NOW (ISO date) overrides the clock for tests.
+const now = process.env.FOLD_NOW ? Date.parse(process.env.FOLD_NOW) : Date.now();
 const err = (m) => errors.push(m);
 
 const listFragments = (dir) => {
@@ -71,6 +72,9 @@ function checkBoard(text) {
     const c = parseCells(l);
     if (!c || c.length !== 8) { out.push(`${at}: row must have eight columns`); return; }
     for (const pr of rowProblems(c)) out.push(`${at}: row ${c[0]}: ${pr}`);
+    const e = openRowEta(c, now);
+    if (e.error) out.push(`${at}: row ${c[0]}: ${e.error}`);
+    if (e.warning) warnings.push(`warning: TASKS.md ${at}: row ${c[0]}: ${e.warning}`);
     if (ids.has(c[0])) out.push(`${at}: duplicate ID ${c[0]}`);
     ids.add(c[0]);
   });
@@ -101,9 +105,39 @@ for (const f of tkFiles) {
   }
 }
 
+// Applies the task fragments to the board lines (replace in place, append, create a section, remove) and
+// returns the new lines. `fail(message)` reports a fragment that cannot apply and the fragment is skipped.
+function applyTasks(lines, fail) {
+  for (const { f, n, section, row, remove } of tkFrags) {
+    const idx = lines.findIndex((l) => new RegExp(`^\\|\\s*${n}\\s*\\|`).test(l));
+    if (remove) {
+      if (idx < 0) { fail(`tasks.d/${f}: cannot remove row ${n}: no such row`); continue; }
+      lines.splice(idx, 1);
+      continue;
+    }
+    if (idx >= 0) { lines[idx] = row; continue; }
+    if (!section) { fail(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); continue; }
+    const h = lines.findIndex((l) => l.replace(/^##\s+/, '') === section && l.startsWith('## '));
+    if (h < 0) {
+      const first = lines.findIndex((l) => l.startsWith('## '));
+      lines.splice(first, 0, `## ${section}`, '', HEADER_LINE, SEPARATOR_LINE, row, '');
+      continue;
+    }
+    let end = lines.findIndex((l, i) => i > h && l.startsWith('## '));
+    if (end < 0) end = lines.length;
+    let last = -1;
+    for (let i = h + 1; i < end; i++) if (lines[i].startsWith('|')) last = i;
+    if (last < 0) lines.splice(h + 1, 0, '', HEADER_LINE, SEPARATOR_LINE, row);
+    else lines.splice(last + 1, 0, row);
+  }
+  return lines;
+}
+
 // Board hygiene, enforced when validating (not when the train folds):
 //  - a fragment whose status is `in_review` must name its PR number (`#123` or `PR 123`) in Notes, or the
 //    board cannot flip the row when that PR lands (scripts/board-sync.mjs);
+//  - an in_progress or in_review row (fragment or board) must have a valid ETA; a past ETA only warns
+//    (it must not fail CI as time passes);
 //  - TASKS.md itself must be in the canonical format (header, statuses, ETA, unpadded cells);
 //  - a row that is not on the board yet needs a "section:" line.
 if (check) {
@@ -111,12 +145,20 @@ if (check) {
   const onBoard = new Set(fs.existsSync(boardFile) ? [...fs.readFileSync(boardFile, 'utf8').matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) => m[1]) : []);
   for (const fr of tkFrags) {
     if (fr.remove) continue;
+    const e = openRowEta(fr.cells, now);
+    if (e.error) err(`tasks.d/${fr.f}: row ${fr.n}: ${e.error}`);
+    if (e.warning) warnings.push(`warning: tasks.d/${fr.f}: row ${fr.n}: ${e.warning}`);
     if (fr.cells[2] === 'in_review' && !/(#|PR\s+)\d+/.test(fr.cells[7])) err(`tasks.d/${fr.f}: status is in_review but Notes name no PR number (write "PR open: #123")`);
     if (!fr.section && !onBoard.has(fr.n)) err(`tasks.d/${fr.f}: row ${fr.n} is not on the board, so the fragment needs a "section:" line`);
   }
-  if (fs.existsSync(boardFile)) for (const m of checkBoard(fs.readFileSync(boardFile, 'utf8'))) err(`TASKS.md: ${m}`);
+  // The board as it will be once the fragments fold, so a fragment may fix a row the current board gets wrong.
+  if (fs.existsSync(boardFile)) {
+    const folded = applyTasks(fs.readFileSync(boardFile, 'utf8').split('\n'), () => {}).filter((l) => !/^ETA: /.test(l));
+    for (const m of checkBoard(folded.join('\n'))) err(`TASKS.md${tkFrags.length ? ' (after fold)' : ''}: ${m}`);
+  }
 }
 
+if (warnings.length) console.error(warnings.join('\n'));
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 if (check) { console.log(`ok: ${clFrags.length} changelog and ${tkFrags.length} task fragment row(s)`); process.exit(0); }
 if (!clFrags.length && !tkFrags.length) { console.log('no fragments'); process.exit(0); }
@@ -142,31 +184,9 @@ if (clFrags.length) {
 // ---- apply: tasks ----------------------------------------------------------------------------
 if (tkFrags.length) {
   const p = path.join(root, 'TASKS.md');
-  const lines = fs.readFileSync(p, 'utf8').split('\n');
-  for (const { f, n, section, row, remove } of tkFrags) {
-    const idx = lines.findIndex((l) => new RegExp(`^\\|\\s*${n}\\s*\\|`).test(l));
-    if (remove) {
-      if (idx < 0) { console.error(`tasks.d/${f}: cannot remove row ${n}: no such row`); process.exit(1); }
-      lines.splice(idx, 1);
-      continue;
-    }
-    if (idx >= 0) { lines[idx] = row; continue; }
-    if (!section) { console.error(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); process.exit(1); }
-    const h = lines.findIndex((l) => l.replace(/^##\s+/, '') === section && l.startsWith('## '));
-    if (h < 0) {
-      const first = lines.findIndex((l) => l.startsWith('## '));
-      lines.splice(first, 0, `## ${section}`, '', HEADER_LINE, SEPARATOR_LINE, row, '');
-      continue;
-    }
-    let end = lines.findIndex((l, i) => i > h && l.startsWith('## '));
-    if (end < 0) end = lines.length;
-    let last = -1;
-    for (let i = h + 1; i < end; i++) if (lines[i].startsWith('|')) last = i;
-    if (last < 0) lines.splice(h + 1, 0, '', HEADER_LINE, SEPARATOR_LINE, row);
-    else lines.splice(last + 1, 0, row);
-  }
-  // Every task fold recomputes the epic ETA lines under the `## ` headings (never hand-edited).
-  fs.writeFileSync(p, withEpicEtas(lines).join('\n'));
+  const lines = applyTasks(fs.readFileSync(p, 'utf8').split('\n'), (m) => { console.error(m); process.exit(1); });
+  // One-off cleanup: drop the per-epic `ETA:` lines an earlier fold wrote under the headings (the board mod computes the epic ETA).
+  fs.writeFileSync(p, lines.filter((l) => !/^ETA: /.test(l)).join('\n'));
 }
 
 for (const f of clFiles) fs.unlinkSync(path.join(root, 'changelog.d', f));
