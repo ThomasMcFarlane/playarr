@@ -120,6 +120,59 @@ async function hold(name, path, stackSelector, size, theme) {
   await context.close();
 }
 
+/**
+ * Owner answer (10 Oct 2026): the re-adjustment shows in a desktop browser, on the first Left/Right moves after landing on
+ * a new rail. Two causes to rule out: (A) a stationary mouse pointer resting over the stack, which Chrome treats as
+ * hovering whatever card scrolls under it, and (B) Right pressed while the vertical glide of the Down is still in flight.
+ * Frames are recorded from the Down on: the stack only moves toward its final position (never back, never past), the
+ * final position is the centre of the rail, and a card other than the focused one never lifts under the parked pointer.
+ */
+async function inflight(name, path, stackSelector, size, { gap, mouse }) {
+  const label = `${name} ${size.width}x${size.height}, ${mouse ? "mouse parked, " : ""}Right ${gap} ms after Down`;
+  const { context, page, errors } = await open(path, size);
+  await page.waitForSelector(`${stackSelector} .tv-media-track`);
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(700);
+  if (mouse) await page.mouse.move(size.width * 0.68, size.height * 0.5);
+  await page.evaluate((selector) => {
+    const stack = document.querySelector(selector);
+    const rec = (window.__fl = { frames: [], lifted: 0 });
+    const tick = () => {
+      rec.frames.push(stack.scrollTop);
+      rec.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }, stackSelector);
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(gap);
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(500);
+  }
+  await page.waitForTimeout(700);
+  const rec = await page.evaluate(() => { cancelAnimationFrame(window.__fl.raf); return window.__fl; });
+  // Settled: a lifted card that is neither the marker nor the focused one is a hover taking effect during keys.
+  const liftedCards = await page.evaluate(() =>
+    [...document.querySelectorAll(".tv-home-card, .tv-episode-card")].filter((card) => {
+      const t = getComputedStyle(card).transform;
+      return t !== "none" && t !== "matrix(1, 0, 0, 1, 0, 0)" && !card.hasAttribute("data-remote-active") && !card.matches(":focus-visible");
+    }).map((c) => `${String(c.className).replace(/media-card /, "")} hover=${c.matches(":hover")} focus=${c.matches(":focus-visible")} marker=${document.body.hasAttribute("data-remote-marker")}`)
+  );
+  rec.lifted = liftedCards.length;
+  rec.liftedDetail = liftedCards.join("; ");
+  const final = rec.frames.at(-1);
+  const dist = rec.frames.map((v) => Math.abs(v - final));
+  const away = dist.filter((d, i) => i > 0 && d > dist[i - 1] + 2).length;
+  const settledAt = dist.findIndex((d, i) => dist.slice(i).every((x) => x <= 0.5));
+  const m = await measure(page, stackSelector);
+  check(`${label}: the stack moves only toward its final position (${away} frames away from it)`, away === 0, `${away} frames moving away from ${final}`);
+  check(`${label}: it ends centred on the rail (off ${m ? m.off.toFixed(1) : "?"} px) and stays there`, m !== null && (m.clamped || Math.abs(m.off) <= 2) && settledAt >= 0, JSON.stringify(m));
+  if (mouse) check(`${label}: a parked pointer lifts no card besides the focused one`, rec.lifted === 0, `${rec.lifted} lifted cards besides the focused one: ${rec.liftedDetail}`);
+  check(`${label}: no page errors`, errors.length === 0, errors.join(";"));
+  await context.close();
+}
+
 const probe = await open("/");
 const seriesId = await probe.page.evaluate(async () => {
   const response = await fetch("/api/v1/catalog?kind=series&limit=1", { headers: { authorization: "Bearer t" } });
@@ -134,6 +187,11 @@ for (const size of [
   await run("Home", "/", ".tv-home-rails", size);
   await run("Playlist", "/playlists?playlist=00000000-0000-4000-8000-000000000100", ".tv-rail-surface.is-vertical-tracks", size);
   await run("Series", `/series/${seriesId}`, ".tv-series-browser", size);
+  for (const [name, path, sel] of [["Home", "/", ".tv-home-rails"], ["Series", `/series/${seriesId}`, ".tv-series-browser"]]) {
+    for (const gap of [50, 100, 200, 300]) await inflight(name, path, sel, size, { gap, mouse: false });
+    await inflight(name, path, sel, size, { gap: 700, mouse: true });
+    await inflight(name, path, sel, size, { gap: 100, mouse: true });
+  }
   for (const theme of ["dark", "light"]) {
     await hold("Home", "/", ".tv-home-rails", size, theme);
     await hold("Series", `/series/${seriesId}`, ".tv-series-browser", size, theme);
