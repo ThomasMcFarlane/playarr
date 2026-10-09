@@ -110,7 +110,7 @@ function step(el: HTMLElement, axis: Axis, now: number): void {
   animation.raf = window.requestAnimationFrame((time) => step(el, axis, time));
 }
 
-function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
+function animateAxis(el: HTMLElement, axis: Axis, target: number, fixedDuration?: number): void {
   const current = read(el, axis);
   const running = active.get(el)?.[axis];
   // Same destination as the glide already under way: leave it be.
@@ -136,9 +136,10 @@ function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
     from: current,
     to: target,
     start: now,
+    // A caller-chosen duration shortens a fresh glide; a retarget is never slower than the repeat rules.
     duration: running
-      ? retargetDuration(now - running.retargetedAt)
-      : durationForDistance(target - current),
+      ? Math.min(fixedDuration ?? Infinity, retargetDuration(now - running.retargetedAt))
+      : (fixedDuration ?? durationForDistance(target - current)),
     lastWritten: current,
     retargetedAt: now,
     raf: 0,
@@ -150,10 +151,11 @@ function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
 /** Ease `el` to the given scroll offsets; omitted axes are left alone. */
 export function smoothScrollTo(
   el: HTMLElement,
-  target: { left?: number; top?: number }
+  target: { left?: number; top?: number },
+  options: { duration?: number } = {}
 ): void {
-  if (target.left !== undefined) animateAxis(el, "left", target.left);
-  if (target.top !== undefined) animateAxis(el, "top", target.top);
+  if (target.left !== undefined) animateAxis(el, "left", target.left, options.duration);
+  if (target.top !== undefined) animateAxis(el, "top", target.top, options.duration);
 }
 
 /**

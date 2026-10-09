@@ -1,4 +1,5 @@
 import { smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
+import { useRemoteMarkerFollow } from "../lib/remoteMarkerFollow";
 import {
   memo,
   startTransition,
@@ -916,20 +917,14 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // In remote mode real DOM focus trails the virtual focus marker by its settle time, so the preview follows the
   // marker itself: the card carrying `data-remote-active` is the one the user is looking at.
   const hasGrid = items !== null && items.length > 0;
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-    const observer = new MutationObserver((records) => {
-      for (const record of records) {
-        const card = record.target as HTMLElement;
-        if (!card.hasAttribute("data-remote-active")) continue;
-        const work = focusStateRef.current.items?.[Number.parseInt(card.dataset.libraryIndex ?? "", 10)];
-        if (work) focusWork(work, true);
-      }
-    });
-    observer.observe(grid, { subtree: true, attributes: true, attributeFilter: ["data-remote-active"] });
-    return () => observer.disconnect();
-  }, [focusWork, hasGrid]);
+  useRemoteMarkerFollow(
+    gridRef,
+    (card) => {
+      const work = focusStateRef.current.items?.[Number.parseInt(card.dataset.libraryIndex ?? "", 10)];
+      if (work) focusWork(work, true);
+    },
+    hasGrid
+  );
 
   if (items === null || initialError || !items.length || !selected) {
     // The header and Back stay up while the library loads, fails or is empty.

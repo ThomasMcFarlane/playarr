@@ -98,6 +98,20 @@ describe("durations", () => {
 });
 
 describe("smoothScrollTo", () => {
+  it("honours a caller-chosen duration for a fresh glide and never slows a retarget", () => {
+    const el = fakeScroller();
+    smoothScrollTo(el, { top: 1000 }, { duration: 160 });
+    for (let i = 0; i < 12; i += 1) advance(16);
+    // 12 frames of 16 ms is 192 ms: a 160 ms glide has landed (the default 200 to 280 ms one would not).
+    expect(el.scrollTop).toBe(1000);
+    expect(isSmoothScrolling(el)).toBe(false);
+    smoothScrollTo(el, { top: 0 }, { duration: 160 });
+    advance(16);
+    smoothScrollTo(el, { top: 500 }, { duration: 400 });
+    for (let i = 0; i < 12; i += 1) advance(16);
+    expect(el.scrollTop).toBe(500);
+  });
+
   it("eases monotonically in several steps and lands exactly on the target", () => {
     const el = fakeScroller();
     smoothScrollTo(el, { top: 400 });

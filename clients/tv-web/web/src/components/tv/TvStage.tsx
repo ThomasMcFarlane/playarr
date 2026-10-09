@@ -1,5 +1,7 @@
 import {
+  createContext,
   forwardRef,
+  useContext,
   useRef,
   type FocusEventHandler,
   type Key,
@@ -43,6 +45,16 @@ export function TvStageChrome({
   );
 }
 
+/**
+ * The gap above a track. `related` is small (tracks that belong together, such as the seasons of one show);
+ * `section` is larger (a different kind of track: Cast, Similar titles, every Home rail). Both are stage-scaled
+ * tokens (`--tv-track-gap-related`, `--tv-track-gap-section`).
+ */
+export type TvTrackSpacing = "related" | "section";
+
+/** The default spacing of the tracks inside a `RailStack`. */
+export const TvTrackSpacingContext = createContext<TvTrackSpacing>("related");
+
 export type TvRailSurfaceMode = "vertical-tracks" | "static-track" | "content";
 
 export const TvRailSurface = forwardRef<
@@ -52,6 +64,7 @@ export const TvRailSurface = forwardRef<
     ariaLabel?: string;
     mode?: TvRailSurfaceMode;
     scrollKey?: string;
+    onFocusCapture?: FocusEventHandler<HTMLElement>;
     children: ReactNode;
   }
 >(function TvRailSurface(
@@ -60,6 +73,7 @@ export const TvRailSurface = forwardRef<
     ariaLabel,
     mode = "content",
     scrollKey,
+    onFocusCapture,
     children,
   },
   ref
@@ -70,6 +84,7 @@ export const TvRailSurface = forwardRef<
       ref={ref}
       className={`tv-rail-surface is-${mode}${className ? ` ${className}` : ""}`}
       aria-label={ariaLabel}
+      onFocusCapture={onFocusCapture}
       data-tv-scroll-container={scrollable ? true : undefined}
       data-tv-scroll-axis={scrollable ? "vertical" : undefined}
       data-navigation-scroll-key={scrollable ? scrollKey : undefined}
@@ -88,6 +103,7 @@ export function TvMediaTrack({
   itemsKey,
   dataTrackId,
   rightEdgeTarget,
+  spacing,
   className = "",
   onFocusCapture,
   overlay,
@@ -102,6 +118,8 @@ export function TvMediaTrack({
   itemsKey: string;
   dataTrackId?: string;
   rightEdgeTarget?: string;
+  /** Gap above this track; defaults to the enclosing `RailStack`'s spacing. */
+  spacing?: TvTrackSpacing;
   className?: string;
   onFocusCapture?: FocusEventHandler<HTMLElement>;
   overlay?: ReactNode;
@@ -110,6 +128,7 @@ export function TvMediaTrack({
   children: ReactNode;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
+  const stackSpacing = useContext(TvTrackSpacingContext);
   useScrollEdges(railRef, "horizontal", itemsKey);
 
   return (
@@ -120,6 +139,7 @@ export function TvMediaTrack({
       aria-label={ariaLabel}
       onFocusCapture={onFocusCapture}
       data-tv-track-id={dataTrackId}
+      data-track-spacing={spacing ?? stackSpacing}
     >
       <header className="tv-media-track-heading">
         <div>

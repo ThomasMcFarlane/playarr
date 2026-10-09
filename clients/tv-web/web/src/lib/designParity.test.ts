@@ -49,12 +49,12 @@ describe("design parity with origin/main", () => {
 
   it("keeps Home stage structure", () => {
     const current = readSrc("pages/Home.tsx");
-    expect(current).toContain("function centreHomeRail");
+    expect(current).toContain("centreTrackInStack");
     expect(current).toContain("tv-home-rails");
     expect(current).toContain("<PageLayout");
     expect(current).not.toContain("is-remote-active");
     // Remote selection debounce present for TV lag budget.
-    expect(current).toMatch(/remote \? 280 : 0/);
+    expect(current).toMatch(/remote \? REMOTE_SELECT_SETTLE_MS : 0/);
   });
 
   it("keeps WorkDetail, Search, MusicDetail selection synchronous (no startTransition wrap)", () => {
