@@ -38,6 +38,8 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { byDistance, gridNeighbours } from "../lib/detailNeighbours";
+import { useFocusedDetailsController } from "../lib/useFocusedDetails";
 
 const SEARCH_LIMIT = 60;
 const SEARCH_DEBOUNCE_MS = 320;
@@ -706,18 +708,44 @@ export function SearchPage() {
   // Delegated focus: one handler for the grid, selection debounced under a
   // remote hold so the preview/stage re-render never runs per key.
   const selectTimerRef = useRef(0);
+  // Details of the focused work follow the remote at once; its neighbours are prefetched after a rest.
+  const details = useFocusedDetailsController();
+  const resultsRef = useRef(results);
+  resultsRef.current = results;
+  const searchFocusRef = useRef(0);
+  const resultsGridRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const workIds = () => resultsRef.current.flatMap((result) => (result.type === "work" ? [{ id: result.id }] : []));
+    details.setNear(() => {
+      const ids = workIds();
+      const cards = [...(resultsGridRef.current?.querySelectorAll<HTMLElement>("[data-search-key]") ?? [])];
+      const columns = cards.length ? cards.filter((card) => card.offsetTop === cards[0]!.offsetTop).length : 1;
+      return gridNeighbours(ids, searchFocusRef.current, columns);
+    });
+    details.setWarm(() => byDistance(workIds(), searchFocusRef.current));
+    return () => details.release();
+  }, [details]);
   const handleResultsFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
     const card = (event.target as Element | null)?.closest<HTMLElement>(
       "[data-search-key]"
     );
     const key = card?.dataset.searchKey;
     if (!key) return;
+    resultsGridRef.current = (event.currentTarget as HTMLElement) ?? null;
+    if (key.startsWith("work:")) {
+      const id = key.slice("work:".length);
+      searchFocusRef.current = Math.max(
+        0,
+        resultsRef.current.filter((result) => result.type === "work").findIndex((result) => result.id === id)
+      );
+      details.focus(id);
+    }
     window.clearTimeout(selectTimerRef.current);
     const remote = document.body.dataset.inputMode === "remote";
     selectTimerRef.current = window.setTimeout(() => {
       startTransition(() => setSelectedId(key));
     }, remote ? 280 : 0);
-  }, []);
+  }, [details]);
   useEffect(() => () => window.clearTimeout(selectTimerRef.current), []);
 
   const selectedWork = selected?.type === "work" ? selected.work : null;

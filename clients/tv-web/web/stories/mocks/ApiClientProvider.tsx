@@ -4,7 +4,7 @@
  * `setMockApi`, and anything unregistered rejects. Nothing here reaches a network.
  */
 import type { ReactNode } from "react";
-import type { ApiClient } from "@playarr-tv/api-client";
+import { QueryCache, type ApiClient } from "@playarr-tv/api-client";
 
 // The real module for the pure helpers; the plugin in main.ts lets this one import through.
 export * from "../../src/lib/ApiClientProvider";
@@ -18,9 +18,13 @@ export function setMockApi(next: Record<string, Handler | unknown>): void {
   handlers = next;
 }
 
+/** The query cache is off (no scope), as when signed out: nothing is stored, prefetched or fetched through it. */
+const queries = new QueryCache();
+
 const client = new Proxy({} as ApiClient, {
   get(_target, method: string) {
     if (method === "then") return undefined;
+    if (method === "queries") return queries;
     return (...args: unknown[]) => {
       const handler = handlers[method];
       if (handler === undefined) return Promise.reject(new Error(`No fixture for ApiClient.${method}`));

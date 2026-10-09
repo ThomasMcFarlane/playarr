@@ -29,6 +29,11 @@ addEventListener('keydown',e=>{cards[idx].style.outline='';const m={ArrowDown:3,
 </script></div></div></body></html>
 `;
 
+/** A movie's runtime in the mock, derived from its id so a test can tell whose detail a panel shows. */
+export function mockRuntimeMinutes(id) {
+  return 90 + (parseInt(id.slice(0, 4), 16) % 60);
+}
+
 const removedWatchlist = new Set();
 
 export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false, watchlist = 0 }) {
@@ -100,7 +105,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
           : [{ season, episodes: [{ episode, media_file_id: `mf-${work.id}` }] }] },
         available_on: [],
         media_files: [],
-        ...(work.kind === "movie" ? { media_file_id: `mf-${work.id}` } : {}),
+        ...(work.kind === "movie" ? { media_file_id: `mf-${work.id}`, runtime_ms: mockRuntimeMinutes(work.id) * 60_000 } : {}),
       };
       if (detailDelayMs > 0) return void setTimeout(() => json(res, body), detailDelayMs);
       return json(res, body);
