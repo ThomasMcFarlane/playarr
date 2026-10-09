@@ -79,7 +79,7 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');
     expect(markup).toContain('id="settings-active-option"');
     expect(markup).toContain("Appearance controls");
-    expect(markup).toContain('<span class="page-header-detail is-section"><strong>Appearance</strong>');
+    expect(markup).toContain('<span class="page-header-detail page-subtitle">Appearance</span>');
   });
 
   it("returns focus to the list only at the detail panel's left boundary", () => {

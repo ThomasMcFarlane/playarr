@@ -238,7 +238,7 @@ export function SettingsIndexPage() {
         title: t("settings.index.title"),
         back: { label: t("settings.sectionLayout.backLink"), onBack: leaveSettings },
         backProps: { "data-tv-focus-default": true },
-        detail: { title: activeSection.title, description: activeSection.description },
+        detail: activeSection.title,
         mobileShow: isSettingsIndex ? "title" : "detail",
       }}
     >

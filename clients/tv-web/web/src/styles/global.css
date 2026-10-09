@@ -4393,6 +4393,9 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     linear-gradient(270deg, color-mix(in srgb, var(--surface) 50%, transparent) 0%, transparent 34%);
 }
 
+/* The one small subtitle style (owner rule 2026-10-10): the media-page kicker, the details-panel eyebrow and the page
+   header subtitle of every page share this rule. Never restyle one of them on its own. */
+.page-subtitle,
 .tv-provider,
 .tv-detail-kicker {
   margin-bottom: clamp(18px, calc(2.4 * var(--viewport-unit)), 34px);
@@ -4965,15 +4968,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .tv-detail-heading {
   right: clamp(102px, calc(8 * var(--vw)), 160px);
   min-width: 0;
-}
-
-.tv-detail-heading-item > strong {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  font: inherit;
-  font-weight: inherit;
-  text-overflow: ellipsis;
 }
 
 .tv-directory {
@@ -8819,6 +8813,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     max-width: 520px;
   }
 
+  .page-subtitle,
   .tv-provider,
   .tv-detail-kicker {
     margin-bottom: 10px;

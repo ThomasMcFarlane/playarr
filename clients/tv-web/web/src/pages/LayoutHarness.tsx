@@ -65,9 +65,7 @@ export function LayoutHarnessPage() {
       ariaLabel="Layout harness"
       header={{
         title: params.get("title") ?? "Title",
-        detail: params.get("description")
-          ? { title: params.get("detail") ?? "", description: params.get("description") ?? "" }
-          : (params.get("detail") ?? undefined),
+        detail: params.get("detail") ?? undefined,
         mobileShow: params.get("mobileShow") === "detail" ? "detail" : undefined,
         back: { label: back ?? "Back", to: "/" },
         actions,
