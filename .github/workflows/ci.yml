@@ -148,7 +148,7 @@ jobs:
         run: scripts/ci/test-android-main-version.sh
 
       - name: Release notes script tests
-        run: node --test scripts/release-notes.test.mjs scripts/fold-fragments.test.mjs
+        run: node --test scripts/release-notes.test.mjs scripts/fold-fragments.test.mjs scripts/board-sync.test.mjs
 
       - name: Profile avatar presets match the web reference
         run: node clients/shared/profile-avatars/render.mjs --check
