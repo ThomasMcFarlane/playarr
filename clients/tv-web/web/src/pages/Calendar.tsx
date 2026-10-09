@@ -29,6 +29,7 @@ import { PeriodPicker } from "../components/shell";
 import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { retryTransient } from "../lib/retryTransient";
 import { useToday } from "../lib/useToday";
 import {
   CALENDAR_VIEWS,
@@ -829,7 +830,7 @@ export function CalendarPage() {
   const fetchRange = fetchWindow(range);
   const liveCalendar = useLiveSubscription({ areas: ["calendar"] });
   const state = useAsyncData<CalendarResponse>(
-    () => client.getCalendar({ start: fetchRange.start, end: fetchRange.end }),
+    () => retryTransient(() => client.getCalendar({ start: fetchRange.start, end: fetchRange.end })),
     [client, fetchRange.start, fetchRange.end, reloadNonce],
     {
       subscribe: liveCalendar,
