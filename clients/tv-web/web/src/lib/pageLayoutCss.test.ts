@@ -63,4 +63,18 @@ describe("page layout CSS", () => {
     const literal = layout.match(/#[0-9a-fA-F]{3,8}\b/g)?.filter((value) => value.toLowerCase() !== "#ffffff") ?? [];
     expect(literal).toEqual([]);
   });
+  it("gives the list panels no entrance of their own: the route transition owns it (the library re-slid and re-faded)", () => {
+    // A base `animation` on these replayed (translateX 60px from opacity 0) the moment the route token expired and on every
+    // first paint; CLS ignores transforms, so the owner saw the library jump while every metric read zero.
+    const PANELS = /(^|,\s*)\.(tv-library-grid-panel|tv-rail-surface|tv-rail-panel)\s*$/;
+    const offenders: string[] = [];
+    for (const file of stylesheets()) {
+      const text = readFileSync(join(src, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1]!.trim().replace(/\s+/g, " ");
+        if (selector.split(",").some((part) => PANELS.test(part.trim())) && /(^|[;\s])animation(-name)?\s*:\s*(?!none)/.test(match[2]!)) offenders.push(`${file}: ${selector}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

@@ -886,3 +886,14 @@ body[data-input-mode="remote"] .action-pill {
 .tv-library-grid-panel.page-layout-state {
   width: var(--stage-rail-width);
 }
+/* The library's loading skeleton sits where its cards land: the same padding and gaps as .tv-title-grid-content, so the
+   cards do not jump sideways (about 40 px) when the list arrives. */
+@media (min-width: 761px) {
+  .tv-library-grid-panel.page-layout-state:has(> .skeleton-state.is-grid) {
+    align-items: start;
+  }
+  .tv-library-grid-panel.page-layout-state .skeleton-grid-set {
+    padding: var(--library-rail-top) var(--library-rail-right) 0 var(--library-rail-left);
+    gap: clamp(22px, calc(2.5 * var(--viewport-unit)), 36px) clamp(14px, calc(1.35 * var(--vw)), 28px);
+  }
+}
