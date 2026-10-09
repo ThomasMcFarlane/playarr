@@ -4,6 +4,7 @@ import { Button } from "./ui";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { formatLastWatched, resumeOptionCaptionKey } from "../lib/resumePlan";
 import { isBackKey } from "../lib/backKey";
+import { useRestoreFocusOnClose } from "../lib/useRestoreFocus";
 
 /**
  * Asks where to continue a series when the server's resume plan found an
@@ -25,6 +26,7 @@ export function ResumeChooserModal({
   const { t, language } = useLanguage();
   const firstButtonRef = useRef<HTMLButtonElement>(null);
 
+  useRestoreFocusOnClose();
   useEffect(() => {
     firstButtonRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {

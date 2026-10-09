@@ -17,7 +17,8 @@ function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return sources(path);
-    return /\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name) ? [path] : [];
+    // `.ts` helpers count too: a class name built there is as much page chrome as one written in JSX.
+    return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
   });
 }
 
@@ -42,9 +43,15 @@ const RULES = {
   chromeClass: /(?<![\w-])(page-filters-button|action-pill|tv-page-back|tv-library-heading|page-header)(?![\w-])/g,
   /** A scroll container written by hand. Use ScrollArea. */
   scrollContainer: /data-tv-scroll-container/g,
+  /**
+   * A page-owned scroll body or fade window: `ScrollArea` is the one scroller with the edge fade (S3, G3). The bodies
+   * that remain are listed in `BASELINE` and the count only shrinks, so a migrated registry entry cannot hide one.
+   */
+  legacyScrollBody: /(?<![\w-])(tv-scroll-edge-window|tv-media-track-window|tv-library-grid-panel)(?![\w-])/g,
   /** A hand-made loading, empty or error state (any `role=status|alert` element whose class says loading, error, empty or state). Use the state components. */
   stateElement:
-    /<[a-zA-Z.]+(?=[^<>]*role=["{]+(?:status|alert))[^<>]*?className=(?:"[^"]*(?:loading|loader|error|empty|state)[^"]*"|\{`[^`]*(?:loading|loader|error|empty|state)[^`]*`\})/gs,
+    // `(?:=>|[^<>])*` lets an attribute expression contain `=>` (an arrow function prop) without ending the tag early.
+    /<[a-zA-Z.]+(?=(?:=>|[^<>])*role=["{]+(?:status|alert))(?:=>|[^<>])*?className=(?:"[^"]*(?:loading|loader|error|empty|state)[^"]*"|\{`[^`]*(?:loading|loader|error|empty|state)[^`]*`\})/gs,
 } as const;
 
 type Rule = keyof typeof RULES;
@@ -79,6 +86,18 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "pages/Playlists.tsx": 1,
     "pages/Profiles.tsx": 1,
     "pages/settings/ProfileAvatar.tsx": 1,
+  },
+  /** Pages and surfaces that still build their own scroll body or fade window (W2 to W6); each migration lowers a count. */
+  legacyScrollBody: {
+    "components/tv/ListPanel.tsx": 1,
+    "components/tv/TvStage.tsx": 1,
+    "pages/Downloads.tsx": 1,
+    "pages/Household.tsx": 1,
+    "pages/Library.tsx": 1,
+    "pages/Playlists.tsx": 1,
+    "pages/Requests.tsx": 1,
+    "pages/Watchlist.tsx": 1,
+    "pages/settings/Index.tsx": 1,
   },
   /** The household block page (a gate, not a routed page), plus inline field errors or status text in components that are not page states. */
   stateElement: {
@@ -127,6 +146,18 @@ describe("page layout audit", () => {
       for (const file of Object.keys(BASELINE[rule])) expect(files, `${file} is in the ${rule} baseline but is not scanned`).toContain(file);
     });
   }
+});
+
+describe("page layout audit rules", () => {
+  it("stateElement still sees a hand-made state when an attribute holds an arrow function", () => {
+    const sample = '<div onClick={() => reload()} role="status" className="page-loading">';
+    expect(sample.match(RULES.stateElement)?.length).toBe(1);
+  });
+
+  it("legacyScrollBody matches whole class names only", () => {
+    expect('className="tv-scroll-edge-window tv-library-grid-panel"'.match(RULES.legacyScrollBody)?.length).toBe(2);
+    expect('className="tv-library-grid-panel-extra"'.match(RULES.legacyScrollBody)).toBeNull();
+  });
 });
 
 export { files as scannedFiles, hits, RULES };

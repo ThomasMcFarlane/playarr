@@ -4,7 +4,7 @@
 // present, in the plain TV layout and with a smart-TV user agent (which also scales the stage).
 //
 //   node scripts/nav-rail-e2e.mjs [--no-build] [--dist dir]
-import { boot } from "./e2e-common.mjs";
+import { boot, focusInfo } from "./e2e-common.mjs";
 
 const { browser, base, check, finish } = await boot({ canDownload: true, playlists: 1, folders: true, watchlist: 1 });
 const VIDAA =
@@ -47,6 +47,30 @@ for (const [width, height, userAgent] of sizes) {
   check(`${label}: the rail clears the profile chip`, !m.chip || last <= m.chip.top + 0.5, `rail bottom ${Math.round(last)} chip top ${Math.round(m.chip?.top ?? 0)}`);
   const first = Math.min(...m.links.map((l) => l.top));
   check(`${label}: the rail clears the top edge`, first >= 0, `rail top ${Math.round(first)}`);
+  await context.close();
+}
+// R13: DOWN from the profile chip (the end of the rail) stays on the chip; it never jumps into the page.
+for (const [width, height] of [[1920, 1080], [1280, 720]]) {
+  const label = `${width}x${height}`;
+  const context = await browser.newContext({ viewport: { width, height } });
+  await context.addInitScript(({ base, userId }) => {
+    localStorage.setItem("playarr:apiBaseUrl", base);
+    const session = { accessToken: "t", refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
+    localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "e2e", apiBaseUrl: base, userId, name: "E2E", deviceId: "d", session }]));
+    localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "e2e", apiBaseUrl: base, userId }));
+  }, { base, userId: "00000000-0000-4000-8000-000000000001" });
+  const page = await context.newPage();
+  await page.goto(`${base}/`);
+  await page.waitForSelector(".app-nav-link", { timeout: 15000 });
+  await page.waitForTimeout(1200);
+  await page.locator(".app-user-identity").focus();
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(450);
+  const info = await page.evaluate(() => ({ onChip: Boolean(document.activeElement?.closest(".app-user-identity")), inNav: Boolean(document.activeElement?.closest(".app-nav")) }));
+  check(`${label}: DOWN on the profile chip stays on the chip`, info.onChip, JSON.stringify(await focusInfo(page)));
+  await page.keyboard.press("ArrowUp");
+  await page.waitForTimeout(450);
+  check(`${label}: UP from the chip returns to the last rail entry`, await page.evaluate(() => Boolean(document.activeElement?.closest(".app-nav"))));
   await context.close();
 }
 await finish();

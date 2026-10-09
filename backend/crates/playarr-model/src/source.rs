@@ -32,6 +32,49 @@ pub enum SourceKind {
     Dubarr,
 }
 
+impl SourceKind {
+    /// Neutral, provider-free label for what this kind of source supplies. Shown to
+    /// users instead of the admin-chosen instance name, which may be (or contain)
+    /// a provider's name.
+    pub fn neutral_label(self) -> &'static str {
+        match self {
+            SourceKind::Radarr => "Movies",
+            SourceKind::Sonarr => "Series",
+            SourceKind::Lidarr => "Music",
+            SourceKind::Readarr => "Books",
+            SourceKind::Whisparr => "Videos",
+            SourceKind::Bazarr => "Subtitles",
+            SourceKind::Prowlarr => "Search",
+            SourceKind::Dubarr => "Dubs",
+        }
+    }
+}
+
+/// Neutral user-facing labels for every instance, keyed by instance id. The first
+/// instance of a kind (by priority, then name, then id) gets the plain label; the
+/// others are numbered ("Movies 2") so they stay distinguishable. Computed over all
+/// instances, not just the ones in a response, so a label never shifts with a filter.
+pub fn neutral_source_labels(
+    instances: &[SourceInstance],
+) -> std::collections::HashMap<Uuid, String> {
+    let mut sorted: Vec<&SourceInstance> = instances.iter().collect();
+    sorted.sort_by(|a, b| (a.priority, &a.name, a.id).cmp(&(b.priority, &b.name, b.id)));
+    let mut seen: std::collections::HashMap<&'static str, usize> = std::collections::HashMap::new();
+    let mut out = std::collections::HashMap::new();
+    for instance in sorted {
+        let base = instance.kind.neutral_label();
+        let n = seen.entry(base).or_insert(0);
+        *n += 1;
+        let label = if *n == 1 {
+            base.to_string()
+        } else {
+            format!("{base} {n}")
+        };
+        out.insert(instance.id, label);
+    }
+    out
+}
+
 /// A single configured *arr connection. Playarr Server can be pointed at
 /// multiple instances of the same kind (e.g. two Radarr instances for 4K
 /// vs 1080p libraries); `priority` breaks ties when more than one instance
@@ -157,5 +200,37 @@ impl SourceInstanceSyncRow {
             best_effort: self.best_effort,
             group_library_id: self.group_library_id,
         })
+    }
+}
+
+#[cfg(test)]
+mod neutral_label_tests {
+    use super::*;
+
+    fn inst(kind: SourceKind, name: &str, priority: i32) -> SourceInstance {
+        SourceInstance {
+            id: Uuid::new_v4(),
+            kind,
+            name: name.into(),
+            base_url: String::new(),
+            api_key_encrypted: Sensitive::new(String::new()),
+            priority,
+            default_root_folder_id: None,
+            folder_mappings: BTreeMap::new(),
+            default_quality_profile_id: None,
+            best_effort: false,
+            group_library_id: None,
+        }
+    }
+
+    #[test]
+    fn labels_are_neutral_and_numbered_per_kind() {
+        let a = inst(SourceKind::Radarr, "Radarr", 0);
+        let b = inst(SourceKind::Radarr, "Radarr 4K", 1);
+        let c = inst(SourceKind::Sonarr, "Sonarr", 0);
+        let labels = neutral_source_labels(&[b.clone(), c.clone(), a.clone()]);
+        assert_eq!(labels[&a.id], "Movies");
+        assert_eq!(labels[&b.id], "Movies 2");
+        assert_eq!(labels[&c.id], "Series");
     }
 }

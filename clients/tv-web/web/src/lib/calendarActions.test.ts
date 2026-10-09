@@ -1,6 +1,7 @@
 import type { CalendarAction, CalendarEntry, TitleSnapshot } from "@playarr-tv/api-client";
 import { describe, expect, it } from "vitest";
-import { legacySnapshot, planCalendarActions } from "./calendarActions";
+import type { CalendarItem } from "./calendar";
+import { legacySnapshot, planCalendarActions, planItemActions } from "./calendarActions";
 
 const snapshot: TitleSnapshot = {
   kind: "series",
@@ -96,5 +97,51 @@ describe("legacySnapshot", () => {
     expect(legacySnapshot(entry(undefined, { media_kind: "movie" })).year).toBe(2026);
     // An episode's date is its air date, so the series gets no year rather than the air year.
     expect(legacySnapshot(entry(undefined)).year).toBeNull();
+  });
+});
+
+describe("planItemActions", () => {
+  const playable = (id: string, extra: Partial<CalendarEntry> = {}, resume = false) =>
+    entry(
+      [
+        { action: "open", enabled: true, work_id: "w1" },
+        { action: resume ? "resume" : "play", enabled: true, work_id: "w1", media_file_id: `file-${id}` },
+      ],
+      { id, has_file: true, season_number: 1, episode_number: Number(id.slice(1)), ...extra },
+    );
+  const unplayable = (id: string) =>
+    entry([{ action: "open", enabled: true, work_id: "w1" }], { id, season_number: 1, episode_number: Number(id.slice(1)) });
+  const group = (entries: CalendarEntry[]): CalendarItem => ({
+    kind: "series",
+    key: "series:w1",
+    title: "Sample Series 1",
+    entries,
+    codes: "S01E01–E03",
+  });
+
+  it("acts on a single entry itself", () => {
+    const single = playable("e1");
+    const result = planItemActions({ kind: "single", key: "e1", entry: single });
+    expect(result.target).toBe(single);
+    expect(result.plan.play).toEqual({ mediaFileId: "file-e1", resume: false });
+  });
+
+  it("plays the earliest playable episode of a group, not blindly the first", () => {
+    const result = planItemActions(group([unplayable("e1"), playable("e2"), playable("e3")]));
+    expect(result.target.id).toBe("e2");
+    expect(result.plan.play).toEqual({ mediaFileId: "file-e2", resume: false });
+  });
+
+  it("resumes the episode with progress even when an earlier one is playable", () => {
+    const result = planItemActions(group([playable("e1"), playable("e2", {}, true), playable("e3")]));
+    expect(result.target.id).toBe("e2");
+    expect(result.plan.play).toEqual({ mediaFileId: "file-e2", resume: true });
+  });
+
+  it("offers no play when no episode of the group is playable, keeping open", () => {
+    const result = planItemActions(group([unplayable("e1"), unplayable("e2")]));
+    expect(result.target.id).toBe("e1");
+    expect(result.plan.play).toBeNull();
+    expect(result.plan.open).toEqual({ route: "/series/w1" });
   });
 });

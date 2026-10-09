@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { CastUnavailableError } from "../../lib/cast/castSdk";
 
@@ -14,6 +14,17 @@ export interface CastButtonProps {
    * thread any extra pending/error props through for that.
    */
   onToggleCast: () => Promise<void>;
+}
+
+/** How long a failed cast attempt keeps its message on screen. */
+export const CAST_ERROR_VISIBLE_MS = 6000;
+
+/**
+ * The pending state must not use the `disabled` attribute: a disabled button drops D-pad focus to the body for
+ * the whole wait (audit P15). `aria-disabled` keeps focus; clicks are ignored in the handler.
+ */
+export function castPendingAttributes(pending: boolean): { "aria-disabled"?: true; "aria-busy"?: true } {
+  return pending ? { "aria-disabled": true, "aria-busy": true } : {};
 }
 
 function CastIcon({ className, connected }: { className?: string; connected: boolean }) {
@@ -54,8 +65,19 @@ export const CastButton = forwardRef<HTMLButtonElement, CastButtonProps>(functio
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
 
+  const mountedRef = useRef(true);
+  const errorTimerRef = useRef(0);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      window.clearTimeout(errorTimerRef.current);
+    };
+  }, []);
+
   const handleClick = useCallback(() => {
     if (pending) return;
+    window.clearTimeout(errorTimerRef.current);
     setErrorMessage(undefined);
     setPending(true);
     onToggleCast()
@@ -68,9 +90,15 @@ export const CastButton = forwardRef<HTMLButtonElement, CastButtonProps>(functio
                   : "components.player.cast.unavailableBrowser"
               )
             : t("components.player.cast.error");
+        if (!mountedRef.current) return;
         setErrorMessage(message);
+        errorTimerRef.current = window.setTimeout(() => {
+          if (mountedRef.current) setErrorMessage(undefined);
+        }, CAST_ERROR_VISIBLE_MS);
       })
-      .finally(() => setPending(false));
+      .finally(() => {
+        if (mountedRef.current) setPending(false);
+      });
   }, [onToggleCast, pending, t]);
 
   if (!available) return null;
@@ -97,7 +125,7 @@ export const CastButton = forwardRef<HTMLButtonElement, CastButtonProps>(functio
         aria-label={label}
         aria-pressed={connected}
         title={title}
-        disabled={pending}
+        {...castPendingAttributes(pending)}
         onClick={handleClick}
       >
         <CastIcon connected={connected} />

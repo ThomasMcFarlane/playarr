@@ -79,7 +79,7 @@ fn description(entry: &CalendarEntry) -> String {
     let sources: Vec<&str> = entry
         .sources
         .iter()
-        .map(|s| s.source_name.as_str())
+        .map(|s| s.display_label.as_str())
         .collect();
     format!("{state}\nSource: {}", sources.join(", "))
 }
@@ -183,6 +183,7 @@ mod tests {
             sources: vec![CalendarEntrySource {
                 source_instance_id: Uuid::nil(),
                 source_name: "TV".into(),
+                display_label: "TV".into(),
                 source_kind: SourceKind::Sonarr,
                 arr_id: 1,
             }],

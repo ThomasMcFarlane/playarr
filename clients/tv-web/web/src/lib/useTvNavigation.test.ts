@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   centredVerticalTrackScrollTop,
+  clearPendingMoves,
+  enqueueMove,
+  pendingMoveCount,
   directionalVerticalScrollTop,
   horizontalRevealDelta,
   isPlainArrowEvent,
@@ -139,6 +142,28 @@ describe("directional page fallback", () => {
         scrollPaddingLeft: 80,
       })
     ).toBe(-140);
+  });
+});
+
+describe("queued moves across a route change (audit A18)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("drops moves that have not run yet and cancels the frame that would apply them", () => {
+    const cancel = vi.fn();
+    vi.stubGlobal("window", {
+      requestAnimationFrame: () => 7,
+      cancelAnimationFrame: cancel,
+      clearTimeout: () => undefined,
+    });
+    vi.stubGlobal("document", { querySelector: () => null, body: { dataset: {} } });
+    enqueueMove("down");
+    enqueueMove("right");
+    expect(pendingMoveCount()).toBe(2);
+
+    clearPendingMoves();
+
+    expect(pendingMoveCount()).toBe(0);
+    expect(cancel).toHaveBeenCalledWith(7);
   });
 });
 

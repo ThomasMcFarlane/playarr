@@ -70,7 +70,7 @@ import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import { TvEmptyState } from "./components/tv/TvEmptyState";
 import { ProfileAvatar, useStoredProfileAvatar } from "./components/ProfileAvatar";
-import { isBackKey } from "./lib/backKey";
+import { hasOpenBackLayer, isBackKey } from "./lib/backKey";
 import {
   CalendarIcon,
   FoldersIcon,
@@ -290,6 +290,8 @@ function AppShell() {
     };
     const closeMinimisedPlayerOnBack = (event: KeyboardEvent) => {
       if (!isBackKey(event)) return;
+      // An open drawer, dialog or menu takes this press first; the mini player closes on the next one.
+      if (hasOpenBackLayer(document)) return;
       closeMinimisedPlayer(event);
     };
     window.addEventListener("playarr:back", closeMinimisedPlayer);

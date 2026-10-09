@@ -35,6 +35,7 @@ import {
   titleGridNeighbourIndex,
 } from "./focusGeometry";
 import { isBackKey } from "./backKey";
+import { ensureLibraryIndex } from "./libraryIndexRegistry";
 import { runPageBack } from "./pageBack";
 
 const FOCUSABLE_SELECTOR = [
@@ -62,6 +63,10 @@ interface FocusableSnapshot {
   entries: FocusableEntry[] | null;
   rectByElement: WeakMap<HTMLElement, FocusRect>;
 }
+
+/** Containers whose class or style toggles show or hide whole groups of controls. */
+export const LAYER_CONTAINER_SELECTOR =
+  '[role="dialog"], [aria-modal="true"], .drawer, .tv-filter-drawer, .tv-stage-chrome, .app-nav, .shell-action-column, [data-tv-panel]';
 
 let focusableSnapshot: FocusableSnapshot | null = null;
 let cacheInvalidationInstalled = false;
@@ -95,16 +100,29 @@ function ensureFocusableCacheInvalidation(): void {
     passive: true,
   });
   window.addEventListener("resize", markFocusableRectsDirty, { passive: true });
+  // A panel that slides or fades in or out by class changes geometry without any DOM insertion (audit A14).
+  window.addEventListener("transitionend", markFocusableRectsDirty, { capture: true, passive: true });
+  window.addEventListener("animationend", markFocusableRectsDirty, { capture: true, passive: true });
 
   if (typeof MutationObserver !== "undefined" && document.body) {
-    // Do NOT watch `class` / `style`: is-selected toggles and artwork loads
-    // would thrash the list cache on every focus under dense catalogues.
     new MutationObserver(invalidateStructure).observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["disabled", "tabindex", "aria-hidden", "aria-modal", "hidden"],
+      attributeFilter: ["disabled", "tabindex", "aria-hidden", "aria-modal", "hidden", "inert"],
     });
+    // `class` / `style` are NOT watched wholesale: is-selected toggles and artwork loads would thrash the list
+    // cache on every focus under dense catalogues. Only toggles on layer containers (panels, drawers, the
+    // chrome) can change what is reachable, so only those invalidate the cache.
+    new MutationObserver((records) => {
+      for (let index = 0; index < records.length; index += 1) {
+        const target = records[index]!.target;
+        if (target instanceof Element && target.matches(LAYER_CONTAINER_SELECTOR)) {
+          invalidateStructure();
+          return;
+        }
+      }
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class", "style"] });
   }
 }
 
@@ -112,7 +130,7 @@ function ensureFocusableCacheInvalidation(): void {
  * Visibility without per-element getComputedStyle (forced style recalc).
  * Zero-size covers display:none; aria-hidden is filtered when collecting.
  */
-function isFocusableVisible(_element: HTMLElement, rect: FocusRect): boolean {
+function isFocusableVisible(rect: FocusRect): boolean {
   return rect.width > 0 && rect.height > 0;
 }
 
@@ -121,7 +139,7 @@ function rebuildElementList(scope: Document | HTMLElement): HTMLElement[] {
   const elements: HTMLElement[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
     const element = nodes[index]!;
-    if (element.closest('[aria-hidden="true"]')) continue;
+    if (element.closest('[aria-hidden="true"], [inert]')) continue;
     elements.push(element);
   }
   return elements;
@@ -137,7 +155,7 @@ function refreshRects(elements: HTMLElement[]): {
     const element = elements[index]!;
     if (!element.isConnected) continue;
     const rect = focusRectFromDOMRect(element.getBoundingClientRect());
-    if (!isFocusableVisible(element, rect)) continue;
+    if (!isFocusableVisible(rect)) continue;
     entries.push({ element, rect });
     rectByElement.set(element, rect);
   }
@@ -194,8 +212,6 @@ function rectFor(
   return focusRectFromDOMRect(element.getBoundingClientRect());
 }
 
-type EnsureLibraryIndexFn = (index: number) => void;
-
 function ensureLibraryIndexMounted(
   grid: HTMLElement,
   index: number
@@ -206,10 +222,7 @@ function ensureLibraryIndexMounted(
   if (existing) return existing;
   // Only flushSync-expand when the target card is not in the DOM. Pre-warming
   // headroom on every key remounts large prefixes and dominates 50× throttle.
-  const ensure = (
-    grid as HTMLElement & { __tvEnsureLibraryIndex?: EnsureLibraryIndexFn }
-  ).__tvEnsureLibraryIndex;
-  ensure?.(index);
+  ensureLibraryIndex(grid, index);
   return grid.querySelector<HTMLElement>(`[data-library-index="${index}"]`);
 }
 
@@ -1094,11 +1107,6 @@ function focusActiveAlphabet(
     document.querySelector<HTMLElement>(".tv-alphabet button");
   if (!activeLetter) return false;
 
-  if (current.closest(".shell-action-column") && direction === "down") {
-    activeLetter.focus({ preventScroll: true });
-    return true;
-  }
-
   const grid = current.closest<HTMLElement>(".tv-title-grid");
   if (!grid || direction !== "right") return false;
 
@@ -1320,6 +1328,8 @@ function moveFocus(direction: Direction): void {
       return;
     }
   }
+  // The profile chip ends the rail: DOWN clamps there instead of falling into the page (audit R13).
+  if (current.closest(".app-user-identity") && direction === "down") return;
   if (current.closest(".app-user-identity") && direction === "up") {
     const navItems = document.querySelectorAll<HTMLElement>(".app-nav-link");
     navItems.item(navItems.length - 1)?.focus({ preventScroll: true });
@@ -1521,7 +1531,24 @@ function flushQueuedMoves(): void {
   runPendingApply();
 }
 
-function enqueueMove(direction: Direction): void {
+/**
+ * Drops moves that have not been applied yet. A key pressed just before a route change must not move focus on
+ * the next page (audit A18); the virtual library focus belongs to the page that is going away too.
+ */
+export function clearPendingMoves(): void {
+  if (moveFrame) {
+    window.cancelAnimationFrame(moveFrame);
+    moveFrame = 0;
+  }
+  queuedMoves.length = 0;
+  clearRemoteLibraryFocus();
+}
+
+export function pendingMoveCount(): number {
+  return queuedMoves.length;
+}
+
+export function enqueueMove(direction: Direction): void {
   queuedMoves.push(direction);
   if (moveFrame) return;
   moveFrame = window.requestAnimationFrame(() => {
@@ -1583,12 +1610,21 @@ export function useNativeScrollRoot(): void {
 }
 
 /** Directional focus bridge for pre-auth surfaces without route-back handling. */
-export function useTvDirectionalNavigation(disabled = false): void {
+export function useTvDirectionalNavigation(disabled = false, onBack?: () => void): void {
+  // Read through a ref so a new callback identity each render never re-binds the listeners.
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
   useEffect(() => {
     if (disabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      handleDirectionalKeyDown(event);
+      if (handleDirectionalKeyDown(event)) return;
+      // The remote Back key does what the on-screen Back button does (audit A7). A dialog or open
+      // selector that already used the press has marked it handled.
+      if (!event.defaultPrevented && isBackKey(event) && onBackRef.current) {
+        event.preventDefault();
+        onBackRef.current();
+      }
     };
     const handlePointer = () => {
       document.body.dataset.inputMode = "pointer";
@@ -1603,6 +1639,52 @@ export function useTvDirectionalNavigation(disabled = false): void {
       window.removeEventListener("pointerdown", handlePointer);
     };
   }, [disabled]);
+}
+
+/**
+ * Where focus lived when it was last placed: the element plus the neighbours that can take over if it unmounts.
+ * Read at focus time without layout (siblings only), so a held remote key pays nothing.
+ */
+interface FocusAnchor {
+  element: HTMLElement;
+  holder: HTMLElement;
+  next: Element | null;
+  previous: Element | null;
+  parent: HTMLElement | null;
+  /** Dialogs, drawers and menus restore focus to their opener themselves. */
+  inLayer: boolean;
+}
+
+function focusAnchorFor(element: HTMLElement): FocusAnchor {
+  const holder =
+    element.closest<HTMLElement>('li, tr, [role="listitem"], [role="row"], .media-card') ?? element;
+  return {
+    element,
+    holder,
+    next: holder.nextElementSibling,
+    previous: holder.previousElementSibling,
+    parent: holder.parentElement,
+    inLayer: element.closest('[role="dialog"], [aria-modal="true"], [role="menu"]') !== null,
+  };
+}
+
+/**
+ * The control that should take focus after the focused one unmounted (a removed list row, a dismissed item):
+ * the next sibling row, else the previous one, else anything left in the same list (audit A9, B15).
+ */
+function recoverLostFocusTarget(anchor: FocusAnchor): HTMLElement | null {
+  const within = (container: Element | null): HTMLElement | null => {
+    if (!container || !container.isConnected) return null;
+    const preferred = container.querySelector<HTMLElement>("[data-tv-focus-default]");
+    if (preferred) return preferred;
+    if (container.matches(FOCUSABLE_SELECTOR)) return container as HTMLElement;
+    return container.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+  };
+  return (
+    within(anchor.next) ??
+    within(anchor.previous) ??
+    (anchor.parent?.isConnected ? within(anchor.parent) : null)
+  );
 }
 
 /**
@@ -1695,6 +1777,43 @@ export function useTvNavigation(
       }
     };
 
+    // A9: a focused control that unmounts (a removed row, a refreshed list) drops focus to the body, and the
+    // default-focus pass is spent after the first placement. Hand focus to the neighbouring control instead.
+    let focusAnchor: FocusAnchor | null = null;
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target !== document.body) focusAnchor = focusAnchorFor(target);
+    };
+    let recoverFrame = 0;
+    const recoverLostFocus = () => {
+      recoverFrame = 0;
+      const anchor = focusAnchor;
+      // Before the first key press the default-focus pass owns placement.
+      if (!userInteracted || !anchor || anchor.inLayer || anchor.element.isConnected) return;
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      invalidateFocusableSnapshot();
+      const target = recoverLostFocusTarget(anchor);
+      if (target) {
+        target.focus({ preventScroll: true });
+        smoothScrollIntoView(target);
+        return;
+      }
+      // Nothing left beside it: fall back to the page default and let that pass run again.
+      focusHandled = false;
+      autoFocused = null;
+      userInteracted = false;
+      focusViewDefault();
+      userInteracted = true;
+    };
+    const lostFocusObserver = new MutationObserver(() => {
+      if (recoverFrame || !focusAnchor || focusAnchor.inLayer || focusAnchor.element.isConnected) return;
+      if (document.activeElement !== document.body) return;
+      recoverFrame = window.requestAnimationFrame(recoverLostFocus);
+    });
+    lostFocusObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("focusin", handleFocusIn);
+
     const handlePointer = () => {
       userInteracted = true;
       flushQueuedMoves();
@@ -1750,9 +1869,13 @@ export function useTvNavigation(
       window.clearTimeout(initialFocus);
       if (defaultFocusFrame) window.cancelAnimationFrame(defaultFocusFrame);
       defaultFocusObserver.disconnect();
+      lostFocusObserver.disconnect();
+      if (recoverFrame) window.cancelAnimationFrame(recoverFrame);
+      window.removeEventListener("focusin", handleFocusIn);
       releaseConfirmCommit();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);
+      clearPendingMoves();
     };
   }, [routeKey, disabled]);
 }

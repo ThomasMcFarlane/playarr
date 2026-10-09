@@ -9438,6 +9438,9 @@ components:
           type: integer
           format: int64
           description: The source app's own id for the episode, movie, album or book.
+        display_label:
+          type: string
+          description: Neutral label (for example "Movies"); safe to show to any user.
         source_instance_id:
           type: string
           format: uuid
@@ -9445,6 +9448,9 @@ components:
           $ref: '#/components/schemas/SourceKind'
         source_name:
           type: string
+          description: |-
+            The instance name as the admin set it. User-facing responses replace it with
+            `display_label`, so only admins ever see the real name.
     CalendarFeedCreated:
       type: object
       required:
@@ -9566,6 +9572,9 @@ components:
       - status
       - entry_count
       properties:
+        display_label:
+          type: string
+          description: Neutral label (for example "Movies"); safe to show to any user.
         entry_count:
           type: integer
           format: int32
@@ -9579,6 +9588,7 @@ components:
           $ref: '#/components/schemas/SourceKind'
         name:
           type: string
+          description: Equals `display_label` in user-facing responses.
         source_instance_id:
           type: string
           format: uuid
@@ -10896,6 +10906,7 @@ components:
       - id
       - source_instance_id
       - source_name
+      - display_label
       - library_kind
       - name
       - available
@@ -10905,6 +10916,9 @@ components:
         available:
           type: boolean
           description: False while the root has never scanned successfully or its last scan failed.
+        display_label:
+          type: string
+          description: Neutral label (for example "Movies"); safe to show to any user.
         id:
           type: string
           format: uuid
@@ -10928,6 +10942,9 @@ components:
           format: uuid
         source_name:
           type: string
+          description: |-
+            Neutral label of the source (equals `display_label`); never the admin-chosen
+            instance name, which only the admin routes return.
     FolderRootsResponse:
       type: object
       required:

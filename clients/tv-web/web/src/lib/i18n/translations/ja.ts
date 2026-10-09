@@ -1331,6 +1331,8 @@ export const ja: Translations = {
   "pages.calendar.sheetSources": "報告元",
   "pages.calendar.groupSummary": "{{count}}エピソード · {{codes}}",
   "pages.calendar.openSeries": "シリーズを開く",
+  "pages.calendar.playEpisode": "{{code}} を再生",
+  "pages.calendar.resumeEpisode": "{{code}} を続きから",
   "pages.calendar.filterDrawerAriaLabel": "公開カレンダーのフィルター",
   "pages.calendar.filterType": "種類",
   "pages.calendar.filterSource": "ソース",

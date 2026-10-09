@@ -35,7 +35,12 @@ pub enum CalendarReleaseType {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CalendarEntrySource {
     pub source_instance_id: Uuid,
+    /// The instance name as the admin set it. User-facing responses replace it with
+    /// `display_label`, so only admins ever see the real name.
     pub source_name: String,
+    /// Neutral label (for example "Movies"); safe to show to any user.
+    #[serde(default)]
+    pub display_label: String,
     pub source_kind: SourceKind,
     /// The source app's own id for the episode, movie, album or book.
     pub arr_id: i64,
@@ -163,7 +168,11 @@ pub enum CalendarSourceState {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CalendarSourceStatus {
     pub source_instance_id: Uuid,
+    /// Equals `display_label` in user-facing responses.
     pub name: String,
+    /// Neutral label (for example "Movies"); safe to show to any user.
+    #[serde(default)]
+    pub display_label: String,
     pub kind: SourceKind,
     pub status: CalendarSourceState,
     /// Short reason; never contains URLs or credentials.

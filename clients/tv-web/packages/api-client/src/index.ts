@@ -652,7 +652,10 @@ export type CalendarSourceState = "ok" | "unreachable" | "rejected" | "error";
 
 export interface CalendarEntrySource {
   source_instance_id: string;
+  /** Neutral label equal to `display_label` on user routes; never the admin-chosen instance name. */
   source_name: string;
+  /** Neutral label such as "Movies" or "Series 2"; the only source text users may see. */
+  display_label?: string;
   source_kind: string;
   arr_id: number | string;
 }
@@ -713,6 +716,8 @@ export interface CalendarGroupMember {
 export interface CalendarSourceStatus {
   source_instance_id: string;
   name: string;
+  /** Neutral label such as "Movies" or "Series 2"; the only source text users may see. */
+  display_label?: string;
   kind: string;
   status: CalendarSourceState;
   error?: string | null;

@@ -62,7 +62,7 @@ import {
   type Day,
   type DayGroup,
 } from "../lib/calendar";
-import { legacySnapshot, planCalendarActions } from "../lib/calendarActions";
+import { legacySnapshot, planItemActions } from "../lib/calendarActions";
 import {
   activeFilterCount,
   applyCalendarFilters,
@@ -585,15 +585,22 @@ function ItemDetails({
 }) {
   const first = itemEntry(item);
   const time = entryTime(first);
-  const plan = planCalendarActions(first);
-  const route = workRouteForEntry(first);
+  const { plan, target } = planItemActions(item);
+  const route = workRouteForEntry(target);
   const subtitle = item.kind === "series"
     ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
     : entrySubtitle(first);
   // A server without computed actions gets the earlier behaviour: open when the
   // entry is in the catalogue, otherwise request and watchlist.
   const openRoute = plan.legacy ? route : (plan.open?.route ?? null);
-  const snapshot = plan.snapshot ?? legacySnapshot(first);
+  const snapshot = plan.snapshot ?? legacySnapshot(target);
+  // A group names the episode Play starts, so the button never hides which one it is.
+  const code = item.kind === "series" ? episodeCode(target) : null;
+  const playLabel = plan.play
+    ? code
+      ? t(plan.play.resume ? "pages.calendar.resumeEpisode" : "pages.calendar.playEpisode", { code })
+      : t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")
+    : "";
   const showRequest = plan.legacy ? !openRoute : plan.request !== null;
   const showWatchlist = plan.legacy ? !openRoute : plan.watchlist !== null;
   const tone = itemPillTone(item, today);
@@ -642,7 +649,7 @@ function ItemDetails({
         <>
           {plan.play && onPlay ? (
             <Button variant="primary" onClick={() => onPlay(plan.play!.mediaFileId, first.title)}>
-              {t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")}
+              {playLabel}
             </Button>
           ) : null}
           {openRoute && onOpen ? (
@@ -848,7 +855,7 @@ export function CalendarPage() {
   );
   const items = useMemo(() => groups.flatMap((group) => groupSeriesEpisodes(group.entries)), [groups]);
   const sourceOptions = useMemo(
-    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.name })),
+    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.display_label ?? source.name })),
     [data]
   );
 
@@ -859,6 +866,18 @@ export function CalendarPage() {
   const selectedItem = items.find((item) => item.key === selectedKey) ?? null;
   // Agenda is master-detail: with nothing explicitly selected the first item is previewed.
   const detailItem = view === "agenda" ? (selectedItem ?? items[0] ?? null) : selectedItem;
+
+  // A live refresh can remove or regroup the open item. The sheet then unmounts with focus inside it, so
+  // drop the stale selection and put focus back where it came from (no notice: nothing here is an error).
+  const staleSelection = view !== "agenda" && !loading && data !== null && urlState.selected !== null && selectedItem === null;
+  useEffect(() => {
+    if (!staleSelection) return;
+    updateParams((params) => writeCalendarUrl(params, { selected: null }));
+    const opener = openerRef.current;
+    (opener?.isConnected ? opener : document.querySelector<HTMLElement>(".calendar-scroll [data-navigation-focus-key]"))?.focus({
+      preventScroll: true,
+    });
+  }, [staleSelection, updateParams]);
 
   function select(item: CalendarItem, target: HTMLElement, source?: "focus") {
     openerRef.current = target;

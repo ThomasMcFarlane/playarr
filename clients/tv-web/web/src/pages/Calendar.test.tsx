@@ -149,3 +149,12 @@ describe("day sections", () => {
     expect(agenda).not.toMatch(/<section[^>]*aria-label=/);
   });
 });
+
+describe("calendar source labels", () => {
+  const page = readFileSync(new URL("./Calendar.tsx", import.meta.url), "utf8");
+
+  it("uses the neutral display_label, never the admin-chosen name", () => {
+    expect(page).toContain("source.display_label ?? source.name");
+    expect(page).not.toMatch(/\{source\.source_name\}/);
+  });
+});

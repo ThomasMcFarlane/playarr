@@ -186,6 +186,27 @@ async function pillShot(page, selector, { hideLabel = false } = {}) {
   const clip = { x: Math.max(0, Math.floor(box.x) - pad), y: Math.max(0, Math.floor(box.y) - pad), width: Math.ceil(box.width) + pad * 2, height: Math.ceil(box.height) + pad * 2 };
   return decode(await page.screenshot({ clip, animations: "disabled", caret: "hide" }));
 }
+/** Settles a freshly (re)loaded page the way open() does: fonts, network, a short idle. A shot taken before this raced the
+ *  web font swap and the first paint of the focus ring (a train batch failed once with 13 mismatched pixels). */
+async function settle(page) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForTimeout(400);
+}
+
+/** Takes the shot until two consecutive captures are identical (at most six), so a late repaint cannot decide a pin.
+ *  This waits for the page to be stable; the comparison against the pin stays at 0 pixels. */
+async function stableShot(shoot) {
+  let previous = await shoot();
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const next = await shoot();
+    if (diffImages(previous, next, "stability").bad === 0) return next;
+    previous = next;
+  }
+  return previous;
+}
+
 async function focusPill(page, selector) {
   await page.locator(selector).first().focus();
   await page.keyboard.press("Shift+Tab");
@@ -322,8 +343,10 @@ for (const layoutId of layoutIds) {
       await page.reload({ waitUntil: "load" });
       await page.addStyleTag({ content: FREEZE });
       await page.waitForSelector("[data-filters-button]");
+      await settle(page);
       await focusPill(page, "[data-filters-button]");
-      pin(`${tag} focus pin`, await pillShot(page, "[data-filters-button]"), join(PINS, layoutId, theme, "action-pill-focus.png"));
+      await page.waitForTimeout(150);
+      pin(`${tag} focus pin`, await stableShot(() => pillShot(page, "[data-filters-button]")), join(PINS, layoutId, theme, "action-pill-focus.png"));
       await open(page, harnessPath({ ...filtersSpec, open: true }), "[data-filters-button]");
       pin(`${tag} open pin`, await pillShot(page, "[data-filters-button]"), join(PINS, layoutId, theme, "action-pill-open.png"));
       await open(page, harnessPath(filtersSpec), "[data-filters-button]");

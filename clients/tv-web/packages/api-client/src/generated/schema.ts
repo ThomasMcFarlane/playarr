@@ -4033,9 +4033,15 @@ export interface components {
              * @description The source app's own id for the episode, movie, album or book.
              */
             arr_id: number;
+            /** @description Neutral label (for example "Movies"); safe to show to any user. */
+            display_label?: string;
             /** Format: uuid */
             source_instance_id: string;
             source_kind: components["schemas"]["SourceKind"];
+            /**
+             * @description The instance name as the admin set it. User-facing responses replace it with
+             *     `display_label`, so only admins ever see the real name.
+             */
             source_name: string;
         };
         CalendarFeedCreated: {
@@ -4086,11 +4092,14 @@ export interface components {
         CalendarSourceState: "ok" | "unreachable" | "rejected" | "error";
         /** @description Per-instance outcome of one calendar query. */
         CalendarSourceStatus: {
+            /** @description Neutral label (for example "Movies"); safe to show to any user. */
+            display_label?: string;
             /** Format: int32 */
             entry_count: number;
             /** @description Short reason; never contains URLs or credentials. */
             error?: string | null;
             kind: components["schemas"]["SourceKind"];
+            /** @description Equals `display_label` in user-facing responses. */
             name: string;
             /** Format: uuid */
             source_instance_id: string;
@@ -4732,6 +4741,8 @@ export interface components {
         FolderRootResponse: {
             /** @description False while the root has never scanned successfully or its last scan failed. */
             available: boolean;
+            /** @description Neutral label (for example "Movies"); safe to show to any user. */
+            display_label: string;
             /** Format: uuid */
             id: string;
             /** Format: int64 */
@@ -4743,6 +4754,10 @@ export interface components {
             scan_status: components["schemas"]["FolderScanStatus"];
             /** Format: uuid */
             source_instance_id: string;
+            /**
+             * @description Neutral label of the source (equals `display_label`); never the admin-chosen
+             *     instance name, which only the admin routes return.
+             */
             source_name: string;
         };
         FolderRootsResponse: {

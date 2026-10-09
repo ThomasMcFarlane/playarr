@@ -127,8 +127,14 @@ export function WatchlistPage() {
             />
           ) : (
             <ul className="tv-watchlist-list">
-              {state.items.map((entry) => (
-                <WatchlistRow key={entry.title.title_key} entry={entry} onRemove={remove} layer={navigationLayer} />
+              {state.items.map((entry, index) => (
+                <WatchlistRow
+                  key={entry.title.title_key}
+                  entry={entry}
+                  onRemove={remove}
+                  layer={navigationLayer}
+                  isFirst={index === 0}
+                />
               ))}
             </ul>
           )}
@@ -151,10 +157,13 @@ export function WatchlistRow({
   entry,
   onRemove,
   layer,
+  isFirst = true,
 }: {
   entry: WatchlistEntry;
   onRemove: (entry: WatchlistEntry) => void;
   layer?: Pick<ReturnType<typeof useNavigationLayer>, "origin" | "captureLink">;
+  /** Only the first row marks its primary action as the page's default focus (audit B15). */
+  isFirst?: boolean;
 }) {
   const { t } = useLanguage();
   const { title, actions } = entry;
@@ -202,7 +211,7 @@ export function WatchlistRow({
             }}
             onClick={layer?.captureLink}
             className="tv-watchlist-primary"
-            data-tv-focus-default
+            data-tv-focus-default={isFirst ? true : undefined}
             data-navigation-focus-key={`watchlist:${key}:primary`}
           >
             {actionLabel(primary, t)}

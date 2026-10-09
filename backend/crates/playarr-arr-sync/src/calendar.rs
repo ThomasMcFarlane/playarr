@@ -39,6 +39,7 @@ pub async fn fetch_calendar(
     let source = |arr_id: i64| CalendarEntrySource {
         source_instance_id: instance.id,
         source_name: instance.name.clone(),
+        display_label: instance.kind.neutral_label().to_string(),
         source_kind: instance.kind,
         arr_id,
     };
@@ -568,6 +569,7 @@ mod tests {
                     sources: vec![CalendarEntrySource {
                         source_instance_id: Uuid::new_v4(),
                         source_name: inst.into(),
+                        display_label: String::new(),
                         source_kind: SourceKind::Radarr,
                         arr_id: 1,
                     }],

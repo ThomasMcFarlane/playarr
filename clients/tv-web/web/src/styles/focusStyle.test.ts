@@ -70,20 +70,14 @@ const MEDIA_CARD =
  * Focus rules that are not controls and stay as they are. Each entry says why. The list may only shrink.
  *  - nav rail and logo: owned by the navigation work (it keeps its label expansion);
  *  - the scrubber and the mini player draw their own ring-and-thumb marker inside the player;
- *  - the dead classes have no TSX user and are removed by the cleanup work.
  */
 const NON_CONTROL_FOCUS = [
   /\.app-nav-link/,
   /\.app-logo/,
   /\.player-seek-track/,
   /\.mini-player-hit-target/,
-  /\.editorial-item/,
   /\.poster-card/,
-  /\.tv-primary-action/,
-  /\.tv-back\b/,
-  /\.tv-season-switcher/,
   /\.tv-filter-launcher/,
-  /\.home-library-link/,
   /\.tv-alphabet button\.is-active/,
   /\.app-user-identity-cluster/,
   /\.tv-download-row-copy/,

@@ -13,6 +13,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: with a minimised player active, Back now closes an open drawer, dialog or menu first and the mini player on the next press.
+- Web TV: Back and Escape work on the signed-out pages (Login, Sign up, Link, legal pages), matching the on-screen Back.
+- Web TV: the Playlists drawers close on Back even after focus has moved out of them.
+- Web TV: removing the focused Watchlist row (or any focused row that unmounts after input) hands focus to the next row instead of dropping it to the page body; only the first Watchlist row is the default focus.
+- Web TV: the Resume chooser, Server choice and Play-on-device dialogs return focus to the control that opened them.
+- Web TV: the player Cast button stays focusable while a cast attempt is pending, and its error message clears itself.
+- Web TV: Down on the profile chip at the end of the nav rail stays on the chip instead of entering the page.
+- Web TV: keys queued just before a route change no longer move focus on the next page.
+- Web TV: the focusable-control cache refreshes after panel, drawer and chrome class toggles and transitions, and ignores inert subtrees.
+- Web TV: removed dead navigation code and replaced the Library grid's DOM expando with a typed registry.
+- Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
+- Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
+- Web calendar: Play on a group of episodes released together starts the episode with progress (Resume), otherwise the earliest playable one, and the button names the episode (for example "Play S01E02"); it no longer always starts the first.
+- Live updates: a failed background refresh now retries quietly with a growing delay, keeping the data on screen and showing nothing; in the calendar, an open item that a refresh removes or regroups clears its selection and returns focus to where it came from.
+- CI: the layout parity focus pin settles the reloaded page (fonts, network, idle) and waits for two identical captures before comparing at 0 pixels, so it no longer flakes (13 mismatched pixels once on a train batch).
+- Web player: a failed cast start resumes local playback instead of leaving it paused, and the music visualiser, tap timer and cancelled negotiations clean up after themselves.
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
 - Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web: opening or closing a side panel (Filters) no longer replays the page-enter transition, so the page content stays still and the panel slides in once instead of jumping, resetting and animating half; every right-side panel is always the full viewport height from its first frame.
@@ -335,6 +351,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Calendar, calendar feed and folder root list responses for users now carry a neutral `display_label` per source ("Movies", "Series 2") and no longer return the admin-chosen instance name, which could be a provider's name. Admin routes still return real names.
+- Web styles: one clock block, a `--z-*` stacking scale, player colour tokens, the scrubber focus ring on the shared ring token, dead classes removed, and no backdrop blur on the rail panel and action pills in remote mode.
+- Merge train: a batch whose CI failed only on tiny layout-parity pixel pins (at most 100 px) has its failed jobs re-run once before it is halved, so a flake no longer costs two halving rounds.
 - Request failures returned by the API no longer name the request service or its product (details stay in the server log).
 - The web client and admin no longer name source providers in user-visible text; a new audit test (with an allowlist for admin integration setup screens) fails on new occurrences.
 - Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
@@ -807,6 +826,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Removed the unused single-use approval mechanism, per the owner decision of 9 Oct 2026 (follow-up to the removal of purchase and install approvals): the `POST /api/v1/household/approvals/{id}/consume` endpoint, its repository method and response type, and the `max_uses` and `uses` fields and columns (migration 0082 rebuilds `household_approvals` without them). Approvals are only content and time grants bounded by their expiry; older peers that still send `max_uses` or `uses` are tolerated because unknown fields are ignored.
 - Guardian approvals no longer have `purchase` or `install` kinds (owner decision, 9 October 2026: Playarr has no store, so approvals cover only `content` and `time`). The kinds are gone from the model, API, OpenAPI contract, generated web types and the admin and web UI. Migration 0081 strips the two values from stored household policies and deletes their approval rows; reading a policy also skips unknown approval kinds, so old or replicated data never fails to load.
@@ -1826,6 +1846,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Watch-progress heartbeats and live events are now written through the shared write queue, so heartbeats that arrive together share one database commit (`synchronous = FULL` is unchanged and a request still returns only after its own write has committed). Heartbeats for the same user and item in one batch coalesce to the newest position, which is safe because each is an idempotent upsert of the latest position that the database only accepts when newer than the stored one. The server also drains the queue on SIGTERM or Ctrl-C before exiting. Measured with an ignored test on a file database with the production pragmas, 500 heartbeats: 500 commits one by one against 8 commits through the queue (see the PR for timings).
 - Added `playarr_db::WriteQueue`, a shared server write queue: one writer task commits whatever small writes are queued as one transaction (up to 64 writes or 5 ms), and every caller is acknowledged only after that commit. `synchronous = FULL` is unchanged. A failing write is rolled back alone; same-key "latest value wins" writes in one batch collapse to the newest; a full queue makes callers wait instead of dropping writes; shutdown drains the queue. Batch size, commit time and queue depth are counted and a slow batch logs a `slow write batch` warning. Measured on a file database with the production pragmas, 500 small writes: 27.8 s as one commit each, 0.24 s through the queue (8 commits). Adopters follow in separate changes.
 - Calendar API: each work's files are read once and concurrently when building per-entry actions, and the time spent resolving titles and files is logged.
 - Calendar API: building per-entry actions reads the viewer's household gate, request backend and watch progress once per request instead of once per entry.
@@ -2555,6 +2576,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web CI guards: the page layout audit counts legacy scroll bodies, scans `.ts` helpers and handles `=>` in attributes; ci.yml matches the tv-web pnpm and Node versions.
 - Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).
 - CI: a `web behaviour` job runs every web Playwright smoke and behaviour script in pull requests and is part of `ci-required`; the layout owner-request gate covers all web stylesheets and shell components; native parity captures are manual (`workflow_dispatch`) only, enforced by a check; the brand red is the `--brand` token.
 - Added a keyboard e2e check that the shared side-panel drawer returns focus to its opener (Filters on Movies, Search and Calendar; Escape and remote Back; both themes).
