@@ -78,7 +78,7 @@ export function NavPerfHarnessPage() {
               outline: "none",
             }}
             onFocus={(event) => {
-              event.currentTarget.style.boxShadow = "0 0 0 3px #cf3157";
+              event.currentTarget.style.boxShadow = "0 0 0 3px var(--brand)";
             }}
             onBlur={(event) => {
               event.currentTarget.style.boxShadow = "none";

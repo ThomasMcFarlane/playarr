@@ -9,9 +9,11 @@
 # A parity fix, a "consistency" pass or a request about one page is not such a request. Agents must not add the trailer
 # without a quoted owner request.
 #
-# Look files: the page-layout stylesheet, the shared layout components (PageLayout, PageHeader, PageActions, ActionPill,
-# ScrollArea, States and their icon map), the committed layout references and pins, and the Android page package and
-# its goldens.
+# Look files: every web stylesheet (styles/*.css, which holds the focus ring, card focus, edge fades and the dark scrim,
+# and pages/*.css such as Calendar, Folders and Clients), the shared layout components (PageLayout, PageHeader,
+# PageActions, ActionPill, ScrollArea, States, Drawer, Skeleton, MasterDetail, ShellActionColumn, PageShell, PeriodPicker,
+# ViewToggle, FiltersDrawer, TvEmptyState, TvStage and the icon map), the committed layout references and pins, and the
+# Android page package and its goldens.
 #
 # Env: BASE_REF (default main); EVENT_NAME (default GITHUB_EVENT_NAME). The PR body comes from, in order, PR_BODY,
 # the pull_request event payload (GITHUB_EVENT_PATH), or `gh pr list --head $GITHUB_REF_NAME` (merge-train runs are
@@ -20,7 +22,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-LOOK_FILES='^(clients/tv-web/web/src/styles/page-layout\.css|clients/tv-web/web/src/components/shell/(ActionPill|PageActions|PageHeader|PageLayout|ScrollArea|States|icons)\.tsx|docs/parity/web/layout/.*|clients/android/core-designsystem/src/main/kotlin/.*/designsystem/page/.*|clients/android/core-designsystem/src/test/snapshots/.*)$'
+LOOK_FILES='^(clients/tv-web/web/src/styles/[^/]+\.css|clients/tv-web/web/src/pages/[^/]+\.css|clients/tv-web/web/src/components/shell/(ActionPill|PageActions|PageHeader|PageLayout|ScrollArea|States|icons|MasterDetail|ShellActionColumn|PageShell|PeriodPicker|Drawer|Skeleton|ViewToggle|FiltersDrawer)\.tsx|clients/tv-web/web/src/components/tv/(TvEmptyState|TvStage)\.tsx|docs/parity/web/layout/.*|clients/android/core-designsystem/src/main/kotlin/.*/designsystem/page/.*|clients/android/core-designsystem/src/test/snapshots/.*)$'
 # Android page files that are pure logic (no look) and may change without the trailer.
 LOGIC_ONLY='^clients/android/core-designsystem/src/main/kotlin/.*/designsystem/page/(PageTokens|PageRegistry|PageActionOrder)\.kt$'
 

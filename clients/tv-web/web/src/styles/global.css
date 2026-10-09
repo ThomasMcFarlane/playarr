@@ -8,6 +8,8 @@
  */
 
 :root {
+  /* The Playarr brand red: the one source for every brand tint (active, error and hover accents). */
+  --brand: #cf3157;
   --bg: #f5f3f2;
   --surface: #fbfaf9;
   --surface-strong: #ffffff;
@@ -135,7 +137,7 @@
 }
 
 .media-context-actions button span {
-  color: var(--player-accent, #cf3157);
+  color: var(--player-accent, var(--brand));
   font-size: 1.22rem;
 }
 
@@ -260,7 +262,7 @@
   --line-strong: rgba(255, 255, 255, 0.18);
   --surface-soft: rgba(255, 255, 255, 0.12);
   --surface-strong: #2b2228;
-  --accent: #cf3157;
+  --accent: var(--brand);
 }
 
 .playlist-context-form .btn {
@@ -1977,7 +1979,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .player-default-button:hover {
-  border-color: color-mix(in srgb, #cf3157 62%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
   box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
@@ -1985,10 +1987,10 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .player-default-button.is-active {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
-  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
   color: var(--ink);
-  box-shadow: inset 4px 0 #cf3157;
+  box-shadow: inset 4px 0 var(--brand);
 }
 
 .player-subtitle-language-choice {
@@ -2045,7 +2047,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .player-language-button:hover {
-  border-color: color-mix(in srgb, #cf3157 62%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
   box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
@@ -2053,14 +2055,14 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .player-language-button.is-active {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
-  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
   color: var(--ink);
-  box-shadow: inset 4px 0 #cf3157;
+  box-shadow: inset 4px 0 var(--brand);
 }
 
 .player-language-button.is-active small {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .player-preference-status {
@@ -2235,8 +2237,8 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .server-choice-option:hover {
-  border-color: #cf3157;
-  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
 }
 
 .resume-chooser-backdrop {
@@ -2312,12 +2314,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #cf3157;
+  background: var(--brand);
 }
 
 .resume-chooser-option:hover {
-  border-color: #cf3157;
-  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
 }
 
 .profile-pin-settings {
@@ -2368,7 +2370,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 .profile-avatar-preset:hover,
 .profile-avatar-preset.is-active {
-  border-color: #cf3157;
+  border-color: var(--brand);
   transform: scale(1.06);
 }
 
@@ -2508,7 +2510,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 .profile-avatar-crop-controls input[type="range"] {
   width: 100%;
-  accent-color: #cf3157;
+  accent-color: var(--brand);
 }
 
 .profile-avatar-editor-actions {
@@ -2946,7 +2948,7 @@ code {
 /* Player: cinematic, remote-friendly controls and errors. */
 
 .player-page {
-  --player-accent: #cf3157;
+  --player-accent: var(--brand);
   position: fixed;
   inset: 0;
   width: calc(100 * var(--vw));
@@ -3173,7 +3175,7 @@ code {
 
 .player-music-colour-wash {
   background:
-    radial-gradient(circle at 35% 35%, rgba(207, 49, 87, 0.24), transparent 34%),
+    radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--brand) 24%, transparent), transparent 34%),
     radial-gradient(circle at 68% 58%, rgba(115, 74, 132, 0.22), transparent 38%),
     linear-gradient(180deg, rgba(8, 5, 7, 0.06), rgba(8, 5, 7, 0.5));
   mix-blend-mode: screen;
@@ -3237,7 +3239,7 @@ code {
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 34% 28%, rgba(207, 49, 87, 0.48), transparent 34%),
+    radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--brand) 48%, transparent), transparent 34%),
     linear-gradient(145deg, #2a1720, #0d090b);
   color: rgba(255, 255, 255, 0.78);
   font-size: clamp(5rem, calc(13 * var(--vw)), 13rem);
@@ -3286,12 +3288,12 @@ code {
   border-radius: 999px;
   background: linear-gradient(
     to top,
-    rgba(207, 49, 87, 0.96),
+    color-mix(in srgb, var(--brand) 96%, transparent),
     rgba(255, 151, 181, 0.92) 62%,
     rgba(255, 255, 255, 0.96)
   );
   box-shadow:
-    0 0 10px rgba(207, 49, 87, 0.38),
+    0 0 10px color-mix(in srgb, var(--brand) 38%, transparent),
     0 0 22px rgba(255, 137, 171, 0.16);
   opacity: 0.58;
   transform: scaleY(0.08);
@@ -3441,7 +3443,7 @@ code {
   place-items: center;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 34% 28%, rgba(207, 49, 87, 0.48), transparent 34%),
+    radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--brand) 48%, transparent), transparent 34%),
     linear-gradient(145deg, #2a1720, #0d090b);
   color: rgba(255, 255, 255, 0.78);
   font-size: clamp(2rem, calc(4 * var(--vw)), 3.8rem);
@@ -3830,7 +3832,7 @@ body[data-input-mode="remote"] .player-seek-track:focus {
   height: 15px;
   border-radius: 50%;
   background: var(--player-accent);
-  box-shadow: 0 0 0 4px rgba(207, 49, 87, 0.2);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 20%, transparent);
   opacity: 0;
   transform: translate(-50%, -50%);
 }
@@ -3898,7 +3900,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-tool-button[aria-expanded="true"] {
-  background: rgba(207, 49, 87, 0.28);
+  background: color-mix(in srgb, var(--brand) 28%, transparent);
   color: #ffffff;
   transform: scale(1.1);
 }
@@ -4068,7 +4070,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   margin: 0 0.35rem 0.4rem;
   padding: 0.5rem 0.7rem;
   border-radius: 10px;
-  background: rgba(207, 49, 87, 0.14);
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.54rem;
   line-height: 1.35;
@@ -4102,7 +4104,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-quality-option.is-selected {
-  background: rgba(207, 49, 87, 0.2);
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
 }
 
 .player-quality-option > span:first-child {
@@ -4248,7 +4250,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .quality-matrix.is-settings .quality-matrix-choice:hover {
-  border-color: color-mix(in srgb, #cf3157 62%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
   background: var(--surface-strong);
   color: var(--ink);
   box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
@@ -4256,14 +4258,14 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .quality-matrix.is-settings .quality-matrix-choice.is-selected {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
-  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
   color: var(--ink);
-  box-shadow: inset 3px 0 #cf3157;
+  box-shadow: inset 3px 0 var(--brand);
 }
 
 .quality-matrix.is-settings .quality-matrix-check {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .quality-matrix.is-settings .quality-matrix-unavailable {
@@ -4294,8 +4296,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .quality-matrix.is-player .quality-matrix-choice.is-selected {
-  border-color: rgba(207, 49, 87, 0.62);
-  background: rgba(207, 49, 87, 0.22);
+  border-color: color-mix(in srgb, var(--brand) 62%, transparent);
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 .quality-matrix.is-player .quality-matrix-check {
@@ -4440,7 +4442,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-playlist-item.is-active {
-  background: rgba(207, 49, 87, 0.2);
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
 }
 
 .player-playlist-art {
@@ -4497,7 +4499,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   height: 7px;
   border-radius: 50%;
   background: var(--player-accent);
-  box-shadow: 0 0 12px rgba(207, 49, 87, 0.72);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--brand) 72%, transparent);
 }
 
 @media (max-width: 1100px) {
@@ -4733,9 +4735,9 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   width: clamp(28px, calc(2.2 * var(--vw)), 40px);
   height: clamp(28px, calc(2.2 * var(--vw)), 40px);
   border: 0;
-  background: #cf3157;
+  background: var(--brand);
   color: #fff;
-  box-shadow: 0 10px 30px rgba(207, 49, 87, 0.28);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--brand) 28%, transparent);
   font-size: clamp(0.55rem, calc(0.62 * var(--vw)), 0.72rem);
 }
 
@@ -4937,7 +4939,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .tv-provider,
 .tv-detail-kicker {
   margin-bottom: clamp(18px, calc(2.4 * var(--viewport-unit)), 34px);
-  color: #cf3157;
+  color: var(--brand);
   font-size: clamp(0.58rem, calc(0.64 * var(--vw)), 0.78rem);
   font-weight: 820;
   letter-spacing: 0.08em;
@@ -5602,7 +5604,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .app-user-identity:hover .app-user-avatar {
-  background: color-mix(in srgb, #cf3157 26%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 26%, var(--bg));
 }
 
 .app-user-avatar > svg {
@@ -6487,7 +6489,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   width: 20px;
   height: 20px;
   border: 2px solid color-mix(in srgb, var(--ink-muted) 24%, transparent);
-  border-top-color: #cf3157;
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: tv-loader-spin 720ms linear infinite;
 }
@@ -6640,7 +6642,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, #cf3157 17%, var(--surface-soft)),
+      color-mix(in srgb, var(--brand) 17%, var(--surface-soft)),
       color-mix(in srgb, var(--surface-strong) 88%, transparent)
     );
 }
@@ -6652,7 +6654,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   left: 50%;
   display: grid;
   place-items: center;
-  color: color-mix(in srgb, #cf3157 78%, var(--ink));
+  color: color-mix(in srgb, var(--brand) 78%, var(--ink));
   transform: translate(-50%, -50%);
 }
 
@@ -6726,7 +6728,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
     clamp(110px, calc(14 * var(--viewport-unit)), 170px) clamp(142px, calc(13 * var(--vw)), 250px);
   overflow: hidden;
   background:
-    radial-gradient(circle at 32% 42%, color-mix(in srgb, #cf3157 12%, transparent), transparent 34%),
+    radial-gradient(circle at 32% 42%, color-mix(in srgb, var(--brand) 12%, transparent), transparent 34%),
     radial-gradient(circle at 72% 72%, color-mix(in srgb, var(--accent-soft) 20%, transparent), transparent 31%);
 }
 
@@ -6736,7 +6738,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   aspect-ratio: 8 / 5;
   display: grid;
   place-items: center;
-  color: color-mix(in srgb, #cf3157 82%, var(--ink));
+  color: color-mix(in srgb, var(--brand) 82%, var(--ink));
 }
 
 .not-found-code {
@@ -6767,7 +6769,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .not-found-star {
-  fill: color-mix(in srgb, #cf3157 62%, var(--surface-strong));
+  fill: color-mix(in srgb, var(--brand) 62%, var(--surface-strong));
 }
 
 .not-found-screen,
@@ -6860,7 +6862,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, #cf3157 18%, var(--surface-soft)),
+      color-mix(in srgb, var(--brand) 18%, var(--surface-soft)),
       var(--surface-soft)
     );
   box-shadow: 0 12px 30px rgba(56, 38, 33, 0.08);
@@ -6967,14 +6969,14 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-playlist-media-type-switch button:hover {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
   color: var(--ink);
-  box-shadow: 0 0 0 4px color-mix(in srgb, #cf3157 16%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
   transform: scale(1.025);
 }
 
 .tv-playlist-media-type-switch button.is-active {
-  border-color: color-mix(in srgb, #cf3157 76%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
   background: var(--ink);
   color: var(--bg);
 }
@@ -7006,7 +7008,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-playlist-feature-actions button span {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 1rem;
 }
 
@@ -7348,7 +7350,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-detail-play:hover {
-  background: #cf3157;
+  background: var(--brand);
   color: #fff;
   transform: scale(1.06);
 }
@@ -7391,7 +7393,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-detail-playback-settings > span {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 1.15em;
 }
 
@@ -7438,7 +7440,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .tv-playback-settings-options button > i {
   width: 1.25rem;
   flex: 0 0 auto;
-  color: #cf3157;
+  color: var(--brand);
   font-style: normal;
   text-align: center;
 }
@@ -7484,7 +7486,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-playback-settings-actions button.is-primary {
-  background: #cf3157;
+  background: var(--brand);
   color: #fff;
 }
 
@@ -7691,7 +7693,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 50% 35%, rgba(207, 49, 87, 0.22), transparent 30%),
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 30%),
     linear-gradient(145deg, var(--surface-soft), var(--surface-strong));
   color: var(--ink-soft);
   font-size: clamp(1.15rem, calc(1.8 * var(--vw)), 2.15rem);
@@ -7714,7 +7716,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 50% 42%, rgba(207, 49, 87, 0.34), transparent 34%),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 34%),
     linear-gradient(145deg, var(--surface-soft), var(--surface-strong));
 }
 
@@ -7923,7 +7925,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-music-track-row:hover {
-  background: color-mix(in srgb, #cf3157 22%, var(--surface-strong));
+  background: color-mix(in srgb, var(--brand) 22%, var(--surface-strong));
   transform: scale(1.012);
 }
 
@@ -7969,8 +7971,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   display: block;
   height: 100%;
   min-width: 3px;
-  background: #cf3157;
-  box-shadow: 0 0 8px rgba(207, 49, 87, 0.7);
+  background: var(--brand);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--brand) 70%, transparent);
 }
 
 .tv-watch-unseen {
@@ -7982,10 +7984,10 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   aspect-ratio: 1;
   border: 2px solid rgba(255, 255, 255, 0.94);
   border-radius: 50%;
-  background: #cf3157;
+  background: var(--brand);
   box-shadow:
     0 2px 9px rgba(31, 14, 20, 0.45),
-    0 0 0 1px rgba(207, 49, 87, 0.35);
+    0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent);
 }
 
 .tv-detail-loader {
@@ -7999,7 +8001,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #cf3157;
+  background: var(--brand);
   animation: tv-loader-pulse 980ms ease-in-out infinite;
 }
 
@@ -8041,8 +8043,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #cf3157;
-  box-shadow: 0 6px 18px rgba(207, 49, 87, 0.28);
+  background: var(--brand);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 28%, transparent);
 }
 
 .tv-orbit-loader i:nth-child(1) {
@@ -8113,7 +8115,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-search-kicker {
   margin-bottom: clamp(8px, calc(1 * var(--viewport-unit)), 14px);
-  color: #cf3157;
+  color: var(--brand);
   font-size: clamp(0.48rem, calc(0.55 * var(--vw)), 0.68rem);
   font-weight: 820;
   letter-spacing: 0.09em;
@@ -8236,7 +8238,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-search-preview > p:first-child {
-  color: #cf3157;
+  color: var(--brand);
   font-size: clamp(0.46rem, calc(0.52 * var(--vw)), 0.64rem);
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -8347,7 +8349,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 76% 22%, color-mix(in srgb, #cf3157 34%, transparent), transparent 42%),
+    radial-gradient(circle at 76% 22%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 42%),
     linear-gradient(
       145deg,
       color-mix(in srgb, var(--surface-soft) 88%, var(--surface-strong)),
@@ -8358,8 +8360,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .tv-search-playlist-art svg {
   width: 34%;
   min-width: 42px;
-  fill: color-mix(in srgb, #cf3157 22%, transparent);
-  stroke: color-mix(in srgb, var(--ink) 76%, #cf3157);
+  fill: color-mix(in srgb, var(--brand) 22%, transparent);
+  stroke: color-mix(in srgb, var(--ink) 76%, var(--brand));
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -8439,7 +8441,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   background:
     radial-gradient(
       circle at 50% 48%,
-      color-mix(in srgb, #cf3157 13%, transparent),
+      color-mix(in srgb, var(--brand) 13%, transparent),
       transparent 34%
     ),
     linear-gradient(145deg, var(--surface), var(--bg) 72%);
@@ -8527,7 +8529,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .profiles-heading p {
-  color: #cf3157;
+  color: var(--brand);
   font-size: clamp(0.46rem, calc(0.54 * var(--vw)), 0.68rem);
   font-weight: 820;
   letter-spacing: 0.13em;
@@ -8665,7 +8667,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .profile-choice.is-selected .profile-avatar {
   box-shadow:
     0 22px 52px rgba(31, 14, 20, 0.18),
-    0 0 0 4px color-mix(in srgb, #cf3157 42%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--brand) 42%, transparent);
   transform: scale(1.035);
 }
 
@@ -8675,7 +8677,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .profile-add {
-  --profile-colour-start: color-mix(in srgb, var(--surface-strong) 84%, #cf3157);
+  --profile-colour-start: color-mix(in srgb, var(--surface-strong) 84%, var(--brand));
 }
 
 .profile-add .profile-avatar {
@@ -8737,7 +8739,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .profile-settings-button svg {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .profile-action-button strong {
@@ -8872,7 +8874,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
   background:
-    radial-gradient(circle at 50% 0, rgba(207, 49, 87, 0.2), transparent 34%),
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--brand) 20%, transparent), transparent 34%),
     linear-gradient(160deg, rgba(40, 28, 35, 0.98), rgba(16, 11, 15, 0.99));
   color: #fff;
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.48);
@@ -8976,7 +8978,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .profile-pin-dialog form button {
   margin-top: 0.4rem;
-  background: #cf3157;
+  background: var(--brand);
   color: #fff;
 }
 
@@ -9014,7 +9016,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   background:
     radial-gradient(
       circle 900px at 50% 50%,
-      color-mix(in srgb, #cf3157 13%, transparent),
+      color-mix(in srgb, var(--brand) 13%, transparent),
       transparent 100%
     ),
     linear-gradient(145deg, var(--surface), var(--bg) 72%);
@@ -9199,7 +9201,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 
 .legal-copy a {
   color: var(--ink);
-  text-decoration-color: #cf3157;
+  text-decoration-color: var(--brand);
   text-underline-offset: 0.2em;
 }
 
@@ -9210,7 +9212,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 
 .legal-effective-date {
   margin-bottom: 2rem;
-  color: #cf3157 !important;
+  color: var(--brand) !important;
   font-size: 0.64rem !important;
   font-weight: 780;
   letter-spacing: 0.1em;
@@ -10842,7 +10844,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-detail-download > span:first-child {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 1.15em;
 }
 
@@ -10914,8 +10916,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .tv-downloads-offline-badge {
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  background: color-mix(in srgb, #cf3157 22%, transparent);
-  color: #cf3157;
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+  color: var(--brand);
   font-size: clamp(0.42rem, calc(0.48 * var(--vw)), 0.58rem);
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -11009,7 +11011,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-download-row-error {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 0.82em;
 }
 
@@ -11037,7 +11039,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-download-row-actions .tv-download-row-remove:hover {
-  background: #cf3157;
+  background: var(--brand);
   color: #fff;
 }
 
@@ -11053,7 +11055,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #cf3157;
+  background: var(--brand);
   transition: width 260ms ease;
 }
 
@@ -11470,7 +11472,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-watchlist-toggle[aria-pressed="true"] {
-  border-color: #cf3157;
+  border-color: var(--brand);
 }
 
 .tv-watchlist-toggle:disabled {
@@ -11479,7 +11481,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-watchlist-error {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 0.82em;
 }
 

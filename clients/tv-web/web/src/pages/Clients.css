@@ -155,7 +155,7 @@
 }
 
 .client-choice.is-vidaa .client-platform-icon {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .client-choice.is-vidaa .client-platform-icon svg {
@@ -249,7 +249,7 @@
 .client-platform:hover .client-platform-icon {
   box-shadow:
     0 22px 52px rgba(31, 14, 20, 0.18),
-    0 0 0 4px color-mix(in srgb, #cf3157 42%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--brand) 42%, transparent);
   transform: scale(1.035);
 }
 
@@ -260,7 +260,7 @@
 .client-choice.is-active .client-platform-icon {
   box-shadow:
     0 22px 52px rgba(31, 14, 20, 0.18),
-    0 0 0 4px color-mix(in srgb, #cf3157 42%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--brand) 42%, transparent);
 }
 
 .client-details-content {
@@ -318,7 +318,7 @@
 }
 
 .client-details-summary.is-vidaa .client-details-icon {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .client-details-summary.is-vidaa .client-details-icon svg {
@@ -478,7 +478,7 @@
 }
 
 .vidaa-section-heading p {
-  color: #cf3157;
+  color: var(--brand);
   font-size: 0.68rem;
   font-weight: 780;
   letter-spacing: 0.14em;
@@ -550,13 +550,13 @@
 
 .vidaa-safety {
   background:
-    radial-gradient(circle at 85% 15%, color-mix(in srgb, #cf3157 22%, transparent), transparent 38%),
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 38%),
     color-mix(in srgb, var(--surface-strong) 80%, transparent);
   text-align: center;
 }
 
 .vidaa-safety .page-kicker {
-  color: #cf3157;
+  color: var(--brand);
 }
 
 .vidaa-safety > p:last-child {

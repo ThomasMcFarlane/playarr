@@ -92,7 +92,10 @@ describe('theme/tokens colour', () => {
       throw new Error('Could not find the .tv-provider, .tv-detail-kicker rule in global.css.');
     }
     const colorMatch = ruleDeclarations.match(/color:\s*([^;]+);/);
-    expect(colorMatch?.[1]?.trim()).toBe(colour.stageKicker);
+    // The web stylesheet writes the brand red as `var(--brand)`; resolve it from the first :root block.
+    const declared = colorMatch?.[1]?.trim();
+    const brand = css.match(/(?:^|\n):root\s*\{[^}]*?--brand:\s*([^;]+);/)?.[1]?.trim();
+    expect(declared === 'var(--brand)' ? brand : declared).toBe(colour.stageKicker);
   });
 
   it.each(Object.entries(colour))('colour.%s is not a leftover placeholder value', (_key, value) => {

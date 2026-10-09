@@ -13,6 +13,17 @@ run() { # name expected-exit changed body [event] [ref]
 CSS=clients/tv-web/web/src/styles/page-layout.css
 PILL=clients/tv-web/web/src/components/shell/ActionPill.tsx
 TRAILER='Layout-Change: owner request 2026-10-07, reference filters-0930'
+GLOBAL=clients/tv-web/web/src/styles/global.css
+run "global.css without trailer" 1 "$GLOBAL" "Tweak"
+run "global.css with trailer" 0 "$GLOBAL" "$TRAILER"
+run "Calendar.css without trailer" 1 "clients/tv-web/web/src/pages/Calendar.css" "x"
+run "Folders.css without trailer" 1 "clients/tv-web/web/src/pages/Folders.css" "x"
+run "any page css without trailer" 1 "clients/tv-web/web/src/pages/Clients.css" "x"
+run "drawer without trailer" 1 "clients/tv-web/web/src/components/shell/Drawer.tsx" "x"
+run "skeleton without trailer" 1 "clients/tv-web/web/src/components/shell/Skeleton.tsx" "x"
+run "tv stage without trailer" 1 "clients/tv-web/web/src/components/tv/TvStage.tsx" "x"
+run "a page tsx is not a look file" 0 "clients/tv-web/web/src/pages/Home.tsx" ""
+run "stories are not look files" 0 "clients/tv-web/web/stories/Cards.stories.tsx" ""
 run "no look file" 0 $'clients/tv-web/web/src/pages/Library.tsx\nREADME.md' ""
 run "css without trailer" 1 "$CSS" "Restyles things"
 run "pill without trailer" 1 "$PILL" "Consistency pass"

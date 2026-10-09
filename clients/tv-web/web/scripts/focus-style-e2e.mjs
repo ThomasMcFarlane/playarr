@@ -11,6 +11,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { launchChromium } from "./chromium-launch.mjs";
 import { startServer } from "./nav-perf/server.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,7 +30,9 @@ const check = (name, ok, detail = "") => {
 
 const server = await startServer({ distDir: DIST, seasons: 2, seasonEpisodes: 4, canDownload: false });
 const base = `http://127.0.0.1:${server.port}`;
-const browser = await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {});
+const browser = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH })
+  : await launchChromium();
 
 /** Style of the focused element (or the remote marker), and of its art, in the current frame. */
 const snapshot = (page) => page.evaluate(() => {

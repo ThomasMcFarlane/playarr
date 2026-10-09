@@ -193,7 +193,8 @@ try {
     await press(page, "ArrowDown", 2);
     const after = await focusedInfo(page);
     const inDrawer = await page.evaluate(() => Boolean(document.activeElement?.closest(".media-context-drawer")));
-    check("context menu: arrows stay inside the drawer", inDrawer && after?.index === target?.index, JSON.stringify({ inDrawer, before: target?.index, after: after?.index }));
+    // Focus inside the drawer is not a library card, so no card index (null) or the unchanged one both mean "the page behind did not move".
+    check("context menu: arrows stay inside the drawer", inDrawer && (after?.index == null || after.index === target?.index), JSON.stringify({ inDrawer, before: target?.index, after: after?.index }));
     await context.close();
   }
 
@@ -380,6 +381,8 @@ try {
     check("search: focus visible after 8 rows down", Boolean(f?.visible && f.href?.startsWith("/search/")), JSON.stringify(f));
     await press(page, "ArrowLeft", 3);
     await settle(page);
+    // Focus leaves the grid on the last Left; give a loaded CI runner a moment to land on the input.
+    await page.waitForFunction(() => document.activeElement?.tagName === "INPUT", null, { timeout: 3000 }).catch(() => {});
     const onInput = await page.evaluate(() => document.activeElement?.tagName === "INPUT");
     check("search: Left past the first column returns to the input", onInput);
     await context.close();

@@ -130,6 +130,10 @@ jobs:
       - name: Layout owner-request gate tests
         run: scripts/ci/test-layout-owner-request.sh
 
+      # Owner ruling 8 October 2026: native-against-web parity captures are manual (workflow_dispatch), never a PR check.
+      - name: Require native parity workflows to be manual
+        run: scripts/ci/check-parity-manual.sh
+
       # The repository is public: no hostnames, addresses, paths or pins of a
       # real deployment. Site-specific names come from a secret, never the tree.
       - name: Reject environment-specific data
@@ -765,6 +769,53 @@ jobs:
         run: docker buildx build -f infra/docker/backend.Dockerfile --target web --output type=cacheonly .
 
   # ---------------------------------------------------------------------
+  # Web behaviour (owner ruling 8 October 2026: CI tests the web styles as the main source of truth; the native parity
+  # regression is manual). Runs every Playwright smoke and behaviour script that needs only the built bundle and the mock
+  # API (rail geometry, calendar navigation, TV viewport, nav smoke, header, motion ...) against one shared build. The
+  # list lives in clients/tv-web/web/scripts/web-behaviour.config.json and a unit test fails when a new script is not on it.
+  # ---------------------------------------------------------------------
+  web-behaviour:
+    name: web behaviour
+    needs: changes
+    if: needs.changes.outputs.tv-web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: clients/tv-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clients/tv-web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web workspace dependencies
+        working-directory: clients/tv-web
+        run: pnpm --filter './packages/**' run build
+
+      - name: Build the web bundle once
+        working-directory: clients/tv-web/web
+        run: pnpm exec vite build
+
+      - name: Install the capture tools and Chromium
+        working-directory: scripts/parity
+        run: npm ci --no-audit --no-fund && npx playwright-core install --with-deps chromium
+
+      - name: Run every web behaviour script
+        working-directory: clients/tv-web/web
+        run: node scripts/web-behaviour.mjs --dist dist
+
+  # ---------------------------------------------------------------------
   # Storybook (clients/tv-web/web/.storybook): the public component catalogue deployed at /storybook. Builds it and
   # runs the render and accessibility smoke over every story in both themes (scripts/storybook-smoke.mjs).
   # ---------------------------------------------------------------------
@@ -831,6 +882,7 @@ jobs:
       - firetv-check
       - web-layout-parity
       - web-storybook
+      - web-behaviour
       - openapi-contract-check
     if: always()
     runs-on: ubuntu-latest
@@ -843,7 +895,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check android-apk xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook openapi-contract-check; do
+          for job in changes backend-check android-check android-apk xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook web-behaviour openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

@@ -6,7 +6,7 @@
 //   node scripts/motion-e2e.mjs [--dist dir] [--width 1280] [--height 720] [--throttle 1]
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { launchChromium } from "./chromium-launch.mjs";
 import { startServer } from "./nav-perf/server.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,7 +25,7 @@ const check = (name, ok, detail = "") => {
 
 const server = await startServer({ distDir: DIST, seasons: 3, seasonEpisodes: 14, canDownload: false });
 const base = `http://127.0.0.1:${server.port}`;
-const browser = await chromium.launch();
+const browser = await launchChromium();
 
 async function open(path, { reducedMotion = "no-preference" } = {}) {
   const context = await browser.newContext({ viewport: { width: WIDTH, height: HEIGHT }, reducedMotion });

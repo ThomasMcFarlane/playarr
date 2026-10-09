@@ -446,8 +446,8 @@ These run in CI through `:app:testSideloadDebugUnitTest`.
 ### 7.4 Owner-request gate
 
 Add `scripts/ci/check-layout-owner-request.sh` to `ci-required`. It runs `git diff --name-only origin/main...HEAD`. If the PR changes any **look file**, the PR body must contain `Layout-Change: owner request <YYYY-MM-DD>, reference <id>`. Look files are:
-- `clients/tv-web/web/src/styles/page-layout.css`
-- `clients/tv-web/web/src/components/shell/{ActionPill,PageActions,PageHeader,PageLayout,ScrollArea,States}.tsx`
+- `clients/tv-web/web/src/styles/*.css` (`page-layout.css` and `global.css`, which holds the focus ring, card focus, edge fades and the dark scrim) and `clients/tv-web/web/src/pages/*.css` (Calendar, Folders, Clients)
+- `clients/tv-web/web/src/components/shell/{ActionPill,PageActions,PageHeader,PageLayout,ScrollArea,States,Drawer,Skeleton,MasterDetail,ShellActionColumn,PageShell,PeriodPicker,ViewToggle,FiltersDrawer}.tsx`, `icons.tsx`, and `clients/tv-web/web/src/components/tv/{TvEmptyState,TvStage}.tsx`
 - `docs/parity/web/layout/**`
 - `clients/android/core-designsystem/.../page/**` (excluding pure-logic files listed in the script)
 - `clients/android/core-designsystem/src/test/snapshots/**`

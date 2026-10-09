@@ -5,7 +5,7 @@
 //   node scripts/rail-geometry-e2e.mjs [--dist dir] [--theme light|dark]
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { launchChromium } from "./chromium-launch.mjs";
 import { startServer } from "./nav-perf/server.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -22,7 +22,7 @@ const check = (name, ok, detail = "") => {
 
 const server = await startServer({ distDir: DIST, seasons: 3, seasonEpisodes: 14, canDownload: false });
 const base = `http://127.0.0.1:${server.port}`;
-const browser = await chromium.launch();
+const browser = await launchChromium();
 
 const state = (page) => page.evaluate(() => {
   const el = document.querySelector("[data-remote-active]") ?? document.activeElement;

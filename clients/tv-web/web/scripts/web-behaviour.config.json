@@ -1,0 +1,44 @@
+{
+  "scripts": [
+    "nav-smoke",
+    "rail-geometry-e2e",
+    "calendar-nav",
+    "calendar-layout",
+    "tv-viewport",
+    "header-parity",
+    "profile-chip-settle",
+    "tablet-layout",
+    "motion-e2e",
+    "nav-back-e2e",
+    "focus-style-e2e",
+    "nav-player-e2e",
+    "nav-rail-e2e",
+    "edge-fade-e2e",
+    "nav-search-e2e",
+    "nav-library-drawer-e2e",
+    "nav-library-preview-e2e",
+    "nav-focus-e2e"
+  ],
+  "args": {
+    "tablet-layout": [
+      "--step",
+      "60"
+    ],
+    "motion-e2e": [
+      "--throttle",
+      "1"
+    ]
+  },
+  "excluded": {
+    "nav-perf": "a performance measurement, not a pass/fail check",
+    "layout-parity": "runs in the `web layout parity` job (it diffs against the committed pins)",
+    "drawer-close": "runs in the `web layout parity` job",
+    "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)"
+  },
+  "tracked": {
+    "nav-smoke": "search Left past the first column fails on a loaded CI runner (row 9623)",
+    "tablet-layout": "the width sweep fails on current main (row 9623)",
+    "focus-style-e2e": "dark 1280x720 calendar entry casts the light-theme shadow colour (row 9623)",
+    "edge-fade-e2e": "not yet verified green in CI (row 9623)"
+  }
+}

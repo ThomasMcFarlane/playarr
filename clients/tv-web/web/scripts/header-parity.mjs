@@ -85,7 +85,10 @@ let failed = false;
 for (const name of ["series", "playlists", "calendar"]) {
   const a = boxes.movies;
   const b = boxes[name];
-  const ok = a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.cls === b.cls;
+  // The shell action column stacks every action vertically with Filters last (owner ruling 8 October 2026), so a page that
+  // also has Create or a calendar link puts Filters lower: the component, size and column (x) must match, and a page with
+  // an extra action must put Filters below it, never above or beside.
+  const ok = a.x === b.x && a.w === b.w && a.h === b.h && a.cls === b.cls && b.y >= a.y;
   console.log(`${ok ? "PASS" : "FAIL"}  Filters button on ${name} matches movies`, ok ? "" : JSON.stringify({ movies: a, [name]: b }));
   failed ||= !ok;
 }

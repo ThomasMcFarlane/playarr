@@ -10,13 +10,21 @@
 import { boot } from "./e2e-common.mjs";
 
 const { check, open, finish } = await boot({ detailDelayMs: 900, movies: 60, series: 8 });
-/** Key to preview text, per press, under a single press and under a held key. */
-const SINGLE_MAX_MS = 50;
-const HELD_MAX_MS = 100;
+/** Key to preview text, per press, in animation frames: a frame count does not stretch on a loaded host the way a
+ * millisecond budget does (the held-key run read 195 ms on a busy CI runner for the same two frames). The text must
+ * change within one frame of the key (the keydown frame, or the next one), with one frame of slack. */
+const SINGLE_MAX_FRAMES = 2;
+const HELD_MAX_FRAMES = 2;
 
 const INSTALL = () => {
   const state = { keys: [], text: [], blanks: 0, dimmed: 0 };
   window.__preview = state;
+  state.frame = 0;
+  const count = () => {
+    state.frame += 1;
+    requestAnimationFrame(count);
+  };
+  requestAnimationFrame(count);
   const read = () => {
     const root = document.querySelector(".tv-library-preview");
     const h = root?.querySelector("h2")?.textContent ?? "";
@@ -30,7 +38,7 @@ const INSTALL = () => {
     const t = performance.now();
     if (!now.h || !now.o) state.blanks += 1;
     if (now.opacity < 0.99) state.dimmed += 1;
-    state.text.push({ ...now, t });
+    state.text.push({ ...now, t, frame: state.frame });
     last = now;
   };
   new MutationObserver(onChange).observe(document.body, { subtree: true, childList: true, characterData: true });
@@ -38,13 +46,13 @@ const INSTALL = () => {
     "keydown",
     (event) => {
       if (!event.key.startsWith("Arrow")) return;
-      state.keys.push({ key: event.key, t: performance.now() });
+      state.keys.push({ key: event.key, t: performance.now(), frame: state.frame });
     },
     true
   );
 };
 
-async function run(label, press, count, gap, maxMs) {
+async function run(label, press, count, gap, maxFrames) {
   const { context, page, errors } = await open("/movies");
   await page.waitForSelector("[data-library-index]");
   await page.evaluate(INSTALL);
@@ -65,10 +73,10 @@ async function run(label, press, count, gap, maxMs) {
   const lags = [];
   for (const change of data.text) {
     const key = [...data.keys].reverse().find((k) => k.t <= change.t);
-    if (key) lags.push(change.t - key.t);
+    if (key) lags.push(change.frame - key.frame);
   }
   const worst = lags.length ? Math.max(...lags) : Infinity;
-  check(`${label}: ${lags.length} preview updates, worst key-to-text ${worst.toFixed(0)} ms (<= ${maxMs})`, lags.length > 0 && worst <= maxMs, `${worst}`);
+  check(`${label}: ${lags.length} preview updates, worst key-to-text ${worst} frames (<= ${maxFrames})`, lags.length > 0 && worst <= maxFrames, `${worst}`);
   check(`${label}: preview is never blank`, data.blanks === 0, String(data.blanks));
   check(`${label}: preview does not replay its fade-in`, data.dimmed === 0, String(data.dimmed));
   check(`${label}: no page errors`, errors.length === 0, errors.join(";"));
@@ -86,7 +94,7 @@ await run("single presses", async (page) => {
     await page.keyboard.press(key);
     await page.waitForTimeout(700);
   }
-}, 5, 0, SINGLE_MAX_MS);
-await run("held key", steps("ArrowDown"), 14, 35, HELD_MAX_MS);
+}, 5, 0, SINGLE_MAX_FRAMES);
+await run("held key", steps("ArrowDown"), 14, 35, HELD_MAX_FRAMES);
 
 await finish();

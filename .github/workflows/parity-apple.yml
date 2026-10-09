@@ -8,18 +8,11 @@ name: Apple parity
 #
 # `platform` selects the client: tvos (1920x1080 TV layout) or ios (mobile layout; the
 # iOS parity work extends the `ios` branch of the steps below).
-# Also runs on pull requests that touch the parity tooling so an edit is exercised
-# before this file exists on the default branch (workflow_dispatch needs it there).
+# Manual only (owner ruling 8 October 2026): CI tests the web styles as the source of truth on every pull request
+# (the `web behaviour`, `web layout parity` and `web storybook` jobs), and the native-against-web parity regression runs
+# on demand from Actions > Apple parity > Run workflow. It is never a pull-request check and never in `ci-required`.
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/parity-apple.yml
-      - scripts/parity/apple/**
-      - scripts/parity/*.mjs
-      - scripts/parity/screens.json
-      - clients/apple-tv/**
-      - clients/ios/**
   workflow_dispatch:
     inputs:
       platform:

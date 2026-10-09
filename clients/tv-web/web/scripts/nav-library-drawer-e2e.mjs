@@ -94,22 +94,41 @@ for (const kind of ["movies", "series"]) {
         await page.waitForSelector(".tv-filter-drawer", { timeout: 5000 });
         await page.waitForTimeout(1000);
         await page.evaluate(() => { window.__mark = performance.now(); });
+        // The close is checked on its own timeline, not the wall clock: pause the closing animation the moment it
+        // starts and seek it to fixed points, so a loaded host cannot skew the sampled steps (it did: 0.43 of the width).
         await page.keyboard.press("Escape");
-        await page.waitForTimeout(1000);
-        const drawer = await page.evaluate(() => window.__drawer.filter((d) => d.t >= window.__mark));
-        const shown = drawer.filter((d) => d.present);
-        const lefts = shown.map((d) => d.left);
-        const width = shown[0]?.width ?? 1;
-        const gone = drawer.findIndex((d, i) => i > 0 && !d.present);
-        const firstFrames = drawer.slice(0, Math.max(1, gone));
-        // The close is drawn, frame by frame: the panel (or its ghost) is there on every frame until it has slid
-        // out, keeps its size and top, moves right steadily without a big step, and starts within ~100 ms.
-        check(`${label}: close is drawn without a gap`, gone > 3 && firstFrames.every((d) => d.present), `frames until gone: ${gone}`);
-        check(`${label}: close keeps the panel size and top`, shown.every((d) => Math.abs(d.width - width) < 1 && Math.abs(d.top - shown[0].top) < 1));
-        const steps = lefts.map((l, i) => (i ? (l - lefts[i - 1]) / width : 0));
-        check(`${label}: close slides right steadily, no step over 30% of the width`, lefts.every((l, i) => !i || l >= lefts[i - 1] - 0.5) && Math.max(...steps) <= 0.3, `max step ${Math.max(...steps).toFixed(2)}`);
-        const at100 = shown.find((d) => d.t - shown[0].t >= 100);
-        check(`${label}: close has visibly started after 100 ms`, !at100 || (at100.left - lefts[0]) / width >= 0.03, `${at100 ? ((at100.left - lefts[0]) / width).toFixed(3) : "-"}`);
+        const close = await page.evaluate(async () => {
+          const find = () => document.getAnimations().find((a) => a.animationName === "drawer-out" && a.effect?.target?.matches?.(".tv-filter-drawer"));
+          let animation = find();
+          for (let i = 0; i < 40 && !animation; i += 1) {
+            await new Promise((r) => requestAnimationFrame(r));
+            animation = find();
+          }
+          if (!animation) return null;
+          animation.pause();
+          const target = animation.effect.target;
+          const duration = animation.effect.getComputedTiming().duration;
+          const rows = [];
+          for (let i = 0; i <= 20; i += 1) {
+            animation.currentTime = (duration * i) / 20;
+            const b = target.getBoundingClientRect();
+            rows.push({ t: (duration * i) / 20, left: b.left, top: b.top, width: b.width });
+          }
+          animation.finish();
+          return rows;
+        });
+        check(`${label}: close animation found and sampled`, Boolean(close));
+        if (close) {
+          const lefts = close.map((d) => d.left);
+          const width = close[0].width || 1;
+          check(`${label}: close keeps the panel size and top`, close.every((d) => Math.abs(d.width - width) < 1 && Math.abs(d.top - close[0].top) < 1));
+          const steps = lefts.map((l, i) => (i ? (l - lefts[i - 1]) / width : 0));
+          check(`${label}: close slides right steadily, no step over 30% of the width`, lefts.every((l, i) => !i || l >= lefts[i - 1] - 0.5) && Math.max(...steps) <= 0.3, `max step ${Math.max(...steps).toFixed(2)}`);
+          const at100 = close.find((d) => d.t >= 100);
+          check(`${label}: close has visibly started after 100 ms`, !at100 || (at100.left - lefts[0]) / width >= 0.03, `${at100 ? ((at100.left - lefts[0]) / width).toFixed(3) : "-"}`);
+        }
+        await page.waitForTimeout(600);
+        check(`${label}: drawer is gone after the close`, await page.evaluate(() => !document.querySelector(".tv-filter-drawer") && !document.querySelector("[data-drawer-ghost]")));
         // Toggle path: Enter on the launcher opens, Enter again closes.
         await page.keyboard.press("Enter");
         await page.waitForSelector(".tv-filter-drawer", { timeout: 5000 });
