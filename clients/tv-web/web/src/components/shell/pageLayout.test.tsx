@@ -88,11 +88,11 @@ describe("PageLayout", () => {
     expect(panel).toContain("tv-stage-wash");
   });
 
-  it("renders the detail variant with one h1 and the item title as the bold detail", () => {
+  it("renders the detail variant with one h1 and the item title as the shared small subtitle", () => {
     const markup = render(<PageLayout pageId="work-detail" header={{ title: "Movies", detail: "Sample", variant: "detail", back: { label: "Back", onBack: noop } }} />);
     expect(markup.match(/<h1/g)).toHaveLength(1);
-    expect(markup).toContain("tv-detail-heading-item");
-    expect(markup).toContain("<strong>Sample</strong>");
+    expect(markup).toContain("page-header-detail page-subtitle");
+    expect(markup).not.toContain("<strong>Sample</strong>");
   });
 });
 

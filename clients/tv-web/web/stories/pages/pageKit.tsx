@@ -129,7 +129,7 @@ export function SettingsFrame({ active, mode = "default", children }: { active: 
         pageId="settings"
         className="tv-library tv-directory settings-page settings-workspace-page settings-detail-route"
         ariaLabel="Settings sections"
-        header={{ title: "Settings", back: { label: "Back", to: "/" }, detail: { title: current[0], description: current[1] }, mobileShow: "detail" }}
+        header={{ title: "Settings", back: { label: "Back", to: "/" }, detail: current[0], mobileShow: "detail" }}
       >
         <div className="settings-workspace">
           <div className="settings-workspace-track">

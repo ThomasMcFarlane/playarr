@@ -1,4 +1,4 @@
-import { isValidElement, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { detailFitsInline } from "../../lib/pageHeaderLayout";
 import { Button, ButtonLink } from "../ui";
@@ -11,10 +11,10 @@ export interface PageHeaderProps {
   /** Large page title (`<h1>`). */
   title: ReactNode;
   /**
-   * Secondary text after the divider (counts, section name, breadcrumb). In the `detail` variant it is the item title.
-   * `{ title, description }` is the two-line section detail (Settings): the section name over its description.
+   * The page subtitle (counts, section name, item title). Every page renders it in the one small media-page subtitle
+   * style (`.page-subtitle`, owner rule 2026-10-10); there is no other subtitle size or weight.
    */
-  detail?: ReactNode | SectionDetail;
+  detail?: ReactNode;
   /** Phones show either the page title or the detail, never both (Settings: the list shows the title, a section the detail). */
   mobileShow?: "title" | "detail";
   /** Back control: where it goes, and its accessible label. Home is the default destination. */
@@ -24,22 +24,13 @@ export interface PageHeaderProps {
    * pills draw in the shell action column, Filters last (owner ruling 2026-10-08, Q1b).
    */
   actions?: PageAction[];
-  /** `detail` is the detail-page variant: the detail text is the item title, bold. */
+  /** `detail` is the detail-page variant (media pages): it only changes how far the header reaches, never the subtitle style. */
   variant?: "page" | "detail";
   /** Ref to the back control (focus management). */
   backRef?: Ref<HTMLAnchorElement>;
   /** Extra attributes for the back control (focus hooks). */
   backProps?: HTMLAttributes<HTMLElement> & Record<`data-${string}`, string | boolean | undefined>;
 
-}
-
-export interface SectionDetail {
-  title: string;
-  description?: string;
-}
-
-function isSectionDetail(value: unknown): value is SectionDetail {
-  return Boolean(value) && typeof value === "object" && !isValidElement(value) && "title" in (value as object);
 }
 
 /** Width of the content itself, independent of how wide its (possibly wrapped) box currently is. */
@@ -113,15 +104,11 @@ export function PageHeader({
       const obstacles: number[] = [];
       if (clock && getComputedStyle(clock).display !== "none") obstacles.push(clock.getBoundingClientRect().left);
       if (actionsRef.current) obstacles.push(actionsRef.current.getBoundingClientRect().left);
-      const detailStyle = getComputedStyle(detailEl);
-      const wrappedNow = header.classList.contains("is-detail-wrapped");
-      // The wrapped variant drops the divider padding, so add it back for the inline estimate.
-      const pad = wrappedNow ? parseFloat(getComputedStyle(header).getPropertyValue("--page-header-divider-pad")) || 20 : parseFloat(detailStyle.paddingLeft) + parseFloat(detailStyle.borderLeftWidth);
       const fits = detailFitsInline({
         headerLeft: header.getBoundingClientRect().left,
         backWidth: (header.firstElementChild as HTMLElement).getBoundingClientRect().width,
         titleWidth: titleRef.current?.getBoundingClientRect().width ?? 0,
-        detailWidth: naturalWidth(detailEl) + pad,
+        detailWidth: naturalWidth(detailEl),
         gap,
         obstacles,
       });
@@ -219,20 +206,8 @@ export function PageHeader({
       <div className="page-header-title-block">
         <h1 ref={titleRef}>{title}</h1>
         {detail ? (
-          <span
-            ref={detailRef}
-            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${isSectionDetail(detail) ? " is-section" : ""}`}
-          >
-            {isSectionDetail(detail) ? (
-              <>
-                <strong>{detail.title}</strong>
-                {detail.description ? <small>{detail.description}</small> : null}
-              </>
-            ) : isDetail ? (
-              <strong>{detail as ReactNode}</strong>
-            ) : (
-              (detail as ReactNode)
-            )}
+          <span ref={detailRef} className="page-header-detail page-subtitle">
+            {detail}
           </span>
         ) : null}
       </div>
