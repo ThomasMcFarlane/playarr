@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: Alt, Ctrl and Meta arrow chords and already-handled arrows are no longer turned into spatial moves.
+- Web TV: pressing OK right after an arrow move now opens link results (such as playlist results) that carry no long-press props, and Enter in a text field is never redirected to a stale card.
 - Web: going Back to Library, Home or Search no longer flashes a skeleton before content that is already cached, Search keeps its results when playlists load, and the detail page's loading state now has the loaded page's layout and shows the opened title.
 - Web: the series page re-reads its resume plan only when one of its own episodes' progress changed, not on every progress event for any title, and the runtime lookup for an episode is no longer dropped when the page state changes while it is in flight.
 - Web: Playlists bounds its per-playlist and per-work reads and reports failures instead of showing an empty list; a failed page load while jumping to a letter no longer rejects unhandled, and a stale page load no longer clears the current in-flight marker.
