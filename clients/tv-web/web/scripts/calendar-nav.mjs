@@ -49,7 +49,7 @@ async function open(view, viewport, theme = "light") {
   const page = await context.newPage();
   await page.goto(`${base}/calendar?view=${view}&date=2026-10-07&platform=tv-webos`);
   await page.waitForSelector(view === "month" ? ".calendar-chip" : ".calendar-entry", { timeout: 15000 });
-  await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton"));
+  await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton, .tv-library-grid-panel .skeleton"));
   await page.waitForTimeout(500);
   return { context, page };
 }
@@ -191,20 +191,31 @@ try {
     check("agenda: DOWN changes the selected item and the details panel without SELECT", changed && ok, JSON.stringify({ first, now: await title(), selected: await selected(), info }));
     check("agenda: the focused entry stays scrolled into view", info?.inView === true, JSON.stringify(info));
     const fades = await page.evaluate(() => {
-      const list = document.querySelector(".calendar-list-scroll");
+      const list = document.querySelector(".tv-title-grid");
       return { start: list.dataset.fadeStart !== undefined, end: list.dataset.fadeEnd !== undefined, mask: getComputedStyle(list).webkitMaskImage !== "none" };
     });
     check("agenda: the list shows the bottom fade where it continues and the top fade once scrolled", fades.start && fades.end && fades.mask, JSON.stringify(fades));
     await context.close();
   }
-  // Details panel: a short viewport makes the details pane scroll, so it must fade too.
-  {
-    const { context, page } = await open("agenda", { width: 1920, height: 260 });
-    const pane = await page.evaluate(() => {
-      const el = document.querySelector(".master-detail-pane");
-      return { scrolls: el.scrollHeight > el.clientHeight, end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage !== "none" };
-    });
-    check("agenda: the details panel fades at the bottom where it continues", pane.scrolls && pane.end && pane.mask, JSON.stringify(pane));
+  // Layout parity: the agenda list is the Library's list container (same top, left, width and bottom, within 1 px).
+  for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+    const rect = (page, selector) =>
+      page.evaluate((s) => {
+        const r = document.querySelector(s).getBoundingClientRect();
+        return { top: r.top, left: r.left, width: r.width, bottom: r.bottom };
+      }, selector);
+    const { context, page } = await open("agenda", viewport);
+    await page.waitForTimeout(1500);
+    const agenda = { panel: await rect(page, ".tv-library-grid-panel"), grid: await rect(page, ".tv-title-grid-content"), firstRow: await rect(page, ".calendar-day") };
+    await page.goto(`${base}/movies?platform=tv-webos`);
+    await page.waitForSelector(".tv-title-card", { timeout: 15000 });
+    await page.waitForTimeout(1500);
+    const library = { panel: await rect(page, ".tv-library-grid-panel"), grid: await rect(page, ".tv-title-grid-content"), firstRow: await rect(page, ".tv-title-card") };
+    const same = (a, b) => ["top", "left", "width", "bottom"].every((k) => Math.abs(a[k] - b[k]) <= 1);
+    const label = `${viewport.width}x${viewport.height}`;
+    check(`agenda list container rect equals the library's at ${label} (top, left, width, bottom, +-1px)`, same(agenda.panel, library.panel), JSON.stringify({ agenda: agenda.panel, library: library.panel }));
+    check(`agenda list content box equals the library's at ${label}`, same({ ...agenda.grid, bottom: 0 }, { ...library.grid, bottom: 0 }), JSON.stringify({ agenda: agenda.grid, library: library.grid }));
+    check(`agenda rows start at the library's left edge and top at ${label}`, Math.abs(agenda.firstRow.left - library.firstRow.left) <= 4 && Math.abs(agenda.firstRow.top - library.firstRow.top) <= 10, JSON.stringify({ agenda: agenda.firstRow, library: library.firstRow }));
     await context.close();
   }
 
@@ -213,7 +224,7 @@ try {
     const { context, page } = await open("agenda", { width: 1920, height: 500 }, "dark");
     await page.waitForTimeout(500);
     const dark = await page.evaluate(() => {
-      const el = document.querySelector(".calendar-list-scroll");
+      const el = document.querySelector(".tv-title-grid");
       return { end: el.dataset.fadeEnd !== undefined, mask: getComputedStyle(el).webkitMaskImage };
     });
     check("dark: the bottom edge is the shared mask gradient", dark.end && /linear-gradient/.test(dark.mask), JSON.stringify(dark));

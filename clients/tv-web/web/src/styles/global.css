@@ -11957,7 +11957,66 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 }
 
 /* Shared details panel (DetailsPanel) and its status pills. Stage placement keeps the Home/Library column
-   positioning from the .tv-home-feature / .tv-library-preview rules it is combined with. */
+   positioning from the .tv-home-feature / .tv-library-preview rules it is combined with.
+   Legibility (WCAG AAA, 7:1 normal text, 4.5:1 large) against the real pixels behind the text: a scrim of the page
+   surface sits behind the column (the art and edge fade stay visible past its soft edge), and the text colours are
+   panel-local mixes of the theme tokens measured against the worst case (black or white art). The tokens themselves
+   are not changed here. scripts/details-contrast-e2e.mjs samples the rendered pixels. */
+.details-panel {
+  --dp-scrim: color-mix(in srgb, var(--surface) 94%, transparent);
+  --dp-text: var(--ink);
+  --dp-soft: color-mix(in srgb, var(--ink) 88%, var(--surface));
+  --dp-eyebrow: color-mix(in srgb, var(--ink) 58%, var(--brand));
+  isolation: isolate;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+:root[data-theme="dark"] .details-panel {
+  --dp-eyebrow: color-mix(in srgb, var(--ink) 72%, var(--brand));
+}
+
+.details-panel::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -14% -22% -14% -40%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, var(--dp-scrim) 22%, var(--dp-scrim) 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+
+.details-panel h2,
+.details-panel .tv-preview-meta,
+.details-panel .tv-preview-overview {
+  color: var(--dp-text);
+}
+
+.details-panel .tv-provider {
+  color: var(--dp-eyebrow);
+  font-weight: 860;
+}
+
+.details-panel .tv-preview-meta,
+.details-panel .tv-preview-meta span + span,
+.details-panel .tv-preview-overview,
+.details-panel > p:not(.tv-provider) {
+  color: var(--dp-soft);
+  font-weight: 600;
+}
+
+.details-panel .tv-preview-overview {
+  font-size: clamp(0.64rem, calc(0.72 * var(--vw)), 0.92rem);
+}
+
+.details-panel .tv-preview-meta {
+  font-size: clamp(0.62rem, calc(0.68 * var(--vw)), 0.86rem);
+}
+
+.details-panel .hint {
+  color: var(--dp-soft);
+}
+
 .details-panel.is-flow {
   position: relative;
   width: 100%;
@@ -11987,19 +12046,21 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   margin-top: clamp(16px, calc(2.2 * var(--viewport-unit)), 30px);
 }
 
+/* Pill: the tone only tints the fill and the border; the text is the theme ink on that fill (AAA in both themes). */
 .status-pill {
   --pill-tone: var(--ink-soft);
   display: inline-flex;
   align-items: center;
   padding: 0.18rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--pill-tone) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pill-tone) 60%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--pill-tone) 16%, transparent);
+  background: color-mix(in srgb, var(--pill-tone) 14%, var(--surface));
   color: var(--ink);
-  font-size: clamp(0.6rem, calc(0.66 * var(--vw)), 0.8rem);
-  font-weight: 700;
+  font-size: clamp(0.64rem, calc(0.7 * var(--vw)), 0.84rem);
+  font-weight: 750;
   line-height: 1.4;
   white-space: nowrap;
+  text-shadow: none;
 }
 
 .status-pill.is-available { --pill-tone: var(--success); }
@@ -12007,3 +12068,22 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 .status-pill.is-upcoming { --pill-tone: var(--brand); }
 .status-pill.is-missing { --pill-tone: var(--danger); }
 .status-pill.is-requested { --pill-tone: var(--ink-muted); }
+
+.details-panel .btn,
+.details-panel button {
+  text-shadow: none;
+}
+
+/* AAA for the panel's buttons without touching the shared tokens: the light theme's --accent (primary fill) is 6.6:1
+   against white and the secondary label (--ink-soft) 6.3:1 against the scrim. Scoped here until the token audit moves them. */
+:root:not([data-theme="dark"]) .details-panel {
+  --accent: #5a4c54;
+}
+
+.details-panel .btn-secondary {
+  color: var(--ink);
+}
+
+.details-panel .btn-danger {
+  color: color-mix(in srgb, var(--ink) 62%, var(--danger));
+}

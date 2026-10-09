@@ -418,27 +418,13 @@
   display: none;
 }
 
-/* Agenda is master-detail: its panes scroll on their own. */
-.calendar-scroll.is-master-detail {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
+/* The agenda list lives in the shared ListPanel (the Library's list container): only its content is a plain stack. */
+.calendar-agenda-content {
+  display: block;
 }
 
-.calendar-scroll.is-master-detail > .master-detail {
-  flex: 1 1 auto;
-}
-
-.calendar-list-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 4px 8px 2rem 4px;
-  scrollbar-color: var(--line-strong) transparent;
+.calendar-agenda-content .calendar-state {
+  margin-top: 0;
 }
 
 /* Selected cards use the shared card shadow, never a ring or a white border (page-layout.css owns the lift). */
