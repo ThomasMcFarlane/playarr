@@ -325,6 +325,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
 - A peer's availability snapshot is replaced in one transaction, and the events one change raises are stored in one transaction, so each does one commit sync instead of one per row (500 rows: 25 s as separate commits, 0.13 s as one, on a busy local disk). Synchronous stays FULL.
 - CI: the web behaviour gate runs as three parallel shards balanced by measured script time (about 15 min down to about 7).
 - Merge train: the batch CI run on train/batch dispatches the train itself when it finishes, so a green batch lands within a minute instead of waiting for a dropped completion trigger; a manual train dispatch is a real run by default.

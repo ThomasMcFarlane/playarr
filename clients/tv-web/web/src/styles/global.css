@@ -7679,12 +7679,32 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   flex-basis: clamp(180px, calc(14 * var(--vw)), 268px);
 }
 
+/* Cast and crew: a circular headshot (1:1) with the name and role centred beneath, not a 16:9 episode tile. */
 .tv-person-card {
+  --tv-person-size: clamp(72px, calc(5.4 * var(--vw)), 112px);
   color: inherit;
 }
 
+.tv-media-track-scroll .tv-person-card {
+  flex-basis: clamp(104px, calc(8.2 * var(--vw)), 152px);
+}
+
+.tv-person-card .tv-person-art {
+  width: var(--tv-person-size);
+  aspect-ratio: 1 / 1;
+  margin-inline: auto;
+  border-radius: 50%;
+}
+
+.tv-person-card .tv-person-art::after {
+  content: none;
+}
+
+/* Portrait headshots: cover the circle and bias to the top so faces are not cropped. */
 .tv-person-art img {
-  object-position: center 20%;
+  object-fit: cover;
+  object-position: 50% 20%;
+  filter: none;
 }
 
 .tv-person-placeholder {
@@ -7704,12 +7724,21 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .tv-person-copy {
   grid-template-columns: minmax(0, 1fr);
   gap: 0.24rem;
+  justify-items: center;
+  text-align: center;
 }
 
+.tv-person-copy strong,
 .tv-person-copy small {
+  display: -webkit-box;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .tv-music-track-art {
