@@ -4418,7 +4418,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     0 30px 90px rgba(56, 38, 33, 0.08),
     inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(30px) saturate(112%);
-  animation: tv-rail-in 700ms 120ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* No entrance of its own: the route transition (page-layout.css) owns it. A base animation here replayed (translateX
+     60px, from opacity 0) the moment the route token expired, and on every first paint. */
 }
 
 :root[data-theme="dark"] .tv-rail-panel {
@@ -4718,30 +4719,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes tv-rail-in {
-  from {
-    opacity: 0;
-    transform: translateX(60px);
-    backdrop-filter: blur(0);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    backdrop-filter: blur(30px);
-  }
-}
-
-@keyframes tv-rail-surface-in {
-  from {
-    opacity: 0;
-    transform: translateX(60px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -6662,7 +6639,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
     color-mix(in srgb, var(--tv-rail-frost) 96%, transparent) 62%,
     var(--tv-rail-frost) 100%
   );
-  animation: tv-rail-in 660ms 100ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* No entrance of its own: the route transition (page-layout.css) owns it. A base animation here replayed (translateX
+     60px, from opacity 0) the moment the route token expired, and on every first paint. */
 }
 
 :root[data-theme="dark"] .tv-rail-surface {
@@ -7119,11 +7097,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   right: clamp(5px, calc(0.4 * var(--vw)), 8px);
   width: clamp(6px, calc(0.5 * var(--vw)), 9px);
   transform: translateY(-50%);
-}
-
-.tv-library-grid-panel,
-.tv-rail-surface {
-  animation-name: tv-rail-surface-in;
 }
 
 .tv-watch-progress {
