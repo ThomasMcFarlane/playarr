@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, folders = false, watchlist = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0 }) {
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -140,10 +140,17 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       const now = new Date().toISOString();
       return json(res, Array.from({ length: playlists }, (_, i) => ({
         id: `00000000-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`, name: `Test list ${i + 1}`, is_system: false,
-        media_type: "video", parent_playlist_id: null, owner_user_id: userId, created_at: now, updated_at: now,
+        media_type: "video", parent_playlist_id: nestedPlaylists && i > 0 ? "00000000-0000-4000-8000-000000000100" : null, owner_user_id: userId, created_at: now, updated_at: now,
       })));
     }
-    if (playlists > 0 && /^\/api\/v1\/playlists\/[^/]+\/items$/.test(p)) return json(res, []);
+    if (playlists > 0 && /^\/api\/v1\/playlists\/[^/]+\/items$/.test(p)) {
+      // Optionally some movies per playlist, so the playlist page shows real rails.
+      const playlistId = p.split("/")[4];
+      return json(res, catalogue.movie.slice(0, playlistItems).map((w, i) => ({
+        id: `${playlistId.slice(0, 30)}${String(i).padStart(6, "0")}`, playlist_id: playlistId, work_id: w.id, position: i,
+        track_id: null, added_at: new Date().toISOString(),
+      })));
+    }
     if (folders && p === "/api/v1/folders/roots") {
       return json(res, { roots: ["Root A", "Root B"].map((name, i) => ({
         id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`, source_instance_id: "00000000-0000-4000-8000-000000000300",
