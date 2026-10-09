@@ -3329,7 +3329,6 @@ body[data-input-mode="remote"]
 .player-controls {
   position: absolute;
   z-index: var(--z-chrome);
-  color: #ffffff;
   right: 0;
   bottom: 0;
   left: 0;
