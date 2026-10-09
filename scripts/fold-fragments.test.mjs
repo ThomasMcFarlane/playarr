@@ -51,7 +51,7 @@ test('a canonical fragment replaces its row in place and a new row creates an ep
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(tasks, /^\| 1 \| One \| in_progress \| agent \| feat\/one \| \| 2026-10-10 14:00 ICT \| a \|$/m);
-  assert.match(tasks, new RegExp(`## Fresh epic\\n\\n${H.replace(/[|]/g, '\\$&')}\\n\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|\\n\\| 3 \\| Three \\| todo \\| \\| \\| 1 \\| \\| c \\|`));
+  assert.match(tasks, new RegExp(`## Fresh epic\\nETA: not set \\(1 open\\)\\n\\n${H.replace(/[|]/g, '\\$&')}\\n\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|\\n\\| 3 \\| Three \\| todo \\| \\| \\| 1 \\| \\| c \\|`));
 });
 
 test('a five-column fragment is converted, keeping the old status in Notes', () => {
@@ -71,4 +71,28 @@ test('--check validates the board itself', () => {
   assert.notEqual(bad(board.replace('| todo |', '| pending |')).status, 0);
   assert.notEqual(bad(board.replace('| One | todo |', '|  One  | todo |')).status, 0);
   assert.notEqual(bad(`${board}| 2 | Dup | todo | | | | | x |\n`).status, 0);
+});
+
+test('epic ETA line: latest open-row ETA in ICT with UK time, recomputed on every fold', () => {
+  const rows = (...r) => `# Tasks\n\n## Active\n\n${H}\n|---|---|---|---|---|---|---|---|\n${r.join('\n')}\n\n## Closed\n\n${H}\n|---|---|---|---|---|---|---|---|\n| 8 | Eight | done | | | | 2026-10-10 09:00 ICT | x |\n`;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+  fs.mkdirSync(path.join(root, 'tasks.d'));
+  fs.writeFileSync(path.join(root, 'TASKS.md'), rows(
+    '| 1 | One | todo | | | | | a |',
+    '| 2 | Two | in_progress | | | | 2026-10-10 04:30 ICT | b |',
+    '| 4 | Four | done | | | | 2026-10-12 04:30 ICT | d |',
+  ).replace('## Active\n', '## Active\nETA: stale hand edit\n'));
+  fs.writeFileSync(path.join(root, 'tasks.d', '3.md'), '| 2 | Two | in_progress | | | | 2026-10-10 05:00 ICT | b |\n');
+  assert.equal(spawnSync('node', [script, root], { encoding: 'utf8' }).status, 0);
+  let t = fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8');
+  assert.match(t, /## Active\nETA: 2026-10-10 05:00 ICT \(2026-10-09 23:00 BST\) \(2 open\)\n\n\| ID/);
+  assert.ok(!/## Closed\nETA/.test(t), 'epic with no open rows gets no line');
+  // winter: BST ends, UK shows GMT; no ETA set: "not set"
+  fs.writeFileSync(path.join(root, 'tasks.d', '2.md'), '| 2 | Two | in_progress | | | | 2026-12-10 05:00 ICT | b |\n');
+  fs.writeFileSync(path.join(root, 'tasks.d', '9.md'), 'section: Fresh\n| 9 | Nine | todo | | | | | n |\n');
+  assert.equal(spawnSync('node', [script, root], { encoding: 'utf8' }).status, 0);
+  t = fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8');
+  assert.match(t, /## Active\nETA: 2026-12-10 05:00 ICT \(2026-12-09 22:00 GMT\) \(2 open\)\n/);
+  assert.match(t, /## Fresh\nETA: not set \(1 open\)\n/);
+  assert.equal((t.match(/^ETA: /gm) ?? []).length, 2);
 });
