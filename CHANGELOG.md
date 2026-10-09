@@ -1814,6 +1814,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Added `playarr_db::WriteQueue`, a shared server write queue: one writer task commits whatever small writes are queued as one transaction (up to 64 writes or 5 ms), and every caller is acknowledged only after that commit. `synchronous = FULL` is unchanged. A failing write is rolled back alone; same-key "latest value wins" writes in one batch collapse to the newest; a full queue makes callers wait instead of dropping writes; shutdown drains the queue. Batch size, commit time and queue depth are counted and a slow batch logs a `slow write batch` warning. Measured on a file database with the production pragmas, 500 small writes: 27.8 s as one commit each, 0.24 s through the queue (8 commits). Adopters follow in separate changes.
 - Calendar API: each work's files are read once and concurrently when building per-entry actions, and the time spent resolving titles and files is logged.
 - Calendar API: building per-entry actions reads the viewer's household gate, request backend and watch progress once per request instead of once per entry.
 - Web: Calendar posters load directly from the provider at tile width again; routing them through the artwork proxy finished slower on a high-latency link.
