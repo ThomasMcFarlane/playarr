@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: opening or closing a side panel (Filters) no longer replays the page-enter transition, so the page content stays still and the panel slides in once instead of jumping, resetting and animating half; every right-side panel is always the full viewport height from its first frame.
 - Web: at 1101 to 1280 px the Release Calendar title steps down and wraps onto two lines instead of running under the shell clock (the clock keeps Home's position).
 - Web TV: Alt, Ctrl and Meta arrow chords and already-handled arrows are no longer turned into spatial moves.
 - Web TV: pressing OK right after an arrow move now opens link results (such as playlist results) that carry no long-press props, and Enter in a text field is never redirected to a stale card.

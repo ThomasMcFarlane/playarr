@@ -35,10 +35,11 @@ export function useRouteMotion(): RouteMotion | undefined {
   const { pathname, key } = useLocation();
   const [expiredKey, setExpiredKey] = useState<string | null>(null);
   const navigationType = useNavigationType();
-  const state = useRef<{ path: string; flip: boolean; motion: RouteMotion | undefined }>({
+  const state = useRef<{ path: string; flip: boolean; motion: RouteMotion | undefined; key: string }>({
     path: pathname,
     flip: false,
     motion: undefined,
+    key,
   });
   if (state.current.path !== pathname) {
     const from = state.current.path;
@@ -48,15 +49,19 @@ export function useRouteMotion(): RouteMotion | undefined {
         path: pathname,
         flip,
         motion: `${routeDirection(from, pathname, navigationType)}-${flip ? "a" : "b"}`,
+        key,
       };
     } else {
       state.current = { ...state.current, path: pathname };
     }
   }
-  // The token only lives for the transition: a later skeleton-to-content swap must not replay it.
+  // The token only lives for the transition: a later skeleton-to-content swap must not replay it. It is keyed to
+  // the navigation that started it, not to the current location: a same-path replace (opening or closing a panel,
+  // a filter change) mints a new location key and must not revive an expired token, or the whole page re-animates.
+  const motionKey = state.current.key;
   useEffect(() => {
-    const timer = window.setTimeout(() => setExpiredKey(key), ROUTE_MOTION_MS + 80);
+    const timer = window.setTimeout(() => setExpiredKey(motionKey), ROUTE_MOTION_MS + 80);
     return () => window.clearTimeout(timer);
-  }, [key]);
-  return expiredKey === key ? undefined : state.current.motion;
+  }, [motionKey]);
+  return expiredKey === motionKey ? undefined : state.current.motion;
 }
