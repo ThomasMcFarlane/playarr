@@ -1,1 +1,0 @@
-- Web: scrolling the Settings menu (and any page body that extends under the page header) no longer lets its items slide under the heading and title. They now fade out at the header's bottom edge with the shared soft edge fade, which only appears once content has scrolled past.

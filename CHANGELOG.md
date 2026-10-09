@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Side panels (Filters on Movies, Series, Music, Search and Calendar, and every other drawer): section labels have clear space above them again. The shared drawer body had lost its section-to-section gap, so each label sat flush against the previous group's items. Covered by `scripts/drawer-spacing-e2e.mjs`.
+- Web: scrolling the Settings menu (and any page body that extends under the page header) no longer lets its items slide under the heading and title. They now fade out at the header's bottom edge with the shared soft edge fade, which only appears once content has scrolled past.
 - Web: the navigation rail, shell and library pages meet WCAG 2.2 AAA: icon-only nav links carry an accessible name, every pointer target is at least 44x44 CSS px (nav links, Back, profile chip, track actions, search field, A to Z rail, which wraps into columns), and header, clock, version and selected-caption text holds 7:1 over artwork and card shadows. Owner request 2026-10-09.
 - Web: the calendar, player chrome and drawers now meet the WCAG 2.2 AAA 44 by 44 pixel target size. The calendar month chips, header Back and period buttons, drawer close, update toast dismiss, player control buttons, seek bar and volume slider all have 44 pixel hit areas (the seek bar and volume bar keep their drawn thickness). The player minimise and close buttons and the player menus' secondary text use stronger fills and text colours so that they stay at 7:1 over video.
 - Web settings, account and utility pages now meet WCAG 2.2 AAA target size (44 by 44 CSS px) for buttons, Back, legal links and checkboxes, name the downloads storage bar, drop the hidden file input from the accessibility tree, and raise low-contrast header and settings detail text and form fields to 7:1. Owner request 2026-10-09.
@@ -368,6 +370,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Pull requests merged directly now have their `tasks.d/` and `changelog.d/` fragments folded onto `main` by the new `Fold board` workflow (`scripts/fold-main.sh`), and `Board sync` folds its row flips straight onto `main` instead of opening a PR, which GitHub Actions is not permitted to do here (the run for #437 failed on that).
 - Web: a focused card (Home, Library, Search, episodes, cast circles, playlists, calendar) draws a subtle red/pink glow ring with its lift and shadow, so card focus meets WCAG 2.2 AAA focus appearance in both themes.
 - Web: the Playlists page's rails (a playlist and its sub-playlists) use the shared rail stack, so focus centres the rail the same way as on Home and the series page.
 - Web: Home, Library, Downloads, Playlists, Search and the calendar agenda share one details panel (background art, kind line, title, metadata, description, actions). Status is shown as pills instead of label/value rows, and the calendar agenda uses the same buttons as the other pages.

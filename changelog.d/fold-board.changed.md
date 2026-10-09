@@ -1,1 +1,0 @@
-- Pull requests merged directly now have their `tasks.d/` and `changelog.d/` fragments folded onto `main` by the new `Fold board` workflow (`scripts/fold-main.sh`), and `Board sync` folds its row flips straight onto `main` instead of opening a PR, which GitHub Actions is not permitted to do here (the run for #437 failed on that).
