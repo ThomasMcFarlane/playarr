@@ -443,6 +443,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 .tv-library-heading.is-detail-wrapped > .page-header-title-block > .page-header-detail {
   max-width: none;
   margin: 0;
+  /* Same clearance below the title the old divider rule gave, so the wrapped subtitle stays beneath the clock row. */
+  padding: 0.4rem 0 0;
 }
 
 .action-pill-count {
