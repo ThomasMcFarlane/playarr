@@ -621,7 +621,8 @@ jobs:
   web-layout-parity:
     # Four shards, each a separate runner; ci-required reads the combined result of the matrix under this job id.
     # The nav steps alone measured ~14.6 min as one shard (run 37938948043: 18 scripts, 15 min timeout hit), so they
-    # are split by measured script time into nav-a (~7 min) and nav-b (~7.5 min). nav-b takes every nav-*-e2e script
+    # are split by measured script time into nav-a and nav-b (run 38004049406: nav-b hit the 25 min limit with nav-rail-centre at
+    # ~8 min, so that script and nav-library-frames moved to nav-a). nav-b takes every nav-*-e2e script
     # not listed under nav-a, so a new script is never skipped.
     name: web layout parity (${{ matrix.shard }})
     needs: changes
@@ -689,7 +690,7 @@ jobs:
         if: startsWith(matrix.shard, 'nav-')
         working-directory: clients/tv-web/web
         run: |
-          shard_a="nav-back nav-details nav-drawer-focus nav-focus nav-home-skeleton nav-home-speed nav-keys nav-layers nav-library-drawer nav-mobile-stage"
+          shard_a="nav-back nav-details nav-drawer-focus nav-focus nav-home-skeleton nav-home-speed nav-keys nav-layers nav-library-drawer nav-mobile-stage nav-rail-centre nav-library-frames"
           for script in scripts/nav-*-e2e.mjs; do
             name=$(basename "$script" -e2e.mjs)
             case " $shard_a " in *" $name "*) in_a=1 ;; *) in_a=0 ;; esac
