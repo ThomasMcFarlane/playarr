@@ -89,6 +89,8 @@ for (const layout of layoutNames) {
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   page.on("requestfailed", (request) => {
     if (!request.url().startsWith(base)) return;
+    // Navigating to the next story cancels the previous page's in-flight requests; that is not a failure.
+    if (request.failure()?.errorText === "net::ERR_ABORTED") return;
     pageErrors.push(`request failed: ${request.url()}`);
   });
   for (const story of stories) {
