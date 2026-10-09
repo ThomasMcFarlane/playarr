@@ -1,5 +1,0 @@
-- web: Back from a title opened deep in the Library now lands on that title with the whole scrolled list painted at once (the loaded list is cached, the mounted-rows reset no longer overrides the restore, and focus and scroll are restored before the first paint).
-- web: Home waits for On Deck from the moment its rails are ready, not from mount, so a cold start no longer paints "Start watching" and swaps it for "On deck" a second later.
-- web: a series page holds the Resume button's place until the resume plan arrives, so the other action buttons no longer shift; the plan is cached for revisits.
-- web: live events and writes mark cached copies stale instead of deleting them, so a page opened next paints the old copy at once and updates in place, not a skeleton.
-- web: idle Home no longer re-requests every title's details each 30 seconds.

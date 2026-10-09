@@ -1,1 +1,0 @@
-- Parity testing matrix: dropped the admin web app row, made the Xbox client device-only, and limited the Browser column to the web client.

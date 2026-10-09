@@ -1,1 +1,0 @@
-- Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.

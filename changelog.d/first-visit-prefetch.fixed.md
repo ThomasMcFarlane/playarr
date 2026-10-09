@@ -1,1 +1,0 @@
-- Web: a nav item that keeps focus for a moment prefetches its page's first-screen data (cancellable, low priority), Playlists and Watchlist paint from the cache on their first render, and Movies, Series and Music are warmed at idle after Home loads, so the first visit to a section shows no skeleton flash.
