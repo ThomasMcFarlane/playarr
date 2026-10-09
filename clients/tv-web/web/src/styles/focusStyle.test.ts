@@ -76,7 +76,6 @@ const NON_CONTROL_FOCUS = [
   /\.app-logo/,
   /\.player-seek-track/,
   /\.mini-player-hit-target/,
-  /\.poster-card/,
   /\.tv-filter-launcher/,
   /\.tv-alphabet button\.is-active/,
   /\.app-user-identity-cluster/,

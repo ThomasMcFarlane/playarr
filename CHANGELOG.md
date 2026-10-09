@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: removed the unused `.poster-card` and `.poster-*` styles (no component uses them).
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
 - Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web TV: with a minimised player active, Back now closes an open drawer, dialog or menu first and the mini player on the next press.
