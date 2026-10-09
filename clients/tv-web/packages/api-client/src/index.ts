@@ -1182,6 +1182,19 @@ export interface ArtworkSize {
   priority?: "high" | "low" | "auto";
 }
 
+function readInit(options: ReadRequestOptions): Record<string, unknown> {
+  return {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.priority ? { priority: options.priority } : {}),
+  };
+}
+
+/** Lets a background prefetch be cancelled and keep out of the way of what the screen is waiting on. */
+export interface ReadRequestOptions {
+  signal?: AbortSignal;
+  priority?: "high" | "low" | "auto";
+}
+
 export class ApiClient {
   /** The underlying `openapi-fetch` client, for operations without a convenience method above. */
   readonly raw: Client<paths>;
@@ -1307,7 +1320,8 @@ export class ApiClient {
     method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    priority?: "high" | "low" | "auto"
   ): Promise<T> {
     const response = await this.sendWithReauth((token) => {
       const headers: Record<string, string> = {};
@@ -1318,6 +1332,7 @@ export class ApiClient {
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal,
+        ...(priority ? ({ priority } as Record<string, unknown>) : {}),
       });
     });
     if (!response.ok) {
@@ -1668,9 +1683,10 @@ export class ApiClient {
   // catalog
   // ---------------------------------------------------------------------
 
-  async browseCatalog(params: BrowseCatalogParams = {}): Promise<CatalogPage> {
+  async browseCatalog(params: BrowseCatalogParams = {}, options: ReadRequestOptions = {}): Promise<CatalogPage> {
     return this.unwrap(
       await this.raw.GET("/api/v1/catalog", {
+        ...readInit(options),
         params: {
           query: {
             kind: params.kind,
@@ -2302,10 +2318,12 @@ export class ApiClient {
   // ---------------------------------------------------------------------
 
   async getHomeRails(
-    params: { lang?: string; library?: "movie" | "series" | "artist"; on?: string } = {}
+    params: { lang?: string; library?: "movie" | "series" | "artist"; on?: string } = {},
+    options: ReadRequestOptions = {}
   ): Promise<HomeRailsResponse> {
     return this.unwrap(
       await this.raw.GET("/api/v1/home/rails", {
+        ...readInit(options),
         params: { query: { lang: params.lang, library: params.library, on: params.on } },
       })
     );
@@ -2492,8 +2510,8 @@ export class ApiClient {
     return this.unwrap(await this.raw.POST("/api/v1/discover/request", { body }));
   }
 
-  async listWatchlist(): Promise<WatchlistResponse> {
-    return this.unwrap(await this.raw.GET("/api/v1/watchlist", {}));
+  async listWatchlist(options: ReadRequestOptions = {}): Promise<WatchlistResponse> {
+    return this.unwrap(await this.raw.GET("/api/v1/watchlist", { ...readInit(options) }));
   }
 
   async addToWatchlist(body: TitleSnapshot): Promise<ResolvedTitle> {
@@ -2509,8 +2527,8 @@ export class ApiClient {
   }
 
   /** Every playlist visible to the caller: their own personal playlists plus every System playlist. */
-  async listPlaylists(): Promise<PlaylistResponse[]> {
-    return this.unwrap(await this.raw.GET("/api/v1/playlists", {}));
+  async listPlaylists(options: ReadRequestOptions = {}): Promise<PlaylistResponse[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/playlists", { ...readInit(options) }));
   }
 
   /** Admin-only: every playlist regardless of owner (System + every user's personal ones). */
@@ -2539,9 +2557,9 @@ export class ApiClient {
     );
   }
 
-  async listPlaylistItems(id: string): Promise<PlaylistItemResponse[]> {
+  async listPlaylistItems(id: string, options: ReadRequestOptions = {}): Promise<PlaylistItemResponse[]> {
     return this.unwrap(
-      await this.raw.GET("/api/v1/playlists/{id}/items", { params: { path: { id } } })
+      await this.raw.GET("/api/v1/playlists/{id}/items", { ...readInit(options), params: { path: { id } } })
     );
   }
 
@@ -3150,8 +3168,14 @@ export class ApiClient {
   // ---------------------------------------------------------------------
 
   /** `GET /api/v1/calendar`; defaults to today..today+30 server-side. */
-  async getCalendar(params: CalendarParams = {}): Promise<CalendarResponse> {
-    return this.requestJson<CalendarResponse>("GET", `/api/v1/calendar${buildCalendarQuery(params)}`);
+  async getCalendar(params: CalendarParams = {}, options: ReadRequestOptions = {}): Promise<CalendarResponse> {
+    return this.requestJson<CalendarResponse>(
+      "GET",
+      `/api/v1/calendar${buildCalendarQuery(params)}`,
+      undefined,
+      options.signal,
+      options.priority
+    );
   }
 
   async getCalendarFeed(): Promise<CalendarFeedStatus> {

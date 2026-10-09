@@ -19,7 +19,8 @@ describe("Library paging (B11, B12)", () => {
 });
 
 describe("Playlists directory load (B10)", () => {
-  const source = read("./Playlists.tsx");
+  const source = read("../lib/playlistsData.ts");
+  const page = read("./Playlists.tsx");
 
   it("bounds the fan-out and shares playlist item reads with the query cache", () => {
     expect(source).toContain("mapWithLimit(");
@@ -29,8 +30,8 @@ describe("Playlists directory load (B10)", () => {
   });
 
   it("reports failures instead of swallowing them", () => {
-    expect(source).toContain("pages.playlists.partialLoadToast");
-    expect(source).toContain("throw firstFailure");
+    expect(page).toContain("pages.playlists.partialLoadToast");
+    expect(page).toContain("throw loaded.firstFailure");
   });
 });
 

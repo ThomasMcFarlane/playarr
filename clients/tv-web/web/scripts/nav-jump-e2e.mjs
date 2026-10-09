@@ -8,6 +8,8 @@
 //   - Home never paints "Start watching" and swaps to "On deck" a moment later when the first request goes out late
 //     (the wait for On Deck is counted from the rails being ready, not from mount),
 //   - Home rails and the Library grid keep their cards across a Back, a same-path revisit and a section switch.
+//   - the first visit of a section after a short nav dwell (Calendar, Playlists, Watchlist, Series, Music), and of
+//     Movies and Series after Home's idle warm-up, renders from the warmed cache with no skeleton frame.
 // Runs at 1920x1080 and 1280x720, both themes, keyboard only.
 //   node scripts/nav-jump-e2e.mjs [--no-build] [--dist dir] [--only text]
 import { boot, opt, root } from "./e2e-common.mjs";
@@ -139,5 +141,68 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
     }
   }
 }
+// A server whose section lists answer after 700 ms, so only a warmed cache can avoid the skeleton.
+const slowServer = await startServer({
+  distDir: opt("dist", join(root, "dist")), movies: 60, series: 20, artists: 20, onDeck: 0, playlists: 2, playlistItems: 3, watchlist: 4,
+  listDelayMs: 700, calendarDelayMs: 700,
+});
+const navTo = async (page, href) => {
+  await page.evaluate((h) => document.querySelector(`.app-nav a[href='${h}']`)?.focus(), href);
+};
+for (const [w, h] of [[1920, 1080], [1280, 720]]) {
+  for (const theme of ["dark", "light"]) {
+    const size = `${w}x${h} ${theme}`;
+    // ---- First visit after a nav dwell: the section renders from the warmed cache, never through a skeleton.
+    if (!only || "first-visit-dwell".includes(only)) {
+      const { context, page } = await open("/", { width: w, height: h, theme, server: slowServer });
+      if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      await page.waitForSelector(".tv-home-card", { timeout: 8000 });
+      // Hold still before any idle warm-up starts, so each section below is warmed by its own dwell alone.
+      await page.waitForTimeout(300);
+      for (const [name, href, ready] of [
+        ["calendar", "/calendar", "[data-page-id='calendar']"],
+        ["playlists", "/playlists", ".tv-title-card, .tv-home-card, .tv-media-track, [data-tv-track-id]"],
+        ["watchlist", "/watchlist", ".tv-watchlist-list"],
+        ["series", "/series", ".tv-title-card"],
+        ["music", "/music", ".tv-title-card"],
+      ]) {
+        await navTo(page, href);
+        // Dwell (200 ms) plus the slow, sequential answers (700 ms each): by the time Enter is pressed the cache holds the page.
+        await page.waitForTimeout(2300);
+        await page.evaluate(RECORD);
+        await page.keyboard.press("Enter");
+        await page.waitForSelector(ready, { timeout: 8000 });
+        await page.waitForTimeout(600);
+        const rec = await stop(page);
+        const skeleton = rec.frames.filter((f) => f.skeleton).length;
+        check(`first visit ${size}: ${name} shows no skeleton frame after a nav dwell`, skeleton === 0, `${skeleton} skeleton frames`);
+        await page.evaluate(() => document.querySelector(".app-nav a[href='/']")?.click());
+        await page.waitForSelector(".tv-home-card", { timeout: 8000 });
+        await page.waitForTimeout(300);
+      }
+      await context.close();
+    }
+    // ---- Idle warm-up: after Home has loaded, Movies and Series are warm without anyone having focused them.
+    if (!only || "first-visit-idle".includes(only)) {
+      const { context, page } = await open("/", { width: w, height: h, theme, server: slowServer });
+      if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      await page.waitForSelector(".tv-home-card", { timeout: 8000 });
+      await page.waitForTimeout(9000);
+      for (const href of ["/movies", "/series"]) {
+        await page.evaluate(RECORD);
+        await page.evaluate((target) => document.querySelector(`.app-nav a[href='${target}']`)?.click(), href);
+        await page.waitForSelector(".tv-title-card", { timeout: 8000 });
+        await page.waitForTimeout(500);
+        const rec = await stop(page);
+        const skeleton = rec.frames.filter((f) => f.skeleton).length;
+        check(`idle warm ${size}: ${href} shows no skeleton frame on its first visit`, skeleton === 0, `${skeleton} skeleton frames`);
+        await page.evaluate(() => document.querySelector(".app-nav a[href='/']")?.click());
+        await page.waitForTimeout(400);
+      }
+      await context.close();
+    }
+  }
+}
+slowServer.close?.();
 coldServer.close?.();
 await finish();
