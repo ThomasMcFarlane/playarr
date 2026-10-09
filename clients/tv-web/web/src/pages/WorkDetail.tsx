@@ -67,7 +67,7 @@ import {
   type JoinedWorkSource,
 } from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { TvMediaTrack, type TvTrackSpacing } from "../components/tv/TvStage";
+import { TvMediaTrack, TvRailSurface, type TvTrackSpacing } from "../components/tv/TvStage";
 import { RailStack, centreTrackInStack } from "../components/tv/RailStack";
 
 interface MoviePlaybackDraft {
