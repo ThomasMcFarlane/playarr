@@ -17,9 +17,14 @@
 //! partial-cache-node case, read back here via
 //! [`PeerLeafAvailabilityRepo::list_unmatched_for_group`] (§4.3).
 
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use playarr_model::PeerLeafAvailability;
 use sqlx::any::AnyRow;
+use sqlx::AnyConnection;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -166,6 +171,71 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
     ) -> Result<Vec<PeerLeafAvailability>, DbError>;
 }
 
+/// Rows as the database stores them (timestamps at millisecond precision), so
+/// a stored row and the same row freshly received compare equal.
+fn normalised_rows(rows: &[PeerLeafAvailability]) -> Result<Vec<PeerLeafAvailability>, DbError> {
+    let round = |at: DateTime<Utc>| parse_datetime(&format_datetime(at));
+    rows.iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row.release_date = row.release_date.map(round).transpose()?;
+            row.updated_at = round(row.updated_at)?;
+            Ok(row)
+        })
+        .collect()
+}
+
+/// Every stored row of one peer, in no particular order.
+async fn load_for_peer(
+    conn: &mut AnyConnection,
+    peer_node_id: Uuid,
+) -> Result<Vec<PeerLeafAvailability>, DbError> {
+    let sql = format!("SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = ?");
+    let rows = sqlx::query(&sql)
+        .bind(peer_node_id.to_string())
+        .fetch_all(&mut *conn)
+        .await?;
+    rows.iter().map(from_row).collect()
+}
+
+/// What turns one peer's stored rows into a new snapshot: rows to upsert (new
+/// or different) and file ids to delete. `updated_at` is when the sender
+/// derived the snapshot, not a property of the file, so a row that differs
+/// only in `updated_at` is unchanged.
+struct SnapshotDiff<'a> {
+    changed: Vec<&'a PeerLeafAvailability>,
+    removed: Vec<Uuid>,
+}
+
+impl<'a> SnapshotDiff<'a> {
+    fn between(stored: &[PeerLeafAvailability], incoming: &'a [PeerLeafAvailability]) -> Self {
+        let stored_by_file: HashMap<Uuid, &PeerLeafAvailability> =
+            stored.iter().map(|row| (row.media_file_id, row)).collect();
+        let incoming_files: HashSet<Uuid> = incoming.iter().map(|row| row.media_file_id).collect();
+        let changed = incoming
+            .iter()
+            .filter(|row| match stored_by_file.get(&row.media_file_id) {
+                Some(old) => {
+                    let mut old = (*old).clone();
+                    old.updated_at = row.updated_at;
+                    old != **row
+                }
+                None => true,
+            })
+            .collect();
+        let removed = stored
+            .iter()
+            .map(|row| row.media_file_id)
+            .filter(|id| !incoming_files.contains(id))
+            .collect();
+        Self { changed, removed }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.changed.is_empty() && self.removed.is_empty()
+    }
+}
+
 pub struct SqlxPeerLeafAvailabilityRepo {
     pool: DbPool,
     queue: Option<WriteQueue>,
@@ -243,19 +313,35 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         peer_node_id: Uuid,
         rows: &[PeerLeafAvailability],
     ) -> Result<(), DbError> {
-        // One write, so the whole snapshot shares one commit (with other queued
-        // writes when there is a queue), and readers never see the peer's
-        // inventory half replaced.
-        let peer = peer_node_id.to_string();
-        let rows = std::sync::Arc::new(rows.to_vec());
+        // The peer's snapshot arrives complete every minute and mostly does
+        // not change. Compare it with what is stored first (a plain read), and
+        // write only the rows that differ, so an unchanged snapshot takes no
+        // write lock and no commit sync.
+        let incoming = Arc::new(normalised_rows(rows)?);
+        let stored = load_for_peer(&mut *self.pool.acquire().await?, peer_node_id).await?;
+        if SnapshotDiff::between(&stored, &incoming).is_empty() {
+            return Ok(());
+        }
+        // One write, so the changes share one commit (with other queued writes
+        // when there is a queue), and readers never see the inventory half
+        // replaced. The diff is taken again inside it, in case a concurrent
+        // writer changed this peer's rows since the read above.
         write(self.queue.as_ref(), &self.pool, move |conn| {
-            let (peer, rows) = (peer.clone(), rows.clone());
+            let incoming = incoming.clone();
             Box::pin(async move {
-                sqlx::query("DELETE FROM peer_leaf_availability WHERE peer_node_id = ?")
-                    .bind(peer)
+                let stored = load_for_peer(&mut *conn, peer_node_id).await?;
+                let diff = SnapshotDiff::between(&stored, &incoming);
+                for media_file_id in &diff.removed {
+                    sqlx::query(
+                        "DELETE FROM peer_leaf_availability \
+                         WHERE peer_node_id = ? AND media_file_id = ?",
+                    )
+                    .bind(peer_node_id.to_string())
+                    .bind(media_file_id.to_string())
                     .execute(&mut *conn)
                     .await?;
-                for row in rows.iter() {
+                }
+                for row in diff.changed {
                     let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
                     bind_upsert(row, leaf_selector).execute(&mut *conn).await?;
                 }
@@ -890,6 +976,146 @@ mod tests {
         assert_eq!(repo.list_for_peer(other).await.unwrap().len(), 1);
         repo.replace_for_peer(peer, &[]).await.unwrap();
         assert!(repo.list_for_peer(peer).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn replace_for_peer_writes_only_what_differs() {
+        let repo = SqlxPeerLeafAvailabilityRepo::new(test_sqlite_pool().await);
+        let (peer, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let tmdb = playarr_model::ExternalProvider::Tmdb;
+        let mut kept = sample(peer, tmdb.clone(), "kept", LeafSelector::Movie);
+        // Finer than the stored millisecond precision: must not count as a change.
+        kept.release_date = Some(kept.updated_at + chrono::Duration::nanoseconds(123_456));
+        let changed = sample(peer, tmdb.clone(), "changed", LeafSelector::Movie);
+        let gone = sample(peer, tmdb.clone(), "gone", LeafSelector::Movie);
+        let elsewhere = sample(other, tmdb.clone(), "elsewhere", LeafSelector::Movie);
+        repo.replace_for_peer(peer, &[kept.clone(), changed.clone(), gone.clone()])
+            .await
+            .unwrap();
+        repo.upsert(&elsewhere).await.unwrap();
+        let first_updated_at = kept.updated_at;
+
+        // The next snapshot was derived later: every `updated_at` moved on,
+        // one row changed for real, one disappeared, one is new.
+        let later = first_updated_at + chrono::Duration::seconds(60);
+        let mut kept_again = kept.clone();
+        kept_again.updated_at = later;
+        let mut changed_again = changed.clone();
+        changed_again.updated_at = later;
+        changed_again.codec = Some("hevc".to_string());
+        let mut added = sample(peer, tmdb.clone(), "added", LeafSelector::Movie);
+        added.updated_at = later;
+        repo.replace_for_peer(peer, &[kept_again, changed_again, added])
+            .await
+            .unwrap();
+
+        let by_id: std::collections::HashMap<_, _> = repo
+            .list_for_peer(peer)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.external_id.clone(), r))
+            .collect();
+        assert_eq!(by_id.len(), 3);
+        assert!(!by_id.contains_key("gone"));
+        assert_eq!(
+            by_id["kept"].updated_at, first_updated_at,
+            "unchanged row not rewritten"
+        );
+        assert_eq!(by_id["changed"].codec.as_deref(), Some("hevc"));
+        assert_eq!(by_id["changed"].updated_at, later);
+        assert_eq!(by_id["added"].updated_at, later);
+        assert_eq!(repo.list_for_peer(other).await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn an_unchanged_snapshot_takes_no_write() {
+        let path = std::env::temp_dir().join(format!("playarr-diff-{}.db", Uuid::new_v4()));
+        let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let peer = Uuid::new_v4();
+        let rows: Vec<_> = (0..20)
+            .map(|i| {
+                sample(
+                    peer,
+                    playarr_model::ExternalProvider::Tmdb,
+                    &format!("id{i}"),
+                    LeafSelector::Movie,
+                )
+            })
+            .collect();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        // `data_version` only moves when ANOTHER connection commits, so hold a
+        // reader connection and compare its view before and after.
+        let mut watcher = pool.acquire().await.unwrap();
+        let before: i64 = sqlx::query_scalar("PRAGMA data_version")
+            .fetch_one(&mut *watcher)
+            .await
+            .unwrap();
+        let mut again = rows.clone();
+        for row in &mut again {
+            row.updated_at += chrono::Duration::seconds(60);
+        }
+        repo.replace_for_peer(peer, &again).await.unwrap();
+        let after: i64 = sqlx::query_scalar("PRAGMA data_version")
+            .fetch_one(&mut *watcher)
+            .await
+            .unwrap();
+        assert_eq!(before, after, "an unchanged snapshot must not commit");
+        drop(watcher);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Timing evidence (run with `--ignored --nocapture`): an unchanged
+    /// 2,000-row snapshot on a file database with the production pragmas,
+    /// delete-and-reinsert versus the diff.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_unchanged_snapshot_replace() {
+        let path = std::env::temp_dir().join(format!("playarr-bench-{}.db", Uuid::new_v4()));
+        let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let peer = Uuid::new_v4();
+        let rows: Vec<_> = (0..2_000)
+            .map(|i| {
+                sample(
+                    peer,
+                    playarr_model::ExternalProvider::Tmdb,
+                    &format!("id{i}"),
+                    LeafSelector::Movie,
+                )
+            })
+            .collect();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        let t = std::time::Instant::now();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query("DELETE FROM peer_leaf_availability WHERE peer_node_id = ?")
+            .bind(peer.to_string())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        for row in &rows {
+            let leaf_selector = serde_json::to_string(&row.leaf_selector).unwrap();
+            bind_upsert(row, leaf_selector)
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+        }
+        tx.commit().await.unwrap();
+        let old = t.elapsed();
+        let t = std::time::Instant::now();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        println!(
+            "2000 unchanged rows: delete and reinsert {old:?}, diff {:?}",
+            t.elapsed()
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     /// Timing evidence for the batching (run with `--ignored --nocapture`):
