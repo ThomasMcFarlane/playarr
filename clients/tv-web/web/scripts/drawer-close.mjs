@@ -42,7 +42,7 @@ const themes = opt("themes", "light,dark").split(",");
 const PANELS = [
   { id: "library-filters", path: "/movies", panel: "filters", launcher: "[data-filters-button]" },
   { id: "calendar-filters", path: "/calendar?view=week&date=2026-10-07", panel: "filters", launcher: "[data-filters-button]" },
-  { id: "calendar-link", path: "/calendar?view=week&date=2026-10-07", panel: "link", launcher: "[data-panel-button]" },
+  { id: "calendar-link", path: "/calendar?view=week&date=2026-10-07", panel: "link", launcher: "[data-panel-button]:not([data-range-button])" },
 ];
 const PATHS = ["close-button", "escape", "launcher", "route-change"];
 const SAMPLES = 13;
