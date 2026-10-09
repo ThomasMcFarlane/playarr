@@ -1,1 +1,0 @@
-- Board fold resolves renamed `section:` names through an alias table, keeps existing rows in their epic, and fails `--check` on an unknown section instead of creating a heading (`section-new:` creates one on purpose).

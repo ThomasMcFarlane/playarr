@@ -373,6 +373,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Board fold resolves renamed `section:` names through an alias table, keeps existing rows in their epic, and fails `--check` on an unknown section instead of creating a heading (`section-new:` creates one on purpose).
 - Pull requests merged directly now have their `tasks.d/` and `changelog.d/` fragments folded onto `main` by the new `Fold board` workflow (`scripts/fold-main.sh`), and `Board sync` folds its row flips straight onto `main` instead of opening a PR, which GitHub Actions is not permitted to do here (the run for #437 failed on that).
 - Web: a focused card (Home, Library, Search, episodes, cast circles, playlists, calendar) draws a subtle red/pink glow ring with its lift and shadow, so card focus meets WCAG 2.2 AAA focus appearance in both themes.
 - Web: the Playlists page's rails (a playlist and its sub-playlists) use the shared rail stack, so focus centres the rail the same way as on Home and the series page.
