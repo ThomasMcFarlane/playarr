@@ -1,5 +1,6 @@
 import type { ApiClient, WorkDetail } from "@playarr-tv/api-client";
 import { DetailsScheduler, isAbortError } from "./detailsQueue";
+import { sharedDetailsStore, type DetailsPersistence } from "./detailsStore";
 import { isNavigating } from "./navigationActivity";
 
 /** The tags a stored work detail depends on (same as `useWork` and `prefetchWorkDetail`). */
@@ -51,10 +52,17 @@ export class FocusedDetails {
 
   constructor(
     private readonly client: ApiClient,
-    scheduler: DetailsScheduler = new DetailsScheduler()
+    scheduler: DetailsScheduler = new DetailsScheduler(),
+    private readonly disk: DetailsPersistence | null = sharedDetailsStore()
   ) {
     this.scheduler = scheduler;
-    this.offInvalidate = client.queries.onInvalidate(() => {
+    this.disk?.warm?.();
+    this.offInvalidate = client.queries.onInvalidate((event) => {
+      // The persistent copies follow the in-memory ones: a live event drops what it touches, a new scope (or
+      // sign-out) drops every other account's rows.
+      const scope = client.queries.currentScope;
+      if (event.scopeChange) void this.disk?.purgeExcept(scope).catch(() => undefined);
+      else if (scope !== undefined) void this.disk?.invalidate(scope, event.tags).catch(() => undefined);
       // Stored copies are gone: whatever is focused is fetched again, and every viewer re-reads the cache.
       this.scheduler.retainBackground();
       const id = this.focused;
@@ -118,11 +126,38 @@ export class FocusedDetails {
   }
 
   private load(id: string, priority: "high" | "low") {
-    return (signal: AbortSignal) =>
-      this.client.queries.fetch(keyOf(id), (s) => this.client.getWork(id, { signal: s, priority }), {
+    return async (signal: AbortSignal) => {
+      const detail = await this.client.queries.fetch(keyOf(id), (s) => this.client.getWork(id, { signal: s, priority }), {
         tags: DETAIL_TAGS,
         signal,
       });
+      // Written through only while the memory copy stands (a live event during the request drops it).
+      const scope = this.client.queries.currentScope;
+      const stored = this.client.queries.peek<WorkDetail>(keyOf(id));
+      if (this.disk && scope !== undefined && stored?.data === detail) {
+        void this.disk.put(scope, id, detail, DETAIL_TAGS, stored.at).catch(() => undefined);
+      }
+      return detail;
+    };
+  }
+
+  /**
+   * Paints from disk when memory has nothing (first visit of the session): the row is seeded as stale, so the
+   * request that follows revalidates it. A live event or scope change while the read was pending discards it.
+   */
+  hydrate(id: string): void {
+    const scope = this.client.queries.currentScope;
+    if (!this.disk || scope === undefined || this.peek(id)) return;
+    const generation = this.client.queries.generation;
+    void this.disk
+      .get(scope, id)
+      .then((row) => {
+        const queries = this.client.queries;
+        if (!row || queries.generation !== generation || queries.currentScope !== scope || this.peek(id)) return;
+        queries.set(keyOf(id), row.data, DETAIL_TAGS, row.at);
+        this.notify(id);
+      })
+      .catch(() => undefined);
   }
 
   /** The remote is on `id` (or on nothing). Call on every focus move; it is cheap. */
@@ -142,10 +177,13 @@ export class FocusedDetails {
     if (this.resolveNear) this.scheduler.setPaused(true);
     this.scheduleNear();
     if (this.isFresh(id)) return;
+    this.hydrate(id);
     const hadCopy = this.peek(id) !== undefined;
     this.startTimer = setTimeout(
       () => {
         this.startTimer = 0;
+        // A disk copy may have landed (fresh) while the start delay ran.
+        if (this.isFresh(id)) return;
         void this.scheduler.current(id, this.load(id, "high")).then(
           () => this.notify(id),
           (error: unknown) => {
