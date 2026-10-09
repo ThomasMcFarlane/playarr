@@ -20,6 +20,10 @@
       <!-- Ring: 16px pad around 240 circle → 272; centre on circle. -->
       <Poster id="focusRing" translation="[-16,-16]" width="272" height="272" uri="pkg:/images/avatar-ring.png" opacity="0" loadDisplayMode="scaleToFit" />
       <Poster id="avatarImage" translation="[0,0]" width="240" height="240" loadDisplayMode="scaleToFit" />
+      <!-- A custom photo: the account's JPEG, clipped to the circle by the mask (only the mask's alpha counts). -->
+      <MaskGroup id="customMask" maskUri="pkg:/images/avatar-mask.png" maskSize="[240,240]" visible="false">
+        <Poster id="customImage" translation="[0,0]" width="240" height="240" loadDisplayMode="scaleToZoom" />
+      </MaskGroup>
       <Label id="initial" translation="[0,0]" width="240" height="240" horizAlign="center" vertAlign="center" scale="[2.2,2.2]" scaleRotateCenter="[120,120]" color="0xFFFFFFFF" visible="false" />
     </Group>
     <Label id="name" translation="[0,268]" width="280" height="34" horizAlign="center" numLines="1" scale="[0.55,0.55]" scaleRotateCenter="[140,17]" color="0xF4F0F1FF" />

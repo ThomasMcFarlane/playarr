@@ -444,6 +444,7 @@ export const ja: Translations = {
   "pages.playlists.loadingLabel": "プレイリストを読み込んでいます",
   "pages.playlists.preparingLabel": "プレイリストを準備しています",
   "pages.playlists.loadErrorTitle": "プレイリストを読み込めませんでした",
+  "pages.playlists.partialLoadToast": "一部のプレイリスト項目を読み込めませんでした",
   "pages.playlists.backToPlaylists": "プレイリストに戻る",
   "pages.playlists.backToHome": "ホームに戻る",
   "pages.playlists.trackCountOne": "{{count}}件のトラック",
@@ -973,7 +974,7 @@ export const ja: Translations = {
   "pages.clients.serverPage.title":
     "Playarr Server",
   "pages.clients.serverPage.description":
-    "Playarr Serverは、すでに運用しているSonarr、Radarr、Lidarr、Bazarr、Prowlarr、Readarrからライブラリをカタログ化し、サムネイルの生成、音声・字幕トラックの解析、オンデマンドのトランスコードを行います。このページのすべてのPlayarrクライアントがこのサーバーに接続します。メディアはお客様自身のハードウェアに残ります。",
+    "Playarr Serverは、すでに運用しているライブラリソースからライブラリをカタログ化し、サムネイルの生成、音声・字幕トラックの解析、オンデマンドのトランスコードを行います。このページのすべてのPlayarrクライアントがこのサーバーに接続します。メディアはお客様自身のハードウェアに残ります。",
   "pages.clients.serverPage.packageNote":
     "リリースごとに、ビルド済みのLinux用tarball（x86-64とARM64）と公開コンテナイメージを提供します。tarballにはサーバー、管理UI、ライセンス、systemdユニットの例が入っています。お使いのCPUに合うビルドを選んでください。",
   "pages.clients.serverPage.downloadAmd64":
@@ -1001,7 +1002,7 @@ export const ja: Translations = {
   "pages.clients.serverPage.req3Title":
     "メディアアプリ",
   "pages.clients.serverPage.req3Description":
-    "Playarr Serverは、すでに運用しているSonarr、Radarr、Lidarr、Bazarr、Prowlarr、Readarrから読み取ります。起動後、サーバーの管理APIから各インスタンスを登録してください。",
+    "Playarr Serverは、すでに運用しているライブラリソースから読み取ります。起動後、サーバーの管理APIから各インスタンスを登録してください。",
   "pages.clients.serverPage.req4Title":
     "ネットワークポート8484",
   "pages.clients.serverPage.req4Description":

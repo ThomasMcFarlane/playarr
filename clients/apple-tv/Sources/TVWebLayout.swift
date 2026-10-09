@@ -1,6 +1,7 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
+import UIKit
 
 /// Building blocks for screens laid out on the web TV grid (1920x1080 stage, CSS pixels
 /// measured from the web client's layout). Elements are placed by their CSS box (x, y, w, h);
@@ -219,6 +220,7 @@ struct TVWebProfileChip: View {
     var version: String
     var userID: String = ""
     var presetName: String? = nil
+    var customAvatar: UIImage? = nil
 
     /// Width of the name at 11.14px / 690 with 0.22px tracking (the capsule grows with it).
     private var nameWidth: CGFloat {
@@ -232,7 +234,7 @@ struct TVWebProfileChip: View {
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.66))
                 .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
                 .placed(x: 58.5, y: 997.3, w: 64.9 + nameWidth, h: 48.2)
-            TVProfileAvatar(userID: userID, size: 34, presetName: presetName)
+            TVProfileAvatar(userID: userID, size: 34, presetName: presetName, customImage: customAvatar)
                 .placed(x: 65.6, y: 1004.4, w: 34, h: 34)
             Text(name)
                 .font(TVTheme.font(size: 11.14, css: 690))

@@ -87,6 +87,17 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 30 \
             || { grep -E "error:" "$RUNNER_TEMP/build.txt" | sort -u | head -40; exit 1; }
 
+      - name: Free the runner for the simulator
+        continue-on-error: true
+        run: |
+          # The Xcode build services and Spotlight indexing keep memory and CPU after the build; the runner only has 3 cores and 7 GB.
+          pkill -f SWBBuildService || true
+          pkill -f XCBBuildService || true
+          sudo mdutil -a -i off >/dev/null 2>&1 || true
+          sudo pkill -f mds_stores || true
+          rm -rf "$RUNNER_TEMP/dd/Build/Intermediates.noindex" "$RUNNER_TEMP/dd/ModuleCache.noindex" || true
+          vm_stat | head -4
+
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
@@ -149,7 +160,7 @@ jobs:
           ip=$(tailscale ip -4 | head -1)
           echo "TS_IP=$ip" >> "$GITHUB_ENV"
           nohup nice -n 5 python3 scripts/sim-vnc/sim_vnc.py --udid "$SIM_UDID" --bind "$ip" --port "$VNC_PORT" --idb "$IDB" --fps 24 \
-            --ready-file "$RUNNER_TEMP/vnc.ready" > "$RUNNER_TEMP/sim-vnc.log" 2>&1 &
+            --metrics-file "$RUNNER_TEMP/health.txt" --ready-file "$RUNNER_TEMP/vnc.ready" > "$RUNNER_TEMP/sim-vnc.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/sim-vnc.pid"
           for _ in $(seq 1 90); do [[ -s "$RUNNER_TEMP/vnc.ready" ]] && break; kill -0 "$(cat "$RUNNER_TEMP/sim-vnc.pid")" || { cat "$RUNNER_TEMP/sim-vnc.log"; exit 1; }; sleep 1; done
           [[ -s "$RUNNER_TEMP/vnc.ready" ]] || { cat "$RUNNER_TEMP/sim-vnc.log"; exit 1; }

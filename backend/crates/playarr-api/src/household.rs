@@ -692,8 +692,6 @@ pub async fn create_approval_handler(
         decided_by: None,
         decided_at: None,
         grant_expires_at: None,
-        max_uses: None,
-        uses: 0,
         bonus_seconds: 0,
     };
     state.household.approvals().insert(&approval).await?;
@@ -816,15 +814,7 @@ pub async fn decide_approval_handler(
         let changed = state
             .household
             .approvals()
-            .decide(
-                id,
-                ApprovalStatus::Denied,
-                guardian.user_id,
-                now,
-                None,
-                None,
-                0,
-            )
+            .decide(id, ApprovalStatus::Denied, guardian.user_id, now, None, 0)
             .await?;
         if !changed {
             return Err(ApiError::conflict("approval already decided or expired"));
@@ -873,16 +863,12 @@ pub async fn decide_approval_handler(
         .unwrap_or(DEFAULT_GRANT_MINUTES)
         .clamp(1, MAX_GRANT_MINUTES);
     let grant_expires_at = now + Duration::minutes(minutes.into());
-    let (max_uses, bonus_seconds) = match approval.kind {
-        ApprovalKind::Content => (None, 0),
-        ApprovalKind::Time => {
-            let bonus = if approval.subject == "budget" {
-                i64::from(body.bonus_minutes.unwrap_or(30).min(MAX_GRANT_MINUTES)) * 60
-            } else {
-                0
-            };
-            (None, bonus)
+    let bonus_seconds = match approval.kind {
+        ApprovalKind::Content => 0,
+        ApprovalKind::Time if approval.subject == "budget" => {
+            i64::from(body.bonus_minutes.unwrap_or(30).min(MAX_GRANT_MINUTES)) * 60
         }
+        ApprovalKind::Time => 0,
     };
     let changed = state
         .household
@@ -893,7 +879,6 @@ pub async fn decide_approval_handler(
             guardian.user_id,
             now,
             Some(grant_expires_at),
-            max_uses,
             bonus_seconds,
         )
         .await?;
@@ -920,48 +905,6 @@ async fn load(state: &AppState, id: Uuid) -> Result<Json<Approval>, ApiError> {
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("unknown approval"))
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ConsumeApprovalResponse {
-    pub consumed: bool,
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/household/approvals/{id}/consume",
-    tag = "household",
-    params(("id" = Uuid, Path, description = "Approval id")),
-    responses(
-        (status = 200, description = "One use of the approval was consumed", body = ConsumeApprovalResponse),
-        (status = 401, description = "Missing or invalid access token"),
-        (status = 403, description = "Approval is not approved, expired, exhausted or belongs to another profile")
-    )
-)]
-pub async fn consume_approval_handler(
-    State(state): State<AppState>,
-    streaming: AnytimeStreamingUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<ConsumeApprovalResponse>, ApiError> {
-    let now = state.household.now();
-    let consumed = state
-        .household
-        .approvals()
-        .consume(id, streaming.user_id, now)
-        .await?;
-    if !consumed {
-        return Err(forbidden("approval is not usable"));
-    }
-    crate::events::publish_to_users(
-        &state,
-        [streaming.user_id],
-        playarr_db::live_event_kind::HOUSEHOLD,
-        "profile",
-        streaming.user_id,
-        &["approval", "status"],
-    )
-    .await;
-    Ok(Json(ConsumeApprovalResponse { consumed: true }))
 }
 
 /// Library access plus the profile's household gate, for the catalog's

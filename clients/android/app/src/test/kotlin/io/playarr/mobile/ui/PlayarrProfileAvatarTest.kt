@@ -50,4 +50,35 @@ class PlayarrProfileAvatarTest {
         assertEquals(custom, custom.toSavedProfileAvatar().toPlayarrProfileAvatarPreference())
         assertEquals(null, SavedProfileAvatar("unexpected", "robot").toPlayarrProfileAvatarPreference())
     }
+
+    @Test
+    fun `preset ids and gradient colours match the shared source of truth`() {
+        // Gradle runs unit tests with the module directory (clients/android/app) as the working directory.
+        val shared = java.io.File("../../shared/profile-avatars/presets.json").readText()
+        val presets = Regex(""""id":\s*"(\w+)",\s*"start":\s*"(#\w+)",\s*"end":\s*"(#\w+)"""").findAll(shared)
+            .map { Triple(it.groupValues[1], it.groupValues[2].uppercase(), it.groupValues[3].uppercase()) }.toList()
+
+        assertEquals(playarrProfileAvatarPresetIds, presets.map { it.first })
+        assertEquals(
+            presets.map { it.second to it.third },
+            presets.map { (id, _, _) ->
+                val visual = playarrProfileAvatarPresetColours(id)
+                hex(visual.first) to hex(visual.second)
+            },
+        )
+    }
+
+    private fun hex(argb: Long): String = "#%06X".format(argb and 0xFFFFFF)
+
+    @Test
+    fun `preset drawables are generated from the shared presets`() {
+        val node = try {
+            ProcessBuilder("node", "../scripts/gen-avatar-drawables.mjs", "--check").redirectErrorStream(true).start()
+        } catch (_: java.io.IOException) {
+            org.junit.Assume.assumeTrue("node is not available", false)
+            return
+        }
+        val output = node.inputStream.bufferedReader().readText()
+        assertEquals(output, 0, node.waitFor())
+    }
 }

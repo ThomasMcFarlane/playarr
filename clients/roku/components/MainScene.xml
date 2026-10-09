@@ -646,7 +646,10 @@
       <!-- .app-user-identity (143.5 x 48.2 pill at 58.5,997.3) and the build label under it. -->
       <Group id="userIdentity" translation="[58,997]">
         <Poster id="userPillBg" translation="[0,0]" width="144" height="48" uri="pkg:/images/nav-user-pill.png" />
-        <Poster id="userAvatar" translation="[7,7]" width="34" height="34" uri="pkg:/images/avatar-robot.png" />
+        <Poster id="userAvatar" translation="[7,7]" width="34" height="34" />
+        <MaskGroup id="userAvatarCustomMask" translation="[7,7]" maskUri="pkg:/images/avatar-mask.png" maskSize="[34,34]" visible="false">
+          <Poster id="userAvatarCustom" translation="[0,0]" width="34" height="34" loadDisplayMode="scaleToZoom" />
+        </MaskGroup>
         <Label id="profileLabel" translation="[52,14]" width="320" height="28" numLines="1" scale="[0.35,0.35]" color="0xC5B8BDFF" />
         <Label id="userVersion" translation="[8,53]" width="200" height="12" numLines="1" scale="[0.25,0.25]" color="0x887A82FF" />
       </Group>

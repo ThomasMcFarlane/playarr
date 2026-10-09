@@ -335,11 +335,15 @@ export function usePlaybackEngine(
     autoAppliedDownloadedQualityRef.current = false;
     setLocalSource(null);
     if (!mediaFileId) return;
-    void downloads.getLocalPlaybackSource(mediaFileId).then((source) => {
-      if (cancelled) return;
-      localSourceRef.current = source;
-      setLocalSource(source);
-    });
+    // A failed lookup just means no local copy: stay on the online path.
+    void downloads
+      .getLocalPlaybackSource(mediaFileId)
+      .then((source) => {
+        if (cancelled) return;
+        localSourceRef.current = source;
+        setLocalSource(source);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -730,7 +734,14 @@ export function usePlaybackEngine(
         // StrictMode's effect replay. Its first subscriber is cancelled
         // while the second consumes the same session, so cancellation
         // must not close the shared server session here.
-        if (cancelled) return;
+        if (cancelled) {
+          // Every later request is this effect's own, so a real cancel (a quick Next, an episode change, an unmount
+          // before the response) leaves a session nobody will use. Close it rather than leave it for the timeout.
+          if (!isInitialNegotiation && info.session_id !== activeSessionIdRef.current) {
+            void recordTerminalEvent(info.session_id, { kind: "stop", reason: "user_stopped", position_ms: 0 });
+          }
+          return;
+        }
         const previousSessionId = activeSessionIdRef.current;
         activeSessionIdRef.current = info.session_id;
         onDemandTranscodeRef.current =
@@ -807,6 +818,7 @@ export function usePlaybackEngine(
     applySourceTracks,
     client,
     closeSession,
+    recordTerminalEvent,
     mediaFileId,
     online,
     retryCount,

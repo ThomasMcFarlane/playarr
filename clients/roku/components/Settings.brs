@@ -126,8 +126,13 @@ end sub
 
 sub panelAvatar()
     presets = ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"]
-    current = m.avatarPreset
-    if current = invalid or current = "" then current = profileAvatarPresetId(m.currentProfileName)
+    ' The account's own choice; a custom photo (chosen on another device) highlights no preset.
+    current = ""
+    if m.avatarKind = "custom"
+        current = "custom"
+    else
+        current = currentAvatarPresetId(m.profileId)
+    end if
     for i = 0 to presets.Count() - 1
         col = i mod 4
         row = Int(i / 4)
@@ -140,7 +145,7 @@ sub panelAvatar()
         art.loadDisplayMode = "scaleToFit"
         pgFocusable(x, y, 163.5, 163.5, 12, "avatar", presets[i], true)
     end for
-    pgLabel(m.pageBody, 773.8, 591.4, 995, 30, "Custom photo selection is not available on this device.", 19, 400, "inkMuted")
+    pgLabel(m.pageBody, 773.8, 591.4, 995, 30, "Choosing a custom photo is not available on this device. A photo chosen elsewhere is shown here.", 19, 400, "inkMuted")
 end sub
 
 sub panelLanguage()
@@ -325,7 +330,11 @@ sub settingsAction(item as Object)
         saveAudioLanguage(item.data)
         m.preferredAudioLanguage = item.data
     else if a = "avatar"
-        m.avatarPreset = item.data
+        deleteCustomAvatarFile()
+        m.avatarKind = "preset"
+        m.avatarValue = item.data
+        m.avatarCustomUri = ""
+        applyShellAvatar()
         sendApi("avatarSave", "PUT", "/api/v1/users/me/profile-avatar", { preference: { kind: "preset", value: item.data } }, true)
     else if a = "serverConnect"
         openServerDialog()

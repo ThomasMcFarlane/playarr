@@ -30,6 +30,7 @@ import { ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea, Skel
 import { usePanelParam } from "../lib/usePanelParam";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { rememberWorks } from "../lib/knownWorks";
 import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
 import { labelWithYear, releaseYear, yearRangeLabel } from "../lib/workYear";
@@ -118,6 +119,35 @@ function resultDetailRoute(
   if (mediaType !== "all") params.set("type", mediaType);
   if (libraryId) params.set("library", libraryId);
   return `/search/${workId}?${params.toString()}`;
+}
+
+/** The query-cache key of one search (works only; playlists and the library filter are applied on top). */
+function searchCacheKey(query: string): string {
+  return `search:${SEARCH_LIMIT}:${query.toLocaleLowerCase()}`;
+}
+
+/** Rows for a search: works that pass the type and library filters, then the matching playlists. */
+function buildSearchRows(input: {
+  works: Work[];
+  libraryWorkIds: Set<string> | null;
+  mediaType: SearchMediaType;
+  includesPlaylists: boolean;
+  playlists: PlaylistResponse[] | null;
+  query: string;
+}): SearchResult[] {
+  const rows: SearchResult[] = input.works
+    .filter(isSupportedWork)
+    .filter((work) => workMatchesType(work, input.mediaType))
+    .filter((work) => !input.libraryWorkIds || input.libraryWorkIds.has(work.id))
+    .map((work) => ({ type: "work" as const, id: work.id, work }));
+  if (input.includesPlaylists) {
+    rows.push(
+      ...(input.playlists ?? [])
+        .filter((playlist) => playlistMatches(playlist, input.query))
+        .map((playlist) => ({ type: "playlist" as const, id: playlist.id, playlist }))
+    );
+  }
+  return rows;
 }
 
 function playlistMatches(playlist: PlaylistResponse, query: string): boolean {
@@ -304,10 +334,33 @@ export function SearchPage() {
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistResponse[] | null>(null);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  // Stale-while-revalidate on the first render: a stored search (Back from a result) paints its rows at once.
+  const [seed] = useState<SearchState | null>(() => {
+    if (!requestedQuery || requestedLibraryId || requestedMediaType === "playlist" || requestedMediaType === "game") return null;
+    const stored = client.queries.peek<Work[]>(searchCacheKey(requestedQuery));
+    if (!stored) return null;
+    return {
+      status: "ready",
+      results: buildSearchRows({
+        works: stored.data,
+        libraryWorkIds: null,
+        mediaType: requestedMediaType,
+        includesPlaylists: requestedMediaType === "all",
+        playlists: null,
+        query: requestedQuery,
+      }),
+    };
+  });
   const [state, setState] = useState<SearchState>(
-    requestedQuery ? { status: "loading" } : { status: "idle" }
+    seed ?? (requestedQuery ? { status: "loading" } : { status: "idle" })
   );
-  const [selectedId, setSelectedId] = useState<string | null>(requestedFocusId);
+  // What the ready rows were fetched for: a re-run for the same request (playlists arriving) keeps them on screen.
+  const shownRequestRef = useRef<string | null>(
+    seed ? `${requestedQuery}|${requestedMediaType}|` : null
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(
+    requestedFocusId ?? (seed?.status === "ready" && seed.results[0] ? resultKey(seed.results[0]) : null)
+  );
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const backButtonRef = useRef<HTMLAnchorElement>(null);
@@ -411,8 +464,11 @@ export function SearchPage() {
     const includesPlaylists =
       !requestedLibraryId &&
       (requestedMediaType === "all" || requestedMediaType === "playlist");
-    if (includesPlaylists && playlists === null) {
-      setState({ status: "loading" });
+    const requestKey = `${requestedQuery}|${requestedMediaType}|${requestedLibraryId ?? ""}`;
+    // Only playlist-only searches have to wait for playlists; "all" shows the works at once and the playlists join
+    // when they arrive. Re-running for the same request never blanks rows that are already shown.
+    if (requestedMediaType === "playlist" && playlists === null) {
+      setState((current) => (shownRequestRef.current === requestKey && current.status === "ready" ? current : { status: "loading" }));
       return;
     }
     if (requestedMediaType === "playlist" && playlistError) {
@@ -420,9 +476,9 @@ export function SearchPage() {
       return;
     }
 
-    setState({ status: "loading" });
+    setState((current) => (shownRequestRef.current === requestKey && current.status === "ready" ? current : { status: "loading" }));
     const workRequest = includesWorks
-      ? client.searchCatalog(requestedQuery, SEARCH_LIMIT, { availableOnly: true })
+      ? client.queries.fetch(searchCacheKey(requestedQuery), () => client.searchCatalog(requestedQuery, SEARCH_LIMIT, { availableOnly: true }), { tags: ["catalog"] })
       : Promise.resolve<Work[]>([]);
     const libraryRequest =
       includesWorks && requestedLibraryId
@@ -435,23 +491,20 @@ export function SearchPage() {
         const libraryWorkIds = libraryWorks
           ? new Set(libraryWorks.map((work) => work.id))
           : null;
-        const resultRows: SearchResult[] = workResults
-          .filter(isSupportedWork)
-          .filter((work) => workMatchesType(work, requestedMediaType))
-          .filter((work) => !libraryWorkIds || libraryWorkIds.has(work.id))
-          .map((work) => ({ type: "work" as const, id: work.id, work }));
-        if (includesPlaylists) {
-          resultRows.push(
-            ...(playlists ?? [])
-              .filter((playlist) => playlistMatches(playlist, requestedQuery))
-              .map((playlist) => ({
-                type: "playlist" as const,
-                id: playlist.id,
-                playlist,
-              }))
-          );
-        }
-        setState({ status: "ready", results: resultRows });
+        const resultRows = buildSearchRows({
+          works: workResults,
+          libraryWorkIds,
+          mediaType: requestedMediaType,
+          includesPlaylists,
+          playlists,
+          query: requestedQuery,
+        });
+        shownRequestRef.current = requestKey;
+        setState((current) =>
+          current.status === "ready" && JSON.stringify(current.results) === JSON.stringify(resultRows)
+            ? current
+            : { status: "ready", results: resultRows }
+        );
         setSelectedId((current) => {
           if (current && resultRows.some((result) => resultKey(result) === current)) {
             return current;
@@ -512,6 +565,7 @@ export function SearchPage() {
   }, [client, liveProgressRevision]);
 
   const results = state.status === "ready" ? state.results : [];
+  useEffect(() => rememberWorks(results.flatMap((r) => (r.type === "work" ? [r.work] : []))), [results]);
   const selected = useMemo(
     () => results.find((result) => resultKey(result) === selectedId) ?? results[0] ?? null,
     [results, selectedId]

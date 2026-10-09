@@ -16,7 +16,17 @@ export const opt = (n, d) => {
 };
 export const USER_ID = "00000000-0000-4000-8000-000000000001";
 
-export async function boot(serverOptions = {}) {
+/**
+ * A signed-in test session whose access token is JWT-shaped (`sub` = the user id). The app names its query cache
+ * scope from that claim, so with the opaque token the other scripts use the stale-while-revalidate cache is OFF. A
+ * script that checks Back/revisit behaviour boots with `{ realisticAuth: true }` to exercise the cache as production does.
+ */
+const jwtFor = (userId) => {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  return `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: userId, exp: Math.floor(Date.now() / 1000) + 86_400 })}.sig`;
+};
+
+export async function boot(serverOptions = {}, { realisticAuth = false } = {}) {
   const dist = opt("dist", join(root, "dist"));
   if (!args.includes("--no-build") && !opt("dist", "")) {
     const r = spawnSync("pnpm", ["exec", "vite", "build"], { cwd: root, stdio: "inherit" });
@@ -36,15 +46,15 @@ export async function boot(serverOptions = {}) {
   async function open(path, { width = 1920, height = 1080, theme = "dark" } = {}) {
     const context = await browser.newContext({ viewport: { width, height } });
     await context.addInitScript(
-      ({ base, userId }) => {
+      ({ base, userId, token }) => {
         try {
           localStorage.setItem("playarr:apiBaseUrl", base);
-          const session = { accessToken: "t", refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
+          const session = { accessToken: token, refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
           localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "e2e", apiBaseUrl: base, userId, name: "E2E", deviceId: "d", session }]));
           localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "e2e", apiBaseUrl: base, userId }));
         } catch {}
       },
-      { base, userId: USER_ID }
+      { base, userId: USER_ID, token: realisticAuth ? jwtFor(USER_ID) : "t" }
     );
     const page = await context.newPage();
     const errors = [];

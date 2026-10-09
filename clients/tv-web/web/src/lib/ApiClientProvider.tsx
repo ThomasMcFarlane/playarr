@@ -571,7 +571,7 @@ const ApiClientContext = createContext<ApiClientContextValue | null>(null);
  * Same-origin is the real default, not a placeholder: `playarr-bin` co-
  * hosts this app's built assets with the API on one port (see
  * `playarr_api::build_router`'s `web_assets_dir`), matching how every
- * other `*arr` app ships its own UI, so "this page's origin" *is* the API
+ * other media app ships its own UI, so "this page's origin" *is* the API
  * for the common case -- no configuration required. `vite.config.ts`
  * proxies `/api` etc. to a local backend so this also holds for
  * `pnpm run dev`. Unlike the TV app shells, the web app has a real

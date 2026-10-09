@@ -4,7 +4,6 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -14,9 +13,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -71,6 +73,10 @@ private val profileAvatarPresetVisuals = mapOf(
     "alien" to ProfileAvatarPresetVisual(Color(0xFF8B71C5), Color(0xFF4A477F), R.drawable.avatar_preset_alien),
 )
 
+/** The gradient stops of a preset as 0xAARRGGBB, for the check against the shared presets. */
+internal fun playarrProfileAvatarPresetColours(id: String): Pair<Long, Long> =
+    profileAvatarPresetVisuals.getValue(id).let { it.start.toArgb().toLong() to it.end.toArgb().toLong() }
+
 internal fun defaultPlayarrProfileAvatarPreset(userId: String): String {
     var hash = 0L
     userId.forEach { character ->
@@ -113,25 +119,26 @@ internal fun PlayarrProfileAvatar(
     Box(
         modifier = modifier
             .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(preset.start, preset.end),
-                    // Web: 145deg gradient + highlight at 34% 26%.
-                ),
-            )
+            .drawBehind {
+                // Web `.profile-avatar`: a 145deg gradient with the 34% / 26% sheen over it (clients/shared/profile-avatars).
+                drawRect(
+                    Brush.linearGradient(
+                        colors = listOf(preset.start, preset.end),
+                        start = Offset(size.width * 0.1005f, -size.height * 0.0705f),
+                        end = Offset(size.width * 0.8995f, size.height * 1.0705f),
+                    ),
+                )
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.28f), Color.Transparent),
+                        center = Offset(size.width * 0.34f, size.height * 0.26f),
+                        radius = size.width * 0.2677f,
+                    ),
+                )
+            }
             .clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        // Soft highlight matching `.profile-avatar` radial wash.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),
-                    ),
-                ),
-        )
         if (resolved.kind == ProfileAvatarKind.Custom) {
             val bitmap = remember(resolved.value) {
                 runCatching {

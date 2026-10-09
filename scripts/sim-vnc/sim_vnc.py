@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hmac
+import http.server
 import os
 import queue
 import secrets
@@ -446,6 +447,8 @@ class Server:
         self.port = listener.getsockname()[1]
         self.log(f"listening on {self.args.bind}:{self.port}")
         threading.Thread(target=self.stats, daemon=True).start()
+        if self.args.metrics_file:
+            self.serve_metrics()
         if self.args.ready_file:
             with open(self.args.ready_file, "w", encoding="utf-8") as handle:
                 handle.write(f"{self.args.bind}:{self.port}\n")
@@ -454,6 +457,31 @@ class Server:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(None)
             Client(sock, addr, self).start()
+
+    def serve_metrics(self) -> None:
+        """Read-only runner health text on the same interface, one port above: evidence that survives a lost runner."""
+        path, server = self.args.metrics_file, self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                try:
+                    body = open(path, "rb").read()
+                except OSError:
+                    body = b"no metrics yet\n"
+                body += (f"vnc source={server.hub.source} frames={server.hub.count} avg_fps={server.hub.fps():.1f} "
+                         f"keys_sent={getattr(server.keys, 'sent', 0)}\n").encode()
+                self.send_response(200)
+                self.send_header("content-type", "text/plain")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        httpd = http.server.ThreadingHTTPServer((self.args.bind, self.args.port + 1), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.log(f"runner health on {self.args.bind}:{self.args.port + 1}")
 
     def stats(self) -> None:
         while True:
@@ -479,6 +507,7 @@ def main() -> None:
     parser.add_argument("--idb", default="idb", help="path of the idb client")
     parser.add_argument("--password-env", default="PLAYARR_VNC_PASSWORD")
     parser.add_argument("--ready-file", default="", help="written with host:port once listening")
+    parser.add_argument("--metrics-file", default="", help="serve this text file (runner health) over HTTP on port+1")
     parser.add_argument("--frame-file", default="", help="test only: serve this JPEG instead of a simulator")
     parser.add_argument("--no-keys", action="store_true", help="test only: do not call idb for keys")
     args = parser.parse_args()
