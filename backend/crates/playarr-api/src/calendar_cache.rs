@@ -192,6 +192,24 @@ pub enum Lookup {
     Miss(Miss),
 }
 
+struct FlightGuard<'a> {
+    flights: &'a Mutex<HashMap<String, Flight>>,
+    key: &'a str,
+    cell: &'a Arc<tokio::sync::OnceCell<Arc<playarr_model::CalendarResponse>>>,
+}
+
+impl Drop for FlightGuard<'_> {
+    fn drop(&mut self) {
+        let mut flights = self.flights.lock().unwrap_or_else(|e| e.into_inner());
+        if flights
+            .get(self.key)
+            .is_some_and(|f| Arc::ptr_eq(&f.cell, self.cell))
+        {
+            flights.remove(self.key);
+        }
+    }
+}
+
 #[derive(Default)]
 struct CacheCounters {
     hits: std::sync::atomic::AtomicU64,
@@ -397,16 +415,35 @@ impl CalendarCache {
 
     /// Settles a [`Lookup::Check`]: the candidates did not touch the response
     /// (`fresh`) or they did.
-    pub fn confirm(&self, key: &str, tick: u64, fresh: bool) -> bool {
+    ///
+    /// `checked` is the response the lookup returned: only that very entry is
+    /// advanced or removed. If another build replaced it while the candidates
+    /// were being read, the newer entry is left alone and, for a fresh
+    /// verdict, the caller still serves the checked response, which was
+    /// current when it was looked up.
+    pub fn confirm(
+        &self,
+        key: &str,
+        checked: &Arc<playarr_model::CalendarResponse>,
+        tick: u64,
+        fresh: bool,
+    ) -> bool {
         use std::sync::atomic::Ordering::Relaxed;
         let mut map = self.responses.lock().unwrap_or_else(|e| e.into_inner());
+        let same = map
+            .get(key)
+            .is_some_and(|entry| Arc::ptr_eq(&entry.response, checked));
         if fresh {
-            if let Some(entry) = map.get_mut(key) {
-                entry.tick = entry.tick.max(tick);
+            if same {
+                if let Some(entry) = map.get_mut(key) {
+                    entry.tick = entry.tick.max(tick);
+                }
             }
             self.stats.hits.fetch_add(1, Relaxed);
         } else {
-            map.remove(key);
+            if same {
+                map.remove(key);
+            }
             self.stats.change.fetch_add(1, Relaxed);
         }
         fresh
@@ -424,6 +461,13 @@ impl CalendarCache {
     ) {
         let deps = ResponseDeps::of(&response);
         let mut map = self.responses.lock().unwrap_or_else(|e| e.into_inner());
+        // A build that started earlier must not replace one that saw more.
+        if map
+            .get(&key)
+            .is_some_and(|old| old.source_generation == source_generation && old.tick > tick)
+        {
+            return;
+        }
         if map.len() >= RESPONSE_CAP && !map.contains_key(&key) {
             map.retain(|_, v| v.built.elapsed() < RESPONSE_TTL);
             if map.len() >= RESPONSE_CAP {
@@ -486,18 +530,18 @@ impl CalendarCache {
                 .shared
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
+        // Removes the flight when this call ends, including when the request is
+        // cancelled mid-build, so no entry outlives its leader.
+        let _guard = FlightGuard {
+            flights: &self.flights,
+            key,
+            cell: &flight.cell,
+        };
         let response = flight
             .cell
             .get_or_init(|| build(source_generation, tick))
             .await
             .clone();
-        let mut flights = self.flights.lock().unwrap_or_else(|e| e.into_inner());
-        if flights
-            .get(key)
-            .is_some_and(|f| Arc::ptr_eq(&f.cell, &flight.cell))
-        {
-            flights.remove(key);
-        }
         (response, joined)
     }
 
@@ -1044,10 +1088,10 @@ mod tests {
         put(&cache, "k", response_with(None, Some("424242")));
         feed.push(None, kind::LIBRARY, "work", appeared, "upserted");
         let Lookup::Check {
+            response,
             candidates,
             deps,
             tick,
-            ..
         } = cache.lookup("k", me)
         else {
             panic!("an unknown work may be the missing one");
@@ -1055,14 +1099,14 @@ mod tests {
         assert_eq!(candidates, vec![appeared]);
         assert!(deps.unmatched().iter().any(|r| r.external_id == "424242"));
         // Settled as unrelated, the entry keeps serving and does not ask again.
-        assert!(cache.confirm("k", tick, true));
+        assert!(cache.confirm("k", &response, tick, true));
         assert!(is_hit(&cache, "k", me));
         // Settled as the missing work, it is gone.
         feed.push(None, kind::LIBRARY, "work", appeared, "upserted");
-        let Lookup::Check { tick, .. } = cache.lookup("k", me) else {
+        let Lookup::Check { response, tick, .. } = cache.lookup("k", me) else {
             panic!("checked again");
         };
-        assert!(!cache.confirm("k", tick, false));
+        assert!(!cache.confirm("k", &response, tick, false));
         assert!(matches!(cache.lookup("k", me), Lookup::Miss(Miss::Cold)));
         // A response with a work for everything never asks.
         put(&cache, "k", response_with(Some(Uuid::new_v4()), None));
@@ -1124,6 +1168,70 @@ mod tests {
         eprintln!("hit rate over {requests} requests: now {hits}, before {old_hits}");
         assert_eq!(old_hits, 0, "every window had an event");
         assert!(hits * 100 >= requests * 95, "{hits}/{requests}");
+    }
+
+    /// An older build that finishes late must not make a newer entry look
+    /// fresher than it is, and a verdict about one entry must not touch another.
+    #[test]
+    fn a_late_older_build_and_a_stale_verdict_cannot_mark_an_entry_fresh() {
+        use playarr_db::live_event_kind as kind;
+        let feed = Feed::default();
+        let cache = feed.cache();
+        let (me, mine, appeared) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let unmatched = || response_with(Some(mine), Some("424242"));
+
+        // R1 is built at tick 0; a change it depends on lands (tick 0); R2 is
+        // built after it (tick 1).
+        let old_tick = cache.change_tick();
+        let old = unmatched();
+        feed.push(Some(me), kind::WATCH, "work", mine, "progress");
+        let newer = unmatched();
+        put(&cache, "k", newer.clone());
+        feed.push(None, kind::LIBRARY, "work", appeared, "upserted");
+        let Lookup::Check { response, tick, .. } = cache.lookup("k", me) else {
+            panic!("an unknown work may be the missing one");
+        };
+        assert!(Arc::ptr_eq(&response, &newer));
+
+        // The old build finishes now: it must not replace the newer entry.
+        cache.store_response("k".into(), cache.source_generation(), old_tick, old.clone());
+        assert!(cache.confirm("k", &response, tick, true));
+        assert!(
+            is_hit(&cache, "k", me),
+            "the newer entry survived and advanced"
+        );
+
+        // A verdict about a response that is no longer the entry (another
+        // build replaced it while the candidates were read) changes nothing.
+        let replacement = unmatched();
+        put(&cache, "k", replacement.clone());
+        assert!(!cache.confirm("k", &newer, tick, false));
+        assert!(is_hit(&cache, "k", me), "the replacement was not removed");
+        // And it must not skip a change the replacement has not seen.
+        feed.push(Some(me), kind::WATCH, "work", mine, "progress");
+        assert!(cache.confirm("k", &newer, tick + 100, true));
+        assert!(matches!(cache.lookup("k", me), Lookup::Miss(Miss::Change)));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_build_leaves_no_flight_behind() {
+        let cache = Arc::new(CalendarCache::new());
+        let cancelled = tokio::time::timeout(
+            Duration::from_millis(20),
+            cache.build_once("k", |_, _| async {
+                std::future::pending::<()>().await;
+                response_with(None, None)
+            }),
+        )
+        .await;
+        assert!(cancelled.is_err(), "the build was cancelled");
+        assert!(cache.flights.lock().unwrap().is_empty());
+        // The next request builds normally.
+        let (_, joined) = cache
+            .build_once("k", |_, _| async { response_with(None, None) })
+            .await;
+        assert!(!joined);
+        assert!(cache.flights.lock().unwrap().is_empty());
     }
 
     #[test]

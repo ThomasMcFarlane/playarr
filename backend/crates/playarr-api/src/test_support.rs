@@ -493,8 +493,14 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let request_sync = Arc::new(crate::request_sync::RequestSync::new(
-        Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
-        Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+        Arc::new(playarr_db::EventingMediaRequestRepo::new(
+            Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
+        Arc::new(playarr_db::EventingRequestIntegrationRepo::new(
+            Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
         user_repo.clone(),
         work_repo.clone(),
     ));

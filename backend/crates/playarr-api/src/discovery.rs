@@ -530,7 +530,7 @@ pub async fn discover_handler(
 }
 
 type RequestsCell = std::sync::Arc<
-    tokio::sync::OnceCell<Option<std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>>>,
+    tokio::sync::OnceCell<std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>>,
 >;
 type ProviderCell = std::sync::Arc<tokio::sync::OnceCell<Option<(Uuid, String)>>>;
 
@@ -552,6 +552,9 @@ pub(crate) struct ResolveMemo {
     watchlist: tokio::sync::OnceCell<std::collections::HashSet<String>>,
     /// Requests per kind (oldest first), read once.
     requests_by_kind: tokio::sync::Mutex<std::collections::HashMap<DiscoveryKind, RequestsCell>>,
+    /// Set when a read failed, so the answer built from this memo is partial
+    /// and must not be cached.
+    failed: std::sync::atomic::AtomicBool,
     /// Work files read this request, `None` for a work the viewer may not
     /// see. The viewer's access does not change within a request, so each
     /// work is loaded once, and [`Self::prime`] loads them all in a few
@@ -666,9 +669,16 @@ impl ResolveMemo {
                 crate::household::access(allowed.as_deref(), gate.as_deref()),
             )
             .await;
-        // On failure leave them unloaded: `view` then reports no such work,
-        // as a failed single read always did.
-        let mut loaded = loaded.unwrap_or_default();
+        // On failure leave them unloaded and flag the memo, so the answer is
+        // not cached: a read error must not look like "not in the library".
+        let mut loaded = match loaded {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                tracing::warn!(?error, "discovery: work files could not be read");
+                self.mark_failed();
+                return;
+            }
+        };
         let mut views = self.views.lock().await;
         for id in wanted {
             let view = loaded.remove(&id).map(std::sync::Arc::new);
@@ -729,17 +739,35 @@ impl ResolveMemo {
             .entry(kind)
             .or_default()
             .clone();
-        cell.get_or_init(|| async {
-            state
-                .request_sync
-                .requests
-                .list_for_kind(kind)
-                .await
-                .ok()
-                .map(std::sync::Arc::new)
-        })
-        .await
-        .clone()
+        // An error is not memoised: the next title asks again.
+        let rows = cell
+            .get_or_try_init(|| async {
+                state
+                    .request_sync
+                    .requests
+                    .list_for_kind(kind)
+                    .await
+                    .map(std::sync::Arc::new)
+            })
+            .await;
+        match rows {
+            Ok(rows) => Some(rows.clone()),
+            Err(error) => {
+                tracing::warn!(?error, "discovery: request list failed");
+                self.mark_failed();
+                None
+            }
+        }
+    }
+
+    pub(crate) fn mark_failed(&self) {
+        self.failed
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// `true` when every read this memo made succeeded.
+    pub(crate) fn complete(&self) -> bool {
+        !self.failed.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// The work and its files, `None` when it does not exist or the viewer

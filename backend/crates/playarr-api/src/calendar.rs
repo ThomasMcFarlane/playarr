@@ -320,7 +320,7 @@ async fn attach_actions(
     viewer: &CatalogViewer,
     candidates: &mut [CalendarCandidate],
     known_works: Option<&HashMap<ExternalRef, playarr_model::Work>>,
-) {
+) -> bool {
     let mut distinct: HashMap<String, TitleSnapshot> = HashMap::new();
     let mut keys: Vec<Option<String>> = Vec::with_capacity(candidates.len());
     for candidate in candidates.iter() {
@@ -353,6 +353,7 @@ async fn attach_actions(
                 Ok(resolved) => Some((key, resolved)),
                 Err(error) => {
                     tracing::warn!(?error, "calendar action resolution failed");
+                    memo.mark_failed();
                     None
                 }
             }
@@ -390,6 +391,7 @@ async fn attach_actions(
         total_ms = phase.elapsed().as_millis(),
         "calendar actions built"
     );
+    memo.complete()
 }
 
 /// Resolves the requested window, applying defaults and the span cap.
@@ -427,6 +429,23 @@ pub(crate) async fn build_calendar(
     only_instance: Option<Uuid>,
     options: CalendarOptions<'_>,
 ) -> CalendarResponse {
+    build_calendar_checked(state, allowed, start, end, kinds, only_instance, options)
+        .await
+        .0
+}
+
+/// [`build_calendar`], also saying whether every read succeeded. A response
+/// built after a failed read is served but must not be cached.
+pub(crate) async fn build_calendar_checked(
+    state: &AppState,
+    allowed: Option<&[Uuid]>,
+    start: NaiveDate,
+    end: NaiveDate,
+    kinds: Option<&HashSet<CalendarMediaKind>>,
+    only_instance: Option<Uuid>,
+    options: CalendarOptions<'_>,
+) -> (CalendarResponse, bool) {
+    let mut complete = true;
     let mut instances: Vec<SourceInstance> = state
         .source_instances
         .all()
@@ -492,6 +511,7 @@ pub(crate) async fn build_calendar(
         Ok(found) => Some(found),
         Err(error) => {
             tracing::warn!(?error, "calendar: work lookup failed");
+            complete = false;
             None
         }
     };
@@ -531,6 +551,7 @@ pub(crate) async fn build_calendar(
             }
             Err(error) => {
                 tracing::warn!(?error, "calendar: availability lag lookup failed");
+                complete = false;
             }
         }
     }
@@ -569,7 +590,7 @@ pub(crate) async fn build_calendar(
         }
     }
     if let Some(viewer) = options.viewer {
-        attach_actions(state, viewer, &mut merged, works.as_ref()).await;
+        complete &= attach_actions(state, viewer, &mut merged, works.as_ref()).await;
     }
     tracing::info!(
         entries = merged.len(),
@@ -580,12 +601,15 @@ pub(crate) async fn build_calendar(
         "calendar built"
     );
 
-    CalendarResponse {
-        start,
-        end,
-        entries: merged.into_iter().map(|c| c.entry).collect(),
-        sources: statuses,
-    }
+    (
+        CalendarResponse {
+            start,
+            end,
+            entries: merged.into_iter().map(|c| c.entry).collect(),
+            sources: statuses,
+        },
+        complete,
+    )
 }
 
 #[utoipa::path(
@@ -637,7 +661,9 @@ pub async fn calendar_handler(
             tick,
         } => {
             let fresh = unaffected_by_new_works(&state, &candidates, &deps).await;
-            cache.confirm(&key, tick, fresh).then_some(response)
+            cache
+                .confirm(&key, &response, tick, fresh)
+                .then_some(response)
         }
         Lookup::Miss(_) => None,
     };
@@ -648,7 +674,7 @@ pub async fn calendar_handler(
         .build_once(&key, |source_generation, tick| {
             let (state, viewer, key) = (&state, &viewer, key.clone());
             async move {
-                let response = build_calendar(
+                let (response, complete) = build_calendar_checked(
                     state,
                     allowed.as_deref(),
                     start,
@@ -662,9 +688,15 @@ pub async fn calendar_handler(
                 )
                 .await;
                 let response = std::sync::Arc::new(response);
-                state
-                    .calendar_cache
-                    .store_response(key, source_generation, tick, response.clone());
+                // A response built after a failed read is served, never kept.
+                if complete {
+                    state.calendar_cache.store_response(
+                        key,
+                        source_generation,
+                        tick,
+                        response.clone(),
+                    );
+                }
                 response
             }
         })
@@ -1561,6 +1593,125 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(open["work_id"], work_id.to_string());
+    }
+
+    /// Like [`get`], also returning the `x-calendar-cache` header.
+    async fn get_cached(
+        router: &axum::Router,
+        token: &str,
+        uri: &str,
+    ) -> (serde_json::Value, String) {
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header("Authorization", bearer_header(token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let outcome = response.headers()["x-calendar-cache"]
+            .to_str()
+            .unwrap()
+            .to_string();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (serde_json::from_slice(&bytes).unwrap(), outcome)
+    }
+
+    fn request_active(body: &serde_json::Value) -> bool {
+        body["entries"][0]["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["action"] == "request" && a["active"] == true)
+    }
+
+    #[tokio::test]
+    async fn a_new_request_rebuilds_the_cached_calendar_and_shows_as_active() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr("Show").await;
+        let sonarr = instance(SourceKind::Sonarr, "TV", server.uri());
+        state.source_instances.upsert(sonarr.clone());
+        prime(&state).await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let uri = "/api/v1/calendar?start=2026-10-01&end=2026-10-31";
+
+        let (body, _) = get_cached(&router, &token, uri).await;
+        assert!(!request_active(&body));
+
+        // The request goes through the repository the request endpoints use.
+        state
+            .app
+            .request_sync
+            .record_direct(
+                &crate::request_sync::NewTitle {
+                    kind: playarr_model::discovery::DiscoveryKind::Series,
+                    title: "Show".into(),
+                    year: Some(2026),
+                    tmdb_id: None,
+                    tvdb_id: Some(77),
+                    imdb_id: None,
+                    poster_url: None,
+                    seasons: vec![],
+                    user: None,
+                    requester_label: None,
+                },
+                sonarr.id,
+            )
+            .await
+            .unwrap();
+        let (body, outcome) = get_cached(&router, &token, uri).await;
+        assert_eq!(outcome, "miss", "a request change rebuilds the calendar");
+        assert!(request_active(&body), "{body}");
+    }
+
+    /// A read that fails while building must not be cached: the response is
+    /// served (without Play/Open it could not compute) but the next request
+    /// builds again and gets them back.
+    #[tokio::test]
+    async fn a_build_with_a_failed_read_is_not_cached() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr("Show").await;
+        let sonarr = instance(SourceKind::Sonarr, "TV", server.uri());
+        state.source_instances.upsert(sonarr.clone());
+        prime(&state).await;
+        crate::test_support::seed_series_with_tvdb(&state, "Show", "77").await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let open = |body: &serde_json::Value| {
+            actions_of(&body["entries"][0])
+                .iter()
+                .any(|a| a.0 == "open")
+        };
+
+        for (end, table) in [(31, "media_files"), (30, "media_requests")] {
+            let uri = format!("/api/v1/calendar?start=2026-10-01&end=2026-10-{end}");
+            sqlx::query(&format!("ALTER TABLE {table} RENAME TO {table}_away"))
+                .execute(&state.pool)
+                .await
+                .unwrap();
+            let (_, first) = get_cached(&router, &token, &uri).await;
+            let (_, second) = get_cached(&router, &token, &uri).await;
+            assert_eq!(first, "miss");
+            assert_eq!(
+                second, "miss",
+                "{table}: a failed build is never served from the cache"
+            );
+            sqlx::query(&format!("ALTER TABLE {table}_away RENAME TO {table}"))
+                .execute(&state.pool)
+                .await
+                .unwrap();
+            let (body, _) = get_cached(&router, &token, &uri).await;
+            assert!(open(&body), "{table}: the next build is whole again");
+        }
     }
 
     #[tokio::test]
