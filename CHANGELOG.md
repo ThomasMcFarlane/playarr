@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Shared profile avatar plates draw the highlight under the artwork, matching the web client.
 - Fire TV (Vega): the app now ships the Playarr brand icon (512x512, 8-bit RGBA PNG, the same artwork as the Android clients) and the 16:9 brand banner instead of the 16-bit placeholder letter tiles, and the pre-build gate rejects a package icon that is not exactly 512x512, larger than 1 MB or not 8-bit.
 - Android (TV and phone): the profile chip now opens the profile switcher with the account's profiles even when the session never learnt its user id at sign-in, instead of an empty "Who's watching?" that looked like a sign-out.
 - `GET /api/v1/media/{id}/thumbnail` answers 204 No Content instead of 500 for a file with no video frame or cover art (audio without embedded art); the web client treats it as an expected miss, keeps its fallback, and no longer retries or logs a console error.

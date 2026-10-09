@@ -3,7 +3,7 @@
 One source of truth for the six preset avatars (astronaut, cat, dinosaur, robot, pirate, alien).
 
 - `presets.json`: ids, gradient stops and the SVG artwork. It mirrors the web client's `ProfileAvatar`, the reference.
-- `plates/<id>.svg` and `plates/<id>.png`: the finished circular plate (web's 145deg gradient, 34%/26% sheen, artwork
+- `plates/<id>.svg` and `plates/<id>.png`: the finished circular plate (web's 145deg gradient, 34%/26% sheen under the artwork, artwork
   at 86%). The PNG is 240 px, for clients that cannot draw SVG (Roku).
 - `render.mjs`: regenerates `plates/`; with `--check` it fails when `plates/` is stale or when `presets.json` and the
   web client disagree. CI runs the check.

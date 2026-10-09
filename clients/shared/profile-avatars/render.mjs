@@ -42,10 +42,10 @@ export function plateSvg(preset) {
 </defs>
 <g clip-path="url(#plate)">
 <rect width="${size}" height="${size}" fill="url(#fill)"/>
+<rect width="${size}" height="${size}" fill="url(#sheen)"/>
 <g transform="translate(${inset} ${inset}) scale(${spec.artScale})">
 ${preset.art.join("\n")}
 </g>
-<rect width="${size}" height="${size}" fill="url(#sheen)"/>
 </g>
 </svg>
 `;
