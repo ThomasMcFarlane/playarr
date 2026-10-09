@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: at 1101 to 1280 px the Release Calendar title steps down and wraps onto two lines instead of running under the shell clock (the clock keeps Home's position).
 - Web TV: Alt, Ctrl and Meta arrow chords and already-handled arrows are no longer turned into spatial moves.
 - Web TV: pressing OK right after an arrow move now opens link results (such as playlist results) that carry no long-press props, and Enter in a text field is never redirected to a stale card.
 - Web: going Back to Library, Home or Search no longer flashes a skeleton before content that is already cached, Search keeps its results when playlists load, and the detail page's loading state now has the loaded page's layout and shows the opened title.
@@ -2550,6 +2551,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).
 - CI: a `web behaviour` job runs every web Playwright smoke and behaviour script in pull requests and is part of `ci-required`; the layout owner-request gate covers all web stylesheets and shell components; native parity captures are manual (`workflow_dispatch`) only, enforced by a check; the brand red is the `--brand` token.
 - Added a keyboard e2e check that the shared side-panel drawer returns focus to its opener (Filters on Movies, Search and Calendar; Escape and remote Back; both themes).
 - Web: a per-frame keyboard e2e asserts that opening and closing the library Filters drawer does not move the grid, header or preview (Movies and Series, both themes, 1920x1080 and 1280x720).

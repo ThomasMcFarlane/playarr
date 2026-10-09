@@ -424,6 +424,17 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   }
 }
 
+/* The Release Calendar title is the longest page title and ran under the clock at 1280 px. The 1280 px desktop layout
+   keeps the clock where Home puts it on every page (layout-parity stage split and header band), so the title steps down
+   and wraps onto two lines inside the room left of the clock instead. */
+@media (min-width: 1101px) and (max-width: 1280px) {
+  .app-shell:has(.calendar-page) .tv-library-heading > .page-header-title-block > h1 {
+    max-width: 5.8em;
+    font-size: 1.2rem;
+    line-height: 1.05;
+  }
+}
+
 /* The header row grows to fit the 72px action tile and everything centres vertically on it. */
 .tv-library-heading.has-actions {
   align-items: center;
