@@ -14,10 +14,9 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
 
 ## Matrix
 
-| Client | Desktop browser or native desktop host | Emulator | Simulator | Real device (dev mode or sideload) |
+| Client | Browser | Emulator | Simulator | Real device (dev mode or sideload) |
 | --- | --- | --- | --- | --- |
 | Web client (TV and mobile layouts) | ✅ [1] | ❌ | ⚠️ DevTools and Playwright device emulation [1] | ✅ [1] |
-| Admin web app (`clients/tv-web/admin`) | ✅ [1] | ❌ | ⚠️ device emulation [1] | ✅ [1] |
 | Android TV | ❌ | ✅ [2] | ❌ | ✅ [2] |
 | Android phone | ❌ | ✅ [2] | ❌ | ✅ [2] |
 | Fire TV, Vega OS | ❌ | ✅ [3] | ❌ | ✅ [3] |
@@ -28,7 +27,7 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
 | Samsung Tizen | ❌ | ✅ [7] | ✅ [7] | ✅ [7] |
 | LG webOS | ❌ | ⚠️ [8] | ✅ [8] | ✅ [8] |
 | Hisense VIDAA | ❌ [9] | ❓ [9] | ❓ [9] | ✅ [9] |
-| Xbox | ✅ [10] | ❌ | ❌ | ✅ [10] |
+| Xbox | ❌ | ❌ | ❌ | ✅ [10] |
 | HarmonyOS | ❌ | ✅ [11] | ⚠️ Previewer [11] | ✅ [11] |
 
 ## Notes (vendor support, with official sources)
@@ -36,7 +35,7 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
 1. **Web.** Every desktop browser runs the client. Playwright device emulation sets viewport, user agent and touch to
    mimic a phone or tablet, but it is not a real mobile engine
    ([Playwright emulation](https://playwright.dev/docs/emulation)). Any real phone or TV browser also runs it. Input:
-   Playwright. The admin app uses the same browsers. The TV web shells (Tizen, webOS, VIDAA) reuse the web client.
+   Playwright. The TV web shells (Tizen, webOS, VIDAA) reuse the web client.
 2. **Android phone and Android TV.** The Android Emulator takes a phone or an Android TV hardware profile and system
    image ([Android TV emulator](https://developer.android.com/training/tv/start/start),
    [create and manage virtual devices](https://developer.android.com/studio/run/managing-avds)). Real devices use USB
@@ -75,10 +74,10 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
    the hosted web client's URL through the TV's browser debug install page (third-party guide, unofficial). Debug with the
    TV's remote-debugging mode. No public emulator or simulator found, so both are ❓ unverified. A desktop browser is not a
    vendor method.
-10. **Xbox.** Dev Mode turns any retail console into a development console; deploy UWP apps from Visual Studio over the
-   network with a signed-in user ([activation](https://learn.microsoft.com/windows/uwp/xbox-apps/devkit-activation),
-   [environment setup](https://learn.microsoft.com/en-us/windows/uwp/xbox-apps/development-environment-setup)). UWP apps
-   also run on a Windows 10 or 11 desktop (stand-in); this page was not fetched to confirm, treat as unverified. No Xbox
+10. **Xbox.** The client is the Xbox app (`clients/xbox`, a UWP/XAML app). It runs only on Xbox: Dev Mode turns any
+   retail console into a development console, and Visual Studio deploys the app over the network with a signed-in user
+   ([activation](https://learn.microsoft.com/windows/uwp/xbox-apps/devkit-activation),
+   [environment setup](https://learn.microsoft.com/en-us/windows/uwp/xbox-apps/development-environment-setup)). No Xbox
    emulator or simulator found. Windows Device Portal on Xbox: ❓ unverified.
 11. **HarmonyOS.** DevEco Studio provides an emulator, driven from the CLI too
    ([emulator CLI](https://developer.huawei.com/consumer/en/doc/harmonyos-guides/ide-emulator-command-line)), and real
