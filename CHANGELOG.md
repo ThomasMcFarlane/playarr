@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: the identity chip and the profile row show the account's own avatar (preset or custom photo) instead of a hard-coded or id-hash preset, and all six presets now have their artwork.
 - Fire TV: the shell chip and profile row show the account's own avatar (preset or custom photo) from the server, and the preset artwork now matches the web client exactly.
 - Shared profile avatar plates draw the highlight under the artwork, matching the web client.
 - Fire TV (Vega): the app now ships the Playarr brand icon (512x512, 8-bit RGBA PNG, the same artwork as the Android clients) and the 16:9 brand banner instead of the 16-bit placeholder letter tiles, and the pre-build gate rejects a package icon that is not exactly 512x512, larger than 1 MB or not 8-bit.
