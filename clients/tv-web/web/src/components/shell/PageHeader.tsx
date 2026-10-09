@@ -55,6 +55,18 @@ function naturalWidth(element: HTMLElement): number {
  * (Filters). Every routed page renders its heading through this component;
  * `pageShell.test.ts` enforces that, so pages cannot drift.
  */
+// Marks the app shell while at least one page header is mounted, so the stylesheet can hide the clock beside a
+// header on tablet widths without the `:has()` selector (unsupported before Chrome 105: older webOS and Tizen).
+// A counter keeps the mark correct while two headers overlap during a page transition.
+let mountedHeaders = 0;
+function markShellPageHeader(delta: 1 | -1): void {
+  mountedHeaders += delta;
+  const shell = document.querySelector<HTMLElement>(".app-shell");
+  if (!shell) return;
+  if (mountedHeaders > 0) shell.setAttribute("data-page-header", "");
+  else shell.removeAttribute("data-page-header");
+}
+
 export function PageHeader({
   title,
   detail,
@@ -71,6 +83,10 @@ export function PageHeader({
   const isDetail = variant === "detail";
   const pageActions: PageAction[] = actions ?? [];
   const headerRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    markShellPageHeader(1);
+    return () => markShellPageHeader(-1);
+  }, []);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const detailRef = useRef<HTMLSpanElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);

@@ -1,10 +1,17 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const globalCss = readFileSync(new URL("./global.css", import.meta.url), "utf8");
-const clientsCss = readFileSync(new URL("../pages/Clients.css", import.meta.url), "utf8");
-const pageLayoutCss = readFileSync(new URL("./page-layout.css", import.meta.url), "utf8");
-const calendarCss = readFileSync(new URL("../pages/Calendar.css", import.meta.url), "utf8");
+
+// Every stylesheet under src, so a new file (Folders.css was missed once) is scanned without editing this test.
+function allStylesheets(directory: URL): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directory);
+    if (entry.isDirectory()) return allStylesheets(child);
+    return entry.name.endsWith(".css") ? [readFileSync(child, "utf8")] : [];
+  });
+}
+const everyCss = allStylesheets(new URL("../", import.meta.url)).join("\n");
 describe("viewport-relative TV layout", () => {
   it("routes vertical viewport sizing through the WebView-safe unit", () => {
     expect(globalCss).toContain("--viewport-unit: 1vh");
@@ -13,7 +20,7 @@ describe("viewport-relative TV layout", () => {
     expect(globalCss.indexOf("--viewport-unit: 1vh")).toBeLessThan(
       globalCss.indexOf("@supports (height: 1dvh)")
     );
-    const declarations = `${globalCss}\n${clientsCss}`
+    const declarations = everyCss
       .replace("--viewport-unit: 1vh", "")
       .replace("@supports (height: 1dvh)", "")
       .replace("--viewport-unit: max(1vh, 1dvh)", "");
@@ -22,7 +29,7 @@ describe("viewport-relative TV layout", () => {
   });
 
   it("routes horizontal viewport sizing through the stage-scaled --vw variable", () => {
-    const declarations = `${globalCss}\n${clientsCss}\n${calendarCss}\n${pageLayoutCss}`.replace("--vw: 1vw", "");
+    const declarations = everyCss.replace("--vw: 1vw", "");
     expect(globalCss).toContain("--vw: 1vw");
     expect(declarations).not.toMatch(/-?\d+(?:\.\d+)?vw\b/);
   });
