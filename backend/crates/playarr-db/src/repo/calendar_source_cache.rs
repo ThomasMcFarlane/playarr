@@ -7,6 +7,7 @@ use sqlx::Row;
 use crate::codec::{format_datetime, parse_datetime};
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write_latest, WriteQueue};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredChunk {
@@ -29,27 +30,48 @@ pub struct StoredHealth {
 #[derive(Clone)]
 pub struct SqlxCalendarSourceCacheRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxCalendarSourceCacheRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
     }
 
+    /// Sends `put_chunk` and `put_health` through the shared write queue.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
+    }
+
+    /// Latest fetch wins for one instance and month within a write-queue batch.
     pub async fn put_chunk(&self, chunk: &StoredChunk) -> Result<(), DbError> {
-        sqlx::query(
-            "INSERT INTO calendar_source_chunks (instance_id, month, fetched_at, entries_json) \
-             VALUES (?, ?, ?, ?) \
-             ON CONFLICT(instance_id, month) DO UPDATE SET \
-             fetched_at = excluded.fetched_at, entries_json = excluded.entries_json",
+        let chunk_value = chunk.clone();
+        write_latest(
+            self.queue.as_ref(),
+            &self.pool,
+            format!("calendar_chunk:{}:{}", chunk.instance_id, chunk.month),
+            chunk.fetched_at.timestamp_millis(),
+            move |conn| {
+                let chunk = chunk_value.clone();
+                Box::pin(async move {
+                    sqlx::query(
+                        "INSERT INTO calendar_source_chunks (instance_id, month, fetched_at, entries_json) \
+                         VALUES (?, ?, ?, ?) \
+                         ON CONFLICT(instance_id, month) DO UPDATE SET \
+                         fetched_at = excluded.fetched_at, entries_json = excluded.entries_json",
+                    )
+                    .bind(chunk.instance_id)
+                    .bind(chunk.month)
+                    .bind(format_datetime(chunk.fetched_at))
+                    .bind(chunk.entries_json)
+                    .execute(&mut *conn)
+                    .await?;
+                    Ok(())
+                })
+            },
         )
-        .bind(&chunk.instance_id)
-        .bind(&chunk.month)
-        .bind(format_datetime(chunk.fetched_at))
-        .bind(&chunk.entries_json)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn all_chunks(&self) -> Result<Vec<StoredChunk>, DbError> {
@@ -92,24 +114,39 @@ impl SqlxCalendarSourceCacheRepo {
         Ok(())
     }
 
+    /// Latest attempt wins for one instance within a write-queue batch.
     pub async fn put_health(&self, health: &StoredHealth) -> Result<(), DbError> {
-        sqlx::query(
-            "INSERT INTO calendar_source_health (instance_id, last_success_at, last_attempt_at, \
-             last_error_state, last_error_message, consecutive_failures) VALUES (?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(instance_id) DO UPDATE SET last_success_at = excluded.last_success_at, \
-             last_attempt_at = excluded.last_attempt_at, last_error_state = excluded.last_error_state, \
-             last_error_message = excluded.last_error_message, \
-             consecutive_failures = excluded.consecutive_failures",
+        let health_value = health.clone();
+        let rank = health.last_attempt_at.map_or(0, |at| at.timestamp_millis());
+        write_latest(
+            self.queue.as_ref(),
+            &self.pool,
+            format!("calendar_health:{}", health.instance_id),
+            rank,
+            move |conn| {
+                let health = health_value.clone();
+                Box::pin(async move {
+                    sqlx::query(
+                        "INSERT INTO calendar_source_health (instance_id, last_success_at, last_attempt_at, \
+                         last_error_state, last_error_message, consecutive_failures) VALUES (?, ?, ?, ?, ?, ?) \
+                         ON CONFLICT(instance_id) DO UPDATE SET last_success_at = excluded.last_success_at, \
+                         last_attempt_at = excluded.last_attempt_at, last_error_state = excluded.last_error_state, \
+                         last_error_message = excluded.last_error_message, \
+                         consecutive_failures = excluded.consecutive_failures",
+                    )
+                    .bind(health.instance_id)
+                    .bind(health.last_success_at.map(format_datetime))
+                    .bind(health.last_attempt_at.map(format_datetime))
+                    .bind(health.last_error_state)
+                    .bind(health.last_error_message)
+                    .bind(i64::from(health.consecutive_failures))
+                    .execute(&mut *conn)
+                    .await?;
+                    Ok(())
+                })
+            },
         )
-        .bind(&health.instance_id)
-        .bind(health.last_success_at.map(format_datetime))
-        .bind(health.last_attempt_at.map(format_datetime))
-        .bind(&health.last_error_state)
-        .bind(&health.last_error_message)
-        .bind(i64::from(health.consecutive_failures))
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn all_health(&self) -> Result<Vec<StoredHealth>, DbError> {

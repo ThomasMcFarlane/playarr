@@ -29,6 +29,7 @@ use crate::codec::{
 };
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write, WriteQueue};
 
 // `leaf_selector` round-trips through its own serde-derived JSON form
 // (`LeafSelector`'s `#[serde(rename_all = "snake_case")]`) directly via
@@ -167,11 +168,18 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
 
 pub struct SqlxPeerLeafAvailabilityRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxPeerLeafAvailabilityRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
+    }
+
+    /// Sends `replace_for_peer` through the shared write queue.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
     }
 }
 
@@ -235,19 +243,26 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         peer_node_id: Uuid,
         rows: &[PeerLeafAvailability],
     ) -> Result<(), DbError> {
-        // One transaction, so one commit sync for the whole snapshot, and
-        // readers never see the peer's inventory half replaced.
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM peer_leaf_availability WHERE peer_node_id = ?")
-            .bind(peer_node_id.to_string())
-            .execute(&mut *tx)
-            .await?;
-        for row in rows {
-            let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
-            bind_upsert(row, leaf_selector).execute(&mut *tx).await?;
-        }
-        tx.commit().await?;
-        Ok(())
+        // One write, so the whole snapshot shares one commit (with other queued
+        // writes when there is a queue), and readers never see the peer's
+        // inventory half replaced.
+        let peer = peer_node_id.to_string();
+        let rows = std::sync::Arc::new(rows.to_vec());
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let (peer, rows) = (peer.clone(), rows.clone());
+            Box::pin(async move {
+                sqlx::query("DELETE FROM peer_leaf_availability WHERE peer_node_id = ?")
+                    .bind(peer)
+                    .execute(&mut *conn)
+                    .await?;
+                for row in rows.iter() {
+                    let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
+                    bind_upsert(row, leaf_selector).execute(&mut *conn).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError> {
@@ -813,6 +828,38 @@ mod tests {
 
         let all = repo.list_for_peer(peer_node_id).await.unwrap();
         assert_eq!(all.len(), 5);
+    }
+
+    /// The queued snapshot swap behaves like the direct one.
+    #[tokio::test]
+    async fn queued_replace_for_peer_swaps_one_peers_snapshot_only() {
+        let pool = test_sqlite_pool().await;
+        let queue = WriteQueue::spawn(pool.clone(), crate::WriteQueueConfig::default());
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool).with_write_queue(queue.clone());
+        let (peer, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let tmdb = playarr_model::ExternalProvider::Tmdb;
+        repo.upsert(&sample(peer, tmdb.clone(), "old", LeafSelector::Movie))
+            .await
+            .unwrap();
+        repo.upsert(&sample(other, tmdb.clone(), "keep", LeafSelector::Movie))
+            .await
+            .unwrap();
+        repo.replace_for_peer(
+            peer,
+            &[sample(peer, tmdb.clone(), "new", LeafSelector::Movie)],
+        )
+        .await
+        .unwrap();
+        let ids: Vec<_> = repo
+            .list_for_peer(peer)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| r.external_id)
+            .collect();
+        assert_eq!(ids, vec!["new"]);
+        assert_eq!(repo.list_for_peer(other).await.unwrap().len(), 1);
+        queue.shutdown().await;
     }
 
     #[tokio::test]

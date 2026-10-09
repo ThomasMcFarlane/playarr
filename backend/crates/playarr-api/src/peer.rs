@@ -34,6 +34,7 @@
 //! precedent) are hand-mirrored field-by-field.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
@@ -889,7 +890,19 @@ pub(crate) fn leaf_selectors_for(
     leaves
 }
 
+/// This node's own availability rows, from the shared snapshot when it is
+/// fresh (see [`crate::own_availability`]) and derived otherwise.
 async fn derive_own_availability(
+    state: &AppState,
+    now: DateTime<Utc>,
+) -> Result<Arc<Vec<PeerAvailabilityRow>>, ApiError> {
+    state
+        .own_availability
+        .get_or_derive(|| derive_own_availability_uncached(state, now))
+        .await
+}
+
+async fn derive_own_availability_uncached(
     state: &AppState,
     now: DateTime<Utc>,
 ) -> Result<Vec<PeerAvailabilityRow>, ApiError> {
@@ -1011,7 +1024,7 @@ pub async fn availability_handler(
     let now = Utc::now();
     let rows = derive_own_availability(&state, now).await?;
     Ok(Json(AvailabilityResponse {
-        rows,
+        rows: rows.as_ref().clone(),
         server_time: cursor(now),
     }))
 }
@@ -1229,7 +1242,8 @@ async fn build_push_request(
     let availability = availability_sync::AvailabilityResponse {
         rows: derive_own_availability(state, now)
             .await?
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|row| availability_sync::AvailabilityRow {
                 media_file_id: row.media_file_id,
                 source_instance_id: row.source_instance_id,
@@ -2410,6 +2424,116 @@ mod sync_endpoint_tests {
             0,
             "a replicated MediaFile row must not advertise a missing physical file"
         );
+    }
+
+    /// Timing evidence for the live availability derivation (run with
+    /// `--ignored --nocapture`): a catalogue of single-file movies, one cold
+    /// derivation and one served from the snapshot cache.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_derive_own_availability() {
+        let (_router, state) = test_state().await;
+        seed_group_and_signed_peer(&state, Uuid::new_v4(), &signing_key()).await;
+        let self_peer_id = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .unwrap()
+            .peer_id;
+        let media_root = tempfile::tempdir().unwrap();
+        std::fs::write(media_root.path().join("file.mkv"), b"media").unwrap();
+        let source_instance_id = Uuid::new_v4();
+        state
+            .app
+            .source_instance_repo
+            .upsert(&SourceInstance {
+                id: source_instance_id,
+                kind: playarr_model::SourceKind::Radarr,
+                name: "Radarr".to_string(),
+                base_url: "https://radarr.example.com".to_string(),
+                api_key_encrypted: Sensitive::new("key".to_string()),
+                priority: 0,
+                default_root_folder_id: Some("/media".to_string()),
+                folder_mappings: [(
+                    self_peer_id,
+                    media_root.path().to_string_lossy().into_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                default_quality_profile_id: None,
+                best_effort: false,
+                group_library_id: Some(Uuid::new_v4()),
+            })
+            .await
+            .unwrap();
+        let works: usize = std::env::var("BENCH_WORKS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1500);
+        for i in 0..works {
+            let work_id = Uuid::new_v4();
+            let work = Work {
+                id: work_id,
+                kind: WorkKind::Movie,
+                external_refs: vec![ExternalRef {
+                    provider: ExternalProvider::Tmdb,
+                    external_id: format!("{i}"),
+                }],
+                title: format!("Sample Movie {i}"),
+                sort_title: format!("sample movie {i:06}"),
+                overview: None,
+                images: vec![],
+                genres: vec![],
+                tags: vec![],
+                added_at: Utc::now(),
+                release_date: None,
+                end_date: None,
+                monitored: true,
+                availability: Availability::Available,
+            };
+            state.app.work_repo.upsert(&work).await.unwrap();
+            state
+                .app
+                .media_file_repo
+                .create(&playarr_model::MediaFile {
+                    id: Uuid::new_v4(),
+                    work_id,
+                    leaf_ref: LeafRef::Work,
+                    path: std::path::PathBuf::from("/media/file.mkv"),
+                    container: "mkv".to_string(),
+                    codec: "h264".to_string(),
+                    bitrate: Some(4_000_000),
+                    duration_ms: Some(3_600_000),
+                    size_bytes: 123_456,
+                    source_instance_id,
+                    source_file_id: Some(format!("{i}")),
+                })
+                .await
+                .unwrap();
+        }
+        let cache = crate::own_availability::OwnAvailabilityCache::new(
+            crate::own_availability::DEFAULT_TTL,
+        );
+        let state = &state.app;
+        let t = std::time::Instant::now();
+        let rows = cache
+            .get_or_derive(|| derive_own_availability_uncached(state, Utc::now()))
+            .await
+            .unwrap();
+        let cold = t.elapsed();
+        let t = std::time::Instant::now();
+        let again = cache
+            .get_or_derive(|| derive_own_availability_uncached(state, Utc::now()))
+            .await
+            .unwrap();
+        println!(
+            "{works} works ({} rows): cold derivation {cold:?}, next caller {:?}",
+            rows.len(),
+            t.elapsed()
+        );
+        assert!(Arc::ptr_eq(&rows, &again));
     }
 
     #[tokio::test]

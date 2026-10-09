@@ -31,6 +31,7 @@ use uuid::Uuid;
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write_latest, WriteQueue};
 
 /// One `(peer_node_id, entity)` sync cursor -- column-for-column mirror of
 /// the `peer_sync_state` table
@@ -69,11 +70,18 @@ pub trait PeerSyncStateRepo: Send + Sync {
 
 pub struct SqlxPeerSyncStateRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxPeerSyncStateRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
+    }
+
+    /// Sends `upsert` through the shared write queue.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
     }
 }
 
@@ -95,19 +103,40 @@ const COLUMNS: &str = "peer_node_id, entity, cursor, last_synced_at";
 
 #[async_trait]
 impl PeerSyncStateRepo for SqlxPeerSyncStateRepo {
+    /// Latest value wins: two cursors saved for one peer and entity in one
+    /// write-queue batch collapse to the one with the newer `last_synced_at`
+    /// (the later submission on a tie).
     async fn upsert(&self, state: &PeerSyncState) -> Result<(), DbError> {
-        let sql = "INSERT INTO peer_sync_state (peer_node_id, entity, cursor, last_synced_at) \
-                 VALUES (?, ?, ?, ?) \
-                 ON CONFLICT (peer_node_id, entity) DO UPDATE SET \
-                 cursor = excluded.cursor, last_synced_at = excluded.last_synced_at";
-        sqlx::query(sql)
-            .bind(state.peer_node_id.to_string())
-            .bind(state.entity.as_str())
-            .bind(state.cursor.as_deref())
-            .bind(state.last_synced_at.map(format_datetime))
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        let peer = state.peer_node_id.to_string();
+        let entity = state.entity.clone();
+        let cursor = state.cursor.clone();
+        let synced = state.last_synced_at.map(format_datetime);
+        let rank = state.last_synced_at.map_or(0, |at| at.timestamp_millis());
+        write_latest(
+            self.queue.as_ref(),
+            &self.pool,
+            format!("peer_sync_state:{peer}:{entity}"),
+            rank,
+            move |conn| {
+                let (peer, entity, cursor, synced) =
+                    (peer.clone(), entity.clone(), cursor.clone(), synced.clone());
+                Box::pin(async move {
+                    let sql = "INSERT INTO peer_sync_state (peer_node_id, entity, cursor, last_synced_at) \
+                         VALUES (?, ?, ?, ?) \
+                         ON CONFLICT (peer_node_id, entity) DO UPDATE SET \
+                         cursor = excluded.cursor, last_synced_at = excluded.last_synced_at";
+                    sqlx::query(sql)
+                        .bind(peer)
+                        .bind(entity)
+                        .bind(cursor)
+                        .bind(synced)
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            },
+        )
+        .await
     }
 
     async fn get(
@@ -142,6 +171,7 @@ mod tests {
 
     use super::*;
     use crate::pool::test_sqlite_pool;
+    use crate::write_queue::WriteQueue;
 
     /// `peer_sync_state` has no `REFERENCES` foreign key (see
     /// `0033_peer_sync_state.sql`'s own schema), so tests can insert
@@ -266,5 +296,48 @@ mod tests {
         let repo = SqlxPeerSyncStateRepo::new(pool);
 
         assert!(repo.list_for_peer(Uuid::new_v4()).await.unwrap().is_empty());
+    }
+
+    /// Cursors saved together for one peer and entity collapse to the newest;
+    /// another entity in the same batch is kept, and every call is committed
+    /// before it returns.
+    #[tokio::test]
+    async fn queued_upserts_keep_the_newest_cursor_per_peer_and_entity() {
+        let pool = test_sqlite_pool().await;
+        let queue = WriteQueue::spawn(
+            pool.clone(),
+            crate::WriteQueueConfig {
+                max_wait: std::time::Duration::from_millis(300),
+                ..Default::default()
+            },
+        );
+        let repo =
+            std::sync::Arc::new(SqlxPeerSyncStateRepo::new(pool).with_write_queue(queue.clone()));
+        let peer = Uuid::new_v4();
+        let now = Utc::now().trunc_subsecs(3);
+        let mut calls = Vec::new();
+        for (entity, age_s, cursor) in [
+            ("accounts", 5, "newer"),
+            ("accounts", 20, "older"),
+            ("playlists", 7, "other"),
+        ] {
+            let repo = repo.clone();
+            let state = PeerSyncState {
+                peer_node_id: peer,
+                entity: entity.to_string(),
+                cursor: Some(cursor.to_string()),
+                last_synced_at: Some(now - chrono::Duration::seconds(age_s)),
+            };
+            calls.push(tokio::spawn(async move { repo.upsert(&state).await }));
+        }
+        for call in calls {
+            call.await.unwrap().unwrap();
+        }
+        let accounts = repo.get(peer, "accounts").await.unwrap().unwrap();
+        assert_eq!(accounts.cursor.as_deref(), Some("newer"));
+        let playlists = repo.get(peer, "playlists").await.unwrap().unwrap();
+        assert_eq!(playlists.cursor.as_deref(), Some("other"));
+        assert_eq!(queue.stats().coalesced, 1);
+        queue.shutdown().await;
     }
 }

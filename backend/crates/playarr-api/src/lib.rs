@@ -53,6 +53,7 @@ pub mod media;
 pub mod notifications;
 pub mod oauth;
 pub mod openapi_docs;
+pub mod own_availability;
 pub mod peer;
 pub mod peer_extractor;
 mod physical_path;
@@ -916,6 +917,9 @@ pub struct AppState {
     pub live_events: playarr_db::LiveEventPublisher,
     /// Short-lived cache of per-instance calendar answers, see `calendar`.
     pub calendar_cache: Arc<calendar::CalendarCache>,
+    /// Shared snapshot of this node's own derived peer availability.
+    pub own_availability:
+        Arc<own_availability::OwnAvailabilityCache<Vec<peer::PeerAvailabilityRow>>>,
     /// Node-local staging area for self-service user-data export jobs.
     pub portability: Arc<portability::ExportRegistry>,
     /// Revocable tokens behind the external iCal subscription URL.

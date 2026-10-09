@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write_latest, WriteQueue};
 
 /// In-process wake-ups for the push transports (SSE and long poll). The
 /// database queue stays the source of truth; a wake only cuts the latency of
@@ -229,11 +230,19 @@ pub trait RemoteRepo: Send + Sync {
 
 pub struct SqlxRemoteRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxRemoteRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
+    }
+
+    /// Sends the target heartbeats (`touch_target`, `set_target_state`)
+    /// through the shared write queue.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
     }
 
     fn sql(&self, q: &str) -> String {
@@ -384,34 +393,63 @@ impl RemoteRepo for SqlxRemoteRepo {
         rows.iter().map(target_from).collect()
     }
 
+    /// A heartbeat: latest `now_ms` wins, so touches of one device in one
+    /// write-queue batch collapse to the newest.
     async fn touch_target(&self, device_id: Uuid, now_ms: i64) -> Result<(), DbError> {
-        let sql = self.sql("UPDATE remote_targets SET last_seen_ms = ? WHERE device_id = ?");
-        sqlx::query(&sql)
-            .bind(now_ms)
-            .bind(device_id.to_string())
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        let device = device_id.to_string();
+        write_latest(
+            self.queue.as_ref(),
+            &self.pool,
+            format!("remote_touch:{device}"),
+            now_ms,
+            move |conn| {
+                let device = device.clone();
+                Box::pin(async move {
+                    sqlx::query("UPDATE remote_targets SET last_seen_ms = ? WHERE device_id = ?")
+                        .bind(now_ms)
+                        .bind(device)
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            },
+        )
+        .await
     }
 
+    /// Reports a target's playback state: the newest `now_ms` wins within a
+    /// write-queue batch.
     async fn set_target_state(
         &self,
         device_id: Uuid,
         state: &Value,
         now_ms: i64,
     ) -> Result<(), DbError> {
-        let sql = self.sql(
-            "UPDATE remote_targets SET state = ?, state_at_ms = ?, last_seen_ms = ? \
-             WHERE device_id = ?",
-        );
-        sqlx::query(&sql)
-            .bind(state.to_string())
-            .bind(now_ms)
-            .bind(now_ms)
-            .bind(device_id.to_string())
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        let device = device_id.to_string();
+        let state = state.to_string();
+        write_latest(
+            self.queue.as_ref(),
+            &self.pool,
+            format!("remote_state:{device}"),
+            now_ms,
+            move |conn| {
+                let (device, state) = (device.clone(), state.clone());
+                Box::pin(async move {
+                    sqlx::query(
+                        "UPDATE remote_targets SET state = ?, state_at_ms = ?, last_seen_ms = ? \
+                         WHERE device_id = ?",
+                    )
+                    .bind(state)
+                    .bind(now_ms)
+                    .bind(now_ms)
+                    .bind(device)
+                    .execute(&mut *conn)
+                    .await?;
+                    Ok(())
+                })
+            },
+        )
+        .await
     }
 
     async fn delete_target(&self, device_id: Uuid) -> Result<(), DbError> {
