@@ -691,7 +691,9 @@ jobs:
           for script in scripts/nav-*-e2e.mjs; do
             name=$(basename "$script" -e2e.mjs)
             case " $shard_a " in *" $name "*) in_a=1 ;; *) in_a=0 ;; esac
-            if [ "${{ matrix.shard }}" = nav-a ] && [ "$in_a" = 1 ] || [ "${{ matrix.shard }}" = nav-b ] && [ "$in_a" = 0 ]; then
+            want_a=0
+            [ "${{ matrix.shard }}" = nav-a ] && want_a=1
+            if [ "$in_a" = "$want_a" ]; then
               echo "=== $name"; start=$SECONDS
               node "$script" --no-build --dist dist || exit 1
               echo "--- $name: passed ($((SECONDS - start))s)"
