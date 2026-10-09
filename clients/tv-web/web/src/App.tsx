@@ -532,6 +532,7 @@ function AppShell() {
                     key={to}
                     to={to}
                     end={end}
+                    aria-label={t(labelKey)}
                     className={({ isActive }) =>
                       `app-nav-link${isActive ? " is-active" : ""}`
                     }
@@ -548,6 +549,7 @@ function AppShell() {
               {group.id === "library" && hasFolderRoots ? (
                 <NavLink
                   to="/folders"
+                  aria-label={t("pages.folders.entry")}
                   className={({ isActive }) =>
                     `app-nav-link${isActive ? " is-active" : ""}`
                   }

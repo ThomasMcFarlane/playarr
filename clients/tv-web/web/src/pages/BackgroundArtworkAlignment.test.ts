@@ -17,7 +17,7 @@ describe("background artwork alignment", () => {
     expect(artworkRule).toContain("width: 52%");
     expect(artworkRule).toContain("height: 106%");
     expect(artworkRule).toContain("margin-left: 0");
-    expect(artworkRule).toContain("opacity: 0.4");
+    expect(artworkRule).toContain("opacity: 0.24");
     expect(artworkRule).toContain(
       "-webkit-mask-image: linear-gradient(90deg, #000 0%, #000 72%, transparent 100%)"
     );

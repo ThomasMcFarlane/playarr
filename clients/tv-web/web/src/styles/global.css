@@ -4337,7 +4337,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   object-fit: cover;
   object-position: center 20%;
   filter: grayscale(1) contrast(0.88) brightness(1.1);
-  opacity: 0.4;
+  opacity: 0.24;
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 72%, transparent 100%);
   mask-image: linear-gradient(90deg, #000 0%, #000 72%, transparent 100%);
   transform: scale(1.04);
@@ -4383,7 +4383,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, transparent 31%),
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, color-mix(in srgb, var(--surface) 90%, transparent) 36%, transparent 52%),
     linear-gradient(270deg, color-mix(in srgb, var(--surface) 50%, transparent) 0%, transparent 34%);
 }
 
@@ -4555,15 +4555,16 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   right: clamp(8px, calc(1 * var(--vw)), 22px);
   height: min(calc(66 * var(--viewport-unit)), 720px);
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  flex-flow: column wrap;
+  align-content: flex-end;
+  justify-content: center;
   transform: translateY(-50%);
 }
 
 .tv-alphabet button {
   position: relative;
-  width: clamp(18px, calc(1.35 * var(--vw)), 24px);
-  height: clamp(18px, calc(1.35 * var(--vw)), 24px);
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -4586,7 +4587,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   z-index: -1;
   top: 50%;
   left: 50%;
-  width: 72%;
+  width: clamp(18px, calc(1.35 * var(--vw)), 24px);
   aspect-ratio: 1;
   border-radius: 50%;
   background: transparent;
@@ -4610,7 +4611,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .tv-alphabet button.is-active::before {
-  width: 76%;
+  width: clamp(18px, calc(1.35 * var(--vw)), 24px);
   background: color-mix(in srgb, var(--ink) 78%, transparent);
 }
 
@@ -4620,7 +4621,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .tv-alphabet button:hover::before {
-  width: 110%;
+  width: calc(clamp(18px, calc(1.35 * var(--vw)), 24px) * 1.5);
   background: var(--ink);
 }
 
@@ -4632,7 +4633,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.46rem, calc(0.52 * var(--vw)), 0.64rem);
 }
 
@@ -4781,6 +4782,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  min-height: 44px;
   padding: 0.38rem 0.78rem 0.38rem var(--tv-user-padding-start);
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: 999px;
@@ -4838,7 +4840,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   position: absolute;
   top: calc(100% + 5px);
   left: calc(var(--tv-user-padding-start) + var(--tv-user-avatar-size) / 2);
-  color: var(--ink-muted);
+  color: var(--ink);
   font: 700 clamp(0.38rem, calc(0.42 * var(--vw)), 0.5rem)/1 var(--mono);
   letter-spacing: 0.04em;
   transform: translateX(-50%);
@@ -4870,8 +4872,15 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
  * that the stage scale does not touch (audit R1). At the 1080 stage these resolve to the original 64px / 0.6rem.
  */
 .app-nav {
-  --tv-nav-link-size: clamp(38px, calc(5.926 * var(--viewport-unit)), 64px);
+  --tv-nav-link-size: clamp(44px, calc(5.926 * var(--viewport-unit)), 64px);
   --tv-nav-gap: clamp(0.15rem, calc(0.889 * var(--viewport-unit)), 0.6rem);
+}
+
+/* 44px nav targets (WCAG 2.5.5) need the gaps tightened on short viewports so ten entries and the profile chip still fit. */
+@media (max-height: 800px) {
+  .app-nav {
+    --tv-nav-gap: 0.25rem;
+  }
 }
 
 .app-nav-group {
@@ -4965,6 +4974,14 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
   --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
+  /* Alphabet rail: 44px targets in two columns on a tall stage, three on a short one (WCAG 2.5.5). */
+  --directory-alphabet-width: 88px;
+}
+
+@media (max-height: 960px) {
+  .tv-directory {
+    --directory-alphabet-width: 132px;
+  }
 }
 
 .tv-filter-launcher {
@@ -5247,7 +5264,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   --library-rail-top: clamp(128px, calc(15 * var(--viewport-unit)), 174px);
   --library-rail-bottom: clamp(48px, calc(6 * var(--viewport-unit)), 78px);
   --library-rail-right: calc(
-    var(--directory-controls-edge) + var(--directory-controls-width) +
+    var(--directory-controls-edge) +
+      max(var(--directory-controls-width), var(--directory-alphabet-width, 0px)) +
       var(--directory-controls-gap)
   );
   --library-rail-left: clamp(28px, calc(2.8 * var(--vw)), 54px);
@@ -5718,7 +5736,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 .tv-directory .tv-alphabet {
   right: var(--directory-controls-edge);
   top: clamp(214px, calc(25 * var(--viewport-unit)), 286px);
-  width: var(--directory-controls-width);
+  width: auto;
   height: min(calc(64 * var(--viewport-unit)), 690px);
   align-items: center;
   transform: none;
@@ -6706,8 +6724,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 /* Season Download: a small round icon button at the right of the track heading. */
 .tv-track-action {
   flex: 0 0 auto;
-  width: clamp(30px, calc(2.4 * var(--vw)), 46px);
-  height: clamp(30px, calc(2.4 * var(--vw)), 46px);
+  width: clamp(44px, calc(2.4 * var(--vw)), 46px);
+  height: clamp(44px, calc(2.4 * var(--vw)), 46px);
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
@@ -6721,8 +6739,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-track-action svg {
-  width: 55%;
-  height: 55%;
+  width: clamp(17px, calc(1.32 * var(--vw)), 25px);
+  height: clamp(17px, calc(1.32 * var(--vw)), 25px);
 }
 
 .tv-track-action:hover {
@@ -7265,6 +7283,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   width: 100%;
   min-width: 0;
   height: 100%;
+  min-height: 44px;
   padding: 0;
   border: 0;
   outline: 0;
@@ -7300,7 +7319,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-search-clear {
-  min-height: clamp(40px, calc(3.5 * var(--vw)), 54px);
+  min-height: clamp(44px, calc(3.5 * var(--vw)), 54px);
   padding: 0 clamp(14px, calc(1.1 * var(--vw)), 20px);
   border-radius: 999px;
   cursor: pointer;
@@ -8642,8 +8661,8 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   .app-user-identity {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     justify-content: center;
     padding: 4px;
     border-radius: 50%;
@@ -10816,7 +10835,7 @@ body[data-input-mode="remote"] :is(
 }
 
 .ui-btn--sm {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.45rem 0.9rem;
   font-size: 0.72rem;
 }
@@ -11112,5 +11131,20 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 .details-panel .btn,
 .details-panel button {
   text-shadow: none;
+}
+
+/*
+ * WCAG AAA (1.4.6): the lifted card's shadow darkens the caption beneath it, so the selected caption gets a
+ * near-opaque surface backing that the shadow cannot tint (the lift and shadow themselves are unchanged).
+ */
+.tv-title-card.is-selected .tv-title-card-copy,
+.tv-episode-card.is-selected .tv-episode-copy,
+.tv-home-card.is-selected > strong,
+.tv-home-card.is-selected > small,
+.tv-episode-card[aria-current="true"] .tv-episode-copy {
+  position: relative;
+  z-index: 1;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
