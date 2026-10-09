@@ -136,10 +136,10 @@ export class QueryCache {
     return { data: entry.data as T, at: entry.at };
   }
 
-  private store(key: string, data: unknown, tags: readonly QueryTag[]): void {
+  private store(key: string, data: unknown, tags: readonly QueryTag[], at: number = this.now()): void {
     const id = this.scoped(key);
     this.entries.delete(id);
-    this.entries.set(id, { data, at: this.now(), tags });
+    this.entries.set(id, { data, at, tags });
     while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next().value;
       if (oldest === undefined) break;
@@ -214,9 +214,17 @@ export class QueryCache {
     });
   }
 
-  /** Stores a value directly (for example one a list response already carries). */
-  set(key: string, data: unknown, tags: readonly QueryTag[] = []): void {
-    if (this.enabled) this.store(key, data, tags);
+  /**
+   * Stores a value directly (for example one a list response already carries). `at` back-dates it, for a copy
+   * restored from disk: callers that revalidate by age then see it as old.
+   */
+  set(key: string, data: unknown, tags: readonly QueryTag[] = [], at?: number): void {
+    if (this.enabled) this.store(key, data, tags, at);
+  }
+
+  /** Changes on every invalidation and scope change: a value read before a change is not to be stored after it. */
+  get generation(): number {
+    return this.epoch;
   }
 
   /** Drops the entries carrying any of `tags` (all entries when none are given). */
