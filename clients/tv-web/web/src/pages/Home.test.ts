@@ -6,7 +6,7 @@ describe("Home layout", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
 
     expect(css).toMatch(
-      /\.tv-home\.is-cover-view \.tv-home-card-art\s*\{[^}]*aspect-ratio:\s*2 \/ 3/s
+      /\.tv-home\.is-cover-view \.tv-home-card-art\s*\{[^}]*aspect-ratio:\s*var\(--card-art-ratio-cover\)/s
     );
     expect(css).toMatch(
       /\.tv-home-card:hover \.tv-home-card-art,[\s\S]*?\{[^}]*0 26px 52px[^}]*transform:\s*scale\(1\.025\)/s

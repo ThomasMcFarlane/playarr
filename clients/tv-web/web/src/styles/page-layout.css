@@ -16,7 +16,8 @@
      page, exactly where Home puts it (owner ruling 2026-10-08): the layout parity job compares them. */
   --stage-split: 65%;
   /* Width of the right-hand column itself: Home's rails, the library rail surface and the library grid panel. */
-  --stage-rail-width: 62%;
+  --stage-rail-vw: 62;
+  --stage-rail-width: calc(var(--stage-rail-vw) * 1%);
   --page-header-top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
   --page-end: clamp(24px, calc(4 * var(--vw)), 96px);
   --page-control-height: clamp(44px, calc(2.8 * var(--vw)), 50px);
@@ -34,6 +35,49 @@
   /* Shell action column: where the 30 September launcher sat (commit 54224f36). */
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
+  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
+  /* Alphabet rail: one column of 44px targets (WCAG 2.5.5) plus 6px padding each side; it scrolls when the letters do not fit. */
+  --directory-alphabet-width: 56px;
+  --library-rail-left: clamp(28px, calc(2.8 * var(--vw)), 54px);
+  --library-rail-right: calc(
+    var(--directory-controls-edge) + max(var(--directory-controls-width), var(--directory-alphabet-width)) +
+      var(--directory-controls-gap)
+  );
+  /*
+   * THE poster card (owner request 2026-10-10): the Library grid card is the canonical size, and every poster or title
+   * card (Home and playlist rails, Library and playlist grids, Search, "more like this") is exactly this wide, with
+   * this art ratio, radius, caption size and spacing. Nothing else sets a poster card's size. --card-w is the Library
+   * grid column: the right-hand rail (--card-rail-vw of the stage) minus its padding, split into --card-cols columns.
+   * --card-w-cover is the same for the cover (2:3) view. Cast circles, episode and chapter tiles are other card
+   * types: they keep their own shape but are sized on the same stage scale.
+   */
+  --card-pad-left: var(--library-rail-left);
+  --card-pad-right: var(--library-rail-right);
+  --card-rail-vw: 62;
+  --card-cols: 3;
+  --card-cols-cover: 5;
+  --card-grid-gap: clamp(14px, calc(1.35 * var(--vw)), 28px);
+  --card-grid-gap-cover: clamp(12px, calc(1 * var(--vw)), 20px);
+  --card-w: calc(
+    (
+      var(--card-rail-vw) * var(--vw) - var(--card-pad-left) - var(--card-pad-right) -
+        (var(--card-cols) - 1) * var(--card-grid-gap)
+    ) / var(--card-cols)
+  );
+  --card-w-cover: calc(
+    (
+      var(--card-rail-vw) * var(--vw) - var(--card-pad-left) - var(--card-pad-right) -
+        (var(--card-cols-cover) - 1) * var(--card-grid-gap-cover)
+    ) / var(--card-cols-cover)
+  );
+  --card-art-ratio: 16 / 9;
+  --card-art-ratio-cover: 2 / 3;
+  --card-radius: clamp(8px, calc(0.65 * var(--vw)), 13px);
+  --card-copy-gap: 0.72rem;
+  --card-copy-inset: 0.12rem;
+  --card-title-size: clamp(0.55rem, calc(0.62 * var(--vw)), 0.78rem);
+  --card-title-weight: 610;
+  --card-meta-size: clamp(0.43rem, calc(0.46 * var(--vw)), 0.56rem);
   --shell-action-column-top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
   /* The focus indicator is a ring, never a fill: white in dark theme, the theme ink in light theme. */
   --focus-ring-color: var(--ink);
@@ -61,6 +105,35 @@
   --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
   --page-edge-fade-floor: 0.3;
 }
+
+/* The poster card follows the Library grid in every layout (same columns, same gutters as the Library rules in global.css). */
+@media (max-width: 1100px), (max-height: 700px) {
+  :root {
+    --card-rail-vw: 66;
+    --card-cols-cover: 4;
+  }
+}
+
+@media (max-width: 760px),
+  (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
+  :root {
+    --card-rail-vw: 100;
+    --card-pad-left: var(--mobile-page-gutter);
+    --card-pad-right: var(--mobile-page-gutter);
+    --card-cols: 2;
+    --card-cols-cover: 2;
+    --card-grid-gap: 12px;
+    --card-grid-gap-cover: 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  :root {
+    --card-cols: 1;
+    --card-cols-cover: 1;
+  }
+}
+
 
 :root[data-theme="dark"] {
   --focus-ring-color: #ffffff;
@@ -787,7 +860,7 @@ body[data-input-mode="remote"] .action-pill {
 }
 
 .skeleton-rail-row > .skeleton-card {
-  flex: 0 0 clamp(150px, calc(11.4 * var(--vw)), 225px);
+  flex: 0 0 var(--card-w);
 }
 
 .skeleton-detail-set {

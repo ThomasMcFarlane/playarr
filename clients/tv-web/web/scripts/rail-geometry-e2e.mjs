@@ -31,7 +31,7 @@ const state = (page) => page.evaluate(() => {
   const rail = el.closest("[data-tv-scroll-axis=horizontal]");
   const rails = [...document.querySelectorAll("[data-tv-scroll-axis=horizontal]")];
   return {
-    cx: r.left + r.width / 2, top: r.top,
+    cx: r.left + r.width / 2, top: r.top, cardW: r.width,
     railIndex: rails.indexOf(rail),
     scrolls: rails.map((x) => Math.round(x.scrollLeft)),
     visible: r.left >= -1 && r.right <= innerWidth + 1,
@@ -84,7 +84,9 @@ for (const theme of THEMES) {
     const label = `${theme} ${direction}`;
     check(`${label}: focus moved to the adjacent rail`, target === before.railIndex + (direction === "ArrowDown" ? 1 : -1), JSON.stringify({ before, after }));
     check(`${label}: landed on the card nearest the previous x`, Math.abs(after.cx - before.cx) <= best + 2, `dx=${Math.abs(after.cx - before.cx)} best=${best}`);
-    check(`${label}: target rail did not scroll to a matching offset`, after.scrolls[target] === before.scrolls[target], `before=${before.scrolls} after=${after.scrolls}`);
+    // The rail scrolls only enough to unclip the chosen card (less than one card), never to the source rail's offset.
+    const moved = Math.abs(after.scrolls[target] - before.scrolls[target]);
+    check(`${label}: target rail did not scroll to a matching offset`, moved < before.cardW && after.scrolls[target] !== before.scrolls[before.railIndex], `before=${before.scrolls} after=${after.scrolls}`);
     check(`${label}: focused card is on screen`, after.visible, JSON.stringify(after));
   }
   // Series detail: stacked season rails behave the same way.
