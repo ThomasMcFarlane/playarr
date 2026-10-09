@@ -151,25 +151,4 @@ for (const [route, label] of starts) {
   await context.close();
 }
 
-// A3, R22: the Calendar period picker holds focus.
-{
-  const { context, page } = await open("/calendar");
-  await settle(page, 1500);
-  await page.locator(".period-picker-trigger").focus();
-  await page.keyboard.press("Enter");
-  await settle(page, 400);
-  let held = true;
-  for (const key of [...Array(16).fill("ArrowDown"), "ArrowRight", "ArrowRight", "ArrowLeft", ...Array(16).fill("ArrowUp")]) {
-    await page.keyboard.press(key);
-    await page.waitForTimeout(40);
-    held &&= await page.evaluate(() => Boolean(document.activeElement?.closest(".period-picker-panel")));
-  }
-  check("Calendar period picker: arrows never leave the popover", held);
-  await page.keyboard.press("Escape");
-  await settle(page, 300);
-  const info = await focusInfo(page);
-  check("Calendar period picker: BACK closes it and returns to the trigger", /period-picker-trigger/.test(info?.cls ?? ""), JSON.stringify(info));
-  await context.close();
-}
-
 await finish();

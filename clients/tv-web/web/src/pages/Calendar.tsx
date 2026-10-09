@@ -25,7 +25,7 @@ import {
   ViewToggle,
 } from "../components/shell";
 import { Button, buttonClassName } from "../components/ui";
-import { PeriodPicker } from "../components/shell";
+import { SettledAnnouncer } from "../components/shell";
 import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -190,6 +190,18 @@ export function formatRangeLabel(view: CalendarView, anchor: Day, firstDay: numb
   const short = utcFormatter(locale, { day: "numeric", month: "short" });
   const withYear = utcFormatter(locale, { day: "numeric", month: "short", year: "numeric" });
   return `${short.format(parseDay(range.start))} – ${withYear.format(parseDay(range.end))}`;
+}
+
+/**
+ * The short range shown on the shell action button ("6–12 Oct", "Oct 2026"), locale-aware. The full label from
+ * {@link formatRangeLabel} is the button's accessible name and the settled announcement.
+ */
+export function formatRangeButtonLabel(view: CalendarView, anchor: Day, firstDay: number, locale: string): string {
+  if (view === "month") {
+    return utcFormatter(locale, { month: "short", year: "numeric" }).format(parseDay(anchor));
+  }
+  const range = visibleRange(view, anchor, firstDay);
+  return utcFormatter(locale, { day: "numeric", month: "short" }).formatRange(parseDay(range.start), parseDay(range.end));
 }
 
 function entryTime(entry: CalendarEntry): Date | null {
@@ -808,7 +820,7 @@ export function CalendarPage() {
   );
   const setAnchor = (next: Day) => updateParams((params) => writeCalendarUrl(params, { date: next }));
   const setFilters = (next: CalendarFilters) => updateParams((params) => writeCalendarFilters(params, next));
-  const setPanel = (next: "filters" | "link" | null) =>
+  const setPanel = (next: "filters" | "link" | "period" | null) =>
     updateParams((params) => writeCalendarUrl(params, { panel: next }));
 
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -937,6 +949,7 @@ export function CalendarPage() {
 
   // Phones hide the stage's left panel (as on Library), so an agenda selection opens the sheet there.
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
+  const rangeButtonLabel = formatRangeButtonLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const activeCount = activeFilterCount(filters);
   const selectProps: SelectHandlers = { selectedKey: view === "agenda" ? (detailItem?.key ?? null) : (selectedItem?.key ?? null), onSelect: stableSelect };
@@ -1004,49 +1017,21 @@ export function CalendarPage() {
       }
     : undefined;
 
-  // Previous / Today / Next are mounted once: in the page header, or on a phone in a row under the
-  // range label (the header copy would be hidden there). One copy means one default-focus marker.
-  const navButtons = (
-    <>
-      <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
-        <span aria-hidden="true">←</span>
-      </Button>
-      <Button
-        variant="secondary"
-        data-tv-focus-default
-        onClick={() => setAnchor(anchorForView(view, localDayOf(new Date())))}
-      >
-        {t("pages.calendar.today")}
-      </Button>
-      <Button variant="icon" aria-label={t("pages.calendar.next")} onClick={() => stepAnchor(1)}>
-        <span aria-hidden="true">→</span>
-      </Button>
-    </>
-  );
-
   const pageHeader: PageHeaderProps = {
     title: t("pages.calendar.title"),
       back: { label: t("pages.calendar.backToHome"), to: "/" },
       actions: [
-        ...(isPhoneWidth
-          ? []
-          : [
-              {
-                kind: "navigation" as const,
-                id: "calendar-navigation",
-                label: t("pages.calendar.navigationLabel"),
-                items: [
-                  { id: "previous", label: t("pages.calendar.previous"), icon: "prev" as const, onSelect: () => stepAnchor(-1) },
-                  {
-                    id: "today",
-                    label: t("pages.calendar.today"),
-                    onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
-                    buttonProps: { "data-tv-focus-default": true },
-                  },
-                  { id: "next", label: t("pages.calendar.next"), icon: "next" as const, onSelect: () => stepAnchor(1) },
-                ],
-              },
-            ]),
+        {
+          kind: "panel",
+          id: "range",
+          label: rangeButtonLabel,
+          ariaLabel: t("pages.calendar.rangeButtonLabel", { range: rangeLabel }),
+          icon: "calendar",
+          open: panel === "period",
+          onToggle: () => setPanel(panel === "period" ? null : "period"),
+          controls: "calendar-period-drawer",
+          buttonProps: { "data-tv-focus-default": true, "data-range-button": true },
+        },
         {
           kind: "panel",
           id: "subscription",
@@ -1069,6 +1054,30 @@ export function CalendarPage() {
 
   const drawers = (
     <>
+      <FiltersDrawer
+        id="calendar-period-drawer"
+        open={panel === "period"}
+        kicker={t("pages.calendar.title")}
+        title={t("pages.calendar.navigationLabel")}
+        ariaLabel={t("pages.calendar.navigationLabel")}
+        closeLabel={t("pages.library.closeFilters")}
+        onClose={() => setPanel(null)}
+      >
+        <FilterSection title={rangeLabel}>
+          <div className="calendar-nav" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+            <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
+              <span aria-hidden="true">←</span>
+            </Button>
+            <Button variant="secondary" onClick={() => setAnchor(anchorForView(view, localDayOf(new Date())))}>
+              {t("pages.calendar.today")}
+            </Button>
+            <Button variant="icon" aria-label={t("pages.calendar.next")} onClick={() => stepAnchor(1)}>
+              <span aria-hidden="true">→</span>
+            </Button>
+          </div>
+        </FilterSection>
+      </FiltersDrawer>
+
       <FiltersDrawer
         id="calendar-filters-drawer"
         open={panel === "filters"}
@@ -1171,18 +1180,7 @@ export function CalendarPage() {
     </>
   );
 
-  const periodPicker = (
-    <PeriodPicker
-      value={anchor}
-      label={rangeLabel}
-      locale={locale}
-      view={view}
-      dialogLabel={t("pages.calendar.jumpTitle")}
-      monthLabel={t("pages.calendar.jumpMonth")}
-      yearLabel={t("pages.calendar.jumpYear")}
-      onChange={(day) => setAnchor(day)}
-    />
-  );
+  const announcer = <SettledAnnouncer text={rangeLabel} />;
 
   if (view === "agenda") {
     // The agenda is the Library's page: the shared stage (art, left details panel, right list panel).
@@ -1193,7 +1191,7 @@ export function CalendarPage() {
         className="calendar-page calendar-view-agenda tv-library tv-directory"
         ariaLabel={t("pages.calendar.title")}
         backdrop={agendaArt ?? { artKey: "calendar-agenda" }}
-        header={isPhoneWidth ? pageHeader : { ...pageHeader, detail: periodPicker }}
+        header={pageHeader}
       >
         {loading ? (
           <DetailsSkeleton />
@@ -1206,14 +1204,6 @@ export function CalendarPage() {
           refreshKey={`${items.length}:${loading}`}
           contentClassName="calendar-agenda-content"
         >
-          {isPhoneWidth ? (
-            <div className="calendar-header">
-              {periodPicker}
-              <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-                {navButtons}
-              </div>
-            </div>
-          ) : null}
           {stateMessage ?? (
             <DaySections
               days={loading ? skeletonDays() : groups}
@@ -1227,6 +1217,7 @@ export function CalendarPage() {
             />
           )}
         </ListPanel>
+        {announcer}
         {drawers}
         {selectedItem && isPhoneWidth && urlState.selected ? (
           <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>
@@ -1254,15 +1245,6 @@ export function CalendarPage() {
       ariaLabel={t("pages.calendar.title")}
       header={pageHeader}
     >
-      <div className="calendar-header">
-        {periodPicker}
-        {isPhoneWidth ? (
-          <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-            {navButtons}
-          </div>
-        ) : null}
-      </div>
-
       {stateMessage}
       <div
         className={`calendar-scroll${stateMessage ? " is-hidden" : ""}`}
@@ -1271,6 +1253,7 @@ export function CalendarPage() {
         {body}
       </div>
 
+      {announcer}
       {drawers}
 
       {selectedItem ? (

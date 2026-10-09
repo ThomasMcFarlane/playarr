@@ -12,6 +12,8 @@ export interface ActionPillProps {
   icon: ActionIcon;
   /** Always the accessible name; visible under the icon on the tile shape. */
   label: string;
+  /** Accessible name when it should say more than the visible label (for example the full date range). */
+  ariaLabel?: string;
   /** Open or pressed (a drawer is showing). */
   active?: boolean;
   /** Badge on Filters. */
@@ -39,6 +41,7 @@ export function ActionPill({
   shape = "tile",
   icon,
   label,
+  ariaLabel,
   active,
   count = 0,
   kind,
@@ -50,7 +53,7 @@ export function ActionPill({
   marker,
 }: ActionPillProps) {
   const common = {
-    "aria-label": label,
+    "aria-label": ariaLabel ?? label,
     "data-action-kind": kind,
     "data-action-icon": icon,
     ...(marker ? { [marker]: true } : {}),

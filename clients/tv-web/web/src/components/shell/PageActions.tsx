@@ -28,6 +28,8 @@ export type PageAction =
       kind: "panel";
       id: string;
       label: string;
+      /** Accessible name when the visible label is abbreviated. */
+      ariaLabel?: string;
       icon: ActionIcon;
       open: boolean;
       onToggle: () => void;
@@ -84,6 +86,7 @@ function renderAction(action: PageAction): ReactNode {
           marker="data-panel-button"
           icon={action.icon}
           label={action.label}
+          ariaLabel={action.ariaLabel}
           active={action.open}
           onClick={action.onToggle}
           controls={action.controls}
