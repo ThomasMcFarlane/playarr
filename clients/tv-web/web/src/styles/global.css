@@ -5109,7 +5109,23 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .tv-filter-drawer section {
   display: grid;
+  /* Label to its items: tighter than the section to section gap below (proximity grouping). */
   gap: 0.75rem;
+}
+
+/* Section to section: the one shared rhythm for every drawer body (Filters on every page, Calendar link,
+   playback settings, download quality ...). It was lost in 824d327a, which left the body a plain block so
+   every section label sat flush against the items above it. */
+.drawer > .drawer-body {
+  display: grid;
+  align-content: start;
+  gap: clamp(22px, calc(2.8 * var(--viewport-unit)), 34px);
+}
+
+.drawer > .drawer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .tv-filter-choice-grid {
