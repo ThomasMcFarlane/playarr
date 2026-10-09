@@ -1344,7 +1344,6 @@ export const th: Translations = {
   "pages.calendar.filterDateRange": "ช่วงวันที่",
   "pages.calendar.filterMonitored": "การติดตาม",
   "pages.calendar.rangeFrom": "จาก",
-  "pages.calendar.rangeButtonLabel": "ช่วงวันที่: {{range}} เปลี่ยนช่วงเวลา",
   "pages.calendar.rangeTo": "ถึง",
   "pages.calendar.rangeClear": "ล้างวันที่",
   "pages.calendar.monitoredOnly": "เฉพาะที่ติดตาม",

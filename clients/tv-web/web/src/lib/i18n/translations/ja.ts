@@ -1340,7 +1340,6 @@ export const ja: Translations = {
   "pages.calendar.filterDateRange": "期間",
   "pages.calendar.filterMonitored": "監視",
   "pages.calendar.rangeFrom": "開始",
-  "pages.calendar.rangeButtonLabel": "期間: {{range}}。期間を変更",
   "pages.calendar.rangeTo": "終了",
   "pages.calendar.rangeClear": "日付をクリア",
   "pages.calendar.monitoredOnly": "監視中のみ",

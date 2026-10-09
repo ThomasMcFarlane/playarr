@@ -1025,7 +1025,6 @@ export function CalendarPage() {
           kind: "panel",
           id: "range",
           label: rangeButtonLabel,
-          ariaLabel: t("pages.calendar.rangeButtonLabel", { range: rangeLabel }),
           icon: "calendar",
           open: panel === "period",
           onToggle: () => setPanel(panel === "period" ? null : "period"),

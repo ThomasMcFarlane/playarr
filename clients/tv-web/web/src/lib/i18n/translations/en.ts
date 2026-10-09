@@ -1353,7 +1353,6 @@ export const en = {
   "pages.calendar.filterDateRange": "Date range",
   "pages.calendar.filterMonitored": "Monitoring",
   "pages.calendar.rangeFrom": "From",
-  "pages.calendar.rangeButtonLabel": "Date range: {{range}}. Change period",
   "pages.calendar.rangeTo": "To",
   "pages.calendar.rangeClear": "Clear dates",
   "pages.calendar.monitoredOnly": "Monitored only",
