@@ -22,13 +22,14 @@ use crate::error::DbError;
 use crate::pool::DbPool;
 
 /// The first of `rows` (oldest first) sharing a TMDB, TVDB or IMDb id.
-pub fn match_request(
-    rows: impl IntoIterator<Item = MediaRequest>,
+pub fn match_request<R: std::borrow::Borrow<MediaRequest>>(
+    rows: impl IntoIterator<Item = R>,
     tmdb_id: Option<i64>,
     tvdb_id: Option<i64>,
     imdb_id: Option<&str>,
-) -> Option<MediaRequest> {
+) -> Option<R> {
     rows.into_iter().find(|r| {
+        let r: &MediaRequest = r.borrow();
         (tmdb_id.is_some() && r.tmdb_id == tmdb_id)
             || (tvdb_id.is_some() && r.tvdb_id == tvdb_id)
             || imdb_id.is_some_and(|i| {

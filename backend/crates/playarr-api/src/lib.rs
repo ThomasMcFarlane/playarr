@@ -85,6 +85,8 @@ pub mod webhooks;
 #[cfg(test)]
 mod admin_routing_tests;
 #[cfg(test)]
+mod calendar_perf_tests;
+#[cfg(test)]
 mod folders_tests;
 #[cfg(test)]
 mod household_tests;

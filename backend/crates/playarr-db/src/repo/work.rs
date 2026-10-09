@@ -82,6 +82,25 @@ pub trait WorkRepo: Send + Sync {
         external_id: &str,
     ) -> Result<Option<Work>, DbError>;
 
+    /// Many works by id at once; ids with no work are absent. The default
+    /// asks one by one; the SQL repo answers in a few queries.
+    async fn get_many(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Work>, DbError> {
+        let mut out = std::collections::HashMap::new();
+        for id in ids {
+            match self.get(*id).await {
+                Ok(work) => {
+                    out.insert(*id, work);
+                }
+                Err(DbError::NotFound) => {}
+                Err(other) => return Err(other),
+            }
+        }
+        Ok(out)
+    }
+
     /// [`Self::find_by_external_ref`] for many refs at once, keyed by the
     /// ref. Refs with no work are absent. The default asks one by one; the
     /// SQL repo answers in a few queries.
@@ -422,6 +441,36 @@ impl WorkRepo for SqlxWorkRepo {
         }
     }
 
+    async fn get_many(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Work>, DbError> {
+        let mut out = std::collections::HashMap::new();
+        for chunk in ids.chunks(400) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
+                 added_at, release_date, end_date, monitored, availability FROM works \
+                 WHERE id IN ({placeholders})"
+            );
+            let mut query = sqlx::query(&sql);
+            for id in chunk {
+                query = query.bind(id.to_string());
+            }
+            let rows = query.fetch_all(&self.pool).await?;
+            let keys: Vec<String> = rows
+                .iter()
+                .map(|row| row.try_get::<String, _>("id"))
+                .collect::<Result<_, _>>()?;
+            let mut refs = self.load_external_refs_batch(&keys).await?;
+            for (row, key) in rows.iter().zip(keys) {
+                let work = Self::build_work(row, refs.remove(&key).unwrap_or_default())?;
+                out.insert(work.id, work);
+            }
+        }
+        Ok(out)
+    }
+
     async fn find_by_external_refs(
         &self,
         refs: &[ExternalRef],
@@ -696,6 +745,25 @@ mod tests {
         assert_eq!(found[&hit], single);
         assert_eq!(found[&other_hit].id, work.id);
         assert!(repo.find_by_external_refs(&[]).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_many_matches_get_and_skips_missing_ids() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxWorkRepo::new(pool);
+        let first = sample_work(WorkKind::Movie, "First");
+        let second = sample_work(WorkKind::Series, "Second");
+        repo.upsert(&first).await.unwrap();
+        repo.upsert(&second).await.unwrap();
+        let missing = Uuid::new_v4();
+        let many = repo
+            .get_many(&[first.id, second.id, missing, first.id])
+            .await
+            .unwrap();
+        assert_eq!(many.len(), 2);
+        assert_eq!(many[&first.id], repo.get(first.id).await.unwrap());
+        assert_eq!(many[&second.id], repo.get(second.id).await.unwrap());
+        assert!(repo.get_many(&[]).await.unwrap().is_empty());
     }
 
     #[tokio::test]

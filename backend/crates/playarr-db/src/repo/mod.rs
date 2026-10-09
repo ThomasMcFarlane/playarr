@@ -51,7 +51,9 @@ mod watch_progress;
 mod watchlist;
 mod work;
 
-pub use availability_event::{AvailabilityEventRepo, SqlxAvailabilityEventRepo};
+pub use availability_event::{
+    availability_event_generation, AvailabilityEventRepo, SqlxAvailabilityEventRepo,
+};
 pub use calendar_feed_token::{
     CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxCalendarFeedTokenRepo,
 };
@@ -61,8 +63,9 @@ pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};
 pub use embedding::{EmbeddingRepo, SqlxEmbeddingRepo};
 pub use eventing::{
-    EventingDownloadTicketRepo, EventingMediaFileRepo, EventingPlaylistRepo,
-    EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
+    EventingDownloadTicketRepo, EventingMediaFileRepo, EventingMediaRequestRepo,
+    EventingPlaylistRepo, EventingRequestIntegrationRepo, EventingWatchProgressRepo,
+    EventingWatchlistRepo, EventingWorkRepo,
 };
 pub use folder::{DiscoveredRoot, FolderRepo, RootConfigUpdate, ScanIndexRow, SqlxFolderRepo};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
@@ -75,10 +78,11 @@ pub use library_view::{
     NEWLY_RELEASED_VIEW_ID,
 };
 pub use live_event::{
-    change_generation as live_change_generation, kind as live_event_kind,
-    subscribe_wake as subscribe_live_events, LiveEvent, LiveEventPublisher, LiveEventRepo,
-    NewLiveEvent, SqlxLiveEventRepo, MAX_ROWS as LIVE_EVENT_MAX_ROWS,
-    RETENTION_MS as LIVE_EVENT_RETENTION_MS,
+    change_generation as live_change_generation, change_tick as live_change_tick,
+    changes_since as live_changes_since, kind as live_event_kind,
+    subscribe_wake as subscribe_live_events, ChangeRecord as LiveChange, LiveEvent,
+    LiveEventPublisher, LiveEventRepo, NewLiveEvent, SqlxLiveEventRepo,
+    MAX_ROWS as LIVE_EVENT_MAX_ROWS, RETENTION_MS as LIVE_EVENT_RETENTION_MS,
 };
 pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use media_language::{

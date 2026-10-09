@@ -17,7 +17,7 @@ use playarr_model::{
 };
 
 /// A normalised entry plus what the API layer needs to finish it.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CalendarCandidate {
     pub entry: CalendarEntry,
     /// Entries from different instances with the same key are one entry.

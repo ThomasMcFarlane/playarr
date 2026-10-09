@@ -1499,8 +1499,14 @@ async fn boot_api(
     let resume_dismissals: Arc<dyn playarr_db::repo::ResumeDismissalRepo> =
         Arc::new(playarr_db::repo::SqlxResumeDismissalRepo::new(pool.clone()));
     let request_sync = Arc::new(playarr_api::request_sync::RequestSync::new(
-        Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
-        Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+        Arc::new(playarr_db::EventingMediaRequestRepo::new(
+            Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
+        Arc::new(playarr_db::EventingRequestIntegrationRepo::new(
+            Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
         user_repo.clone(),
         work_repo.clone(),
     ));
