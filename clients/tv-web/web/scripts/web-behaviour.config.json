@@ -17,6 +17,7 @@
     "edge-fade-e2e",
     "nav-search-e2e",
     "nav-library-drawer-e2e",
+    "drawer-spacing-e2e",
     "nav-library-preview-e2e",
     "nav-focus-e2e"
   ],
@@ -57,6 +58,7 @@
     "edge-fade-e2e": 17,
     "nav-search-e2e": 7,
     "nav-library-drawer-e2e": 66,
+    "drawer-spacing-e2e": 30,
     "nav-library-preview-e2e": 13,
     "nav-focus-e2e": 47
   }

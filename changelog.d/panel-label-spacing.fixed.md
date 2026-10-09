@@ -1,0 +1,1 @@
+- Side panels (Filters on Movies, Series, Music, Search and Calendar, and every other drawer): section labels have clear space above them again. The shared drawer body had lost its section-to-section gap, so each label sat flush against the previous group's items. Covered by `scripts/drawer-spacing-e2e.mjs`.
