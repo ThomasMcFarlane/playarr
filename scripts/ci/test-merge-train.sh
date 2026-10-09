@@ -333,6 +333,33 @@ grep -q 'blocked 1' "$be/gh.log" && ok "batch red: the single culprit is blocked
 [ "$(ogit "$be" rev-parse main)" = "$m0" ] && ok "batch red: main never moved" || bad "batch red: main moved"
 rm -rf "$be"
 
+# Flaky class: a lone tiny parity-pin failure is re-run once instead of halving; anything else halves.
+# flaky_case <log text> <failed job> <run_attempt>: prints "rerun" or "none".
+flaky_case() {
+  local out; out=$(
+    REPO=o/r; log() { :; }; DRY=false
+    gh() {
+      case "$*" in
+        "api repos/o/r/actions/runs?head_sha=abc"*) echo "77 $FL_ATTEMPT" ;;
+        "api repos/o/r/actions/runs/77/jobs"*) printf '%s\n' "$FL_JOBS" ;;
+        "run view 77"*) printf '%s\n' "$FL_LOG" ;;
+        "run rerun 77"*) echo rerun ;;
+      esac
+    }
+    flaky_rerun abc >/dev/null 2>&1 && echo rerun || echo none
+    ) ; echo "$out"
+}
+FL_ATTEMPT=1 FL_JOBS="web layout parity (layout)" FL_LOG="FAIL  tv/light focus pin: 13 mismatched pixels against docs/parity/x.png"
+[ "$(flaky_case)" = rerun ] && ok "flaky: a 13 px parity pin failure is re-run" || bad "flaky: tiny pin not re-run"
+FL_LOG="FAIL  tv/light focus pin: 5000 mismatched pixels against docs/parity/x.png"
+[ "$(flaky_case)" = none ] && ok "flaky: a large pixel diff halves" || bad "flaky: large diff re-run"
+FL_LOG=$'FAIL  a: 3 mismatched pixels against x.png\nFAIL  b: header band 0 not found'
+[ "$(flaky_case)" = none ] && ok "flaky: a mixed failure halves" || bad "flaky: mixed failure re-run"
+FL_LOG="FAIL  a: 3 mismatched pixels against x.png" FL_JOBS=$'web layout parity (layout)\nTV web lint'
+[ "$(flaky_case)" = none ] && ok "flaky: another failed job halves" || bad "flaky: other job re-run"
+FL_JOBS="web layout parity (nav)" FL_ATTEMPT=2
+[ "$(flaky_case)" = none ] && ok "flaky: a second attempt halves" || bad "flaky: re-run twice"
+
 # A PR head that moves while the stack is tested discards the stack instead of landing it.
 be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
 run_batch "$be" pending "1 2"

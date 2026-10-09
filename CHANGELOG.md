@@ -337,6 +337,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Merge train: a batch whose CI failed only on tiny layout-parity pixel pins (at most 100 px) has its failed jobs re-run once before it is halved, so a flake no longer costs two halving rounds.
 - Request failures returned by the API no longer name the request service or its product (details stay in the server log).
 - The web client and admin no longer name source providers in user-visible text; a new audit test (with an allowlist for admin integration setup screens) fails on new occurrences.
 - Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
