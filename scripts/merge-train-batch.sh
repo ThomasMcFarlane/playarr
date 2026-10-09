@@ -21,7 +21,13 @@
 #
 # State lives in the `train/batch` branch only: its commits carry Train-PR and Train-Head trailers.
 BATCH_BR="train/batch"
-BATCH_MAX="${BATCH_MAX:-6}"
+NEXT_BR="train/batch-next"
+# BATCH_MAX caps a batch; BATCH_DEFAULT is the size used until the ready queue reaches BATCH_DEEP PRs.
+BATCH_MAX="${BATCH_MAX:-10}"
+BATCH_DEFAULT="${BATCH_DEFAULT:-6}"
+BATCH_DEEP="${BATCH_DEEP:-10}"
+# PIPELINE=false keeps one batch in flight; true lets a second batch (train/batch-next) test on top of the first.
+PIPELINE="${PIPELINE:-false}"
 
 # batch_members <main> <tip>: "<pr> <head> <commit>" per stacked PR, oldest first.
 batch_members() {
@@ -59,7 +65,15 @@ flaky_rerun() {
 }
 
 # batch_drop: delete the remote scratch branch.
-batch_drop() { [ "$DRY" = true ] || git push -q origin --delete "$BATCH_BR" >/dev/null 2>&1 || true; }
+batch_drop() { [ "$DRY" = true ] || git push -q origin --delete "${1:-$BATCH_BR}" >/dev/null 2>&1 || true; }
+remote_has() { git ls-remote --exit-code origin "refs/heads/$1" >/dev/null 2>&1; }
+
+# batch_limit: how many PRs the next batch takes: BATCH_DEFAULT, up to BATCH_MAX when the queue is deep.
+batch_limit() {
+  local cap="$BATCH_MAX" depth
+  depth=$(ready_queue | grep -c . || true)
+  if [ "$depth" -ge "$BATCH_DEEP" ]; then echo "$cap"; elif [ "$BATCH_DEFAULT" -lt "$cap" ]; then echo "$BATCH_DEFAULT"; else echo "$cap"; fi
+}
 
 # resolve_shared_conflicts: after a conflicted `git merge --squash`, succeeds when every conflicted path is
 #   - CHANGELOG.md or TASKS.md (PRs add fragments and never edit them; a conflict there is stale fold
@@ -210,12 +224,19 @@ $(sed 's/^/- `/;s/$/`/' <<<"$fold_extra")" >&2
   echo "$sq"
 }
 
-# batch_build <limit>: build a fresh stack on origin/main from the ready queue and start CI on it.
+# batch_build <limit> [<base-tip> [<branch>]]: build a stack from the ready queue and start CI on it. By default
+# the stack sits on current main and goes to train/batch; with a base tip (the batch in flight) it sits on that tip,
+# skips the PRs already in it, and goes to train/batch-next.
 batch_build() {
-  local limit="$1" main tip pr n=0 sq
+  local limit="$1" base="${2:-}" br="${3:-$BATCH_BR}" main tip pr n=0 sq skip=" "
   git fetch -q origin main; main=$(git rev-parse origin/main); tip="$main"
+  if [ -n "$base" ]; then
+    tip="$base"
+    skip=" $(batch_members "$main" "$base" | awk '{print $1}' | tr '\n' ' ')"
+  fi
   for pr in $(ready_queue); do
     [ "$n" -ge "$limit" ] && break
+    case "$skip" in *" $pr "*) continue ;; esac
     if [ "$DRY" != true ]; then
       gh pr view "$pr" --repo "$REPO" --json labels --jq '.labels[].name' | grep -qx ready || { log "PR #$pr no longer ready"; continue; }
     fi
@@ -227,9 +248,9 @@ batch_build() {
   git checkout -q -f -B batch-work "$tip"
   if [ "$n" -eq 0 ]; then log "no PR is ready to batch (waiting on their own CI, or blocked)"; return 0; fi
   if [ "$DRY" = true ]; then log "dry run: batch of $n built locally on $tip, nothing pushed"; return 0; fi
-  git push -q origin "+$tip:refs/heads/$BATCH_BR" || { log "could not push $BATCH_BR"; STOP=true; return 0; }
-  log "batch of $n pushed as $tip; starting CI on $BATCH_BR"
-  gh workflow run ci.yml --repo "$REPO" --ref "$BATCH_BR" >/dev/null 2>&1 || log "could not dispatch CI on $BATCH_BR"
+  git push -q origin "+$tip:refs/heads/$br" || { log "could not push $br"; STOP=true; return 0; }
+  log "batch of $n pushed to $br as $tip; starting CI on $br"
+  gh workflow run ci.yml --repo "$REPO" --ref "$br" >/dev/null 2>&1 || log "could not dispatch CI on $br"
   STOP=true
 }
 
@@ -274,47 +295,107 @@ batch_land() {
   log "batch landed: main is now $tip"
 }
 
+# batch_failed <branch> <base> <tip>: CI failed on <tip>, a stack of the PRs between <base> and <tip>. A flaky-class
+# failure is re-run once; otherwise the stack is halved (first half rebuilt on <base>) down to one PR, which is blocked.
+batch_failed() {
+  local br="$1" base="$2" tip="$3" members n half pr
+  if [ "$DRY" != true ] && flaky_rerun "$tip"; then STOP=true; return 0; fi
+  members=$(batch_members "$base" "$tip"); n=$(grep -c . <<<"$members" || true)
+  if [ "$n" -le 1 ]; then
+    pr=$(awk 'NR==1{print $1}' <<<"$members")
+    batch_drop "$br"
+    [ -n "$pr" ] && block "$pr" "\`ci-required\` failed on \`$tip\` with this PR stacked alone on the latest \`main\`. See the CI run on branch $br."
+    return 0
+  fi
+  half=$(( (n + 1) / 2 ))
+  log "batch of $n failed on $tip: retrying with the first $half PR(s) to find the culprit"
+  batch_drop "$br"
+  if [ "$base" = "$(git rev-parse origin/main)" ]; then batch_build "$half" "" "$br"; else batch_build "$half" "$base" "$br"; fi
+}
+
+# batch_pipeline <main> <tip>: with batch A (train/batch, tip <tip>) testing, keep a second batch B
+# (train/batch-next) testing on top of it, so the next CI run starts before A lands. At most two are in flight.
+# B contains A's commits, so a green B can land both; if A fails, B is discarded and rebuilt.
+batch_pipeline() {
+  [ "$PIPELINE" = true ] || return 0
+  local main="$1" tip="$2" ntip st
+  if remote_has "$NEXT_BR"; then
+    git fetch -q origin "+refs/heads/$NEXT_BR:refs/remotes/origin/$NEXT_BR" || return 0
+    ntip=$(git rev-parse "origin/$NEXT_BR")
+    if ! git merge-base --is-ancestor "$tip" "$ntip"; then log "$NEXT_BR no longer sits on $BATCH_BR; discarding it"; batch_drop "$NEXT_BR"; return 0; fi
+    st=$(ci_state "$ntip")
+    case "$st" in
+      success)
+        log "$NEXT_BR is green with $BATCH_BR beneath it: landing both"
+        batch_land "$main" "$ntip"; batch_drop "$NEXT_BR"; batch_drop
+        if ! remote_has "$BATCH_BR"; then batch_build "$(batch_limit)"; fi ;;
+      failure) batch_failed "$NEXT_BR" "$tip" "$ntip" ;;
+      none)
+        if [ $(( $(date +%s) - $(git log -1 --format=%ct "$ntip") )) -ge 600 ]; then
+          log "$NEXT_BR: no CI run for $ntip, dispatching"; gh workflow run ci.yml --repo "$REPO" --ref "$NEXT_BR" >/dev/null 2>&1
+        fi
+        STOP=true ;;
+      *) STOP=true ;;
+    esac
+    return 0
+  fi
+  batch_build "$(batch_limit)" "$tip" "$NEXT_BR"
+}
+
+# batch_promote <main>: after batch A landed, a batch B on top of it becomes the batch in flight.
+# Succeeds when it promoted B.
+batch_promote() {
+  local main="$1" ntip
+  remote_has "$NEXT_BR" || return 1
+  git fetch -q origin "+refs/heads/$NEXT_BR:refs/remotes/origin/$NEXT_BR" || return 1
+  ntip=$(git rev-parse "origin/$NEXT_BR")
+  git merge-base --is-ancestor "$main" "$ntip" || { batch_drop "$NEXT_BR"; return 1; }
+  git push -q origin "+$ntip:refs/heads/$BATCH_BR" && batch_drop "$NEXT_BR" || return 1
+  log "$NEXT_BR ($ntip) is now the batch in flight"
+}
+
 # batch_step: advance the batch state machine by one step. Returns 1 when batch mode does not apply (token
 # mode), so the caller falls back to the single-PR path.
 batch_step() {
   [ "$KEY_MODE" = true ] && [ "$BATCH_MAX" -gt 1 ] || return 1
   TRAIN_BR=""
-  if [ "$DRY" = true ]; then batch_build "$BATCH_MAX"; return 0; fi
+  if [ "$DRY" = true ]; then batch_build "$(batch_limit)"; return 0; fi
   local main tip st members n
   git fetch -q origin main; main=$(git rev-parse origin/main)
-  if git ls-remote --exit-code origin "refs/heads/$BATCH_BR" >/dev/null 2>&1; then
+  if remote_has "$BATCH_BR"; then
     git fetch -q origin "+refs/heads/$BATCH_BR:refs/remotes/origin/$BATCH_BR" || { log "could not fetch $BATCH_BR"; STOP=true; return 0; }
     tip=$(git rev-parse "origin/$BATCH_BR")
     if ! git merge-base --is-ancestor "$main" "$tip"; then
-      log "main moved since the batch was built; discarding it"; batch_drop
+      log "main moved since the batch was built; discarding it"; batch_drop; batch_drop "$NEXT_BR"
     else
       members=$(batch_members "$main" "$tip"); n=$(grep -c . <<<"$members")
       st=$(ci_state "$tip")
       case "$st" in
-        pending) log "batch of $n: ci-required running on $tip; the next trigger resumes"; STOP=true; return 0 ;;
+        pending) log "batch of $n: ci-required running on $tip; the next trigger resumes"; batch_pipeline "$main" "$tip"; STOP=true; return 0 ;;
         none)
           if [ $(( $(date +%s) - $(git log -1 --format=%ct "$tip") )) -lt 600 ]; then log "batch of $n: no CI run registered yet for $tip, waiting"
           else log "batch of $n: no CI run for $tip, dispatching"; gh workflow run ci.yml --repo "$REPO" --ref "$BATCH_BR" >/dev/null 2>&1; fi
           STOP=true; return 0 ;;
         success)
           batch_land "$main" "$tip"
-          # Start the next batch straight away instead of waiting for the next trigger.
-          if ! git ls-remote --exit-code origin "refs/heads/$BATCH_BR" >/dev/null 2>&1; then batch_build "$BATCH_MAX"; fi
+          # A batch already testing on top of the landed one becomes the batch in flight (and may already be green).
+          if ! remote_has "$BATCH_BR" && batch_promote "$(git rev-parse origin/main)" 2>/dev/null; then
+            if [ "${BATCH_DEPTH:-0}" -lt 3 ]; then BATCH_DEPTH=$(( ${BATCH_DEPTH:-0} + 1 )) batch_step; return 0; fi
+            STOP=true; return 0
+          fi
+          # Otherwise start the next batch straight away instead of waiting for the next trigger.
+          if ! remote_has "$BATCH_BR"; then batch_build "$(batch_limit)"; fi
           return 0 ;;
         failure)
-          if [ "$DRY" != true ] && flaky_rerun "$tip"; then STOP=true; return 0; fi
-          if [ "$n" -le 1 ]; then
-            local pr; pr=$(awk 'NR==1{print $1}' <<<"$members")
-            batch_drop
-            [ -n "$pr" ] && block "$pr" "\`ci-required\` failed on \`$tip\` with this PR stacked alone on the latest \`main\`. See the CI run on branch $BATCH_BR."
-          else
-            local half=$(( (n + 1) / 2 ))
-            log "batch of $n failed on $tip: retrying with the first $half PR(s) to find the culprit"
-            batch_drop; batch_build "$half"; return 0
-          fi ;;
+          batch_drop "$NEXT_BR"
+          batch_failed "$BATCH_BR" "$main" "$tip"
+          return 0 ;;
       esac
     fi
+  else
+    remote_has "$NEXT_BR" && batch_drop "$NEXT_BR"
   fi
-  batch_build "$BATCH_MAX"
+  batch_build "$(batch_limit)"
+  batch_pipeline "$main" "$(git rev-parse -q --verify "refs/heads/batch-work" || echo "$main")" 2>/dev/null || true
   return 0
 }
