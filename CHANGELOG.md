@@ -13,6 +13,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the navigation rail, shell and library pages meet WCAG 2.2 AAA: icon-only nav links carry an accessible name, every pointer target is at least 44x44 CSS px (nav links, Back, profile chip, track actions, search field, A to Z rail, which wraps into columns), and header, clock, version and selected-caption text holds 7:1 over artwork and card shadows. Owner request 2026-10-09.
+- Web: the calendar, player chrome and drawers now meet the WCAG 2.2 AAA 44 by 44 pixel target size. The calendar month chips, header Back and period buttons, drawer close, update toast dismiss, player control buttons, seek bar and volume slider all have 44 pixel hit areas (the seek bar and volume bar keep their drawn thickness). The player minimise and close buttons and the player menus' secondary text use stronger fills and text colours so that they stay at 7:1 over video.
+- Web settings, account and utility pages now meet WCAG 2.2 AAA target size (44 by 44 CSS px) for buttons, Back, legal links and checkboxes, name the downloads storage bar, drop the hidden file input from the accessibility tree, and raise low-contrast header and settings detail text and form fields to 7:1. Owner request 2026-10-09.
+- Web: a nav item that keeps focus for a moment prefetches its page's first-screen data (cancellable, low priority), Playlists and Watchlist paint from the cache on their first render, and Movies, Series and Music are warmed at idle after Home loads, so the first visit to a section shows no skeleton flash.
+- web: Back from a title opened deep in the Library now lands on that title with the whole scrolled list painted at once (the loaded list is cached, the mounted-rows reset no longer overrides the restore, and focus and scroll are restored before the first paint).
+- web: Home waits for On Deck from the moment its rails are ready, not from mount, so a cold start no longer paints "Start watching" and swaps it for "On deck" a second later.
+- web: a series page holds the Resume button's place until the resume plan arrives, so the other action buttons no longer shift; the plan is cached for revisits.
+- web: live events and writes mark cached copies stale instead of deleting them, so a page opened next paints the old copy at once and updates in place, not a skeleton.
+- web: idle Home no longer re-requests every title's details each 30 seconds.
 - Web: Home rail changes start on the key press and settle in about 200 ms (they waited 370 ms for real focus before), and the left panel follows focus within a frame, in place, instead of 620 ms later with a replayed fade-in.
 - Web: Down then Up on a series page no longer overshoots the rail; Home, seasons, Cast and Similar titles share one rail stack with a small gap between related rails and a larger one between different rails.
 - Web: the Home loading skeleton is the rail stack itself, so it sits exactly where the loaded rails render.
@@ -210,6 +219,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.
 - Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.
 - A music album whose tracks have no cover art shows a basic initials placeholder (neutral tile, theme tokens) instead of an empty gap.
 - Storybook: a composition story for every page and settings section, and a test that fails when a component or page has no story.
@@ -358,6 +368,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: a focused card (Home, Library, Search, episodes, cast circles, playlists, calendar) draws a subtle red/pink glow ring with its lift and shadow, so card focus meets WCAG 2.2 AAA focus appearance in both themes.
+- Web: the Playlists page's rails (a playlist and its sub-playlists) use the shared rail stack, so focus centres the rail the same way as on Home and the series page.
+- Web: Home, Library, Downloads, Playlists, Search and the calendar agenda share one details panel (background art, kind line, title, metadata, description, actions). Status is shown as pills instead of label/value rows, and the calendar agenda uses the same buttons as the other pages.
+- Web: calendar cards (agenda, week, month) use the shared card focus (shadow and lift) with no white border.
 - Web calendar: the in-library and monitored badge tints, the entry sheet scrim and shadow, and the period popover and sheet layers now use theme tokens and a layer scale (`--scrim`, `--z-popover`, `--z-modal`) instead of literals; the range label is announced once the period stops changing instead of on every key repeat.
 - Web calendar: dead styles (toolbar, view buttons, filter chips, subscription block, the load state block) are removed and the body frame has a single rule.
 - Web TV: the library Cover Flow now glides calmly. One step takes 380 ms on an ease-out curve with no overshoot (320 ms when a press lands mid-glide, 240 ms on a held key); presses retarget from the current position and speed instead of restarting, and each cover's rotation, scale and depth follow the live scroll position frame by frame (transform only) instead of snapping per selection. The settled look is unchanged. `scripts/motion-e2e.mjs` gains Cover Flow cases.
@@ -2595,6 +2609,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: the focus-style end-to-end check covers calendar agenda, week and month cards in both themes at 1920 and 1280; Storybook stories for the details panel and status pill.
 - Web behaviour gate: nav-smoke, tablet-layout, focus-style-e2e and edge-fade-e2e no longer sit in `tracked`, so a failure now blocks `ci-required` (row 9623).
 - Web: `tokenContrast.test.ts` computes the contrast of every text token against every surface it is used on (7:1, both themes); `scripts/a11y-aaa.mjs` and `scripts/a11y-aaa-pages.mjs` run axe-core with the WCAG 2.2 AAA rules over the Storybook stories and the pages.
 - Web CI guards: the page layout audit counts legacy scroll bodies, scans `.ts` helpers and handles `=>` in attributes; ci.yml matches the tv-web pnpm and Node versions.
@@ -2642,6 +2657,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Reconcile the task board with the merged PRs of 9 October 2026: statuses, owners, new rows for the owner's requests (rows 9895, 9896).
+- Parity testing matrix: dropped the admin web app row, made the Xbox client device-only, and limited the Browser column to the web client.
 - App Store review notes and iOS release docs no longer ask for a demo server or review account: Playarr is bring-your-own-server and provides no servers.
 - Roku parity: light-theme measurements for every screen against the live web, with the known causes of the high figures.
 - Page layout spec: owner decisions recorded. The reference action pill is web's library Filters button as of 30 September 2026 (pinned to a commit), the header row grows to the tile height with items centred, Back and the period arrows stay round, focus is a ring with no fill (white in dark theme, ink in light theme), the drawer-open state keeps its ink fill, Customise Home moves into the header row, and the header and Back always show while loading or on error.

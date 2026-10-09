@@ -4,9 +4,16 @@ Do not edit `TASKS.md` in a PR. Add `tasks.d/<row-number>.md` per row you create
 `TASKS.md` stays the live board: the merge train folds each fragment into it when your PR lands.
 
 ```
-section: Heading text of the "## " section the row belongs to
-| 330 | Task | status | owner | Notes and evidence |
+section: Heading text of the "## " epic the row belongs to
+| 330 | Task | todo | owner | feat/branch | 329 | 2026-10-10 14:00 ICT | Notes and evidence |
 ```
+
+The row has the eight canonical columns `ID | Task | Status | Owner | Branch | Depends | ETA | Notes`.
+Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `done`. Branch,
+Depends and ETA may be empty (write a single space between the pipes). ETA is
+`YYYY-MM-DD HH:MM <timezone>`. Do not pad cells and write a literal pipe as `\|`. A row with status
+`in_review` must name its PR (`PR open: #123`) in Notes. A fragment in the former five-column shape
+(`| n | Task | status | owner | Notes |`) is still accepted and converted when it folds.
 
 - Updating an existing row: the fragment holds the complete new row; it replaces the row with that number
   in place (the `section:` line may be omitted).
