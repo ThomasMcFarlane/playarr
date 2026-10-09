@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the Calendar page retries a dropped connection or a busy server (408, 425, 429, 5xx) twice before showing "could not be loaded", and a unit and an end-to-end guard cover a cancelled nav prefetch followed by opening Calendar.
 - `Fold board` uses its own concurrency group so it no longer cancels queued merge-train runs.
 - Web: the "Who's watching?" picker no longer shows profiles left over from another or deleted account before the real list arrives. It shows the current account's tile with skeletons, the profile directory is cached per account and server and cleared on sign-out and switch, and tiles that arrive late no longer jump in.
 - Side panels (Filters on Movies, Series, Music, Search and Calendar, and every other drawer): section labels have clear space above them again. The shared drawer body had lost its section-to-section gap, so each label sat flush against the previous group's items. Covered by `scripts/drawer-spacing-e2e.mjs`.

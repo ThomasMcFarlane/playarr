@@ -1,1 +1,0 @@
-- Web: the Calendar page retries a dropped connection or a busy server (408, 425, 429, 5xx) twice before showing "could not be loaded", and a unit and an end-to-end guard cover a cancelled nav prefetch followed by opening Calendar.
