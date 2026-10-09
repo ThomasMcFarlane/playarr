@@ -837,3 +837,55 @@ async fn roots_are_discovered_from_the_source_and_start_disabled() {
     assert_eq!(list["roots"][0]["scan_enabled"], true);
     assert!(list["roots"][0]["local_path"].is_string());
 }
+
+#[tokio::test]
+async fn viewer_root_list_never_shows_the_admin_instance_name() {
+    let (router, state) = test_state().await;
+    let admin_id = Uuid::new_v4();
+    seed_admin_user(&state, admin_id).await;
+    let viewer_id = Uuid::new_v4();
+    let mut source = radarr_source("https://source.invalid");
+    source.name = "Radarr 4K".into();
+    add_source(&state, &source).await;
+    seed_streaming_user_with_library_allow(&state, viewer_id, vec![source.id]).await;
+    let tree = tempfile::tempdir().unwrap();
+    let text = tree.path().to_string_lossy().into_owned();
+    state
+        .app
+        .folder_repo
+        .upsert_root(&playarr_model::SourceRootFolder {
+            id: Uuid::new_v4(),
+            source_instance_id: source.id,
+            source_root_id: format!("manual:{text}"),
+            reported_path: text,
+            local_path_override: None,
+            display_name: "Sample Unsorted".into(),
+            work_kind: playarr_model::WorkKind::Movie,
+            accessible: true,
+            free_space_bytes: None,
+            total_space_bytes: None,
+            active: true,
+            scan_enabled: true,
+            scan_status: playarr_model::FolderScanStatus::Ready,
+            last_scanned_at: Some(chrono::Utc::now()),
+            scan_error: None,
+            updated_at: chrono::Utc::now(),
+        })
+        .await
+        .unwrap();
+
+    let viewer = mint_access_token(&state, viewer_id);
+    let (status, roots) = get(&router, &viewer, "/api/v1/folders/roots").await;
+    assert_eq!(status, StatusCode::OK, "{roots}");
+    assert_eq!(roots["roots"][0]["display_label"], "Movies");
+    assert_eq!(roots["roots"][0]["source_name"], "Movies");
+    assert!(
+        !roots.to_string().to_lowercase().contains("radarr"),
+        "{roots}"
+    );
+
+    // Admins still get the real name on the admin route.
+    let admin = mint_access_token(&state, admin_id);
+    let (_, admin_roots) = get(&router, &admin, "/api/v1/admin/folders/roots").await;
+    assert_eq!(admin_roots["roots"][0]["source_name"], "Radarr 4K");
+}

@@ -85,7 +85,10 @@ pub use routing::{DeliveryMode, RoutingRule};
 pub use seasonal::{Hemisphere, SeasonalRule};
 pub use sensitive::Sensitive;
 pub use series::{Episode, Season, Series};
-pub use source::{SourceInstance, SourceInstanceIdentity, SourceInstanceSyncRow, SourceKind};
+pub use source::{
+    neutral_source_labels, SourceInstance, SourceInstanceIdentity, SourceInstanceSyncRow,
+    SourceKind,
+};
 pub use system_settings::{SystemSettings, DEFAULT_INSTANCE_NAME};
 pub use tdarr::TdarrConnection;
 pub use user::{

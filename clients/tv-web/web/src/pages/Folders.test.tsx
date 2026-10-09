@@ -53,15 +53,15 @@ describe("folder entry cards", () => {
 
 describe("root chooser", () => {
   const roots: FolderRoot[] = [
-    { id: "r1", source_instance_id: "s1", source_name: "Sample Library", library_kind: "movie", name: "Sample Unsorted", available: true, scan_status: "ready", item_count: 3 },
-    { id: "r2", source_instance_id: "s1", source_name: "Sample Library", library_kind: "movie", name: "New Root", available: false, scan_status: "scanning", item_count: 0 },
+    { id: "r1", source_instance_id: "s1", source_name: "Movies", display_label: "Movies", library_kind: "movie", name: "Sample Unsorted", available: true, scan_status: "ready", item_count: 3 },
+    { id: "r2", source_instance_id: "s1", source_name: "Movies", display_label: "Movies", library_kind: "movie", name: "New Root", available: false, scan_status: "scanning", item_count: 0 },
   ];
 
   it("lists every root with its state", () => {
     const markup = renderToStaticMarkup(<RootChooser roots={roots} t={t} onChoose={() => undefined} />);
     expect(markup).toContain("Sample Unsorted");
-    expect(markup).toContain("Sample Library · 3 items");
-    expect(markup).toContain("Sample Library · Scanning");
+    expect(markup).toContain("Movies · 3 items");
+    expect(markup).toContain("Movies · Scanning");
   });
 });
 

@@ -661,7 +661,7 @@ function ItemDetails({
               {[...new Map(entries.flatMap((e) => e.sources).map((s) => [s.source_instance_id, s])).values()].map(
                 (source) => (
                   <li key={source.source_instance_id}>
-                    {source.source_name}
+                    {source.display_label ?? source.source_name}
                   </li>
                 )
               )}
@@ -869,7 +869,7 @@ export function CalendarPage() {
   );
   const items = useMemo(() => groups.flatMap((group) => groupSeriesEpisodes(group.entries)), [groups]);
   const sourceOptions = useMemo(
-    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.name })),
+    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.display_label ?? source.name })),
     [data]
   );
 

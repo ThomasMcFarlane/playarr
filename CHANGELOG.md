@@ -351,6 +351,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Calendar, calendar feed and folder root list responses for users now carry a neutral `display_label` per source ("Movies", "Series 2") and no longer return the admin-chosen instance name, which could be a provider's name. Admin routes still return real names.
 - Web styles: one clock block, a `--z-*` stacking scale, player colour tokens, the scrubber focus ring on the shared ring token, dead classes removed, and no backdrop blur on the rail panel and action pills in remote mode.
 - Merge train: a batch whose CI failed only on tiny layout-parity pixel pins (at most 100 px) has its failed jobs re-run once before it is halved, so a flake no longer costs two halving rounds.
 - Request failures returned by the API no longer name the request service or its product (details stay in the server log).
