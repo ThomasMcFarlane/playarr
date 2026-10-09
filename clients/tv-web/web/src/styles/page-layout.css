@@ -614,11 +614,23 @@ body[data-input-mode="remote"] .action-pill {
   --fade-end-size: 0px;
   --fade-start-floor: 1;
   --fade-end-floor: 1;
+  --fade-start-inset: 0px;
 }
 
 [data-fade-axis][data-fade-start] {
-  --fade-start-size: var(--edge-fade-start-size, var(--page-edge-fade-size));
+  --fade-start-size: calc(var(--edge-fade-start-size, var(--page-edge-fade-size)) * var(--fade-start-amount, 1));
   --fade-start-floor: var(--edge-fade-start-floor, var(--page-edge-fade-floor));
+}
+
+/*
+ * A vertical scroller that extends under the page header (the settings menu and detail on narrow widths) is clipped at
+ * the header's bottom edge: `attachScrollEdges` sets data-fade-clear, --fade-start-inset (the header's overlap, in px) and
+ * --fade-start-amount (0 to 1, the scrolled distance), so nothing renders under the header and the top fade appears
+ * below it only once content has scrolled past. Everything above the inset is fully masked.
+ */
+[data-fade-axis="y"][data-fade-start][data-fade-clear] {
+  --fade-start-floor: 0;
+  --fade-start-inset: var(--header-clear, 0px);
 }
 
 [data-fade-axis][data-fade-end] {
@@ -660,10 +672,11 @@ body[data-input-mode="remote"] .action-pill {
   -webkit-mask-image: linear-gradient(
     180deg,
     rgba(0, 0, 0, var(--fade-start-floor)) 0,
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
-    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, var(--fade-start-floor)) var(--fade-start-inset),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) calc(var(--fade-start-inset) + var(--fade-start-size)),
     rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
     rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
     rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),
@@ -673,10 +686,11 @@ body[data-input-mode="remote"] .action-pill {
   mask-image: linear-gradient(
     180deg,
     rgba(0, 0, 0, var(--fade-start-floor)) 0,
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-size) * 0.25),
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-size) * 0.5),
-    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-size) * 0.75),
-    rgba(0, 0, 0, 1) var(--fade-start-size),
+    rgba(0, 0, 0, var(--fade-start-floor)) var(--fade-start-inset),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.156)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.25),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.5)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.5),
+    rgba(0, 0, 0, calc(var(--fade-start-floor) + (1 - var(--fade-start-floor)) * 0.844)) calc(var(--fade-start-inset) + var(--fade-start-size) * 0.75),
+    rgba(0, 0, 0, 1) calc(var(--fade-start-inset) + var(--fade-start-size)),
     rgba(0, 0, 0, 1) calc(100% - var(--fade-end-size)),
     rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.844)) calc(100% - var(--fade-end-size) * 0.75),
     rgba(0, 0, 0, calc(var(--fade-end-floor) + (1 - var(--fade-end-floor)) * 0.5)) calc(100% - var(--fade-end-size) * 0.5),

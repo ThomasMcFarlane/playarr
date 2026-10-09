@@ -11,6 +11,9 @@
 //     (the mask touches content only, there is no overlay tint).
 //  4. Unclipped shadow. The focused card's lift and soft shadow fit inside the scroller on every side, and the pixel
 //     rows across the scroller's bottom edge show no cut (no step) under the focused card.
+//  5. Page bodies under the header. Every vertical page scroller, scrolled, carries the top fade; where it extends under
+//     the page header, nothing of it paints inside the header band (pixel compare with the scroller hidden). At rest
+//     there is no fade. 1920x1080 and 1280x720.
 import { dirname, join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -43,7 +46,7 @@ const pixels = (page, png, rect) => page.evaluate(async ({ b64, rect }) => {
   return { w: bmp.width, h: bmp.height, data: Array.from(d.data) };
 }, { b64: png.toString("base64"), rect });
 
-const server = await startServer({ distDir: DIST, seasons: 3, seasonEpisodes: 14, canDownload: false, onDeck: 30, movies: 300, series: 80 });
+const server = await startServer({ distDir: DIST, seasons: 3, seasonEpisodes: 14, canDownload: false, onDeck: 30, movies: 300, series: 80, watchlist: 40, playlists: 24, playlistItems: 10 });
 const base = `http://127.0.0.1:${server.port}`;
 const browser = await chromium.launch();
 
@@ -204,6 +207,59 @@ for (const theme of THEMES) {
   });
   check(`${theme}: library grid has the bottom fade at first paint`, grid.end && grid.axis === "y" && grid.mask, JSON.stringify(grid));
   if (OUT) await page.screenshot({ path: join(OUT, `${theme}-library.png`) });
+
+  // 5. Page bodies never render under the page header, and fade out below it once scrolled.
+  for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+    await page.setViewportSize(size);
+    for (const url of ["/settings", "/watchlist", "/playlists", "/movies"]) {
+      const label = `${theme} ${size.width}: ${url}`;
+      await page.goto(`${base}${url}`);
+      await page.waitForTimeout(1200);
+      const keys = await page.evaluate(() => [...document.querySelectorAll("[data-tv-scroll-container][data-tv-scroll-axis='vertical']:not(.app-main)")]
+        .filter((e) => e.scrollHeight > e.clientHeight + 40).map((e, i) => { e.dataset.probeScroller = String(i); return i; }));
+      if (url === "/settings") check(`${label}: has an overflowing scroller to test`, keys.length > 0, "none");
+      for (const key of keys) {
+        const sel = `[data-probe-scroller="${key}"]`;
+        await page.evaluate((s) => { document.querySelector(s).scrollTop = 0; }, sel);
+        await page.waitForTimeout(250);
+        const rest = await page.evaluate((s) => { const e = document.querySelector(s); return { start: e.dataset.fadeStart !== undefined }; }, sel);
+        check(`${label} #${key}: no top fade at rest`, !rest.start, JSON.stringify(rest));
+        await page.evaluate((s) => { document.querySelector(s).scrollTop = 400; }, sel);
+        await page.waitForFunction((s) => document.querySelector(s).dataset.fadeStart !== undefined, sel, { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(400);
+        const m = await page.evaluate((s) => {
+          const e = document.querySelector(s);
+          const box = e.getBoundingClientRect();
+          const header = e.closest("[data-page-id]")?.querySelector(".page-header");
+          let clear = 0; let left = Infinity; let right = -Infinity;
+          for (const part of header?.querySelectorAll("button, a, h1, .page-header-detail") ?? []) {
+            const r = part.getBoundingClientRect();
+            if (!r.width || !r.height || r.right <= box.left || r.left >= box.right || r.bottom <= box.top) continue;
+            clear = Math.max(clear, r.bottom - box.top); left = Math.min(left, r.left); right = Math.max(right, r.right);
+          }
+          const cs = getComputedStyle(e);
+          return { start: e.dataset.fadeStart !== undefined, mask: (cs.webkitMaskImage || cs.maskImage) !== "none", clear, left, right, top: box.top, boxLeft: box.left, boxRight: box.right };
+        }, sel);
+        check(`${label} #${key}: top fade present when scrolled`, m.start && m.mask, JSON.stringify(m));
+        if (m.clear > 0) {
+          const x = Math.max(0, Math.floor(Math.max(m.left, m.boxLeft)));
+          const w = Math.max(1, Math.floor(Math.min(m.right, m.boxRight, size.width) - x));
+          const y = Math.max(0, Math.floor(m.top));
+          const h = Math.max(1, Math.floor(Math.min(m.clear, size.height - y)) - 1);
+          await page.addStyleTag({ content: ".page-header,.app-clock,.page-header *{visibility:hidden!important}" }).then((tag) => { globalThis.__hide = tag; });
+          const shown = await pixels(page, await page.screenshot({ clip: { x, y, width: w, height: h } }));
+          await page.evaluate((s) => { document.querySelector(s).style.visibility = "hidden"; }, sel);
+          const hidden = await pixels(page, await page.screenshot({ clip: { x, y, width: w, height: h } }));
+          await page.evaluate((s) => { document.querySelector(s).style.visibility = ""; }, sel);
+          await globalThis.__hide.evaluate((el) => el.remove());
+          let worst = 0;
+          for (let i = 0; i < shown.data.length; i += 1) worst = Math.max(worst, Math.abs(shown.data[i] - hidden.data[i]));
+          check(`${label} #${key}: nothing of the body paints under the header (${w}x${h}px band, max diff ${worst})`, worst <= 2, `diff=${worst}`);
+          if (OUT) await page.screenshot({ path: join(OUT, `${theme}-${size.width}-${url.replace("/", "")}-scrolled.png`) });
+        }
+      }
+    }
+  }
   await context.close();
 }
 
