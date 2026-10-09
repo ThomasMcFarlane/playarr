@@ -4945,6 +4945,13 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   --tv-nav-gap: clamp(0.15rem, calc(0.889 * var(--viewport-unit)), 0.6rem);
 }
 
+/* 44px nav targets (WCAG 2.5.5) need the gaps tightened on short viewports so ten entries and the profile chip still fit. */
+@media (max-height: 800px) {
+  .app-nav {
+    --tv-nav-gap: 0.25rem;
+  }
+}
+
 .app-nav-group {
   flex-direction: column;
   gap: var(--tv-nav-gap);
