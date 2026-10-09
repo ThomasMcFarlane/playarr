@@ -104,7 +104,7 @@ Steps only the repository owner can perform.
 | ID | Task | Status | Owner | Branch | Depends | ETA | Notes |
 |---|---|---|---|---|---|---|---|
 | 9840 | Shared server write queue: frequent small writes (watch-progress heartbeats, poller media file updates) share one SQLite commit, `synchronous = FULL` kept | done | | | | | Done: `playarr_db::WriteQueue` (backend/src/main.rs:548) via #386, with #368, #409, #413, #416 merged (#353 rejected by owner); `synchronous = FULL` kept. Board audit 2026-10-10: the only remainder, the live slow-statement comparison, is tracked in row 9886. |
-| 9886 | Server CPU at the 2-core limit on both regional servers: peer availability sync cost | todo | | | | | Code done and merged: #416, #420 (receiver catalogue walk, bench 56 s to 0.2 s), #421 (shared 2-minute snapshot), #423 (diff-based `replace_for_peer`), #428. Remaining: after deploy compare live CPU, slow statements and detail latency on both servers (also covers the write-queue comparison from row 9840). Nobody is on it. |
+| 9886 | Server CPU at the 2-core limit on both regional servers: peer availability sync cost | in_progress | server-cpu worker | row-9886-measure | | 2026-10-10 07:30 ICT | Code done and merged: #416, #420 (receiver catalogue walk, bench 56 s to 0.2 s), #421 (shared 2-minute snapshot), #423 (diff-based `replace_for_peer`), #428. Measuring now (read-only): snapshot 1 taken with the fixes live, snapshot 2 follows the 10 Oct web integration deploy (about 06:45 ICT). |
 
 ## Profile avatar parity (2026-10-09)
 
