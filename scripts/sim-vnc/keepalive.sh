@@ -49,14 +49,15 @@ snapshot() {
     vm_stat | awk '/page size/ {ps=$8} /^Pages (free|active|inactive|wired down)|occupied by compressor/ {l=$0; sub(/:.*/,"",l); v=$NF; gsub(/\./,"",v); printf "mem %s=%dMB\n", l, v*ps/1048576}'
     echo "swap $(sysctl -n vm.swapusage)"
     echo "disk $(df -h / | awk 'NR==2 {print $4" free"}')"
-    echo "top cpu:"; ps -Ao pcpu,pmem,rss,comm -r | head -6 | tail -5
-    echo "top mem:"; ps -Ao pcpu,pmem,rss,comm -m | head -6 | tail -5
-  } > "$RUNNER_TEMP/health.tmp" 2>/dev/null && mv "$RUNNER_TEMP/health.tmp" "$RUNNER_TEMP/health.txt"
+    echo "top cpu:"; ps -Ao pcpu,pmem,rss,comm -r | sed -n 2,6p
+    echo "top mem:"; ps -Ao pcpu,pmem,rss,comm -m | sed -n 2,6p
+  } > "$RUNNER_TEMP/health.tmp" 2>/dev/null
+  mv "$RUNNER_TEMP/health.tmp" "$RUNNER_TEMP/health.txt"
 }
 
 heartbeat() {
   say "heartbeat load=$(sysctl -n vm.loadavg | tr -d '{}') free_pages=$(vm_stat | awk '/Pages free/ {print $3}') vnc=$(tail -n 1 "$vnc_log" | cut -c1-120)"
-  ps -Ao pcpu,pmem,comm -r | head -4 | tail -3 | sed 's/^/  top: /'
+  ps -Ao pcpu,pmem,comm -r | sed -n 2,4p | sed 's/^/  top: /'
 }
 
 fail() { say "FAILED: $*"; summary "### The live simulator stopped early"; summary ""; summary "- $*"; tail -n 20 "$vnc_log"; exit 1; }
