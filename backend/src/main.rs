@@ -1414,7 +1414,7 @@ async fn boot_api(
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
-        Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+        Arc::new(SqlxMediaFileRepo::new(pool.clone()).with_write_queue(write_queue.clone())),
         live_events.clone(),
     ));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
@@ -2536,6 +2536,7 @@ fn spawn_poller_for(
     artwork_prewarm: Option<playarr_arr_sync::ArtworkPrewarm>,
     embedding_sync: Option<playarr_arr_sync::EmbeddingSync>,
     pool: DbPool,
+    write_queue: playarr_db::WriteQueue,
     coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
 ) -> tokio::task::JoinHandle<()> {
     use playarr_arr_sync::{ArrClient, ReconciliationPoller};
@@ -2578,7 +2579,8 @@ fn spawn_poller_for(
     // and costs nothing extra for non-Radarr instances.
     .with_credit_repo(credit_repo)
     .with_language_repo(language_repo)
-    .with_live_events(live_events);
+    .with_live_events(live_events)
+    .with_write_queue(write_queue);
     let poller = if let Some(prewarm) = artwork_prewarm {
         poller.with_artwork_prewarm(prewarm.with_source_instance(instance.clone()))
     } else {
@@ -2728,11 +2730,11 @@ async fn boot_worker(
     let live_events =
         playarr_db::LiveEventPublisher::from_pool_queued(pool.clone(), write_queue.clone());
     let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
-        Arc::new(SqlxWorkRepo::new(pool.clone())),
+        Arc::new(SqlxWorkRepo::new(pool.clone()).with_write_queue(write_queue.clone())),
         live_events.clone(),
     ));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
-        Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+        Arc::new(SqlxMediaFileRepo::new(pool.clone()).with_write_queue(write_queue.clone())),
         live_events,
     ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
@@ -2828,6 +2830,7 @@ async fn boot_worker(
             artwork_prewarm.clone(),
             embedding_sync.clone(),
             pool.clone(),
+            write_queue.clone(),
             coordinator.clone(),
         ));
         spawned_instance_ids.insert(instance.id);
@@ -2949,6 +2952,7 @@ async fn boot_worker(
                             artwork_prewarm.clone(),
                             embedding_sync.clone(),
                             pool.clone(),
+                            write_queue.clone(),
                             coordinator.clone(),
                         );
                     }

@@ -167,6 +167,61 @@ fn minutes_to_ms(minutes: Option<u32>) -> Option<u64> {
         .map(|minutes| u64::from(minutes) * 60_000)
 }
 
+/// An owned bind value, so a queued write can run again if its batch is retried.
+#[derive(Clone)]
+enum Bind {
+    Text(Option<String>),
+    Int(Option<i64>),
+}
+
+impl Bind {
+    fn apply<'q>(
+        &self,
+        query: sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>>,
+    ) -> sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>> {
+        match self {
+            Bind::Text(value) => query.bind(value.clone()),
+            Bind::Int(value) => query.bind(*value),
+        }
+    }
+}
+
+impl From<String> for Bind {
+    fn from(value: String) -> Self {
+        Bind::Text(Some(value))
+    }
+}
+impl From<&String> for Bind {
+    fn from(value: &String) -> Self {
+        Bind::Text(Some(value.clone()))
+    }
+}
+impl From<&str> for Bind {
+    fn from(value: &str) -> Self {
+        Bind::Text(Some(value.to_owned()))
+    }
+}
+impl From<Option<&str>> for Bind {
+    fn from(value: Option<&str>) -> Self {
+        Bind::Text(value.map(str::to_owned))
+    }
+}
+impl From<Option<String>> for Bind {
+    fn from(value: Option<String>) -> Self {
+        Bind::Text(value)
+    }
+}
+impl From<i64> for Bind {
+    fn from(value: i64) -> Self {
+        Bind::Int(Some(value))
+    }
+}
+impl From<Option<i64>> for Bind {
+    fn from(value: Option<i64>) -> Self {
+        Bind::Int(value)
+    }
+}
+
 pub struct MediaSync {
     pool: DbPool,
     media_file_repo: std::sync::Arc<dyn MediaFileRepo>,
@@ -184,6 +239,9 @@ pub struct MediaSync {
     /// (no event-decorated repository wraps them), so this announces the
     /// metadata edits those writes make.
     live_events: Option<playarr_db::LiveEventPublisher>,
+    /// Shared server write queue the sync's own writes go through. `None`
+    /// (the default) writes each statement in its own transaction.
+    write_queue: Option<playarr_db::WriteQueue>,
 }
 
 impl MediaSync {
@@ -194,7 +252,34 @@ impl MediaSync {
             credit_repo: None,
             language_repo: None,
             live_events: None,
+            write_queue: None,
         }
+    }
+
+    /// Sends this sync's season, episode, album, track and book writes through
+    /// the shared write queue, so writes from concurrently synced works share
+    /// a commit. Each call still waits for its own commit.
+    pub fn with_write_queue(mut self, queue: playarr_db::WriteQueue) -> Self {
+        self.write_queue = Some(queue);
+        self
+    }
+
+    /// Runs one write statement through the queue (or directly without one)
+    /// and returns the rows it changed.
+    async fn exec_write(&self, sql: &'static str, binds: Vec<Bind>) -> Result<u64, MediaSyncError> {
+        let binds = std::sync::Arc::new(binds);
+        let changed = playarr_db::write(self.write_queue.as_ref(), &self.pool, move |conn| {
+            let binds = binds.clone();
+            Box::pin(async move {
+                let mut query = sqlx::query(sql);
+                for bind in binds.iter() {
+                    query = bind.apply(query);
+                }
+                Ok(query.execute(&mut *conn).await?.rows_affected())
+            })
+        })
+        .await?;
+        Ok(changed)
     }
 
     /// Opts this `MediaSync` into publishing a `library`/`upserted` live event
@@ -810,12 +895,15 @@ impl MediaSync {
         let id = Uuid::new_v4();
         let insert_sql = "INSERT INTO seasons (id, series_work_id, season_number, title, overview, monitored, availability) \
                  VALUES (?, ?, ?, NULL, NULL, 1, 'unknown')";
-        sqlx::query(insert_sql)
-            .bind(id.to_string())
-            .bind(series_work_id.to_string())
-            .bind(season_number as i64)
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            insert_sql,
+            vec![
+                Bind::from(id.to_string()),
+                Bind::from(series_work_id.to_string()),
+                Bind::from(season_number as i64),
+            ],
+        )
+        .await?;
         Ok((id, true))
     }
 
@@ -849,44 +937,43 @@ impl MediaSync {
                           OR runtime_minutes IS NOT ? OR monitored IS NOT ? OR availability IS NOT 'available')";
             let air_date = air_date.map(|date| date.format("%Y-%m-%d").to_string());
             let runtime = runtime_minutes.map(i64::from);
-            let mut query = sqlx::query(update_sql)
-                .bind(title)
-                .bind(overview)
-                .bind(&images_json)
-                .bind(air_date.clone())
-                .bind(runtime)
-                .bind(monitored as i64)
-                .bind(id.to_string());
-            {
-                // SQLite's `?` placeholders are positional: repeat the values
-                // for the "did anything change" guard.
-                query = query
-                    .bind(title)
-                    .bind(overview)
-                    .bind(&images_json)
-                    .bind(air_date)
-                    .bind(runtime)
-                    .bind(monitored as i64);
-            }
-            let changed = query.execute(&self.pool).await?.rows_affected() > 0;
+            // SQLite's `?` placeholders are positional: the values repeat for
+            // the "did anything change" guard.
+            let values = || {
+                [
+                    Bind::from(title),
+                    Bind::from(overview),
+                    Bind::from(images_json.clone()),
+                    Bind::from(air_date.clone()),
+                    Bind::from(runtime),
+                    Bind::from(monitored as i64),
+                ]
+            };
+            let mut binds = values().to_vec();
+            binds.push(Bind::from(id.to_string()));
+            binds.extend(values());
+            let changed = self.exec_write(update_sql, binds).await? > 0;
             return Ok((id, changed));
         }
 
         let id = Uuid::new_v4();
         let insert_sql = "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available')";
-        sqlx::query(insert_sql)
-            .bind(id.to_string())
-            .bind(season_id.to_string())
-            .bind(episode_number as i64)
-            .bind(title)
-            .bind(overview)
-            .bind(images_json)
-            .bind(air_date.map(|date| date.format("%Y-%m-%d").to_string()))
-            .bind(runtime_minutes.map(i64::from))
-            .bind(monitored as i64)
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            insert_sql,
+            vec![
+                Bind::from(id.to_string()),
+                Bind::from(season_id.to_string()),
+                Bind::from(episode_number as i64),
+                Bind::from(title),
+                Bind::from(overview),
+                Bind::from(images_json),
+                Bind::from(air_date.map(|date| date.format("%Y-%m-%d").to_string())),
+                Bind::from(runtime_minutes.map(i64::from)),
+                Bind::from(monitored as i64),
+            ],
+        )
+        .await?;
         Ok((id, true))
     }
 
@@ -913,16 +1000,19 @@ impl MediaSync {
             .map_err(playarr_db::DbError::from)?;
         let insert_sql = "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, 'available')";
-        sqlx::query(insert_sql)
-            .bind(id.to_string())
-            .bind(artist_work_id.to_string())
-            .bind(title)
-            .bind(images_json)
-            .bind(album_type)
-            .bind(release_date)
-            .bind(album.monitored as i64)
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            insert_sql,
+            vec![
+                Bind::from(id.to_string()),
+                Bind::from(artist_work_id.to_string()),
+                Bind::from(title),
+                Bind::from(images_json),
+                Bind::from(album_type),
+                Bind::from(release_date),
+                Bind::from(album.monitored as i64),
+            ],
+        )
+        .await?;
         Ok(id)
     }
 
@@ -936,14 +1026,17 @@ impl MediaSync {
             .map_err(playarr_db::DbError::from)?;
         let update_sql = "UPDATE albums SET images = ?, album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
                  WHERE id = ?";
-        sqlx::query(update_sql)
-            .bind(images_json)
-            .bind(lidarr_album_type(album))
-            .bind(lidarr_release_date(album.release_date.as_deref()))
-            .bind(album.monitored as i64)
-            .bind(album_id.to_string())
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            update_sql,
+            vec![
+                Bind::from(images_json),
+                Bind::from(lidarr_album_type(album)),
+                Bind::from(lidarr_release_date(album.release_date.as_deref())),
+                Bind::from(album.monitored as i64),
+                Bind::from(album_id.to_string()),
+            ],
+        )
+        .await?;
         Ok(())
     }
 
@@ -966,27 +1059,33 @@ impl MediaSync {
         if let Some(row) = row {
             let id = uuid_from_row(&row)?;
             let update_sql = "UPDATE tracks SET title = ?, duration_seconds = ?, availability = 'available' WHERE id = ?";
-            sqlx::query(update_sql)
-                .bind(title)
-                .bind(duration_seconds)
-                .bind(id.to_string())
-                .execute(&self.pool)
-                .await?;
+            self.exec_write(
+                update_sql,
+                vec![
+                    Bind::from(title),
+                    Bind::from(duration_seconds),
+                    Bind::from(id.to_string()),
+                ],
+            )
+            .await?;
             return Ok(id);
         }
 
         let id = Uuid::new_v4();
         let insert_sql = "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
                  VALUES (?, ?, ?, ?, ?, ?, 'available')";
-        sqlx::query(insert_sql)
-            .bind(id.to_string())
-            .bind(album_id.to_string())
-            .bind(disc_number)
-            .bind(track_number)
-            .bind(title)
-            .bind(duration_seconds)
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            insert_sql,
+            vec![
+                Bind::from(id.to_string()),
+                Bind::from(album_id.to_string()),
+                Bind::from(disc_number),
+                Bind::from(track_number),
+                Bind::from(title),
+                Bind::from(duration_seconds),
+            ],
+        )
+        .await?;
         Ok(id)
     }
 
@@ -1006,12 +1105,15 @@ impl MediaSync {
         let id = Uuid::new_v4();
         let insert_sql = "INSERT INTO books (id, author_work_id, title, isbn, release_date, series_name, series_position, monitored, availability) \
                  VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 1, 'available')";
-        sqlx::query(insert_sql)
-            .bind(id.to_string())
-            .bind(author_work_id.to_string())
-            .bind(title)
-            .execute(&self.pool)
-            .await?;
+        self.exec_write(
+            insert_sql,
+            vec![
+                Bind::from(id.to_string()),
+                Bind::from(author_work_id.to_string()),
+                Bind::from(title),
+            ],
+        )
+        .await?;
         Ok(id)
     }
 

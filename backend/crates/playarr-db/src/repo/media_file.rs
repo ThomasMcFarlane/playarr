@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use sqlx::any::AnyRow;
@@ -14,6 +15,7 @@ use uuid::Uuid;
 use crate::codec::{leaf_ref_from_str, leaf_ref_to_str, parse_uuid};
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write, WriteQueue};
 
 /// CRUD + lookup surface over [`playarr_model::MediaFile`] -- the on-disk
 /// files a source *arr instance has imported. This is the table that
@@ -87,13 +89,74 @@ pub trait MediaFileRepo: Send + Sync {
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError>;
 }
 
+/// Owned bind values for a `media_files` insert, so a queued write can run
+/// again if its batch has to be retried.
+struct MediaFileBinds {
+    id: String,
+    work_id: String,
+    leaf_ref: String,
+    path: String,
+    container: String,
+    codec: String,
+    bitrate: Option<i64>,
+    duration_ms: Option<i64>,
+    size_bytes: i64,
+    source_instance_id: String,
+    source_file_id: Option<String>,
+}
+
+impl MediaFileBinds {
+    fn new(media_file: &MediaFile) -> Self {
+        Self {
+            id: media_file.id.to_string(),
+            work_id: media_file.work_id.to_string(),
+            leaf_ref: leaf_ref_to_str(&media_file.leaf_ref),
+            path: media_file.path.to_string_lossy().into_owned(),
+            container: media_file.container.clone(),
+            codec: media_file.codec.clone(),
+            bitrate: media_file.bitrate.map(|b| b as i64),
+            duration_ms: media_file.duration_ms.map(|duration| duration as i64),
+            size_bytes: media_file.size_bytes as i64,
+            source_instance_id: media_file.source_instance_id.to_string(),
+            source_file_id: media_file.source_file_id.clone(),
+        }
+    }
+
+    fn bind<'q>(
+        &self,
+        query: sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>>,
+    ) -> sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>> {
+        query
+            .bind(self.id.clone())
+            .bind(self.work_id.clone())
+            .bind(self.leaf_ref.clone())
+            .bind(self.path.clone())
+            .bind(self.container.clone())
+            .bind(self.codec.clone())
+            .bind(self.bitrate)
+            .bind(self.duration_ms)
+            .bind(self.size_bytes)
+            .bind(self.source_instance_id.clone())
+            .bind(self.source_file_id.clone())
+    }
+}
+
 pub struct SqlxMediaFileRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxMediaFileRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
+    }
+
+    /// Sends the repository's writes through the shared write queue so they
+    /// share a commit with other small writes. Each call still returns only
+    /// after its own write has committed.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
     }
 
     fn from_row(row: &AnyRow) -> Result<MediaFile, DbError> {
@@ -151,24 +214,18 @@ impl SqlxMediaFileRepo {
 #[async_trait]
 impl MediaFileRepo for SqlxMediaFileRepo {
     async fn create(&self, media_file: &MediaFile) -> Result<(), DbError> {
-        let sql = "INSERT INTO media_files \
-                 (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        sqlx::query(sql)
-            .bind(media_file.id.to_string())
-            .bind(media_file.work_id.to_string())
-            .bind(leaf_ref_to_str(&media_file.leaf_ref))
-            .bind(media_file.path.to_string_lossy().into_owned())
-            .bind(media_file.container.as_str())
-            .bind(media_file.codec.as_str())
-            .bind(media_file.bitrate.map(|b| b as i64))
-            .bind(media_file.duration_ms.map(|duration| duration as i64))
-            .bind(media_file.size_bytes as i64)
-            .bind(media_file.source_instance_id.to_string())
-            .bind(media_file.source_file_id.as_deref())
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        let row = Arc::new(MediaFileBinds::new(media_file));
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let row = row.clone();
+            Box::pin(async move {
+                let sql = "INSERT INTO media_files \
+                     (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                row.bind(sqlx::query(sql)).execute(&mut *conn).await?;
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError> {
@@ -259,26 +316,40 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn set_duration_ms(&self, id: Uuid, duration_ms: u64) -> Result<(), DbError> {
-        let sql = "UPDATE media_files SET duration_ms = ? WHERE id = ?";
-        let result = sqlx::query(sql)
-            .bind(duration_ms as i64)
-            .bind(id.to_string())
-            .execute(&self.pool)
-            .await?;
-        if result.rows_affected() == 0 {
+        let id = id.to_string();
+        let affected = write(self.queue.as_ref(), &self.pool, move |conn| {
+            let id = id.clone();
+            Box::pin(async move {
+                let result = sqlx::query("UPDATE media_files SET duration_ms = ? WHERE id = ?")
+                    .bind(duration_ms as i64)
+                    .bind(id)
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(result.rows_affected())
+            })
+        })
+        .await?;
+        if affected == 0 {
             return Err(DbError::NotFound);
         }
         Ok(())
     }
 
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError> {
-        let sql =
-            "UPDATE media_files SET duration_ms = 0 WHERE work_id = ? AND duration_ms IS NULL";
-        sqlx::query(sql)
-            .bind(work_id.to_string())
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        let work_id = work_id.to_string();
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let work_id = work_id.clone();
+            Box::pin(async move {
+                sqlx::query(
+                    "UPDATE media_files SET duration_ms = 0 WHERE work_id = ? AND duration_ms IS NULL",
+                )
+                .bind(work_id)
+                .execute(&mut *conn)
+                .await?;
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError> {
@@ -293,20 +364,15 @@ impl MediaFileRepo for SqlxMediaFileRepo {
                    THEN COALESCE(media_files.duration_ms, excluded.duration_ms) \
                    ELSE excluded.duration_ms \
                  END, size_bytes = excluded.size_bytes";
-        sqlx::query(sql)
-            .bind(media_file.id.to_string())
-            .bind(media_file.work_id.to_string())
-            .bind(leaf_ref_to_str(&media_file.leaf_ref))
-            .bind(media_file.path.to_string_lossy().into_owned())
-            .bind(media_file.container.as_str())
-            .bind(media_file.codec.as_str())
-            .bind(media_file.bitrate.map(|b| b as i64))
-            .bind(media_file.duration_ms.map(|duration| duration as i64))
-            .bind(media_file.size_bytes as i64)
-            .bind(media_file.source_instance_id.to_string())
-            .bind(media_file.source_file_id.as_deref())
-            .execute(&self.pool)
-            .await?;
+        let row = Arc::new(MediaFileBinds::new(media_file));
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let row = row.clone();
+            Box::pin(async move {
+                row.bind(sqlx::query(sql)).execute(&mut *conn).await?;
+                Ok(())
+            })
+        })
+        .await?;
 
         // `id` is deliberately absent from `DO UPDATE SET` above: on a
         // conflict-update, the pre-existing row's id is the authoritative
@@ -632,5 +698,38 @@ mod tests {
         let ids: Vec<Uuid> = files.iter().map(|f| f.id).collect();
         assert!(ids.contains(&first.id));
         assert!(ids.contains(&second.id));
+    }
+
+    /// The queued repository behaves like the direct one: it inserts, updates
+    /// in place keeping the original id, and still reports a missing row.
+    #[tokio::test]
+    async fn queued_writes_behave_like_direct_ones() {
+        let pool = test_sqlite_pool().await;
+        let queue = WriteQueue::spawn(pool.clone(), crate::WriteQueueConfig::default());
+        let repo = SqlxMediaFileRepo::new(pool.clone()).with_write_queue(queue.clone());
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let source_instance = Uuid::new_v4();
+
+        let first = sample_media_file(work_id, LeafRef::Work, source_instance, Some("file-1"));
+        let stored = repo.upsert_by_source(&first).await.unwrap();
+        assert_eq!(stored.id, first.id);
+
+        let mut again = sample_media_file(work_id, LeafRef::Work, source_instance, Some("file-1"));
+        again.size_bytes = 99;
+        let updated = repo.upsert_by_source(&again).await.unwrap();
+        assert_eq!(updated.id, first.id, "the original id is kept");
+        assert_eq!(updated.size_bytes, 99);
+
+        repo.set_duration_ms(first.id, 1_234).await.unwrap();
+        assert_eq!(
+            repo.get_by_id(first.id).await.unwrap().duration_ms,
+            Some(1_234)
+        );
+        assert!(matches!(
+            repo.set_duration_ms(Uuid::new_v4(), 1).await,
+            Err(DbError::NotFound)
+        ));
+        queue.shutdown().await;
     }
 }
