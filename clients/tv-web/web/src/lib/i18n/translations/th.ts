@@ -1425,7 +1425,6 @@ export const th: Translations = {
   "pages.calendar.subscription.copyFailed": "ไม่สามารถคัดลอกลิงก์อัตโนมัติได้ โปรดเลือกและคัดลอกด้วยตนเอง",
   "pages.calendar.subscription.actionError": "ไม่สามารถเปลี่ยนแปลงได้: {{reason}}",
   "pages.workDetail.availabilityLag": "ปกติพร้อมใช้งานหลังวางจำหน่ายประมาณ {{duration}}",
-  "pages.workDetail.availabilityLagNoData": "ยังไม่มีข้อมูลเวลาที่พร้อมใช้งาน",
   "pages.workDetail.availabilityLagSamples": "คำนวณจาก {{count}} ตอน",
   "pages.workDetail.availabilityLagBackfill": "ไม่รวม {{count}} รายการที่เพิ่มเข้ามาภายหลังเกิน {{days}} วัน",
   "pages.workDetail.availabilityLagUnknown": "ไม่รวม {{count}} รายการที่ไม่มีข้อมูลวันที่",

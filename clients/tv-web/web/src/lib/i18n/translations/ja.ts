@@ -1421,7 +1421,6 @@ export const ja: Translations = {
   "pages.calendar.subscription.copyFailed": "リンクを自動でコピーできませんでした。選択して手動でコピーしてください。",
   "pages.calendar.subscription.actionError": "変更できませんでした: {{reason}}",
   "pages.workDetail.availabilityLag": "通常、公開の約{{duration}}後に入手できます",
-  "pages.workDetail.availabilityLagNoData": "入手可能時期のデータはまだありません",
   "pages.workDetail.availabilityLagSamples": "{{count}}話に基づく",
   "pages.workDetail.availabilityLagBackfill": "公開から{{days}}日以上経って取り込まれた{{count}}件を除外",
   "pages.workDetail.availabilityLagUnknown": "日付が不明な{{count}}件を除外",
