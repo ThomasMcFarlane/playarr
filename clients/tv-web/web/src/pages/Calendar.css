@@ -340,10 +340,6 @@
   display: block;
 }
 
-.calendar-agenda-content .calendar-state {
-  margin-top: 0;
-}
-
 /* Selected cards use the shared card shadow, never a ring or a white border (page-layout.css owns the lift). */
 .calendar-entry.is-selected,
 .calendar-chip.is-selected {
