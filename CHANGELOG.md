@@ -351,6 +351,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Merge train: while the batch CI is still waiting for a runner, the train cancels the queued CI runs of pull requests that are not ready; they re-run when the PR is labelled ready.
 - Web: text colour tokens now meet WCAG 2.2 AAA contrast (7:1) on every surface in both themes: `--ink-soft`, `--ink-muted`, `--accent`, `--danger` and `--success` change lightness (hues kept); new `--brand-ink` (brand-hued text) and `--brand-strong` (fill under white text); always-dark surfaces (player, end screen, playback health, media-context drawer, PIN dialog) take the dark tokens in both themes; native `select` is themed. Owner request 2026-10-09.
 - Calendar, calendar feed and folder root list responses for users now carry a neutral `display_label` per source ("Movies", "Series 2") and no longer return the admin-chosen instance name, which could be a provider's name. Admin routes still return real names.
 - Web styles: one clock block, a `--z-*` stacking scale, player colour tokens, the scrubber focus ring on the shared ring token, dead classes removed, and no backdrop blur on the rail panel and action pills in remote mode.

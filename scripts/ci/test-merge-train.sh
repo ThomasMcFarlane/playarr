@@ -320,6 +320,24 @@ if [ "$(ogit "$be" rev-list --count "$m0..train/batch" 2>/dev/null)" = 1 ] && [ 
 grep -q 'blocked 5' "$be/gh.log" 2>/dev/null && bad "batch: PNG-conflict PR was blocked" || ok "batch: PNG-conflict PR not blocked"
 rm -rf "$be"
 
+# prioritise_batch: cancels queued PR runs of PRs that are not ready, only while the batch CI is queued.
+pb=$(mktemp -d)
+(
+  REPO=o/r; DRY=false; BATCH_BR=train/batch; log() { echo "$*" >>"$pb/log"; }
+  gh() {
+    case "$*" in
+      *"--branch train/batch"*) echo "${PB_WAIT:-1}" ;;
+      *"pr list"*) echo ready-branch ;;
+      *"run list"*) printf '%s\n' "11 ready-branch" "12 other-branch" "13 third-branch" ;;
+      *"run cancel"*) echo "$3" >>"$pb/cancelled" ;;
+    esac
+  }
+  prioritise_batch
+  PB_WAIT=0 prioritise_batch
+) >/dev/null 2>&1
+{ [ "$(sort "$pb/cancelled" 2>/dev/null | tr '\n' ' ')" = "12 13 " ]; } && ok "prioritise: queued runs of non-ready PRs are cancelled, ready PRs' are kept, only while the batch waits" || bad "prioritise: wrong cancellations ($(cat "$pb/cancelled" 2>/dev/null | tr '\n' ' '))"
+rm -rf "$pb"
+
 # Red batch: halved down to the culprit, which alone is blocked.
 be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
 run_batch "$be" pending "1 2 4"
