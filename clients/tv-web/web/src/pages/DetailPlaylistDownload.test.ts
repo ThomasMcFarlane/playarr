@@ -10,7 +10,7 @@ describe("title detail Add to Playlist and season Download", () => {
 
   it("shows an Add to Playlist pill beside Add to watchlist that opens the playlist picker", () => {
     expect(detail).toContain('data-navigation-focus-key={`detail:${work.id}:add-to-playlist`}');
-    expect(detail).toContain('detailMediaContext.openAction(\n                "playlists"');
+    expect(detail.replace(/\s+/g, " ")).toContain('detailMediaContext.openAction( "playlists"');
     expect(detail).toContain('t("components.mediaContextMenu.addToPlaylist")');
     expect(detail.indexOf("focusKey={`detail:${work.id}:watchlist`}")).toBeLessThan(
       detail.indexOf("detail:${work.id}:add-to-playlist")

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryCache, type ApiClient, type WorkDetail } from "@playarr-tv/api-client";
-import { CURRENT_START_DELAY_MS, FocusedDetails, NEIGHBOUR_DWELL_MS } from "./focusedDetails";
+import { CURRENT_START_DELAY_MS, DETAIL_FRESH_MS, FocusedDetails, NEIGHBOUR_DWELL_MS } from "./focusedDetails";
 
 interface Call {
   id: string;
@@ -145,6 +145,17 @@ describe("FocusedDetails", () => {
     queries.invalidate(["catalog"]);
     vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
     expect(calls.map((call) => call.id)).toEqual(["a"]);
+  });
+
+  it("idle warm-up does not re-request a stored copy because it grew old", () => {
+    const { client, queries, calls } = fakeClient();
+    queries.set("work:w1", { id: "w1" }, ["catalog"]);
+    queries.set("work:w2", { id: "w2" }, ["catalog"]);
+    const details = new FocusedDetails(client);
+    details.setWarm(() => ["w1", "w2", "w3"]);
+    // Well past the freshness window: the copies are old, not stale.
+    vi.advanceTimersByTime(DETAIL_FRESH_MS * 3);
+    expect(calls.map((call) => call.id)).toEqual(["w3"]);
   });
 
   it("release drops everything in flight and queued", () => {

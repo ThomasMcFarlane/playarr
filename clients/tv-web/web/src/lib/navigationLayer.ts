@@ -2,6 +2,7 @@ import { setScrollInstant } from "./smoothScroll";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -237,6 +238,34 @@ export function useNavigationLayer(
       capture(event.currentTarget);
     },
     [capture]
+  );
+
+  // The saved focus and scroll are applied in the commit that mounts their target, before the frame is painted: the
+  // two animation frames the effect below waits would paint the top of the page (and its default focus) first, a
+  // visible jump when Back returns to a title far down a list. The effect below stays as the retry for targets that
+  // mount later (more rows, data arriving). Runs every commit while a restore is pending and costs one lookup.
+  const earlyCancelRef = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    if (
+      !restoreEnabled ||
+      !hasSnapshot ||
+      !snapshot ||
+      !snapshot.focusKey ||
+      restoredEntryRef.current === location.key
+    ) {
+      return;
+    }
+    const restoration = restoreSnapshot(snapshot);
+    if (!restoration) return;
+    restoredEntryRef.current = location.key;
+    earlyCancelRef.current = restoration;
+  });
+  useEffect(
+    () => () => {
+      earlyCancelRef.current?.();
+      earlyCancelRef.current = null;
+    },
+    []
   );
 
   useEffect(() => {

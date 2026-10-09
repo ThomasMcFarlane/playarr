@@ -17,10 +17,10 @@ function filled() {
   return cache;
 }
 
-const kept = (cache: QueryCache) =>
-  ["home", "library", "progress", "playlists", "calendar", "household", "untagged"].filter(
-    (key) => cache.peek(key) !== undefined
-  );
+const KEYS = ["home", "library", "progress", "playlists", "calendar", "household", "untagged"];
+/** The entries still fresh: a live event marks what it touches stale but keeps the copy for the next paint. */
+const kept = (cache: QueryCache) => KEYS.filter((key) => cache.peek(key)?.stale === false);
+const held = (cache: QueryCache) => KEYS.filter((key) => cache.peek(key) !== undefined);
 
 describe("queryTagsForInvalidations", () => {
   it("maps each live area to the cache tags that show it", () => {
@@ -38,7 +38,7 @@ describe("queryTagsForInvalidations", () => {
 });
 
 describe("withQueryCacheInvalidation", () => {
-  it("drops stored copies at once, before the debounced refetch runs", () => {
+  it("marks stored copies stale at once, before the debounced refetch runs, and keeps them for the next paint", () => {
     vi.useFakeTimers();
     const cache = filled();
     const registry = createLiveRegistry({ debounceMs: 200 });
@@ -49,20 +49,21 @@ describe("withQueryCacheInvalidation", () => {
     live.invalidate(mapChangeToInvalidations({ type: "watch", entity: "work", id: "w1", changed: ["progress"] }));
 
     expect(kept(cache)).toEqual(["library", "playlists", "calendar", "household", "untagged"]);
+    expect(held(cache)).toEqual(KEYS);
     expect(refetch).not.toHaveBeenCalled();
     vi.advanceTimersByTime(250);
     expect(refetch).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 
-  it("an account change drops every stored copy", () => {
+  it("an account change marks every stored copy stale", () => {
     const cache = filled();
     const live = withQueryCacheInvalidation(createLiveRegistry(), cache);
     live.invalidate(mapChangeToInvalidations({ type: "account", entity: "profile", id: "u1", changed: ["policy"] }));
     expect(kept(cache)).toEqual([]);
   });
 
-  it("resync, gap and fallback polls (refetchAll) drop every stored copy", () => {
+  it("resync, gap and fallback polls (refetchAll) mark every stored copy stale", () => {
     const cache = filled();
     const registry = createLiveRegistry();
     const refetch = vi.fn();

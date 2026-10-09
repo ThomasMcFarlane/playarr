@@ -33,7 +33,8 @@ export async function boot(serverOptions = {}, { realisticAuth = false } = {}) {
     if (r.status !== 0) process.exit(r.status ?? 1);
   }
   const server = await startServer({ distDir: dist, movies: 24, series: 8, artists: 0, ...serverOptions });
-  const base = `http://127.0.0.1:${server.port}`;
+  const defaultBase = `http://127.0.0.1:${server.port}`;
+  const base = defaultBase;
   const dir = join(homedir(), ".cache/ms-playwright");
   const full = existsSync(dir) ? readdirSync(dir).filter((d) => /^chromium-\d+$/.test(d)).sort().pop() : undefined;
   const exe = process.env.NAV_PERF_CHROMIUM || (full ? join(dir, full, "chrome-linux64/chrome") : undefined);
@@ -43,7 +44,9 @@ export async function boot(serverOptions = {}, { realisticAuth = false } = {}) {
     results.push({ name, ok });
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  -- ${detail}`}`);
   };
-  async function open(path, { width = 1920, height = 1080, theme = "dark" } = {}) {
+  // `server` (optional) is another mock started with `startServer`: the page then signs in to that one.
+  async function open(path, { width = 1920, height = 1080, theme = "dark", server: other } = {}) {
+    const base = other ? `http://127.0.0.1:${other.port}` : defaultBase;
     const context = await browser.newContext({ viewport: { width, height } });
     await context.addInitScript(
       ({ base, userId, token }) => {
