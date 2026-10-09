@@ -371,13 +371,6 @@ export function DownloadsPage() {
       header={{
         title: t("pages.downloads.title"),
         back: { label: t("pages.downloads.backToHome"), to: "/" },
-        detail:
-          storageSupported && storageUsage
-            ? t("pages.downloads.storageUsed", {
-                used: formatBytes(storageUsage.usageBytes),
-                quota: formatBytes(storageUsage.quotaBytes),
-              })
-            : null,
         actions: online ? [] : [{ kind: "status", id: "offline", label: t("pages.downloads.offline") }],
       }}
     >
