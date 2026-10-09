@@ -322,6 +322,43 @@ impl WriteQueue {
     }
 }
 
+/// Runs `f` through `queue` when there is one; otherwise directly, in its own
+/// transaction on `pool`. Repositories use this so they behave the same with or
+/// without a queue (tests, tools and the CLI run without one).
+pub async fn write<T, F>(queue: Option<&WriteQueue>, pool: &DbPool, mut f: F) -> Result<T, DbError>
+where
+    T: Send + 'static,
+    F: for<'c> FnMut(&'c mut AnyConnection) -> WriteFuture<'c, T> + Send + 'static,
+{
+    match queue {
+        Some(queue) => queue.submit(f).await,
+        None => {
+            let mut tx = pool.begin().await?;
+            let value = f(&mut tx).await?;
+            tx.commit().await?;
+            Ok(value)
+        }
+    }
+}
+
+/// [`write`] for an idempotent latest-value-wins write; see
+/// [`WriteQueue::submit_latest`]. Without a queue it simply runs.
+pub async fn write_latest<F>(
+    queue: Option<&WriteQueue>,
+    pool: &DbPool,
+    key: impl Into<String>,
+    rank: i64,
+    f: F,
+) -> Result<(), DbError>
+where
+    F: for<'c> FnMut(&'c mut AnyConnection) -> WriteFuture<'c, ()> + Send + 'static,
+{
+    match queue {
+        Some(queue) => queue.submit_latest(key, rank, f).await,
+        None => write(None, pool, f).await,
+    }
+}
+
 async fn run_writer(
     pool: DbPool,
     mut rx: mpsc::Receiver<Box<dyn ErasedOp>>,
