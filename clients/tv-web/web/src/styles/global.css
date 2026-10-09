@@ -4450,9 +4450,16 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   display: none;
 }
 
-.tv-title-card,
+.tv-title-card {
+  flex: 0 0 var(--card-w);
+}
+
 .tv-episode-card {
   flex: 0 0 clamp(160px, calc(12 * var(--vw)), 245px);
+}
+
+.tv-title-card,
+.tv-episode-card {
   min-width: 0;
   padding: 0;
   background: transparent;
@@ -4473,13 +4480,21 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   transform: translateY(-7px);
 }
 
+.tv-title-card-art {
+  aspect-ratio: var(--card-art-ratio);
+  border-radius: var(--card-radius);
+}
+
+.tv-episode-art {
+  aspect-ratio: 16 / 9;
+  border-radius: clamp(8px, calc(0.7 * var(--vw)), 14px);
+}
+
 .tv-title-card-art,
 .tv-episode-art {
   position: relative;
-  aspect-ratio: 16 / 9;
   display: block;
   overflow: hidden;
-  border-radius: clamp(8px, calc(0.7 * var(--vw)), 14px);
   background: var(--surface-soft);
   box-shadow:
     0 10px 20px rgba(56, 38, 33, 0.14),
@@ -4529,6 +4544,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .tv-title-card-copy {
   grid-template-columns: minmax(0, 1fr);
+  padding: var(--card-copy-gap) var(--card-copy-inset) 0;
 }
 
 .tv-episode-copy {
@@ -4538,15 +4554,23 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .tv-title-card-copy small,
 .tv-episode-copy small {
   color: var(--ink-muted);
-  font-size: clamp(0.43rem, calc(0.46 * var(--vw)), 0.56rem);
+  font-size: var(--card-meta-size);
   font-weight: 700;
 }
 
-.tv-title-card-copy strong,
 .tv-episode-copy strong {
   overflow: hidden;
   font-size: clamp(0.54rem, calc(0.6 * var(--vw)), 0.74rem);
   font-weight: 610;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-title-card-copy strong {
+  overflow: hidden;
+  font-size: var(--card-title-size);
+  font-weight: var(--card-title-weight);
   letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4971,14 +4995,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   min-width: 0;
 }
 
-.tv-directory {
-  --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
-  --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
-  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
-  /* Alphabet rail: one column of 44px targets (WCAG 2.5.5) plus 6px padding each side; it scrolls when the letters do not fit. */
-  --directory-alphabet-width: 56px;
-}
-
 .tv-filter-launcher {
   position: absolute;
   z-index: var(--z-actions);
@@ -5274,12 +5290,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   --tv-rail-frost: color-mix(in srgb, var(--surface-soft) 48%, var(--surface-strong));
   --library-rail-top: clamp(128px, calc(15 * var(--viewport-unit)), 174px);
   --library-rail-bottom: clamp(48px, calc(6 * var(--viewport-unit)), 78px);
-  --library-rail-right: calc(
-    var(--directory-controls-edge) +
-      max(var(--directory-controls-width), var(--directory-alphabet-width, 0px)) +
-      var(--directory-controls-gap)
-  );
-  --library-rail-left: clamp(28px, calc(2.8 * var(--vw)), 54px);
   top: 0;
   right: 0;
   width: 65%;
@@ -5359,10 +5369,11 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   width: 100%;
   min-height: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--card-cols), var(--card-w));
+  justify-content: start;
   grid-auto-rows: max-content;
   align-content: start;
-  gap: clamp(22px, calc(2.5 * var(--viewport-unit)), 36px) clamp(14px, calc(1.35 * var(--vw)), 28px);
+  gap: clamp(22px, calc(2.5 * var(--viewport-unit)), 36px) var(--card-grid-gap);
   padding:
     var(--library-rail-top)
     var(--library-rail-right)
@@ -5474,26 +5485,13 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   contain: layout style;
 }
 
-.tv-title-grid .tv-title-card-art {
-  aspect-ratio: 16 / 9;
-  border-radius: clamp(8px, calc(0.65 * var(--vw)), 13px);
-}
-
-.tv-title-grid .tv-title-card-copy {
-  padding: 0.72rem 0.12rem 0;
-}
-
-.tv-title-grid .tv-title-card-copy strong {
-  font-size: clamp(0.55rem, calc(0.62 * var(--vw)), 0.78rem);
-}
-
 .tv-list-card-meta {
   display: none;
 }
 
 .tv-library-grid-panel.is-cover .tv-title-grid-content {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: clamp(26px, calc(3 * var(--viewport-unit)), 42px) clamp(12px, calc(1 * var(--vw)), 20px);
+  grid-template-columns: repeat(var(--card-cols-cover), var(--card-w-cover));
+  gap: clamp(26px, calc(3 * var(--viewport-unit)), 42px) var(--card-grid-gap-cover);
 }
 
 .tv-library-grid-panel.is-screen.artwork-small .tv-title-grid-content {
@@ -5513,7 +5511,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 }
 
 .tv-library-grid-panel.is-cover .tv-title-card-art {
-  aspect-ratio: 2 / 3;
+  aspect-ratio: var(--card-art-ratio-cover);
 }
 
 .tv-library-grid-panel.is-cover .tv-title-card-copy {
@@ -5765,12 +5763,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 .tv-home-feature {
   z-index: 8;
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-}
-
-.tv-playlists {
-  --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
-  --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
-  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
 }
 
 .tv-playlists .tv-media-track-heading {
@@ -6081,12 +6073,7 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: rgba(255, 166, 186, 0.72);
 }
 
-.tv-playlist-directory-panel .tv-title-grid-content {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .tv-playlist-directory-card .tv-playlist-card-art {
-  aspect-ratio: 16 / 10;
   overflow: visible;
   background: transparent;
   box-shadow: none;
@@ -6127,8 +6114,19 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   object-fit: cover;
 }
 
+/* The card is as tall as every other poster card (art plus one title line): the detail line hangs below it. */
+.tv-playlist-directory-card-copy {
+  gap: 0;
+}
+
 .tv-playlist-directory-card-copy small {
+  height: 1.45em;
+  margin-top: 0.25rem;
+  margin-bottom: calc(-1.45em - 0.25rem);
+  overflow: hidden;
   line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tv-playlist-directory-grid .tv-playlist-empty-state {
@@ -6313,7 +6311,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-home-card {
-  flex: 0 0 clamp(150px, calc(11.4 * var(--vw)), 225px);
+  flex: 0 0 var(--card-w);
   min-width: 0;
   color: inherit;
   opacity: 1;
@@ -6332,10 +6330,10 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-home-card-art {
   position: relative;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--card-art-ratio);
   display: block;
   overflow: hidden;
-  border-radius: clamp(8px, calc(0.65 * var(--vw)), 13px);
+  border-radius: var(--card-radius);
   background: var(--surface-soft);
   box-shadow:
     0 10px 22px rgba(56, 38, 33, 0.16),
@@ -6387,11 +6385,11 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-home.is-cover-view .tv-home-card {
-  flex-basis: clamp(118px, calc(8.6 * var(--vw)), 172px);
+  flex-basis: var(--card-w-cover);
 }
 
 .tv-home.is-cover-view .tv-home-card-art {
-  aspect-ratio: 2 / 3;
+  aspect-ratio: var(--card-art-ratio-cover);
 }
 
 .tv-home-card-art img {
@@ -6412,19 +6410,26 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-home-card > strong {
   display: block;
-  margin-top: 0.62rem;
+  padding: var(--card-copy-gap) var(--card-copy-inset) 0;
   overflow: hidden;
-  font-size: clamp(0.52rem, calc(0.59 * var(--vw)), 0.72rem);
-  font-weight: 630;
+  font-size: var(--card-title-size);
+  font-weight: var(--card-title-weight);
+  letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The card is as tall as every other poster card (art plus one title line): the detail line hangs below it. */
 .tv-home-card > small {
   display: block;
-  margin-top: 0.16rem;
+  height: 1.3em;
+  margin: 0.16rem 0 calc(-1.3em - 0.16rem);
+  padding-inline: var(--card-copy-inset);
+  overflow: hidden;
   color: var(--ink-muted);
-  font-size: clamp(0.4rem, calc(0.45 * var(--vw)), 0.55rem);
+  font-size: var(--card-meta-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tv-detail-copy {
@@ -6822,6 +6827,19 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-media-track-scroll .tv-episode-card {
   flex-basis: clamp(180px, calc(14 * var(--vw)), 268px);
+}
+
+/* Title cards in a rail are as tall as the Library card (art plus one title line): the kind label hangs below it. */
+.tv-media-track-scroll .tv-title-card-copy {
+  gap: 0;
+}
+
+.tv-media-track-scroll .tv-title-card-copy small {
+  height: 1.3em;
+  margin: 0.16rem 0 calc(-1.3em - 0.16rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Cast and crew: a circular headshot (1:1) with the name and role centred beneath, not a 16:9 episode tile. */
@@ -7393,8 +7411,9 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-search-results-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(28px, calc(3.5 * var(--viewport-unit)), 48px) clamp(14px, calc(1.4 * var(--vw)), 26px);
+  grid-template-columns: repeat(var(--card-cols), var(--card-w));
+  justify-content: start;
+  gap: clamp(28px, calc(3.5 * var(--viewport-unit)), 48px) var(--card-grid-gap);
 }
 
 .tv-search-result {
@@ -7408,10 +7427,10 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-search-result-art {
   position: relative;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--card-art-ratio);
   display: block;
   overflow: hidden;
-  border-radius: clamp(8px, calc(0.65 * var(--vw)), 13px);
+  border-radius: var(--card-radius);
   background: var(--surface-strong);
   box-shadow: 0 12px 34px rgba(31, 14, 20, 0.16);
   transition:
@@ -7463,13 +7482,14 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0.6rem;
-  padding: 0.68rem 0.1rem 0;
+  padding: var(--card-copy-gap) var(--card-copy-inset) 0;
 }
 
 .tv-search-result-copy strong {
   overflow: hidden;
-  font-size: clamp(0.56rem, calc(0.64 * var(--vw)), 0.8rem);
-  font-weight: 650;
+  font-size: var(--card-title-size);
+  font-weight: var(--card-title-weight);
+  letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8367,14 +8387,6 @@ html.is-native-scroll-root .profile-auth-scroll {
     width: 66%;
   }
 
-  .tv-title-grid-content {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .tv-library-grid-panel.is-cover .tv-title-grid-content {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .tv-library-grid-panel.is-cover.artwork-small .tv-title-grid-content {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
@@ -8404,7 +8416,7 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   .tv-search-results-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, var(--card-w));
   }
 
   .profiles-row {
@@ -8519,24 +8531,6 @@ html.is-native-scroll-root .profile-auth-scroll {
     height: 100%;
   }
 
-  .tv-title-grid-content {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .tv-library-grid-panel.is-cover .tv-title-grid-content {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .tv-library-grid-panel.is-screen.artwork-small .tv-title-grid-content,
-  .tv-library-grid-panel.is-cover.artwork-small .tv-title-grid-content {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .tv-library-grid-panel.is-screen.artwork-large .tv-title-grid-content,
-  .tv-library-grid-panel.is-cover.artwork-large .tv-title-grid-content {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .tv-home-feature {
     left: 6%;
   }
@@ -8581,10 +8575,6 @@ html.is-native-scroll-root .profile-auth-scroll {
   .tv-search-results {
     padding-right: 20px;
     padding-left: 34px;
-  }
-
-  .tv-search-results-grid {
-    grid-template-columns: 1fr;
   }
 
   .tv-search-clear {
@@ -8991,18 +8981,17 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
 
   .tv-home-card,
   .tv-media-track-scroll .tv-episode-card {
-    flex-basis: min(calc(46 * var(--vw)), 210px);
     scroll-snap-align: start;
   }
 
-  .tv-home-card > strong,
-  .tv-title-card-copy strong,
+  .tv-media-track-scroll .tv-episode-card {
+    flex-basis: min(calc(46 * var(--vw)), 210px);
+  }
+
   .tv-episode-copy strong {
     font-size: 0.78rem;
   }
 
-  .tv-home-card > small,
-  .tv-title-card-copy small,
   .tv-episode-copy small {
     font-size: 0.62rem;
   }
@@ -9049,8 +9038,8 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
   .tv-library-grid-panel.is-screen.artwork-large .tv-title-grid-content,
   .tv-library-grid-panel.is-cover.artwork-large .tv-title-grid-content,
   .tv-playlist-directory-panel .tv-title-grid-content {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 12px;
+    grid-template-columns: repeat(var(--card-cols), var(--card-w));
+    gap: 24px var(--card-grid-gap);
     padding: 84px var(--mobile-page-gutter)
       calc(var(--mobile-nav-height) + 24px);
   }
@@ -9298,21 +9287,23 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
   }
 
   .tv-search-results-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 12px;
+    grid-template-columns: repeat(var(--card-cols), var(--card-w));
+    gap: 24px var(--card-grid-gap);
   }
 
+  /* One title line like every poster card; the kind label hangs below it. */
   .tv-search-result-copy {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-  }
-
-  .tv-search-result-copy strong {
-    font-size: 0.76rem;
+    gap: 0;
   }
 
   .tv-search-result-copy small {
-    font-size: 0.58rem;
+    height: 1.3em;
+    margin-top: 2px;
+    margin-bottom: calc(-1.3em - 2px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .profiles-heading {
@@ -9750,16 +9741,8 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     font-size: 2.25rem;
   }
 
-  .tv-home-card,
   .tv-media-track-scroll .tv-episode-card {
     flex-basis: calc(52 * var(--vw));
-  }
-
-  .tv-title-grid-content,
-  .tv-library-grid-panel.is-cover .tv-title-grid-content,
-  .tv-playlist-directory-panel .tv-title-grid-content,
-  .tv-search-results-grid {
-    grid-template-columns: 1fr;
   }
 }
 
