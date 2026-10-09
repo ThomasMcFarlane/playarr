@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Layout-shift check for the Release Calendar: the skeleton shown while loading must
 // occupy exactly the same boxes as the loaded view (month grid / week track / agenda
-// master-detail), at TV 1920x1080, 1280x720 and phone 390x844. Uses the mock API with a
+// stage with the Library list panel), at TV 1920x1080, 1280x720 and phone 390x844. Uses the mock API with a
 // delayed calendar response so both states can be measured.
 //
 //   node scripts/calendar-layout.mjs [--no-build] [--dist dir]
@@ -32,7 +32,7 @@ const USER_ID = "00000000-0000-4000-8000-000000000001";
 const REGIONS = {
   month: [".calendar-scroll", ".calendar-month-body", ".calendar-month-cell"],
   week: [".calendar-scroll", ".calendar-week-scroll", ".calendar-day"],
-  agenda: [".calendar-scroll", ".master-detail", ".master-detail-pane", ".master-detail-list"],
+  agenda: [".tv-library-grid-panel", ".tv-title-grid"],
 };
 let failed = false;
 for (const [vp, label, mobile] of [[{ width: 1920, height: 1080 }, "1920x1080", false], [{ width: 1280, height: 720 }, "1280x720", false], [{ width: 390, height: 844 }, "390x844", true]]) {
@@ -46,7 +46,7 @@ for (const [vp, label, mobile] of [[{ width: 1920, height: 1080 }, "1920x1080", 
     }, { base, userId: USER_ID });
     const page = await context.newPage();
     await page.goto(`${base}/calendar?view=${view}&date=2026-10-07`);
-    await page.waitForSelector(".calendar-scroll .skeleton", { timeout: 15000 });
+    await page.waitForSelector(".calendar-scroll .skeleton, .tv-library-grid-panel .skeleton", { timeout: 15000 });
     const measure = () =>
       page.evaluate((selectors) => {
         const round = (n) => Math.round(n * 10) / 10;
@@ -57,8 +57,9 @@ for (const [vp, label, mobile] of [[{ width: 1920, height: 1080 }, "1920x1080", 
           return { selector, x: round(r.x), y: round(r.y), w: round(r.width), h: round(r.height) };
         });
       }, REGIONS[view]);
+    if (view === "agenda") await page.waitForTimeout(900); // the stage entrance animation settles
     const loading = await measure();
-    await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton"), null, { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton, .tv-library-grid-panel .skeleton"), null, { timeout: 15000 });
     await page.waitForTimeout(300);
     const loaded = await measure();
     await context.close();

@@ -8,6 +8,7 @@ import type {
 import { CALENDAR_QUERY_TAGS, calendarCacheKey, prefetchCalendar, useAsyncData } from "@playarr-tv/api-client/react";
 import { CalendarLink } from "../components/CalendarLink";
 import { DetailsPanel } from "../components/DetailsPanel";
+import { ListPanel } from "../components/tv/ListPanel";
 import { StatusPill } from "../components/StatusPill";
 import {
   DateRangeField,
@@ -16,6 +17,7 @@ import {
   MasterDetail,
   MultiSelect,
   PageLayout,
+  type PageHeaderProps,
   SkeletonBlock,
   SkeletonLines,
   ViewToggle,
@@ -557,11 +559,14 @@ function ItemDetails({
   today,
   onOpen,
   onPlay,
+  stage = false,
 }: {
   item: CalendarItem;
   t: TFunction;
   locale: string;
   today: Day;
+  /** The Library-style stage placement (agenda); otherwise in flow (the week and month sheet). */
+  stage?: boolean;
   onOpen: ((route: string) => void) | null;
   onPlay: ((mediaFileId: string, title: string) => void) | null;
 }) {
@@ -597,8 +602,8 @@ function ItemDetails({
   ].filter((hint): hint is string => Boolean(hint));
   return (
     <DetailsPanel
-      placement="flow"
-      className="calendar-details"
+      placement={stage ? "stage" : "flow"}
+      className={stage ? "calendar-details tv-library-preview" : "calendar-details"}
       eyebrow={`${t(KIND_KEYS[first.media_kind])} · ${t(RELEASE_KEYS[first.release_type])}`}
       title={<span id="calendar-details-title">{itemTitle(item)}</span>}
       meta={
@@ -673,7 +678,7 @@ function ItemDetails({
 
 function DetailsSkeleton() {
   return (
-    <div className="calendar-details" aria-hidden="true">
+    <div className="calendar-details details-panel is-stage tv-library-preview" aria-hidden="true">
       <SkeletonBlock width="30%" height="0.8rem" />
       <SkeletonBlock width="80%" height="2rem" />
       <SkeletonBlock width="50%" height="1rem" />
@@ -897,6 +902,8 @@ export function CalendarPage() {
     );
   }
 
+  // Phones hide the stage's left panel (as on Library), so an agenda selection opens the sheet there.
+  const isPhone = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const activeCount = activeFilterCount(filters);
@@ -926,7 +933,7 @@ export function CalendarPage() {
       entries: [],
     }));
 
-  let body;
+  let body: ReactNode = null;
   if (view === "month") {
     body = (
       <MonthGrid
@@ -954,42 +961,6 @@ export function CalendarPage() {
         loading={loading}
         {...selectProps}
       />
-    );
-  } else {
-    body = (
-      <MasterDetail
-        detailLabel={t("pages.calendar.detailsLabel")}
-        detailKey={`${detailItem?.key ?? ""}:${loading}`}
-        detail={
-          loading ? (
-            <DetailsSkeleton />
-          ) : detailItem ? (
-            <ItemDetails item={detailItem} t={t} locale={locale} today={today} onOpen={openRoute} onPlay={playFile} />
-          ) : (
-            <p className="muted calendar-details">{t("pages.calendar.selectPrompt")}</p>
-          )
-        }
-      >
-        <EdgeScroller
-          axis="vertical"
-          className="calendar-list-scroll"
-          data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
-          data-navigation-scroll-key="calendar:list"
-          refreshKey={`${items.length}:${loading}`}
-        >
-          <DaySections
-            days={loading ? skeletonDays() : groups}
-            t={t}
-            locale={locale}
-            today={today}
-            showEmpty={false}
-            loading={loading}
-            {...selectProps}
-            selectOnFocus
-          />
-        </EdgeScroller>
-      </MasterDetail>
     );
   }
 
@@ -1020,77 +991,48 @@ export function CalendarPage() {
     </>
   );
 
-  return (
-    <PageLayout
-      pageId="calendar"
-      body="bleed"
-      className={`calendar-page calendar-view-${view}`}
-      ariaLabel={t("pages.calendar.title")}
-      backdrop={agendaArt}
-      header={{
-        title: t("pages.calendar.title"),
-        back: { label: t("pages.calendar.backToHome"), to: "/" },
-        actions: [
-          {
-            kind: "navigation",
-            id: "calendar-navigation",
-            label: t("pages.calendar.navigationLabel"),
-            hideOnPhone: true,
-            items: [
-              { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => stepAnchor(-1) },
-              {
-                id: "today",
-                label: t("pages.calendar.today"),
-                onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
-                buttonProps: { "data-tv-focus-default": true },
-              },
-              { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => stepAnchor(1) },
-            ],
-          },
-          {
-            kind: "panel",
-            id: "subscription",
-            label: t("pages.calendar.subscription.title"),
-            icon: "bell",
-            open: panel === "link",
-            onToggle: () => setPanel(panel === "link" ? null : "link"),
-            controls: "calendar-subscribe-drawer",
-          },
-          {
-            kind: "filters",
-            label: t("pages.library.filters"),
-            open: panel === "filters",
-            onToggle: () => setPanel(panel === "filters" ? null : "filters"),
-            controls: "calendar-filters-drawer",
-            activeCount,
-          },
-        ],
-      }}
-    >
-      <div className="calendar-header">
-        <PeriodPicker
-          value={anchor}
-          label={rangeLabel}
-          locale={locale}
-          view={view}
-          dialogLabel={t("pages.calendar.jumpTitle")}
-          monthLabel={t("pages.calendar.jumpMonth")}
-          yearLabel={t("pages.calendar.jumpYear")}
-          onChange={(day) => setAnchor(day)}
-        />
-        <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-          {navButtons}
-        </div>
-      </div>
+  const pageHeader: PageHeaderProps = {
+    title: t("pages.calendar.title"),
+      back: { label: t("pages.calendar.backToHome"), to: "/" },
+      actions: [
+        {
+          kind: "navigation",
+          id: "calendar-navigation",
+          label: t("pages.calendar.navigationLabel"),
+          hideOnPhone: true,
+          items: [
+            { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => stepAnchor(-1) },
+            {
+              id: "today",
+              label: t("pages.calendar.today"),
+              onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
+              buttonProps: { "data-tv-focus-default": true },
+            },
+            { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => stepAnchor(1) },
+          ],
+        },
+        {
+          kind: "panel",
+          id: "subscription",
+          label: t("pages.calendar.subscription.title"),
+          icon: "bell",
+          open: panel === "link",
+          onToggle: () => setPanel(panel === "link" ? null : "link"),
+          controls: "calendar-subscribe-drawer",
+        },
+        {
+          kind: "filters",
+          label: t("pages.library.filters"),
+          open: panel === "filters",
+          onToggle: () => setPanel(panel === "filters" ? null : "filters"),
+          controls: "calendar-filters-drawer",
+          activeCount,
+        },
+      ],
+  };
 
-      {stateMessage}
-      <div
-        className={`calendar-scroll${view === "agenda" ? " is-master-detail" : ""}${stateMessage ? " is-hidden" : ""}`}
-        data-navigation-scroll-key="calendar:body"
-      >
-        {body}
-      </div>
-
+  const drawers = (
+    <>
       <FiltersDrawer
         id="calendar-filters-drawer"
         open={panel === "filters"}
@@ -1197,8 +1139,102 @@ export function CalendarPage() {
       >
         <CalendarLink />
       </FiltersDrawer>
+    </>
+  );
 
-      {view !== "agenda" && selectedItem ? (
+  const periodPicker = (
+    <PeriodPicker
+      value={anchor}
+      label={rangeLabel}
+      locale={locale}
+      view={view}
+      dialogLabel={t("pages.calendar.jumpTitle")}
+      monthLabel={t("pages.calendar.jumpMonth")}
+      yearLabel={t("pages.calendar.jumpYear")}
+      onChange={(day) => setAnchor(day)}
+    />
+  );
+
+  if (view === "agenda") {
+    // The agenda is the Library's page: the shared stage (art, left details panel, right list panel).
+    return (
+      <PageLayout
+        pageId="calendar"
+        body="panel"
+        className="calendar-page calendar-view-agenda tv-library tv-directory"
+        ariaLabel={t("pages.calendar.title")}
+        backdrop={agendaArt ?? { artKey: "calendar-agenda" }}
+        header={{ ...pageHeader, detail: periodPicker }}
+      >
+        {loading ? (
+          <DetailsSkeleton />
+        ) : detailItem ? (
+          <ItemDetails item={detailItem} t={t} locale={locale} today={today} onOpen={openRoute} onPlay={playFile} stage />
+        ) : null}
+        <ListPanel
+          ariaLabel={t("pages.calendar.title")}
+          scrollKey="calendar:list"
+          refreshKey={`${items.length}:${loading}`}
+          contentClassName="calendar-agenda-content"
+        >
+          {stateMessage ?? (
+            <DaySections
+              days={loading ? skeletonDays() : groups}
+              t={t}
+              locale={locale}
+              today={today}
+              showEmpty={false}
+              loading={loading}
+              {...selectProps}
+              selectOnFocus
+            />
+          )}
+        </ListPanel>
+        {drawers}
+        {selectedItem && isPhone && urlState.selected ? (
+          <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>
+            <ItemDetails
+              item={selectedItem}
+              t={t}
+              locale={locale}
+              today={today}
+              onOpen={(route) => {
+                openRoute(route);
+              }}
+              onPlay={playFile}
+            />
+          </DetailSheet>
+        ) : null}
+      </PageLayout>
+    );
+  }
+
+  return (
+    <PageLayout
+      pageId="calendar"
+      body="bleed"
+      className={`calendar-page calendar-view-${view}`}
+      ariaLabel={t("pages.calendar.title")}
+      header={pageHeader}
+    >
+      <div className="calendar-header">
+        {periodPicker}
+        <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+          {navButtons}
+        </div>
+      </div>
+
+      {stateMessage}
+      <div
+        className={`calendar-scroll${stateMessage ? " is-hidden" : ""}`}
+        data-navigation-scroll-key="calendar:body"
+      >
+        {body}
+      </div>
+
+      {drawers}
+
+      {selectedItem ? (
         <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>
           <ItemDetails
             item={selectedItem}

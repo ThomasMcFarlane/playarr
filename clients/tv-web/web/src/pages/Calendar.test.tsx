@@ -55,7 +55,8 @@ describe("calendar scroll and focus contract", () => {
 
   it("owns native scroll containers with the shared data attributes", () => {
     expect(page).toContain("data-tv-scroll-container");
-    expect(page).toContain('data-tv-scroll-axis="vertical"');
+    expect(page).toContain("<ListPanel");
+    expect(readFileSync(new URL("../components/tv/ListPanel.tsx", import.meta.url), "utf8")).toContain('data-tv-scroll-axis="vertical"');
     expect(page).toContain('data-navigation-scroll-key="calendar:body"');
     expect(css).toMatch(/\.calendar-scroll\s*\{[^}]*overflow-y: auto/);
   });
