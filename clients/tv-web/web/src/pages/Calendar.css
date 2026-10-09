@@ -1,7 +1,7 @@
 /*
- * Release calendar. The page owns one vertical scroll viewport
- * (.calendar-scroll) beneath a fixed header; the month grid adds a native
- * horizontal viewport on narrow screens. Both carry data-tv-scroll-container.
+ * Release calendar. The body frame (.calendar-scroll) sits beneath a fixed header and does not scroll;
+ * the viewports inside it do: the month and week tracks (horizontal), each week day column and the
+ * agenda list (vertical). Each carries data-tv-scroll-container and a scroll key.
  */
 .calendar-header {
   display: flex;
@@ -9,17 +9,7 @@
   gap: 0.6rem;
 }
 
-
-.calendar-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem 1.25rem;
-}
-
 .calendar-nav,
-.calendar-views,
-.calendar-filters,
 .calendar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -34,62 +24,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-.calendar-views {
-  margin-left: auto;
-}
-
-.calendar-icon-btn {
-  min-width: 44px;
-  padding-inline: 0.75rem;
-}
-
-.calendar-view-btn,
-.calendar-filter-chip {
-  min-height: 44px;
-  min-width: 44px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-soft);
-  font: inherit;
-  font-weight: 640;
-  padding: 0.4rem 1rem;
-  cursor: pointer;
-}
-
-.calendar-view-btn[aria-pressed="true"],
-.calendar-filter-chip[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--bg);
-}
-
+/*
+ * The body frame fills the space under the header and never scrolls itself: the scrollers inside it do
+ * (month and week tracks, week day columns, the agenda list), each in a plain edge-fade window.
+ * Every view fills the body area; containers, not content, decide the size (zero shift on load).
+ */
 .calendar-scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 4px 4px 8rem 0;
-  scrollbar-color: var(--line-strong) transparent;
-}
-
-.calendar-state {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 1.5rem 0;
-}
-
-.calendar-state-title {
-  margin: 0;
-  font-size: clamp(1rem, calc(1.2 * var(--vw)), 1.4rem);
-}
-
-.calendar-state p {
-  margin: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .calendar-days {
@@ -219,12 +165,12 @@
 }
 
 .calendar-badge-inLibrary {
-  background: color-mix(in srgb, #3f9d77 24%, transparent);
+  background: color-mix(in srgb, var(--success) 16%, transparent);
   color: var(--ink);
 }
 
 .calendar-badge-monitored {
-  background: color-mix(in srgb, #5b7fd1 24%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--ink);
 }
 
@@ -340,11 +286,11 @@
 .calendar-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
 }
 
 .calendar-sheet {
@@ -385,36 +331,7 @@
   margin: 0;
 }
 
-/* Subscription */
-.calendar-subscription {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
-  max-width: 720px;
-}
-
-.calendar-subscription h2,
-.calendar-subscription p {
-  margin: 0;
-}
-
-.calendar-subscription-secret {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.9rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-}
-
-.calendar-subscription-warning {
-  color: var(--danger);
-  font-weight: 640;
-}
-
+/* Subscription link (components/CalendarLink) */
 .calendar-subscription-url {
   min-height: 44px;
   width: 100%;
@@ -609,7 +526,7 @@
 
 .period-picker-panel {
   position: absolute;
-  z-index: 40;
+  z-index: var(--z-popover);
   top: calc(100% + 8px);
   left: 0;
   display: flex;
@@ -618,7 +535,7 @@
   border: 1px solid var(--line-strong);
   border-radius: 18px;
   background: var(--surface-strong);
-  box-shadow: 0 24px 64px rgba(40, 26, 24, 0.24);
+  box-shadow: var(--shadow-focus);
 }
 
 .period-picker-list {
@@ -682,12 +599,6 @@
   justify-items: start;
 }
 
-/* Every view fills the body area; containers, not content, decide the size (zero shift on load). */
-.calendar-scroll {
-  display: flex;
-  flex-direction: column;
-}
-
 .calendar-scroll > * {
   flex: 1 1 auto;
   min-height: 0;
@@ -706,11 +617,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-}
-
-.calendar-scroll {
-  overflow: hidden;
-  padding: 0;
 }
 
 /* Each scrollable calendar area sits in a plain window; the edge fade is the shared mask on the scroller (page-layout.css). */
