@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Layout-shift check for the Release Calendar: the skeleton shown while loading must
+// Layout-shift check for the Calendar: the skeleton shown while loading must
 // occupy exactly the same boxes as the loaded view (month grid / week track / agenda
 // stage with the Library list panel), at TV 1920x1080, 1280x720 and phone 390x844. Uses the mock API with a
 // delayed calendar response so both states can be measured.

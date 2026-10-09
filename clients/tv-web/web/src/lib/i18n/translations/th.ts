@@ -1366,7 +1366,7 @@ export const th: Translations = {
   "pages.calendar.link.errorUnsupported": "เซิร์ฟเวอร์เวอร์ชันนี้ยังไม่รองรับลิงก์ปฏิทิน โปรดให้ผู้ดูแลอัปเดต Playarr Server",
   "pages.calendar.link.errorSignin": "การเข้าสู่ระบบหมดอายุ โปรดเข้าสู่ระบบอีกครั้ง",
   "pages.calendar.link.errorOther": "เกิดข้อผิดพลาดในการรับลิงก์ปฏิทิน ลองอีกครั้ง",
-  "pages.calendar.title": "ปฏิทินวันวางจำหน่าย",
+  "pages.calendar.title": "ปฏิทิน",
   "pages.calendar.today": "วันนี้",
   "pages.calendar.previous": "ก่อนหน้า",
   "pages.calendar.next": "ถัดไป",

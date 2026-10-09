@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless check that every filterable page renders the Filters button through the
 // shared PageHeader slot: identical component classes and identical bounding box on
-// Movies, Series, Playlists and the Release Calendar (against the deterministic mock API).
+// Movies, Series, Playlists and the Calendar (against the deterministic mock API).
 //
 //   node scripts/header-parity.mjs [--no-build] [--dist dir]
 import { spawnSync } from "node:child_process";
