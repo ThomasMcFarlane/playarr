@@ -120,6 +120,14 @@ pub struct LiveEvent {
 #[async_trait]
 pub trait LiveEventRepo: Send + Sync {
     async fn insert(&self, event: &NewLiveEvent, now_ms: i64) -> Result<(), DbError>;
+    /// Inserts several events; the SQL repo does it in one transaction (one
+    /// commit sync). The default inserts one by one.
+    async fn insert_many(&self, events: &[NewLiveEvent], now_ms: i64) -> Result<(), DbError> {
+        for event in events {
+            self.insert(event, now_ms).await?;
+        }
+        Ok(())
+    }
     /// Rows with `seq > after`, oldest first.
     async fn list_after(&self, after: i64, limit: i64) -> Result<Vec<LiveEvent>, DbError>;
     /// `(min seq, max seq)` of retained rows.
@@ -169,6 +177,32 @@ impl LiveEventRepo for SqlxLiveEventRepo {
         .bind(now_ms)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    async fn insert_many(&self, events: &[NewLiveEvent], now_ms: i64) -> Result<(), DbError> {
+        match events {
+            [] => return Ok(()),
+            [one] => return self.insert(one, now_ms).await,
+            _ => {}
+        }
+        let mut tx = self.pool.begin().await?;
+        for e in events {
+            sqlx::query(
+                "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
+                 source_instance_id, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(e.user_id.map(|u| u.to_string()))
+            .bind(e.kind)
+            .bind(e.entity)
+            .bind(e.entity_id.clone())
+            .bind(serde_json::to_string(&e.changed)?)
+            .bind(e.source_instance_id.map(|u| u.to_string()))
+            .bind(now_ms)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 
@@ -304,9 +338,26 @@ impl LiveEventPublisher {
         }
     }
 
+    /// Publishes several events with one commit.
     pub async fn publish_all(&self, events: impl IntoIterator<Item = NewLiveEvent>) {
-        for event in events {
-            self.publish(event).await;
+        let events: Vec<NewLiveEvent> = events.into_iter().collect();
+        if events.is_empty() {
+            return;
+        }
+        let now = chrono::Utc::now().timestamp_millis();
+        if let Err(err) = self.repo.insert_many(&events, now).await {
+            tracing::warn!(%err, count = events.len(), "failed to publish live events");
+            return;
+        }
+        for event in &events {
+            bump_generation(event.user_id);
+        }
+        wake();
+        let before = self
+            .published
+            .fetch_add(events.len() as u64, Ordering::Relaxed);
+        if before / 200 != (before + events.len() as u64) / 200 {
+            let _ = self.repo.purge(now).await;
         }
     }
 
@@ -377,6 +428,23 @@ mod tests {
             ))
             .await;
         assert!(change_generation(me).0 > global);
+    }
+
+    #[tokio::test]
+    async fn publish_all_stores_every_event_in_order() {
+        let publisher = LiveEventPublisher::from_pool(test_sqlite_pool().await);
+        let (user, work) = (Uuid::new_v4(), Uuid::new_v4());
+        publisher
+            .publish_all([
+                NewLiveEvent::for_user(user, kind::WATCH, "work", work, &["progress"]),
+                NewLiveEvent::for_library(kind::LIBRARY, "work", work, &["files"], None),
+                NewLiveEvent::for_library(kind::CALENDAR, "work", work, &["imported"], None),
+            ])
+            .await;
+        publisher.publish_all(Vec::<NewLiveEvent>::new()).await;
+        let all = publisher.repo().list_after(0, 10).await.unwrap();
+        let kinds: Vec<_> = all.iter().map(|e| e.kind.as_str()).collect();
+        assert_eq!(kinds, vec!["watch", "library", "calendar"]);
     }
 
     #[tokio::test]

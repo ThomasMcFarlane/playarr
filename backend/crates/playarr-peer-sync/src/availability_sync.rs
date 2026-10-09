@@ -185,34 +185,35 @@ pub async fn apply_availability_response(
     }
     // The endpoint deliberately returns a complete live inventory even when
     // a cursor is supplied, so replace the cache to remove deleted/moved files.
-    availability_repo.delete_for_peer(peer_node_id).await?;
     let mut applied = 0usize;
+    let mut snapshot = Vec::with_capacity(resolved.len());
     for (row, local_work_id) in resolved {
-        availability_repo
-            .upsert(&PeerLeafAvailability {
-                peer_node_id,
-                media_file_id: row.media_file_id,
-                source_instance_id: row.source_instance_id,
-                path: row.path.clone(),
-                provider: row.provider.clone(),
-                external_id: row.external_id.clone(),
-                leaf_selector: row.leaf_selector.clone(),
-                group_library_id: row.group_library_id,
-                availability: row.availability,
-                container: row.container.clone(),
-                codec: row.codec.clone(),
-                bitrate: row.bitrate,
-                size_bytes: row.size_bytes,
-                duration_ms: row.duration_ms,
-                local_work_id,
-                title: row.title.clone(),
-                kind: row.kind,
-                release_date: row.release_date,
-                updated_at: row.updated_at,
-            })
-            .await?;
+        snapshot.push(PeerLeafAvailability {
+            peer_node_id,
+            media_file_id: row.media_file_id,
+            source_instance_id: row.source_instance_id,
+            path: row.path.clone(),
+            provider: row.provider.clone(),
+            external_id: row.external_id.clone(),
+            leaf_selector: row.leaf_selector.clone(),
+            group_library_id: row.group_library_id,
+            availability: row.availability,
+            container: row.container.clone(),
+            codec: row.codec.clone(),
+            bitrate: row.bitrate,
+            size_bytes: row.size_bytes,
+            duration_ms: row.duration_ms,
+            local_work_id,
+            title: row.title.clone(),
+            kind: row.kind,
+            release_date: row.release_date,
+            updated_at: row.updated_at,
+        });
         applied += 1;
     }
+    availability_repo
+        .replace_for_peer(peer_node_id, &snapshot)
+        .await?;
 
     sync_state_repo
         .upsert(&playarr_db::PeerSyncState {

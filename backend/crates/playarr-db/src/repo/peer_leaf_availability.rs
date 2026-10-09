@@ -106,6 +106,21 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
     /// availability endpoint always returns a complete current inventory.
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError>;
 
+    /// Replaces one peer's whole snapshot with `rows`. The SQL repo does it in
+    /// a single transaction (one commit instead of one per row); the default
+    /// deletes and upserts row by row.
+    async fn replace_for_peer(
+        &self,
+        peer_node_id: Uuid,
+        rows: &[PeerLeafAvailability],
+    ) -> Result<(), DbError> {
+        self.delete_for_peer(peer_node_id).await?;
+        for row in rows {
+            self.upsert(row).await?;
+        }
+        Ok(())
+    }
+
     /// Every leaf availability row ingested from one specific peer -- the
     /// full-refresh starting point for `availability_sync.rs`, and the
     /// admin/debug "what does this peer report" view.
@@ -160,11 +175,7 @@ impl SqlxPeerLeafAvailabilityRepo {
     }
 }
 
-#[async_trait]
-impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
-    async fn upsert(&self, availability: &PeerLeafAvailability) -> Result<(), DbError> {
-        let leaf_selector = serde_json::to_string(&availability.leaf_selector)?;
-        let sql = "INSERT INTO peer_leaf_availability \
+const UPSERT_SQL: &str = "INSERT INTO peer_leaf_availability \
                  (peer_node_id, media_file_id, source_instance_id, path, \
                  provider, external_id, leaf_selector, group_library_id, \
                  availability, container, codec, bitrate, size_bytes, duration_ms, \
@@ -181,28 +192,61 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
                  local_work_id = excluded.local_work_id, title = excluded.title, \
                  kind = excluded.kind, release_date = excluded.release_date, \
                  updated_at = excluded.updated_at";
-        sqlx::query(sql)
-            .bind(availability.peer_node_id.to_string())
-            .bind(availability.media_file_id.to_string())
-            .bind(availability.source_instance_id.to_string())
-            .bind(availability.path.as_str())
-            .bind(provider_to_str(&availability.provider))
-            .bind(availability.external_id.as_str())
-            .bind(leaf_selector)
-            .bind(availability.group_library_id.map(|id| id.to_string()))
-            .bind(availability_to_str(availability.availability))
-            .bind(availability.container.as_deref())
-            .bind(availability.codec.as_deref())
-            .bind(availability.bitrate.map(|b| b as i64))
-            .bind(availability.size_bytes.map(|b| b as i64))
-            .bind(availability.duration_ms.map(|d| d as i64))
-            .bind(availability.local_work_id.map(|id| id.to_string()))
-            .bind(availability.title.as_str())
-            .bind(work_kind_to_str(availability.kind))
-            .bind(availability.release_date.map(format_datetime))
-            .bind(format_datetime(availability.updated_at))
+
+/// Binds one row to [`UPSERT_SQL`].
+fn bind_upsert<'q>(
+    availability: &'q PeerLeafAvailability,
+    leaf_selector: String,
+) -> sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>> {
+    sqlx::query(UPSERT_SQL)
+        .bind(availability.peer_node_id.to_string())
+        .bind(availability.media_file_id.to_string())
+        .bind(availability.source_instance_id.to_string())
+        .bind(availability.path.as_str())
+        .bind(provider_to_str(&availability.provider))
+        .bind(availability.external_id.as_str())
+        .bind(leaf_selector)
+        .bind(availability.group_library_id.map(|id| id.to_string()))
+        .bind(availability_to_str(availability.availability))
+        .bind(availability.container.as_deref())
+        .bind(availability.codec.as_deref())
+        .bind(availability.bitrate.map(|b| b as i64))
+        .bind(availability.size_bytes.map(|b| b as i64))
+        .bind(availability.duration_ms.map(|d| d as i64))
+        .bind(availability.local_work_id.map(|id| id.to_string()))
+        .bind(availability.title.as_str())
+        .bind(work_kind_to_str(availability.kind))
+        .bind(availability.release_date.map(format_datetime))
+        .bind(format_datetime(availability.updated_at))
+}
+
+#[async_trait]
+impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
+    async fn upsert(&self, availability: &PeerLeafAvailability) -> Result<(), DbError> {
+        let leaf_selector = serde_json::to_string(&availability.leaf_selector)?;
+        bind_upsert(availability, leaf_selector)
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    async fn replace_for_peer(
+        &self,
+        peer_node_id: Uuid,
+        rows: &[PeerLeafAvailability],
+    ) -> Result<(), DbError> {
+        // One transaction, so one commit sync for the whole snapshot, and
+        // readers never see the peer's inventory half replaced.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM peer_leaf_availability WHERE peer_node_id = ?")
+            .bind(peer_node_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        for row in rows {
+            let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
+            bind_upsert(row, leaf_selector).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 
@@ -769,5 +813,73 @@ mod tests {
 
         let all = repo.list_for_peer(peer_node_id).await.unwrap();
         assert_eq!(all.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn replace_for_peer_swaps_one_peers_snapshot_only() {
+        let repo = SqlxPeerLeafAvailabilityRepo::new(test_sqlite_pool().await);
+        let (peer, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let tmdb = playarr_model::ExternalProvider::Tmdb;
+        repo.upsert(&sample(peer, tmdb.clone(), "old", LeafSelector::Movie))
+            .await
+            .unwrap();
+        repo.upsert(&sample(other, tmdb.clone(), "keep", LeafSelector::Movie))
+            .await
+            .unwrap();
+        let fresh = vec![
+            sample(peer, tmdb.clone(), "new-a", LeafSelector::Movie),
+            sample(peer, tmdb.clone(), "new-b", LeafSelector::Movie),
+        ];
+        repo.replace_for_peer(peer, &fresh).await.unwrap();
+        let mut ids: Vec<_> = repo
+            .list_for_peer(peer)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| r.external_id)
+            .collect();
+        ids.sort();
+        assert_eq!(ids, vec!["new-a", "new-b"]);
+        assert_eq!(repo.list_for_peer(other).await.unwrap().len(), 1);
+        repo.replace_for_peer(peer, &[]).await.unwrap();
+        assert!(repo.list_for_peer(peer).await.unwrap().is_empty());
+    }
+
+    /// Timing evidence for the batching (run with `--ignored --nocapture`):
+    /// rows written one commit each versus in one transaction, on a file
+    /// database with the production pragmas.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_replace_for_peer_commit_cost() {
+        let path = std::env::temp_dir().join(format!("playarr-bench-{}.db", Uuid::new_v4()));
+        let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool);
+        let peer = Uuid::new_v4();
+        let rows: Vec<_> = (0..500)
+            .map(|i| {
+                sample(
+                    peer,
+                    playarr_model::ExternalProvider::Tmdb,
+                    &format!("id{i}"),
+                    LeafSelector::Movie,
+                )
+            })
+            .collect();
+        let t = std::time::Instant::now();
+        repo.delete_for_peer(peer).await.unwrap();
+        for r in &rows {
+            repo.upsert(r).await.unwrap();
+        }
+        let per_row = t.elapsed();
+        let t = std::time::Instant::now();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        println!(
+            "500 rows: per-row commits {per_row:?}, one transaction {:?}",
+            t.elapsed()
+        );
+        let _ = std::fs::remove_file(&path);
     }
 }
