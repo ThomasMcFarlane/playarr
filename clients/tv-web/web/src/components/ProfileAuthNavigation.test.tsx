@@ -16,6 +16,7 @@ vi.mock("./tv/TvStage", () => ({
 
 import {
   authFocusBridgeDestination,
+  defaultAuthBack,
   ProfileAuthLayout,
 } from "./ProfileAuthLayout";
 
@@ -30,6 +31,23 @@ describe("ProfileAuthLayout directional navigation", () => {
     );
 
     expect(useTvDirectionalNavigation).toHaveBeenCalledOnce();
+  });
+
+  it("binds the remote Back key to the on-screen Back, or to history when there is none (audit A7)", () => {
+    const onBack = vi.fn();
+    renderToStaticMarkup(
+      <ProfileAuthLayout onBack={onBack}>
+        <input aria-label="Username" />
+      </ProfileAuthLayout>
+    );
+    expect(useTvDirectionalNavigation).toHaveBeenLastCalledWith(false, onBack);
+
+    renderToStaticMarkup(
+      <ProfileAuthLayout>
+        <input aria-label="Username" />
+      </ProfileAuthLayout>
+    );
+    expect(useTvDirectionalNavigation).toHaveBeenLastCalledWith(false, defaultAuthBack);
   });
 
   it("bridges between the first field and the closed language selector", () => {

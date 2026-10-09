@@ -35,7 +35,9 @@ pub use repo::{
     SyncConflictLog, SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo,
     UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
 };
-pub use write_queue::{WriteFuture, WriteQueue, WriteQueueConfig, WriteQueueStats};
+pub use write_queue::{
+    write, write_latest, WriteFuture, WriteQueue, WriteQueueConfig, WriteQueueStats,
+};
 
 pub use repo::{
     match_request, MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo,

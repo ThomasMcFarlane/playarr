@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBackKey } from "./backKey";
+import { hasOpenBackLayer, isBackKey } from "./backKey";
 
 const key = (key: string, extra: Record<string, unknown> = {}) =>
   ({ key, ...extra }) as unknown as KeyboardEvent;
@@ -36,5 +36,12 @@ describe("isBackKey", () => {
   it("ignores modified Backspace and Escape", () => {
     expect(isBackKey(key("Backspace", { altKey: true }))).toBe(false);
     expect(isBackKey(key("Escape", { ctrlKey: true }))).toBe(false);
+  });
+});
+
+describe("hasOpenBackLayer (audit A5)", () => {
+  it("reports an open dialog, drawer or menu so a global Back handler stands aside", () => {
+    expect(hasOpenBackLayer({ querySelector: () => ({}) })).toBe(true);
+    expect(hasOpenBackLayer({ querySelector: () => null })).toBe(false);
   });
 });

@@ -136,49 +136,23 @@
 }
 
 .app-clock {
+  position: absolute;
+  top: var(--page-header-top);
+  right: calc(var(--stage-split) + clamp(18px, calc(2 * var(--vw)), 38px));
+  bottom: auto;
+  left: auto;
   display: grid;
   grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: clamp(12px, calc(1.5 * var(--vw)), 28px);
-  white-space: nowrap;
-}
-
-.app-clock-time {
-  font-size: clamp(0.95rem, calc(1.25 * var(--vw)), 1.35rem);
-  font-weight: 520;
-  letter-spacing: -0.03em;
-}
-
-.app-clock-date {
-  color: var(--ink-muted);
-  font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.8rem);
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-@media (max-width: 1100px) {
-  .app-clock-date {
-    display: none;
-  }
-}
-
-@media (max-width: 720px) {
-  .app-clock {
-    display: none;
-  }
-}
-
-.app-clock {
-  pointer-events: auto;
-}
-
-.app-clock {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
+  align-content: center;
+  align-items: center;
+  justify-items: end;
   gap: 0.7rem;
+  height: var(--page-control-height);
+  transform: none;
   color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: auto;
 }
 
 .app-clock-time {
@@ -194,28 +168,21 @@
   font-weight: 640;
   letter-spacing: 0.04em;
   line-height: 1.1;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .app-clock-date {
+    display: none;
+  }
 }
 
 /* -------------------------------------------------------------------------
 * Playarr TV library stage — grid rail + focus-driven editorial preview
 * ---------------------------------------------------------------------- */
-.app-clock {
-  position: absolute;
-  top: var(--page-header-top);
-  right: calc(var(--stage-split) + clamp(18px, calc(2 * var(--vw)), 38px));
-  bottom: auto;
-  left: auto;
-  height: var(--page-control-height);
-  transform: none;
-  align-content: center;
-  align-items: center;
-  justify-items: end;
-  text-align: right;
-}
-
 .tv-library-heading {
   position: absolute;
-  z-index: 24;
+  z-index: var(--z-heading);
   top: var(--page-header-top);
   left: var(--page-start);
   display: flex;
@@ -419,7 +386,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 /* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
    page title (Preferences, Release Calendar). The clock is already hidden on phones; hide it here too. */
 @media (min-width: 761px) and (max-width: 1100px) {
-  .app-shell:has(.page-header) .app-clock {
+  .app-shell[data-page-header] .app-clock {
     display: none;
   }
 }
@@ -502,7 +469,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 }
 
 /* Remote / keyboard navigation: flat translucency instead of re-blurring glass over scrolling artwork. */
-body[data-input-mode="remote"] .tv-page-back {
+body[data-input-mode="remote"] .tv-page-back,
+body[data-input-mode="remote"] .action-pill {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -515,7 +483,7 @@ body[data-input-mode="remote"] .tv-page-back {
  */
 .shell-action-column {
   position: absolute;
-  z-index: 32;
+  z-index: var(--z-actions);
   top: var(--shell-action-column-top);
   right: var(--directory-controls-edge);
   width: var(--directory-controls-width);

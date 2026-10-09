@@ -44,3 +44,14 @@ export function isBackKey(event: BackKeyEvent): boolean {
       return false;
   }
 }
+
+/** Open layers that own the next Back press: dialogs, drawers, modal panels and menus. */
+export const BACK_LAYER_SELECTOR = '[role="dialog"], [aria-modal="true"], [role="menu"]';
+
+/**
+ * True while a layer above the page is open. A global Back handler (the minimised player) must leave the
+ * press to that layer, so Back closes one level at a time, top first (owner rule, audit A5).
+ */
+export function hasOpenBackLayer(doc: { querySelector(selector: string): unknown }): boolean {
+  return doc.querySelector(BACK_LAYER_SELECTOR) !== null;
+}

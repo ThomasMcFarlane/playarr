@@ -1,1 +1,1 @@
-- Web: removed the unused `.poster-*` and `.editorial-*` styles and the background fill on a focused discovery row (focus is a ring or a lift, never a fill).
+- Web: removed the unused `.poster-card` and `.poster-*` styles (no component uses them).

@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { QueryCache, QueryTag } from "./queryCache";
+import { createRefreshRetry } from "./refreshRetry";
 import type {
   ApiClient,
   BrowseCatalogParams,
@@ -120,19 +121,25 @@ export function useAsyncData<T>(
 
   useEffect(() => {
     if (!enabled || !subscribe) return;
-    return subscribe(() => {
+    // A failed background refresh retries quietly with a backoff; the data on screen stays and nothing is shown.
+    const refresh = createRefreshRetry(() => {
       const started = generation.current;
       // A live change makes any stored copy stale: drop what depends on it, then refetch (shared).
       const { cache: liveCache, fetcher: liveFetcher } = latest.current;
       if (liveCache) liveCache.store.invalidate(liveCache.tags);
-      (liveCache ? liveCache.store.fetch(liveCache.key, liveFetcher, { tags: liveCache.tags }) : liveFetcher())
-        .then((data) => {
+      return (liveCache ? liveCache.store.fetch(liveCache.key, liveFetcher, { tags: liveCache.tags }) : liveFetcher()).then(
+        (data) => {
           if (generation.current !== started) return;
           const next: AsyncState<T> = latest.current.isEmpty?.(data) ? { status: "empty" } : { status: "ready", data };
           setState((current) => (sameAsyncState(current, next) ? current : next));
-        })
-        .catch(() => undefined);
+        }
+      );
     });
+    const unsubscribe = subscribe(refresh.start);
+    return () => {
+      refresh.cancel();
+      unsubscribe();
+    };
   }, [enabled, subscribe]);
 
   return state;

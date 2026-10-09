@@ -541,6 +541,11 @@ async fn serve() -> anyhow::Result<()> {
     );
 
     let pool = connect_and_migrate(&config).await?;
+    // One writer commits the frequent small writes (watch-progress heartbeats,
+    // live events, poller updates) together; `synchronous = FULL` is unchanged
+    // and every caller still waits for its own commit.
+    let write_queue =
+        playarr_db::WriteQueue::spawn(pool.clone(), playarr_db::WriteQueueConfig::default());
     let coordinator = build_coordinator(&config).await?;
     // Shared across roles so a single `all`-role process's playback
     // decisions (`TranscodeOrchestrator`, in `boot_api`) and background
@@ -653,6 +658,7 @@ async fn serve() -> anyhow::Result<()> {
     let _worker_handles = if config.role.runs_worker() {
         boot_worker(
             pool.clone(),
+            write_queue.clone(),
             coordinator.clone(),
             source_instances.clone(),
             active_sessions.clone(),
@@ -671,6 +677,7 @@ async fn serve() -> anyhow::Result<()> {
             boot_api(
                 &config,
                 pool,
+                write_queue.clone(),
                 source_instances,
                 active_sessions,
                 tdarr_notify_tx,
@@ -690,9 +697,46 @@ async fn serve() -> anyhow::Result<()> {
         }
     };
 
-    application_listener.await?;
+    // The servers have no graceful-shutdown hook of their own, so a stop signal
+    // ends them here. Writes already queued are committed before the process
+    // exits; a request whose write had not committed was never acknowledged.
+    let outcome = tokio::select! {
+        result = application_listener => result,
+        () = shutdown_signal() => {
+            tracing::info!("stop signal received; draining the write queue");
+            Ok(())
+        }
+    };
+    if tokio::time::timeout(Duration::from_secs(20), write_queue.shutdown())
+        .await
+        .is_err()
+    {
+        tracing::warn!("write queue did not drain within 20 seconds");
+    }
+    outcome
+}
 
-    Ok(())
+/// Resolves on SIGTERM or Ctrl-C.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => {
+                tokio::select! {
+                    _ = term.recv() => {}
+                    _ = tokio::signal::ctrl_c() => {}
+                }
+            }
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }
 
 /// Opens the SQLite connection pool for `config.database_url` and applies
@@ -1297,6 +1341,7 @@ fn generate_bootstrap_password() -> String {
 async fn boot_api(
     config: &Config,
     pool: DbPool,
+    write_queue: playarr_db::WriteQueue,
     source_instances: Arc<playarr_api::SourceInstanceRegistry>,
     active_sessions: playarr_transcode::ActiveSessionCounter,
     tdarr_notify_tx: tokio::sync::mpsc::Sender<playarr_transcode::MediaFileImportEvent>,
@@ -1360,7 +1405,8 @@ async fn boot_api(
 
     // Every write to these repositories also publishes a live event
     // (`GET /api/v1/events`, docs/architecture/live-events.md).
-    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+    let live_events =
+        playarr_db::LiveEventPublisher::from_pool_queued(pool.clone(), write_queue.clone());
     let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
         Arc::new(SqlxWorkRepo::new(pool.clone())),
         live_events.clone(),
@@ -1409,7 +1455,9 @@ async fn boot_api(
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(playarr_db::EventingWatchProgressRepo::new(
             Arc::new(playarr_api::home_rails::InvalidatingWatchProgressRepo::new(
-                Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+                Arc::new(
+                    SqlxWatchProgressRepo::new(pool.clone()).with_write_queue(write_queue.clone()),
+                ),
                 home_rails_cache.clone(),
             )),
             live_events.clone(),
@@ -2647,6 +2695,7 @@ fn spawn_peer_sync_poller_for(
 #[allow(clippy::too_many_arguments)]
 async fn boot_worker(
     pool: DbPool,
+    write_queue: playarr_db::WriteQueue,
     coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
     source_instances: Arc<playarr_api::SourceInstanceRegistry>,
     active_sessions: playarr_transcode::ActiveSessionCounter,
@@ -2676,7 +2725,8 @@ async fn boot_worker(
     // The worker role writes catalogue rows too (arr sync, peer sync); the
     // events land in the shared database and reach API-role streams through
     // their poll fallback even when the roles run as separate processes.
-    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+    let live_events =
+        playarr_db::LiveEventPublisher::from_pool_queued(pool.clone(), write_queue.clone());
     let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
         Arc::new(SqlxWorkRepo::new(pool.clone())),
         live_events.clone(),

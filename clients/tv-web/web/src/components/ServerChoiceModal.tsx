@@ -3,6 +3,7 @@ import type { JoinedWorkSource } from "../lib/joinedServers";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { Button } from "./ui";
 import { isBackKey } from "../lib/backKey";
+import { useRestoreFocusOnClose } from "../lib/useRestoreFocus";
 
 export function ServerChoiceModal({
   sources,
@@ -34,6 +35,7 @@ export function ServerChoiceModal({
     }
   };
 
+  useRestoreFocusOnClose();
   useEffect(() => {
     firstButtonRef.current?.focus({ preventScroll: true });
     const handleKeyDown = (event: KeyboardEvent) => {
