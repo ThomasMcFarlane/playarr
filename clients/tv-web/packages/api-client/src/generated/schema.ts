@@ -1794,22 +1794,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/household/approvals/{id}/consume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["consume_approval_handler"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/household/approvals/{id}/decision": {
         parameters: {
             query?: never;
@@ -3736,12 +3720,6 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ApprovalKind"];
-            /**
-             * Format: int32
-             * @description `None` = unlimited uses within the grant window (content/time grants
-             *     are re-checked on every request).
-             */
-            max_uses?: number | null;
             note?: string | null;
             /** Format: uuid */
             profile_user_id: string;
@@ -3754,12 +3732,8 @@ export interface components {
             /** Format: date-time */
             requested_at: string;
             status: components["schemas"]["ApprovalStatus"];
-            /**
-             * @description `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
-             */
+            /** @description `Content`: the work id. `Time`: `"schedule"` or `"budget"`. */
             subject: string;
-            /** Format: int32 */
-            uses: number;
         };
         /**
          * @description Things a guardian can be asked to approve.
@@ -4227,15 +4201,10 @@ export interface components {
              */
             sunset?: string | null;
         };
-        ConsumeApprovalResponse: {
-            consumed: boolean;
-        };
         CreateApprovalRequest: {
             kind: components["schemas"]["ApprovalKind"];
             note?: string | null;
-            /**
-             * @description `content`: a work id. `time`: `schedule` or `budget`.
-             */
+            /** @description `content`: a work id. `time`: `schedule` or `budget`. */
             subject: string;
         };
         CreateDownloadTicketRequest: {
@@ -13901,43 +13870,6 @@ export interface operations {
             };
             /** @description Too many pending requests */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    consume_approval_handler: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Approval id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One use of the approval was consumed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsumeApprovalResponse"];
-                };
-            };
-            /** @description Missing or invalid access token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Approval is not approved, expired, exhausted or belongs to another profile */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

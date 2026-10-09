@@ -471,6 +471,7 @@ export const en = {
   "pages.playlists.itemCountOne": "{{count}} title",
   "pages.playlists.itemCountOther": "{{count}} titles",
   "pages.playlists.loadErrorTitle": "Playlists could not be loaded",
+  "pages.playlists.partialLoadToast": "Some playlist items could not be loaded",
   "pages.playlists.loadingLabel": "Loading playlists",
   "pages.playlists.nameLabel": "Name",
   "pages.playlists.mediaTypeLabel": "Playlist type",

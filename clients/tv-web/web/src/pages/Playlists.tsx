@@ -1,4 +1,5 @@
 import { DetailsPanel } from "../components/DetailsPanel";
+import { mapWithLimit } from "../lib/mapWithLimit";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
@@ -212,6 +213,11 @@ function descendantPlaylistTracks(
   return descendants;
 }
 
+/** Most playlist and work reads in flight at once while the directory loads. */
+const LOAD_CONCURRENCY = 6;
+/** A playlist's items read this recently are reused (live events drop them sooner). */
+const ITEMS_TTL_MS = 5_000;
+
 /** Playlist directory plus an in-route playlist detail surface. */
 export function PlaylistsPage() {
   const { t } = useLanguage();
@@ -270,27 +276,54 @@ export function PlaylistsPage() {
     const load = async () => {
       try {
         const playlists = await client.listPlaylists();
-        const itemGroups = await Promise.all(
-          playlists.map(async (playlist) => {
+        // One request per playlist and per distinct work is unavoidable until the server batches them, so
+        // bound the fan-out, share playlist item reads with the query cache and report what failed.
+        let failures = 0;
+        let firstFailure: unknown;
+        const noteFailure = (error: unknown) => {
+          failures += 1;
+          firstFailure ??= error;
+        };
+        const itemGroups = await mapWithLimit(
+          playlists,
+          LOAD_CONCURRENCY,
+          async (playlist) => {
             try {
-              return await client.listPlaylistItems(playlist.id);
-            } catch {
+              return await client.queries.fetch(
+                `playlists:items:${playlist.id}`,
+                () => client.listPlaylistItems(playlist.id),
+                { tags: ["playlists", "catalog"], ttlMs: ITEMS_TTL_MS }
+              );
+            } catch (error) {
+              noteFailure(error);
               return [];
             }
-          })
+          },
+          () => cancelled
         );
+        if (cancelled) return;
         const workIds = [
           ...new Set(itemGroups.flat().map((item) => item.work_id)),
         ];
-        const details = await Promise.all(
-          workIds.map(async (workId): Promise<WorkDetail | null> => {
+        const details = await mapWithLimit(
+          workIds,
+          LOAD_CONCURRENCY,
+          async (workId): Promise<WorkDetail | null> => {
             try {
               return await client.getWork(workId);
-            } catch {
+            } catch (error) {
+              noteFailure(error);
               return null;
             }
-          })
+          },
+          () => cancelled
         );
+        if (cancelled) return;
+        // Nothing at all could be read: that is an error (with Retry), not an empty library.
+        if (failures > 0 && failures >= playlists.length + workIds.length) throw firstFailure;
+        if (failures > 0 && livePlaylistsRevision === 0) {
+          showToast(t("pages.playlists.partialLoadToast"));
+        }
         const detailById = new Map(
           details
             .filter((detail): detail is WorkDetail => detail !== null)

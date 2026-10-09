@@ -36,6 +36,7 @@ import {
 import { labelWithYear } from "../lib/workYear";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useHomeView, type HomeViewPreference } from "../lib/homeView";
+import { rememberWorks } from "../lib/knownWorks";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import { TvMediaTrack, TvRailSurface } from "../components/tv/TvStage";
 import { ResumeChooserModal } from "../components/ResumeChooserModal";
@@ -127,14 +128,17 @@ export function HomePage() {
   }, { subscribe: liveCatalog });
   const [activeRail, setActiveRail] = useState<HomeRailId>("primary");
   const [selectedByRail, setSelectedByRail] = useState<Record<HomeRailId, string | null>>({});
-  const [onDeck, setOnDeck] = useState<OnDeckEntry[]>([]);
-  const [onDeckSettled, setOnDeckSettled] = useState(false);
+  // Stale-while-revalidate on the first render: the last resolved On Deck paints with the page on a revisit (Back),
+  // instead of an empty, unsettled frame that the effect below then fills.
+  const [seed] = useState(() => client.queries.peek<StoredOnDeck>(ON_DECK_CACHE_KEY)?.data ?? null);
+  const [onDeck, setOnDeck] = useState<OnDeckEntry[]>(seed?.entries ?? []);
+  const [onDeckSettled, setOnDeckSettled] = useState(seed !== null);
   const [resumeChooser, setResumeChooser] = useState<{ work: Work; plan: ResumePlan } | null>(
     null
   );
-  const [stackedPlans, setStackedPlans] = useState<Map<string, ResumePlan>>(new Map());
+  const [stackedPlans, setStackedPlans] = useState<Map<string, ResumePlan>>(() => seed?.plans ?? new Map());
   const navigate = useNavigate();
-  const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
+  const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(seed?.progress ?? null);
   const railsRef = useRef<HTMLDivElement>(null);
   const focusedRailRef = useRef<HomeRailId | null>(null);
   const homeSelectTimerRef = useRef(0);
@@ -240,6 +244,7 @@ export function HomePage() {
     () => mergeRecent(...serverRails.map((rail) => rail.items), siteItems),
     [serverRails, siteItems]
   );
+  useEffect(() => rememberWorks(items), [items]);
   const onDeckItems = useMemo(() => onDeck.map((entry) => entry.work), [onDeck]);
   const onDeckByWork = useMemo(
     () => new Map(onDeck.map((entry) => [entry.work.id, entry])),

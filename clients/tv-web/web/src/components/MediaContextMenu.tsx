@@ -32,6 +32,10 @@ import { TvEmptyState } from "./tv/TvEmptyState";
 import { isBackKey } from "../lib/backKey";
 
 const LONG_PRESS_MS = 650;
+/** How long an armed "swallow the origin's Enter release" waits for that release before standing down. */
+const ORIGIN_RELEASE_WINDOW_MS = 1_500;
+/** A fetched work detail is reused this long inside the menu; the cache is also emptied on every open and close. */
+const DETAIL_CACHE_MS = 30_000;
 /** Download enqueue calls are heavier than a watch-progress PUT (each creates a server-side download ticket) -- a smaller batch than `setWatched`'s. */
 const DOWNLOAD_BATCH_SIZE = 4;
 
@@ -299,7 +303,7 @@ export function useMediaContextMenu({
   const suppressClickTimerRef = useRef<number | undefined>(undefined);
   const suppressOriginReleaseRef = useRef(false);
   const playlistActionInFlightRef = useRef(false);
-  const detailCacheRef = useRef(new Map<string, Promise<WorkDetail>>());
+  const detailCacheRef = useRef(new Map<string, { at: number; request: Promise<WorkDetail> }>());
 
   const clearLongPress = useCallback(() => {
     window.clearTimeout(longPressTimerRef.current);
@@ -314,30 +318,36 @@ export function useMediaContextMenu({
     }, 180);
   }, []);
 
-  const suppressOriginRelease = useCallback(() => {
-    suppressOriginReleaseRef.current = true;
+  // The key release that follows an Enter-activated action belongs to the menu's origin, not to
+  // whatever is focused next. The capture listener exists only between arming and that release (or a
+  // short timeout), so a lost keyup can never swallow a later Enter.
+  const originReleaseCleanupRef = useRef<(() => void) | null>(null);
+  const disarmOriginRelease = useCallback(() => {
+    originReleaseCleanupRef.current?.();
+    originReleaseCleanupRef.current = null;
+    suppressOriginReleaseRef.current = false;
   }, []);
 
-  useEffect(() => {
+  const suppressOriginRelease = useCallback(() => {
+    disarmOriginRelease();
+    suppressOriginReleaseRef.current = true;
     const consumeOriginRelease = (event: globalThis.KeyboardEvent) => {
-      if (
-        !suppressOriginReleaseRef.current ||
-        (event.key !== "Enter" &&
-          event.key !== "Accept" &&
-          event.keyCode !== 13)
-      ) {
-        return;
-      }
-      suppressOriginReleaseRef.current = false;
+      if (event.key !== "Enter" && event.key !== "Accept" && event.keyCode !== 13) return;
+      disarmOriginRelease();
       event.preventDefault();
       event.stopImmediatePropagation();
       suppressReleaseClick();
       longPressTriggeredRef.current = false;
     };
-
+    const timer = window.setTimeout(disarmOriginRelease, ORIGIN_RELEASE_WINDOW_MS);
     window.addEventListener("keyup", consumeOriginRelease, true);
-    return () => window.removeEventListener("keyup", consumeOriginRelease, true);
-  }, [suppressReleaseClick]);
+    originReleaseCleanupRef.current = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keyup", consumeOriginRelease, true);
+    };
+  }, [disarmOriginRelease, suppressReleaseClick]);
+
+  useEffect(() => disarmOriginRelease, [disarmOriginRelease]);
 
   const open = useCallback((item: MediaContextItem, origin: HTMLElement, confirmHeld = false) => {
     clearLongPress();
@@ -351,6 +361,8 @@ export function useMediaContextMenu({
     setDownloadLeaves([]);
     setDownloadBusy(false);
     playlistActionInFlightRef.current = false;
+    // Watch state and playlists move between opens: never reuse a detail read for an earlier menu.
+    detailCacheRef.current.clear();
     setActiveItem(item);
   }, [clearLongPress]);
 
@@ -365,6 +377,7 @@ export function useMediaContextMenu({
     setDownloadLeaves([]);
     setDownloadBusy(false);
     playlistActionInFlightRef.current = false;
+    detailCacheRef.current.clear();
     window.requestAnimationFrame(() => originRef.current?.focus({ preventScroll: true }));
   }, [clearLongPress]);
 
@@ -403,10 +416,12 @@ export function useMediaContextMenu({
   const getDetail = useCallback(
     (workId: string) => {
       const cached = detailCacheRef.current.get(workId);
-      if (cached) return cached;
+      if (cached && Date.now() - cached.at < DETAIL_CACHE_MS) return cached.request;
       const request = client.getWork(workId);
-      detailCacheRef.current.set(workId, request);
-      void request.catch(() => detailCacheRef.current.delete(workId));
+      detailCacheRef.current.set(workId, { at: Date.now(), request });
+      void request.catch(() => {
+        if (detailCacheRef.current.get(workId)?.request === request) detailCacheRef.current.delete(workId);
+      });
       return request;
     },
     [client]
@@ -951,7 +966,7 @@ export function useMediaContextMenu({
         event.stopPropagation();
         clearLongPress();
         if (suppressOriginReleaseRef.current) {
-          suppressOriginReleaseRef.current = false;
+          disarmOriginRelease();
           suppressReleaseClick();
           longPressTriggeredRef.current = false;
           return;
@@ -967,7 +982,7 @@ export function useMediaContextMenu({
       },
       onBlur: clearLongPress,
     }),
-    [clearLongPress, open, suppressReleaseClick]
+    [clearLongPress, disarmOriginRelease, open, suppressReleaseClick]
   );
 
   const canAddToPlaylist = Boolean(playlistTarget(activeItem));

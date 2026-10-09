@@ -444,6 +444,7 @@ export const ja: Translations = {
   "pages.playlists.loadingLabel": "プレイリストを読み込んでいます",
   "pages.playlists.preparingLabel": "プレイリストを準備しています",
   "pages.playlists.loadErrorTitle": "プレイリストを読み込めませんでした",
+  "pages.playlists.partialLoadToast": "一部のプレイリスト項目を読み込めませんでした",
   "pages.playlists.backToPlaylists": "プレイリストに戻る",
   "pages.playlists.backToHome": "ホームに戻る",
   "pages.playlists.trackCountOne": "{{count}}件のトラック",

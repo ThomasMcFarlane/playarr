@@ -112,7 +112,7 @@ Before public App Store release:
 
 1. Replace the numeric App Store listing ID placeholder used by the update deep link.
 2. Complete Apple-platform privacy-policy coverage, store screenshots and listing metadata, and
-   App Review access instructions.
+   App Review notes that explain the bring-your-own-server model (Playarr provides no demo server or review account).
 3. Obtain explicit release authorisation and complete App Store review and submission.
 
 Apple distribution remains App Store/TestFlight based; the update gate in the app can prompt or

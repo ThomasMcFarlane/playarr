@@ -34,8 +34,20 @@ const browser = process.env.PLAYWRIGHT_CHROMIUM_PATH
   ? await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH })
   : await launchChromium();
 
-/** Style of the focused element (or the remote marker), and of its art, in the current frame. */
-const snapshot = (page) => page.evaluate(() => {
+/** Style of the focused element (or the remote marker), and of its art, in the current frame, read once every running
+ *  transition and animation has finished (a fixed sleep read the shadow mid-transition, e.g. 23.99px instead of 24px). */
+const snapshot = async (page) => {
+  await page.evaluate(async () => {
+    for (let pass = 0; pass < 5; pass += 1) {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const running = document.getAnimations().filter((a) => a.playState === "running" && Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+      if (!running.length) return;
+      await Promise.allSettled(running.map((a) => a.finished));
+    }
+  });
+  return readStyle(page);
+};
+const readStyle = (page) => page.evaluate(() => {
   const el = document.querySelector("[data-remote-active]") ?? document.activeElement;
   if (!el || el === document.body) return null;
   const cs = getComputedStyle(el);

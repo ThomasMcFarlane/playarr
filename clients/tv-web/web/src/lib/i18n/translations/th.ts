@@ -447,6 +447,7 @@ export const th: Translations = {
   "pages.playlists.loadingLabel": "กำลังโหลดเพลย์ลิสต์",
   "pages.playlists.preparingLabel": "กำลังเตรียมเพลย์ลิสต์",
   "pages.playlists.loadErrorTitle": "ไม่สามารถโหลดเพลย์ลิสต์ได้",
+  "pages.playlists.partialLoadToast": "ไม่สามารถโหลดบางรายการในเพลย์ลิสต์ได้",
   "pages.playlists.backToPlaylists": "กลับไปที่เพลย์ลิสต์",
   "pages.playlists.backToHome": "กลับไปหน้าแรก",
   "pages.playlists.trackCountOne": "{{count}} แทร็ก",

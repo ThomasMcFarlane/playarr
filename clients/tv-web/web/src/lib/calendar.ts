@@ -15,7 +15,6 @@ export type Day = string;
 export type CalendarView = "month" | "week" | "agenda";
 
 export const CALENDAR_VIEWS: readonly CalendarView[] = ["agenda", "week", "month"];
-export const CALENDAR_KINDS: readonly CalendarMediaKind[] = ["episode", "movie", "album", "book"];
 export const AGENDA_DAYS = 30;
 /** Server limit on `end - start`, in days (inclusive span). */
 export const MAX_RANGE_DAYS = 92;
@@ -255,14 +254,6 @@ export function compareEntries(a: CalendarEntry, b: CalendarEntry): number {
 export interface DayGroup {
   day: Day;
   entries: CalendarEntry[];
-}
-
-export function filterByKinds(
-  entries: readonly CalendarEntry[],
-  kinds: ReadonlySet<CalendarMediaKind>
-): CalendarEntry[] {
-  if (kinds.size === 0) return [...entries];
-  return entries.filter((entry) => kinds.has(entry.media_kind));
 }
 
 /** Groups entries by local day inside `range`, ascending; days without entries are omitted. */

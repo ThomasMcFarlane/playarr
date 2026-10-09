@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AvailabilityLag, CalendarSourceStatus } from "@playarr-tv/api-client";
+import type { AvailabilityLag, CalendarEntry, CalendarSourceStatus } from "@playarr-tv/api-client";
 import { describe, expect, it } from "vitest";
 import { availabilityLagLines } from "../components/AvailabilityLag";
 import { translations } from "../lib/i18n/translations";
-import { formatRangeLabel } from "./Calendar";
+import { DaySections, MonthGrid, formatRangeLabel } from "./Calendar";
 
 const en = translations.en;
 const t = (key: keyof typeof en, params?: Record<string, string | number>) =>
@@ -49,16 +49,65 @@ describe("availabilityLagLines", () => {
   });
 });
 
-describe("calendar scroll and focus contract", () => {
-  const page = readFileSync(new URL("./Calendar.tsx", import.meta.url), "utf8");
+const entryFor = (extra: Partial<CalendarEntry> = {}): CalendarEntry => ({
+  id: "e1",
+  media_kind: "movie",
+  release_type: "digital",
+  title: "Sample Movie 1",
+  date: "2026-10-07",
+  monitored: true,
+  has_file: false,
+  sources: [],
+  ...extra,
+});
+
+const noop = () => undefined;
+
+function renderDays(showEmpty: boolean): string {
+  return renderToStaticMarkup(
+    <DaySections
+      days={[{ day: "2026-10-07", entries: [entryFor()] }]}
+      t={t}
+      locale="en-GB"
+      today="2026-10-07"
+      showEmpty={showEmpty}
+      selectedKey={null}
+      onSelect={noop}
+    />
+  );
+}
+
+/** The value of the last declaration of `prop` in rules whose selector list is exactly `selector`. */
+function effectiveDeclaration(css: string, selector: string, prop: string): string | null {
+  let found: string | null = null;
+  for (const [, selectors, body] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!selectors!.split(",").some((part) => part.trim() === selector)) continue;
+    const match = new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+);`).exec(body!);
+    if (match) found = match[1]!.trim();
+  }
+  return found;
+}
+
+describe("calendar scroll contract", () => {
   const css = readFileSync(new URL("./Calendar.css", import.meta.url), "utf8");
 
-  it("owns native scroll containers with the shared data attributes", () => {
-    expect(page).toContain("data-tv-scroll-container");
-    expect(page).toContain("<ListPanel");
-    expect(readFileSync(new URL("../components/tv/ListPanel.tsx", import.meta.url), "utf8")).toContain('data-tv-scroll-axis="vertical"');
-    expect(page).toContain('data-navigation-scroll-key="calendar:body"');
-    expect(css).toMatch(/\.calendar-scroll\s*\{[^}]*overflow-y: auto/);
+  it("gives each week day column the shared scroll attributes and a key of its own", () => {
+    const week = renderDays(true);
+    expect(week).toContain("data-tv-scroll-container");
+    expect(week).toContain('data-tv-scroll-axis="vertical"');
+    expect(week).toContain('data-navigation-scroll-key="calendar:day:2026-10-07"');
+  });
+
+  it("leaves the agenda sections as plain sections: the list around them scrolls", () => {
+    const agenda = renderDays(false);
+    expect(agenda).not.toContain("data-tv-scroll-container");
+    expect(agenda).not.toContain("calendar-edge-scroller");
+  });
+
+  it("keeps the body frame from scrolling while the inner viewports do", () => {
+    expect(effectiveDeclaration(css, ".calendar-scroll", "overflow")).toBe("hidden");
+    expect(effectiveDeclaration(css, ".calendar-month-scroll", "overflow-x")).toBe("auto");
+        expect(effectiveDeclaration(css, ".calendar-week-scroll .calendar-day", "overflow-y")).toBe("auto");
   });
 
   it("enables touch scrolling on every overflow:auto viewport", () => {
@@ -66,10 +115,37 @@ describe("calendar scroll and focus contract", () => {
     expect(blocks.length).toBeGreaterThan(0);
     for (const block of blocks) expect(block).toContain("-webkit-overflow-scrolling");
   });
+});
 
-  it("closes the entry sheet on Back and keeps touch targets at 44px", () => {
-    expect(page).toContain("isBackKey(event)");
-    expect(page).toContain("isBackKey");
-    expect(css).toMatch(/\.calendar-filter-chip[^{]*\{[^}]*min-height: 44px/s);
+describe("month grid markup", () => {
+  const markup = renderToStaticMarkup(
+    <MonthGrid
+      anchor="2026-10-01"
+      firstDay={1}
+      groups={[{ day: "2026-10-07", entries: [entryFor()] }]}
+      today="2026-10-07"
+      t={t}
+      locale="en-GB"
+      selectedKey={null}
+      onSelect={noop}
+      onMore={noop}
+    />
+  );
+
+  it("does not claim a grid whose cells nothing can focus", () => {
+    for (const role of ["grid", "row", "gridcell", "columnheader"]) expect(markup).not.toContain(`role="${role}"`);
+  });
+
+  it("gives each chip its date in its accessible name, starting with the visible text", () => {
+    expect(markup).toContain('aria-label="Sample Movie 1, ');
+    expect(markup).toMatch(/aria-label="Sample Movie 1, [^"]*7[^"]*"/);
+  });
+});
+
+describe("day sections", () => {
+  it("name each day once, through its heading", () => {
+    const agenda = renderDays(false);
+    expect(agenda).toContain("<h3>");
+    expect(agenda).not.toMatch(/<section[^>]*aria-label=/);
   });
 });

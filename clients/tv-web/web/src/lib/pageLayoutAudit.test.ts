@@ -42,9 +42,9 @@ const RULES = {
   chromeClass: /(?<![\w-])(page-filters-button|action-pill|tv-page-back|tv-library-heading|page-header)(?![\w-])/g,
   /** A scroll container written by hand. Use ScrollArea. */
   scrollContainer: /data-tv-scroll-container/g,
-  /** A hand-made loading, empty or error state. Use the state components. */
+  /** A hand-made loading, empty or error state (any `role=status|alert` element whose class says loading, error, empty or state). Use the state components. */
   stateElement:
-    /<[a-zA-Z.]+(?=[^<>]*role=["{]+(?:status|alert))[^<>]*?className=(?:"[^"]*(?:loading|loader|error|empty)[^"]*"|\{`[^`]*(?:loading|loader|error|empty)[^`]*`\})/gs,
+    /<[a-zA-Z.]+(?=[^<>]*role=["{]+(?:status|alert))[^<>]*?className=(?:"[^"]*(?:loading|loader|error|empty|state)[^"]*"|\{`[^`]*(?:loading|loader|error|empty|state)[^`]*`\})/gs,
 } as const;
 
 type Rule = keyof typeof RULES;
@@ -72,7 +72,7 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "components/player/PlayerSurface.tsx": 1,
     "components/tv/ListPanel.tsx": 1,
     "components/tv/TvStage.tsx": 2,
-    "pages/Calendar.tsx": 3,
+    "pages/Calendar.tsx": 4,
     "pages/Clients.tsx": 2,
     "pages/Library.tsx": 1,
     "pages/NavPerfHarness.tsx": 1,
@@ -80,10 +80,11 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "pages/Profiles.tsx": 1,
     "pages/settings/ProfileAvatar.tsx": 1,
   },
-  /** Pages with hand-made states (W3, W6) and inline field errors or status text in components that are not page states. */
+  /** The household block page (a gate, not a routed page), plus inline field errors or status text in components that are not page states. */
   stateElement: {
     "components/CalendarLink.tsx": 2,
-    "components/MediaContextMenu.tsx": 1,
+    "components/HouseholdGate.tsx": 1,
+    "components/MediaContextMenu.tsx": 3,
     "components/PlaylistContextMenu.tsx": 1,
     "components/RequestButton.tsx": 1,
     "components/ServerChoiceModal.tsx": 1,

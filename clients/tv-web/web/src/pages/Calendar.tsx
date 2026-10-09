@@ -12,6 +12,8 @@ import { ListPanel } from "../components/tv/ListPanel";
 import { StatusPill } from "../components/StatusPill";
 import {
   DateRangeField,
+  EmptyState,
+  ErrorState,
   FilterSection,
   FiltersDrawer,
   MasterDetail,
@@ -66,6 +68,7 @@ import {
   applyCalendarFilters,
   CALENDAR_STATUSES,
   CALENDAR_TYPE_PARAMS,
+  EMPTY_CALENDAR_FILTERS,
   kindForType,
   parseCalendarFilters,
   parseCalendarUrl,
@@ -77,7 +80,9 @@ import {
 } from "../lib/calendarFilters";
 import { IS_TV } from "../lib/clientPlatform";
 import { useLiveSubscription } from "../lib/liveEvents";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { localeTagFor } from "../lib/i18n/languages";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer, useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -121,7 +126,6 @@ export function EdgeScroller({
 
 type TFunction = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
-const LOCALE_TAGS: Record<string, string> = { en: "en-GB", th: "th-TH", ja: "ja-JP" };
 const MONTH_CHIP_LIMIT = 3;
 
 const KIND_KEYS: Record<CalendarMediaKind, TranslationKey> = {
@@ -317,7 +321,7 @@ function SkeletonRow() {
   );
 }
 
-function DaySections({
+export function DaySections({
   days,
   t,
   locale,
@@ -346,7 +350,6 @@ function DaySections({
         .map((group, index) => {
           const dayProps = {
             className: `calendar-day${group.day === today ? " is-today" : ""}`,
-            "aria-label": formatDayHeading(group.day, locale),
             "aria-busy": loading ? true : undefined,
           };
           const content = (
@@ -389,6 +392,9 @@ function DaySections({
               as="section"
               windowClassName="calendar-day-window"
               refreshKey={`${group.day}:${group.entries.length}:${loading}`}
+              data-tv-scroll-container
+              data-tv-scroll-axis="vertical"
+              data-navigation-scroll-key={`calendar:day:${group.day}`}
               {...dayProps}
             >
               {content}
@@ -420,11 +426,14 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
   );
 }
 
-/** Rows of vertical space one month-cell chip needs, used to decide how many fit before "+N more". */
-const CHIP_ROW_PX = 26;
-const CELL_CHROME_PX = 52;
+/**
+ * Vertical space one month-cell chip and a cell's own chrome (padding, day number, "+N more") need, in rem so
+ * they follow the root font size (a TV stage restates it), used to decide how many chips fit before "+N more".
+ */
+const CHIP_ROW_REM = 1.625;
+const CELL_CHROME_REM = 3.25;
 
-function MonthGrid({
+export function MonthGrid({
   anchor,
   firstDay,
   groups,
@@ -456,8 +465,11 @@ function MonthGrid({
     const element = bodyRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
     const update = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const cellHeight = element.clientHeight / weeks.length;
-      setChipLimit(Math.max(1, Math.min(MONTH_CHIP_LIMIT + 2, Math.floor((cellHeight - CELL_CHROME_PX) / CHIP_ROW_PX))));
+      setChipLimit(
+        Math.max(1, Math.min(MONTH_CHIP_LIMIT + 2, Math.floor((cellHeight - CELL_CHROME_REM * rem) / (CHIP_ROW_REM * rem))))
+      );
     };
     update();
     const observer = new ResizeObserver(update);
@@ -476,10 +488,10 @@ function MonthGrid({
       aria-busy={loading ? true : undefined}
       refreshKey={weeks.length}
     >
-      <div className="calendar-month" role="grid" aria-label={formatRangeLabel("month", anchor, firstDay, locale)}>
-        <div className="calendar-month-head" role="row">
+      <div className="calendar-month" role="group" aria-label={formatRangeLabel("month", anchor, firstDay, locale)}>
+        <div className="calendar-month-head">
           {weeks[0]!.map((cell) => (
-            <div key={cell.day} role="columnheader" className="calendar-month-weekday">
+            <div key={cell.day} className="calendar-month-weekday">
               {weekdayFormat.format(parseDay(cell.day))}
             </div>
           ))}
@@ -490,7 +502,7 @@ function MonthGrid({
           style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
         >
           {weeks.map((week, weekIndex) => (
-            <div key={week[0]!.day} role="row" className="calendar-month-row">
+            <div key={week[0]!.day} className="calendar-month-row">
               {week.map((cell, cellIndex) => {
                 const items = groupSeriesEpisodes(cell.entries);
                 const overflow = items.length > chipLimit;
@@ -499,7 +511,6 @@ function MonthGrid({
                 return (
                   <div
                     key={cell.day}
-                    role="gridcell"
                     className={`calendar-month-cell${cell.inMonth ? "" : " is-outside"}${cell.isToday ? " is-today" : ""}`}
                   >
                     <time dateTime={cell.day} className="calendar-month-day">
@@ -513,6 +524,7 @@ function MonthGrid({
                       ) : null}
                       {shown.map((item) => {
                         const entry = itemEntry(item);
+                        const chipText = item.kind === "series" ? `${item.title} · ${item.entries.length}×` : entry.title;
                         return (
                           <li key={item.key}>
                             <button
@@ -526,10 +538,11 @@ function MonthGrid({
                                     })}`
                                   : [entry.title, entrySubtitle(entry)].filter(Boolean).join(" · ")
                               }
+                              aria-label={`${chipText}, ${formatDayHeading(cell.day, locale)}`}
                               data-navigation-focus-key={`calendar:${item.key}`}
                               onClick={(event) => onSelect(item, event.currentTarget)}
                             >
-                              {item.kind === "series" ? `${item.title} · ${item.entries.length}×` : entry.title}
+                              {chipText}
                             </button>
                           </li>
                         );
@@ -572,11 +585,11 @@ function ItemDetails({
 }) {
   const first = itemEntry(item);
   const time = entryTime(first);
+  const plan = planCalendarActions(first);
   const route = workRouteForEntry(first);
   const subtitle = item.kind === "series"
     ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
     : entrySubtitle(first);
-  const plan = planCalendarActions(first);
   // A server without computed actions gets the earlier behaviour: open when the
   // entry is in the catalogue, otherwise request and watchlist.
   const openRoute = plan.legacy ? route : (plan.open?.route ?? null);
@@ -743,7 +756,7 @@ const VIEW_ICONS: Record<CalendarView, "list" | "screen" | "cover"> = {
  */
 export function CalendarPage() {
   const { t, language } = useLanguage();
-  const locale = LOCALE_TAGS[language] ?? "en-GB";
+  const locale = localeTagFor(language);
   const client = useApiClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -752,6 +765,7 @@ export function CalendarPage() {
 
   const firstDay = useMemo(() => weekStartsOn(locale), [locale]);
   const today = useToday();
+  const isPhoneWidth = useMediaQuery("(max-width: 760px)");
   const [defaultView] = useState<CalendarView>(() =>
     defaultCalendarView({
       isTv: IS_TV,
@@ -903,7 +917,6 @@ export function CalendarPage() {
   }
 
   // Phones hide the stage's left panel (as on Library), so an agenda selection opens the sheet there.
-  const isPhone = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const activeCount = activeFilterCount(filters);
@@ -911,20 +924,19 @@ export function CalendarPage() {
 
   const stateMessage =
     state.status === "error" ? (
-      <div className="calendar-state" role="alert">
-        <h2 className="calendar-state-title error-text">{t("pages.calendar.loadError")}</h2>
-        <p className="muted">{state.message}</p>
-        <Button variant="primary" onClick={() => setReloadNonce((n) => n + 1)}>
-          {t("pages.calendar.retry")}
-        </Button>
-      </div>
+      <ErrorState
+        graphic="details"
+        title={t("pages.calendar.loadError")}
+        description={state.message}
+        onRetry={() => setReloadNonce((n) => n + 1)}
+        retryLabel={t("pages.calendar.retry")}
+      />
     ) : state.status === "ready" && visibleCount === 0 ? (
-      <div className="calendar-state">
-        <h2 className="calendar-state-title">{t("pages.calendar.emptyTitle")}</h2>
-        <p className="muted">
-          {activeCount > 0 ? t("pages.calendar.emptyFiltered") : t("pages.calendar.emptyDescription")}
-        </p>
-      </div>
+      <EmptyState
+        graphic="details"
+        title={t("pages.calendar.emptyTitle")}
+        description={activeCount > 0 ? t("pages.calendar.emptyFiltered") : t("pages.calendar.emptyDescription")}
+      />
     ) : null;
 
   const skeletonDays = (): { day: Day; entries: CalendarEntry[] }[] =>
@@ -973,6 +985,8 @@ export function CalendarPage() {
       }
     : undefined;
 
+  // Previous / Today / Next are mounted once: in the page header, or on a phone in a row under the
+  // range label (the header copy would be hidden there). One copy means one default-focus marker.
   const navButtons = (
     <>
       <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
@@ -995,22 +1009,25 @@ export function CalendarPage() {
     title: t("pages.calendar.title"),
       back: { label: t("pages.calendar.backToHome"), to: "/" },
       actions: [
-        {
-          kind: "navigation",
-          id: "calendar-navigation",
-          label: t("pages.calendar.navigationLabel"),
-          hideOnPhone: true,
-          items: [
-            { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => stepAnchor(-1) },
-            {
-              id: "today",
-              label: t("pages.calendar.today"),
-              onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
-              buttonProps: { "data-tv-focus-default": true },
-            },
-            { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => stepAnchor(1) },
-          ],
-        },
+        ...(isPhoneWidth
+          ? []
+          : [
+              {
+                kind: "navigation" as const,
+                id: "calendar-navigation",
+                label: t("pages.calendar.navigationLabel"),
+                items: [
+                  { id: "previous", label: t("pages.calendar.previous"), icon: "prev" as const, onSelect: () => stepAnchor(-1) },
+                  {
+                    id: "today",
+                    label: t("pages.calendar.today"),
+                    onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
+                    buttonProps: { "data-tv-focus-default": true },
+                  },
+                  { id: "next", label: t("pages.calendar.next"), icon: "next" as const, onSelect: () => stepAnchor(1) },
+                ],
+              },
+            ]),
         {
           kind: "panel",
           id: "subscription",
@@ -1110,14 +1127,7 @@ export function CalendarPage() {
                 type="button"
                 onClick={() =>
                   updateParams((params) =>
-                    writeCalendarFilters(params, {
-                      types: new Set(),
-                      sources: new Set(),
-                      statuses: new Set(),
-                      from: null,
-                      to: null,
-                      monitoredOnly: false,
-                    })
+                    writeCalendarFilters(params, EMPTY_CALENDAR_FILTERS)
                   )
                 }
               >
@@ -1164,7 +1174,7 @@ export function CalendarPage() {
         className="calendar-page calendar-view-agenda tv-library tv-directory"
         ariaLabel={t("pages.calendar.title")}
         backdrop={agendaArt ?? { artKey: "calendar-agenda" }}
-        header={isPhone ? pageHeader : { ...pageHeader, detail: periodPicker }}
+        header={isPhoneWidth ? pageHeader : { ...pageHeader, detail: periodPicker }}
       >
         {loading ? (
           <DetailsSkeleton />
@@ -1177,7 +1187,14 @@ export function CalendarPage() {
           refreshKey={`${items.length}:${loading}`}
           contentClassName="calendar-agenda-content"
         >
-          {isPhone ? <div className="calendar-header">{periodPicker}</div> : null}
+          {isPhoneWidth ? (
+            <div className="calendar-header">
+              {periodPicker}
+              <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+                {navButtons}
+              </div>
+            </div>
+          ) : null}
           {stateMessage ?? (
             <DaySections
               days={loading ? skeletonDays() : groups}
@@ -1192,7 +1209,7 @@ export function CalendarPage() {
           )}
         </ListPanel>
         {drawers}
-        {selectedItem && isPhone && urlState.selected ? (
+        {selectedItem && isPhoneWidth && urlState.selected ? (
           <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>
             <ItemDetails
               item={selectedItem}
@@ -1220,9 +1237,11 @@ export function CalendarPage() {
     >
       <div className="calendar-header">
         {periodPicker}
-        <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-          {navButtons}
-        </div>
+        {isPhoneWidth ? (
+          <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+            {navButtons}
+          </div>
+        ) : null}
       </div>
 
       {stateMessage}
