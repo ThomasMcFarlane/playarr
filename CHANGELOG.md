@@ -2579,6 +2579,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web behaviour gate: nav-smoke, tablet-layout, focus-style-e2e and edge-fade-e2e no longer sit in `tracked`, so a failure now blocks `ci-required` (row 9623).
 - Web: `tokenContrast.test.ts` computes the contrast of every text token against every surface it is used on (7:1, both themes); `scripts/a11y-aaa.mjs` and `scripts/a11y-aaa-pages.mjs` run axe-core with the WCAG 2.2 AAA rules over the Storybook stories and the pages.
 - Web CI guards: the page layout audit counts legacy scroll bodies, scans `.ts` helpers and handles `=>` in attributes; ci.yml matches the tv-web pnpm and Node versions.
 - Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).

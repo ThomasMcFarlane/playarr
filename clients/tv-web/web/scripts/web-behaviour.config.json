@@ -37,12 +37,7 @@
     "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)",
     "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate"
   },
-  "tracked": {
-    "nav-smoke": "search Left past the first column fails on a loaded CI runner (row 9623)",
-    "tablet-layout": "the width sweep fails on current main (row 9623)",
-    "focus-style-e2e": "dark 1280x720 calendar entry casts the light-theme shadow colour (row 9623)",
-    "edge-fade-e2e": "not yet verified green in CI (row 9623)"
-  },
+  "tracked": {},
   "seconds": {
     "nav-smoke": 83,
     "rail-geometry-e2e": 57,

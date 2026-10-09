@@ -191,7 +191,8 @@ try {
     await page.waitForSelector(".media-context-drawer", { timeout: 5000 }).catch(() => {});
     check("context menu: right-click opens the drawer", (await page.locator(".media-context-drawer").count()) > 0);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
+    // The drawer plays its exit animation before it leaves the DOM; wait for that instead of a fixed sleep.
+    await page.locator(".media-context-drawer").first().waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
     check("context menu: Escape closes it", (await page.locator(".media-context-drawer").count()) === 0);
     await context.close();
   }
@@ -203,6 +204,8 @@ try {
     await page.waitForTimeout(1200);
     await press(page, "ArrowDown", 3);
     await press(page, "ArrowRight", 1);
+    // Directional keys are applied once per animation frame; read the target only after the last move has landed.
+    await settle(page, 60);
     const target = await focusedInfo(page);
     await page.keyboard.down("Enter");
     await page.waitForSelector(".media-context-drawer", { timeout: 5000 }).catch(() => {});
@@ -213,6 +216,7 @@ try {
     check("context menu: long-press OK targets the visible title", Boolean(title) && drawerText.includes(title), `title=${title}`);
     await page.waitForTimeout(400);
     await press(page, "ArrowDown", 2);
+    await settle(page, 60);
     const after = await focusedInfo(page);
     const inDrawer = await page.evaluate(() => Boolean(document.activeElement?.closest(".media-context-drawer")));
     // Focus inside the drawer is not a library card, so no card index (null) or the unchanged one both mean "the page behind did not move".
@@ -401,9 +405,14 @@ try {
     await settle(page);
     let f = await focusedInfo(page);
     check("search: focus visible after 8 rows down", Boolean(f?.visible && f.href?.startsWith("/search/")), JSON.stringify(f));
-    await press(page, "ArrowLeft", 3);
-    await settle(page);
-    // Focus leaves the grid on the last Left; give a loaded CI runner a moment to land on the input.
+    // Walk Left one press at a time, letting each move land (settle) before the next, until focus leaves the grid. A
+    // fixed count of three presses assumed how many columns the row had and raced the queued moves on a loaded runner;
+    // six presses is more than the widest grid has columns, so a Left that never reaches the input still fails.
+    for (let i = 0; i < 6; i += 1) {
+      if (await page.evaluate(() => document.activeElement?.tagName === "INPUT")) break;
+      await page.keyboard.press("ArrowLeft");
+      await settle(page, 60);
+    }
     await page.waitForFunction(() => document.activeElement?.tagName === "INPUT", null, { timeout: 3000 }).catch(() => {});
     const onInput = await page.evaluate(() => document.activeElement?.tagName === "INPUT");
     check("search: Left past the first column returns to the input", onInput);
