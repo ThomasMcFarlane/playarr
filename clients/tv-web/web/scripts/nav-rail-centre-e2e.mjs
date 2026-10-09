@@ -81,6 +81,45 @@ async function run(name, path, stackSelector, size) {
   }
 }
 
+/**
+ * Owner report (10 Oct 2026): "after navigating to a new track, when I navigate between items (LEFT/RIGHT along that
+ * rail), it readjusts the track vertically." Down to a new rail, then Right x5 and Left x3: the stack's scroll offset and
+ * transform are identical (within 0.5 px) on every frame from the moment the rail has been centred.
+ */
+async function hold(name, path, stackSelector, size, theme) {
+  const { context, page, errors } = await open(path, { ...size, theme });
+  await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+  await page.waitForSelector(`${stackSelector} .tv-media-track`);
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(700);
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(1000);
+  await page.evaluate((selector) => {
+    const stack = document.querySelector(selector);
+    const rec = (window.__hold = { frames: [] });
+    const tick = () => {
+      rec.frames.push([stack.scrollTop, getComputedStyle(stack).transform, stack.getBoundingClientRect().top]);
+      rec.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }, stackSelector);
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowLeft", "ArrowLeft", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(450);
+  }
+  await page.waitForTimeout(600);
+  const rec = await page.evaluate(() => { cancelAnimationFrame(window.__hold.raf); return window.__hold; });
+  const tops = rec.frames.map((f) => f[0]);
+  const spread = Math.max(...tops) - Math.min(...tops);
+  const transforms = new Set(rec.frames.map((f) => f[1]));
+  const rects = rec.frames.map((f) => f[2]);
+  const rectSpread = Math.max(...rects) - Math.min(...rects);
+  check(`${name} ${size.width}x${size.height} ${theme}: Right x5 and Left x3 never move the stack vertically (scroll spread ${spread.toFixed(2)} px over ${tops.length} frames)`, spread <= 0.5 && transforms.size === 1 && rectSpread <= 0.5, `scroll ${spread}, transforms ${[...transforms].join("|")}, rect ${rectSpread}`);
+  check(`${name} ${size.width}x${size.height} ${theme}: no page errors`, errors.length === 0, errors.join(";"));
+  await context.close();
+}
+
 const probe = await open("/");
 const seriesId = await probe.page.evaluate(async () => {
   const response = await fetch("/api/v1/catalog?kind=series&limit=1", { headers: { authorization: "Bearer t" } });
@@ -95,5 +134,9 @@ for (const size of [
   await run("Home", "/", ".tv-home-rails", size);
   await run("Playlist", "/playlists?playlist=00000000-0000-4000-8000-000000000100", ".tv-rail-surface.is-vertical-tracks", size);
   await run("Series", `/series/${seriesId}`, ".tv-series-browser", size);
+  for (const theme of ["dark", "light"]) {
+    await hold("Home", "/", ".tv-home-rails", size, theme);
+    await hold("Series", `/series/${seriesId}`, ".tv-series-browser", size, theme);
+  }
 }
 await finish();
