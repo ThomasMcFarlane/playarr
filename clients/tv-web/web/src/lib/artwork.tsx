@@ -100,8 +100,13 @@ function artworkKey(workId: string, kind: ImageKind, width: number): string {
   return `${workId}:${kind}:${width}`;
 }
 
-/** Background artwork prefetches in flight at once; the focused card's own loads are never held back. */
-const PREFETCH_ARTWORK_CONCURRENCY = 3;
+/**
+ * Card-sized and prefetched artwork in flight at once, at low fetch priority. The full-screen backdrop of the
+ * focused item (wider than a card) and the detail requests are never held back by it.
+ */
+const PREFETCH_ARTWORK_CONCURRENCY = 6;
+/** Art at least this wide is a hero backdrop, not a card. */
+const HERO_ARTWORK_WIDTH = 1280;
 let prefetchRunning = 0;
 const prefetchWaiting: Array<() => void> = [];
 
@@ -289,7 +294,7 @@ export function useCachedArtwork(
     setLoading(true);
     const cancelStart = whenNavigationIdle(() => {
       if (cancelled) return;
-      const record = cache.get(key) ?? loadArtwork(client, work.id, kind, artWidth, version);
+      const record = cache.get(key) ?? loadArtwork(client, work.id, kind, artWidth, version, artWidth < HERO_ARTWORK_WIDTH);
       hold(record);
       record.promise
         .then((resolvedUrl) => {
