@@ -1,4 +1,4 @@
-import { setScrollInstant, settledScrollOffset, smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
+import { setScrollInstant, smoothScrollIntoView } from "../lib/smoothScroll";
 import { Drawer, PageLayout } from "../components/shell";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { WatchlistToggle } from "../components/WatchlistToggle";
@@ -41,7 +41,6 @@ import {
   selectDefaultSubtitleTrackId,
 } from "../lib/playerDefaults";
 import {
-  isNavigationLayerRestoring,
   navigationOriginFromState,
   useNavigationLayer,
   type NavigationOrigin,
@@ -68,7 +67,8 @@ import {
   type JoinedWorkSource,
 } from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { TvMediaTrack, TvRailSurface } from "../components/tv/TvStage";
+import { TvMediaTrack, type TvTrackSpacing } from "../components/tv/TvStage";
+import { RailStack, centreTrackInStack } from "../components/tv/RailStack";
 
 interface MoviePlaybackDraft {
   quality_id: string;
@@ -472,21 +472,6 @@ function generatedMovieChapters(runtimeMs: number, t: TFunc): MediaChapter[] {
   });
 }
 
-function centreDetailTrack(track: HTMLElement, behavior: ScrollBehavior) {
-  const browser = track.closest<HTMLElement>(".tv-rail-surface.is-vertical-tracks");
-  if (!browser) return;
-
-  const trackRect = track.getBoundingClientRect();
-  const browserRect = browser.getBoundingClientRect();
-  const delta =
-    trackRect.top + trackRect.height / 2 - (browserRect.top + browserRect.height / 2);
-  if (Math.abs(delta) > 1) {
-    const top = settledScrollOffset(browser, "top") + delta;
-    if (behavior === "smooth") smoothScrollTo(browser, { top });
-    else setScrollInstant(browser, { top });
-  }
-}
-
 function MovieChapterTrack({
   chapters,
   generated,
@@ -543,11 +528,6 @@ function MovieChapterTrack({
         .map((chapter) => `${chapter.index}:${chapter.start_ms}`)
         .join(":")}
       dataTrackId="chapters"
-      onFocusCapture={(event) => {
-        if (!isNavigationLayerRestoring()) {
-          centreDetailTrack(event.currentTarget, "smooth");
-        }
-      }}
       overlay={mediaContext.contextMenu}
     >
       {chapters.map((chapter) => (
@@ -666,11 +646,13 @@ function MoviePeopleTrack({
   credits,
   workId,
   groupKey,
+  spacing,
 }: {
   title: string;
   credits: CreditResponse[];
   workId: string;
   groupKey: string;
+  spacing?: TvTrackSpacing;
 }) {
   const { t } = useLanguage();
   const [selectedCreditId, setSelectedCreditId] = useState(credits[0]?.id ?? null);
@@ -687,11 +669,7 @@ function MoviePeopleTrack({
       scrollKey={`detail:${workId}:people:${groupKey}`}
       itemsKey={credits.map((credit) => credit.id).join(":")}
       dataTrackId={`people:${groupKey}`}
-      onFocusCapture={(event) => {
-        if (!isNavigationLayerRestoring()) {
-          centreDetailTrack(event.currentTarget, "smooth");
-        }
-      }}
+      spacing={spacing}
     >
       {credits.map((credit) => {
         const subtitle =
@@ -761,11 +739,7 @@ function SimilarTitlesTrack({
       scrollKey={`detail:${workId}:similar`}
       itemsKey={works.map((work) => work.id).join(":")}
       dataTrackId="similar"
-      onFocusCapture={(event) => {
-        if (!isNavigationLayerRestoring()) {
-          centreDetailTrack(event.currentTarget, "smooth");
-        }
-      }}
+      spacing="section"
       overlay={mediaContext.contextMenu}
     >
       {works.map((similarWork) => {
@@ -873,12 +847,6 @@ function SeasonEpisodeTrack({
       : []
   );
 
-  function revealSeasonTrack(card: HTMLElement) {
-    if (isNavigationLayerRestoring()) return;
-    const track = card.closest<HTMLElement>(".tv-media-track");
-    if (track) centreDetailTrack(track, "smooth");
-  }
-
   return (
     <TvMediaTrack
       title={seasonLabel}
@@ -950,9 +918,8 @@ function SeasonEpisodeTrack({
                   detailNavigationOrigin,
                 }}
                 className={`media-card tv-episode-card${isSelected ? " is-selected" : ""}`}
-                onFocus={(event) => {
+                onFocus={() => {
                   onSelect(seasonNumber, episode.episode.id);
-                  revealSeasonTrack(event.currentTarget);
                 }}
                 onClick={(event) => {
                   onSelect(seasonNumber, episode.episode.id);
@@ -1387,7 +1354,7 @@ export function WorkDetailPage() {
           (active instanceof HTMLElement && active.closest(".app-nav") !== null);
         if (!free) return;
       }
-      if (targetTrack) centreDetailTrack(targetTrack, "auto");
+      if (targetTrack) centreTrackInStack(targetTrack, { animate: false });
       const rail = initialCard?.closest<HTMLElement>(".tv-episode-rail");
       if (initialCard && rail) {
         setScrollInstant(rail, {
@@ -2158,10 +2125,10 @@ export function WorkDetailPage() {
       </aside>
 
       {episodic && hasSeriesTracks ? (
-        <TvRailSurface
+        <RailStack
           className="tv-series-browser"
           ref={seriesBrowserRef}
-          mode="vertical-tracks"
+          spacing="related"
           scrollKey={`detail:${work.id}:seasons`}
           ariaLabel={t("pages.workDetail.titleSeasonsAndEpisodes", { title: work.title })}
         >
@@ -2197,6 +2164,7 @@ export function WorkDetailPage() {
               credits={workCredits.cast}
               workId={work.id}
               groupKey="cast"
+              spacing="section"
             />
           ) : null}
           {similarWorks.length > 0 ? (
@@ -2208,13 +2176,13 @@ export function WorkDetailPage() {
               onNavigate={navigationLayer.captureLink}
             />
           ) : null}
-        </TvRailSurface>
+        </RailStack>
       ) : null}
 
       {work.kind === "movie" && hasMovieTracks ? (
-        <TvRailSurface
+        <RailStack
           className="tv-movie-browser"
-          mode="vertical-tracks"
+          spacing="related"
           scrollKey={`detail:${work.id}:movie-tracks`}
           ariaLabel={t("pages.workDetail.titleChaptersAndPeople", { title: work.title })}
         >
@@ -2245,6 +2213,7 @@ export function WorkDetailPage() {
               credits={workCredits.cast}
               workId={work.id}
               groupKey="cast"
+              spacing="section"
             />
           ) : null}
           {movieCrewGroups.map((group) => (
@@ -2265,7 +2234,7 @@ export function WorkDetailPage() {
               onNavigate={navigationLayer.captureLink}
             />
           ) : null}
-        </TvRailSurface>
+        </RailStack>
       ) : null}
 
       {detailMediaContext.contextMenu}

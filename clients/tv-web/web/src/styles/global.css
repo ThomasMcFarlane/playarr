@@ -6336,7 +6336,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: clamp(24px, calc(3.4 * var(--viewport-unit)), 44px);
+  gap: 0;
   min-width: 0;
   max-width: none;
   padding-block: var(--viewport-half-height);
@@ -6784,8 +6784,19 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   scroll-margin-block: clamp(28px, calc(4 * var(--viewport-unit)), 58px);
 }
 
+/* Two spacings between tracks (stage scale): related tracks (the seasons of one show) sit close; different tracks
+   (Cast, Similar titles, every Home rail) sit further apart. A track's spacing is the gap above it. */
+:root {
+  --tv-track-gap-related: clamp(38px, calc(5 * var(--viewport-unit)), 64px);
+  --tv-track-gap-section: clamp(62px, calc(8.4 * var(--viewport-unit)), 108px);
+}
+
 .tv-media-track + .tv-media-track {
-  margin-top: clamp(38px, calc(5 * var(--viewport-unit)), 64px);
+  margin-top: var(--tv-track-gap-related);
+}
+
+.tv-media-track + .tv-media-track[data-track-spacing="section"] {
+  margin-top: var(--tv-track-gap-section);
 }
 
 .tv-media-track-heading {
@@ -8951,6 +8962,8 @@ html.is-native-scroll-root .profile-auth-scroll {
     width: 100%;
     height: 57%;
     gap: 24px;
+    /* The mobile stack keeps its own 24px gap on top of the related spacing. */
+    --tv-track-gap-section: var(--tv-track-gap-related);
     padding: 22px 0 calc(var(--mobile-nav-height) + 24px);
     overflow-x: hidden;
     overflow-y: auto;
@@ -11097,5 +11110,30 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   font-size: clamp(1.2rem, calc(3 * var(--vw)), 3rem);
   font-weight: 700;
   letter-spacing: 0.06em;
+  user-select: none;
+}
+
+/* Home's loading rails reuse the loaded card markup; the text lines keep their real line boxes. */
+.tv-home-card.is-skeleton {
+  pointer-events: none;
+}
+
+.tv-home-card.is-skeleton .skeleton-text-line {
+  width: 62%;
+  color: transparent;
+  user-select: none;
+}
+
+.tv-home-card.is-skeleton small.skeleton-text-line {
+  width: 38%;
+}
+
+.skeleton-title-line {
+  display: inline;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: transparent;
+  box-decoration-break: clone;
+  font-style: normal;
   user-select: none;
 }
