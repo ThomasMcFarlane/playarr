@@ -172,7 +172,7 @@ struct TVRootView: View {
                 .zIndex(80)
 
             if TVParityLaunch.isLive {
-                TVWebProfileChip(name: environment.profileName ?? "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset)
+                TVWebProfileChip(name: environment.profileName ?? "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset, customAvatar: environment.currentAvatarImage)
                     .zIndex(50)
             } else {
             VStack {
@@ -729,7 +729,8 @@ struct TVProfilesView: View {
                         TVProfileAvatar(
                             userID: profile.id.uuidString.lowercased(),
                             size: size,
-                            presetName: profile.isCurrent ? environment.currentAvatarPreset : nil
+                            presetName: profile.isCurrent ? environment.currentAvatarPreset : nil,
+                            customImage: profile.isCurrent ? environment.currentAvatarImage : nil
                         )
                         if busy {
                             ProgressView().tint(.white)
