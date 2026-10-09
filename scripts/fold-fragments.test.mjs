@@ -10,10 +10,10 @@ const board = `# Tasks
 
 ## Active
 
-| # | Task | Status | Picked up by | Notes |
-|---|------|--------|--------------|-------|
-| 1 | One | pending | - | a |
-| 2 | Two | pending | - | b |
+| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |
+|---|---|---|---|---|---|---|---|
+| 1 | One | todo | | | | | a |
+| 2 | Two | todo | | | | | b |
 `;
 
 const run = (fragments, extra = []) => {
@@ -40,4 +40,35 @@ test('removing an unknown row fails', () => {
 test('--check accepts remove lines and rejects junk', () => {
   assert.equal(run({ '1.md': 'remove: 1\n' }, ['--check']).r.status, 0);
   assert.notEqual(run({ '1.md': 'remove 1\n' }, ['--check']).r.status, 0);
+});
+
+const H = '| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |';
+
+test('a canonical fragment replaces its row in place and a new row creates an epic table', () => {
+  const { r, tasks } = run({
+    '1.md': '| 1 | One | in_progress | agent | feat/one | | 2026-10-10 14:00 ICT | a |\n',
+    '3.md': 'section: Fresh epic\n| 3 | Three | todo | | | 1 | | c |\n',
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(tasks, /^\| 1 \| One \| in_progress \| agent \| feat\/one \| \| 2026-10-10 14:00 ICT \| a \|$/m);
+  assert.match(tasks, new RegExp(`## Fresh epic\\n\\n${H.replace(/[|]/g, '\\$&')}\\n\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|\\n\\| 3 \\| Three \\| todo \\| \\| \\| 1 \\| \\| c \\|`));
+});
+
+test('a five-column fragment is converted, keeping the old status in Notes', () => {
+  const { r, tasks } = run({ '1.md': '| 1 | One | on hold (native) | - | a |\n' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(tasks, /^\| 1 \| One \| blocked \| - \| \| \| \| a Previous status: on hold \(native\)\. \|$/m);
+});
+
+test('--check validates the board itself', () => {
+  const bad = (text) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+    fs.writeFileSync(path.join(root, 'TASKS.md'), text);
+    return spawnSync('node', [script, '--check', root], { encoding: 'utf8' });
+  };
+  assert.equal(bad(board).status, 0);
+  assert.notEqual(bad(board.replace('| ID | Task', '| # | Task')).status, 0);
+  assert.notEqual(bad(board.replace('| todo |', '| pending |')).status, 0);
+  assert.notEqual(bad(board.replace('| One | todo |', '|  One  | todo |')).status, 0);
+  assert.notEqual(bad(`${board}| 2 | Dup | todo | | | | | x |\n`).status, 0);
 });

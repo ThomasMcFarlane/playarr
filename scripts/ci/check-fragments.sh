@@ -13,7 +13,9 @@ bad=""
 for c in $(git rev-list --no-merges "origin/$base..$head"); do
   # "chore(scrub):" is reserved for owner-ordered repository-wide scrubs (for example removing media
   # titles) that must rewrite existing CHANGELOG.md/TASKS.md text, which fragments cannot express.
-  case "$(git log -1 --format=%s "$c")" in "chore(train): fold fragments"*|"chore(scrub):"*) continue ;; esac
+  # "chore(board-format):" is reserved for a repository-wide migration of TASKS.md to the canonical
+  # epic-table format (one ## heading per epic, eight columns), which rewrites every row.
+  case "$(git log -1 --format=%s "$c")" in "chore(train): fold fragments"*|"chore(scrub):"*|"chore(board-format):"*) continue ;; esac
   # Key mode: the train squashes the branch (with the folded fragments) into one commit it marks.
   git log -1 --format=%B "$c" | grep -qx 'Merge-Train: yes' && continue
   if git diff-tree --no-commit-id --name-only -r "$c" | grep -qxE 'CHANGELOG\.md|TASKS\.md'; then
