@@ -20,8 +20,39 @@ export function measureScrollEdges(element: HTMLElement, axis: FadeAxis): void {
   element.dataset.fadeAxis = horizontal ? "x" : "y";
   if (position > EDGE_TOLERANCE_PX) element.dataset.fadeStart = "";
   else delete element.dataset.fadeStart;
+  if (!horizontal) measureHeaderClear(element, position);
   if (position + viewport < extent - EDGE_TOLERANCE_PX) element.dataset.fadeEnd = "";
   else delete element.dataset.fadeEnd;
+}
+
+const CLEAR_RAMP_PX = 48;
+
+/**
+ * How far the page header reaches into a vertical scroller (the settings menu starts at the top of the page, so its
+ * list scrolls under the heading). The CSS clips everything above that line and fades in below it.
+ */
+function measureHeaderClear(element: HTMLElement, position: number): void {
+  const header = element.closest("[data-page-id]")?.querySelector<HTMLElement>(".page-header");
+  let clear = 0;
+  if (header) {
+    const box = element.getBoundingClientRect();
+    // The header's own box can be wider than what it draws, so test its visible parts: Back, the title and the subtitle.
+    for (const part of header.querySelectorAll<HTMLElement>("button, a, h1, .page-header-detail")) {
+      const rect = part.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const across = rect.right > box.left && rect.left < box.right;
+      if (across && rect.bottom > box.top) clear = Math.max(clear, Math.ceil(rect.bottom - box.top));
+    }
+  }
+  if (clear > 0) {
+    element.dataset.fadeClear = "";
+    element.style.setProperty("--header-clear", `${clear}px`);
+    element.style.setProperty("--fade-start-amount", String(Math.min(1, Math.max(0, position / CLEAR_RAMP_PX))));
+  } else if (element.dataset.fadeClear !== undefined) {
+    delete element.dataset.fadeClear;
+    element.style.removeProperty("--header-clear");
+    element.style.removeProperty("--fade-start-amount");
+  }
 }
 
 /** Measure now (before paint), then keep the fade current on scroll, resize and content changes. Returns the detach. */
@@ -62,6 +93,9 @@ export function attachScrollEdges(element: HTMLElement, axis: FadeAxis): () => v
     window.removeEventListener("resize", schedule);
     delete element.dataset.fadeStart;
     delete element.dataset.fadeEnd;
+    delete element.dataset.fadeClear;
+    element.style.removeProperty("--header-clear");
+    element.style.removeProperty("--fade-start-amount");
   };
 }
 

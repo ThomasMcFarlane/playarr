@@ -1,0 +1,39 @@
+# Post-merge fold: a pull request merged directly (`gh pr merge --squash`) bypasses the merge train, the
+# only other place that folds tasks.d/ and changelog.d/ fragments. This folds whatever is pending after any
+# push to main, as the train's identity (Thomas McFarlane, `Merge-Train: yes`), pushing with the train's
+# deploy key when it exists (so CI and deploys fire natively) and GITHUB_TOKEN otherwise. main is not
+# protected, so a direct push is allowed; Actions cannot open pull requests here. See scripts/fold-main.sh.
+name: Fold board
+
+on:
+  push:
+    branches: [main]
+    paths: ['tasks.d/**', 'changelog.d/**']
+  workflow_dispatch:
+
+# Own group: sharing the train's would cancel its queued runs (one pending run per group). A fold that races
+# a landing just re-fetches and retries (scripts/fold-main.sh).
+concurrency:
+  group: fold-board
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fold:
+    name: Fold pending fragments
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.TRAIN_DEPLOY_KEY }}
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fold and push
+        run: scripts/fold-main.sh

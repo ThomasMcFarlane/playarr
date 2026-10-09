@@ -33,6 +33,11 @@ import {
 } from "../lib/androidTvUpdate";
 import { IS_TV, PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
 import { isBackKey } from "../lib/backKey";
+import {
+  readProfileDirectory,
+  writeProfileDirectory,
+  type CachedDirectoryProfile,
+} from "../lib/profileDirectoryCache";
 
 interface ProfileLocationState {
   backTo?: unknown;
@@ -55,6 +60,18 @@ type LoadState =
   | { status: "error"; message: string };
 
 type ProfileAction = "select" | "settings";
+
+/** The directory answer, tagged with the server and account it belongs to so another account never reads it. */
+interface ServerDirectory {
+  scope: string;
+  profiles: CachedDirectoryProfile[];
+}
+
+const MAX_SKELETON_TILES = 5;
+
+function directoryScope(apiBaseUrl: string, userId: string | undefined): string | null {
+  return userId ? `${apiBaseUrl}\n${userId}` : null;
+}
 
 const ADD_PROFILE_ID = "__add_profile__";
 
@@ -122,7 +139,19 @@ export function ProfilesPage(
   );
   const navigationLayer = useNavigationLayer("profiles");
   useTvNavigation(location.pathname, false, backTo, navigationOrigin);
-  const [serverProfiles, setServerProfiles] = useState<ViewerProfile[] | null>(null);
+  const scope = directoryScope(apiBaseUrl, currentUserId);
+  // Same server and same account only: a returning visit paints these at once and the fresh answer updates them in place.
+  const [serverDirectory, setServerDirectory] = useState<ServerDirectory | null>(() =>
+    scope && currentUserId
+      ? (() => {
+          const cached = readProfileDirectory(apiBaseUrl, currentUserId);
+          return cached ? { scope, profiles: cached } : null;
+        })()
+      : null
+  );
+  // The entrance animation is for tiles painted on first load. Tiles that replace a skeleton or arrive with the
+  // fresh answer take their place without moving.
+  const [entranceDone, setEntranceDone] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedId, setSelectedId] = useState<string>(
     currentUserId ?? ADD_PROFILE_ID
@@ -183,7 +212,27 @@ export function ProfilesPage(
     return profiles;
   }, [currentUserId, currentUserName, savedProfiles, t]);
 
-  const profiles = serverProfiles ?? fallbackProfiles;
+  const directoryProfiles =
+    serverDirectory && serverDirectory.scope === scope ? serverDirectory.profiles : null;
+  const serverProfiles = useMemo<ViewerProfile[] | null>(
+    () =>
+      directoryProfiles?.map((profile) => ({
+        ...profile,
+        isCurrent: profile.id === currentUserId,
+        isSaved: isProfileSaved(profile.id),
+      })) ?? null,
+    [directoryProfiles, currentUserId, isProfileSaved]
+  );
+  // With an account and no answer yet, the saved list could hold sessions the server no longer knows. Only the current
+  // account is certain, so its real tile shows at once and skeletons stand in for the others, in the final layout.
+  const awaitingDirectory =
+    Boolean(currentUserId) && serverProfiles === null && loadState.status === "loading";
+  const profiles = awaitingDirectory
+    ? fallbackProfiles.filter((profile) => profile.isCurrent)
+    : (serverProfiles ?? fallbackProfiles);
+  const skeletonTiles = awaitingDirectory
+    ? Math.min(fallbackProfiles.length - profiles.length, MAX_SKELETON_TILES)
+    : 0;
   const selectedIndex = selectedId !== ADD_PROFILE_ID
     ? profiles.findIndex((profile) => profile.id === selectedId)
     : profiles.length;
@@ -234,37 +283,52 @@ export function ProfilesPage(
 
   useEffect(() => {
     if (!currentUserId) {
-      setServerProfiles(null);
+      setServerDirectory(null);
       setLoadState({ status: "ready" });
       return;
     }
     let cancelled = false;
-    setLoadState({ status: "loading" });
+    const requestScope = directoryScope(apiBaseUrl, currentUserId);
+    // A cached answer for this account already paints; only a cold load shows the skeleton.
+    setLoadState(
+      readProfileDirectory(apiBaseUrl, currentUserId)
+        ? { status: "ready" }
+        : { status: "loading" }
+    );
     void client
       .listAvailableProfiles()
       .then((available) => {
         if (cancelled) return;
-        setServerProfiles(
-          selectDeviceProfiles(available, isProfileSaved, currentUserId).map((profile) => ({
+        const fresh = selectDeviceProfiles(available, isProfileSaved, currentUserId).map(
+          (profile) => ({
             id: profile.id,
             username: profile.username,
             name: profile.display_name || profile.username,
-            isCurrent: profile.is_current || profile.id === currentUserId,
-            isSaved: isProfileSaved(profile.id),
             pinLocked: profile.pin_locked,
-          }))
+          })
         );
+        if (requestScope) setServerDirectory({ scope: requestScope, profiles: fresh });
+        writeProfileDirectory(apiBaseUrl, currentUserId, fresh);
         setLoadState({ status: "ready" });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setServerProfiles(null);
+        setServerDirectory(null);
         setLoadState({ status: "error", message: describeApiError(error) });
       });
     return () => {
       cancelled = true;
     };
-  }, [client, currentUserId, isProfileSaved]);
+  }, [apiBaseUrl, client, currentUserId, isProfileSaved]);
+
+  useEffect(() => {
+    if (awaitingDirectory) {
+      setEntranceDone(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setEntranceDone(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [awaitingDirectory]);
 
   useEffect(() => {
     if (profiles.length === 0) {
@@ -428,13 +492,6 @@ export function ProfilesPage(
 
   function handleProfileLogout(profile: ViewerProfile) {
     logoutProfile(profile.id);
-    setServerProfiles((existing) =>
-      existing?.map((candidate) =>
-        candidate.id === profile.id
-          ? { ...candidate, isCurrent: false, isSaved: false }
-          : candidate
-      ) ?? null
-    );
   }
 
   function checkForUpdates() {
@@ -489,7 +546,7 @@ export function ProfilesPage(
         data-tv-scroll-axis="horizontal"
         data-navigation-scroll-key="profiles:row"
       >
-        <div className="profiles-track">
+        <div className="profiles-track" data-entrance-done={entranceDone ? "" : undefined}>
           {profiles.map((profile, index) => {
             const selected = profile.id === selectedProfile?.id;
             const previous = profiles[index - 1];
@@ -585,6 +642,21 @@ export function ProfilesPage(
               </div>
             );
           })}
+
+          {Array.from({ length: skeletonTiles }, (_, index) => (
+            <div
+              key={`skeleton-${index}`}
+              className="profile-choice profile-skeleton"
+              style={profileStyle(profiles.length + index)}
+              aria-hidden="true"
+            >
+              <div className="profile-avatar-button">
+                <SkeletonBlock className="profile-avatar" />
+                <SkeletonBlock className="profile-skeleton-name" />
+                <SkeletonBlock className="profile-skeleton-status" />
+              </div>
+            </div>
+          ))}
 
           <div
             className={`profile-choice profile-add${

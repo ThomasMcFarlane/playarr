@@ -7671,6 +7671,40 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   animation-delay: calc(var(--profile-index, 0) * 55ms);
 }
 
+/* Tiles that replace a skeleton, or arrive with a fresh directory, take their place without the entrance motion. */
+.profiles-track[data-entrance-done] .profile-choice {
+  animation: none;
+}
+
+.profile-skeleton .profile-avatar-button {
+  cursor: default;
+}
+
+.profile-skeleton {
+  animation: none;
+}
+
+.profile-skeleton .profile-avatar {
+  border-color: transparent;
+  background: var(--surface-soft);
+}
+
+.profile-skeleton .profile-avatar::after {
+  content: "";
+}
+
+.profile-skeleton-name {
+  width: 60%;
+  height: clamp(0.9rem, calc(1.1 * var(--vw)), 1.4rem);
+  border-radius: 6px;
+}
+
+.profile-skeleton-status {
+  width: 40%;
+  height: 1em;
+  border-radius: 4px;
+}
+
 .profile-avatar-button {
   width: 100%;
   display: grid;

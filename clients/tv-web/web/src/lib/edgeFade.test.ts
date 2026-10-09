@@ -40,6 +40,16 @@ describe("the one scroll edge fade", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("clips a scroller at the page header's bottom edge instead of letting content slide under it", () => {
+    const layout = read(join(src, "styles/page-layout.css"));
+    expect(layout).toMatch(/\[data-fade-axis="y"\]\[data-fade-start\]\[data-fade-clear\]\s*\{[^}]*--fade-start-floor:\s*0;[^}]*--fade-start-inset:\s*var\(--header-clear/s);
+    const y = layout.match(/\[data-fade-axis="y"\]:is\(\[data-fade-start\], \[data-fade-end\]\)\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(y).toContain("var(--fade-start-inset)");
+    const core = read(join(src, "lib/scrollEdgeFade.ts"));
+    expect(core).toContain("measureHeaderClear");
+    expect(core).toContain('".page-header"');
+  });
+
   it("measures before the first paint, without React state", () => {
     const hook = read(join(src, "lib/useScrollEdges.ts"));
     expect(hook).toContain("useLayoutEffect");
