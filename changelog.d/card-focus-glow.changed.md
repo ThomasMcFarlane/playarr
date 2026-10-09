@@ -1,0 +1,1 @@
+- Web: a focused card (Home, Library, Search, episodes, cast circles, playlists, calendar) draws a subtle red/pink glow ring with its lift and shadow, so card focus meets WCAG 2.2 AAA focus appearance in both themes.

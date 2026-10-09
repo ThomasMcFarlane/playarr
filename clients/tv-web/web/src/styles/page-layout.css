@@ -54,7 +54,10 @@
   --card-art-scale: 1.025;
   --card-art-duration: 240ms;
   --card-shadow-rest: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1);
-  --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2);
+  --card-glow-color: var(--brand-strong);
+  /* Owner 2026-10-09: a subtle red/pink glow ring on card focus (WCAG 2.4.13: a 3px ring, 3:1 against the unfocused state). */
+  --card-glow: 0 0 0 3px var(--card-glow-color), 0 0 20px 4px color-mix(in srgb, var(--card-glow-color) 45%, transparent);
+  --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2), var(--card-glow);
   /* The scroll-edge fade (the rail-panel glow). */
   --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
   --page-edge-fade-floor: 0.3;
@@ -62,6 +65,7 @@
 
 :root[data-theme="dark"] {
   --focus-ring-color: #ffffff;
+  --card-glow-color: var(--brand-ink);
 }
 
 /* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */

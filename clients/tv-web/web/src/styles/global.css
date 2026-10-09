@@ -11198,3 +11198,44 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+
+/*
+ * Card focus glow (owner 2026-10-09): every art-owning card also draws the soft red/pink ring (--card-glow) with its
+ * lift and shadow, on keyboard and remote focus (the selected card of a focused list included), never on hover.
+ * The glow follows the art shape (circles for cast). Same shadows as above, plus the ring.
+ */
+.tv-title-card:focus-visible .tv-title-card-art,
+.tv-title-grid:focus-within .tv-title-card.is-selected .tv-title-card-art,
+.tv-episode-card:focus-visible .tv-episode-art,
+.tv-episode-rail:focus-within .tv-episode-card.is-selected .tv-episode-art,
+body[data-input-mode="remote"] .tv-title-card[data-remote-active] .tv-title-card-art {
+  box-shadow: var(--card-shadow-focus) !important;
+}
+
+.tv-home-card:focus-visible .tv-home-card-art,
+.tv-home-rail:focus-within .tv-home-card.is-selected .tv-home-card-art,
+.tv-media-track-scroll:focus-within .tv-home-card.is-selected .tv-home-card-art,
+body[data-input-mode="remote"] .tv-home-card[data-remote-active] .tv-home-card-art {
+  box-shadow: 0 26px 52px rgba(56, 38, 33, 0.32), 0 11px 22px rgba(56, 38, 33, 0.22), var(--card-glow) !important;
+}
+
+.tv-home-card.is-stacked:focus-visible .tv-home-card-art,
+.tv-home-rail:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art,
+.tv-media-track-scroll:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art,
+body[data-input-mode="remote"] .tv-home-card.is-stacked[data-remote-active] .tv-home-card-art {
+  box-shadow:
+    0 -5px 0 -2px color-mix(in srgb, var(--ink) 30%, var(--surface-soft)),
+    0 -10px 0 -4px color-mix(in srgb, var(--ink) 18%, var(--surface-soft)),
+    0 26px 52px rgba(56, 38, 33, 0.32),
+    var(--card-glow) !important;
+}
+
+.tv-search-result:focus-visible .tv-search-result-art,
+.tv-search-results:focus-within .tv-search-result.is-selected .tv-search-result-art,
+body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-result-art {
+  box-shadow: 0 22px 52px rgba(31, 14, 20, 0.28), var(--card-glow) !important;
+}
+
+html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-visible, [data-remote-active]) .tv-playlist-card-art.tv-title-card-art:not(.is-empty) {
+  box-shadow: var(--card-glow) !important;
+}

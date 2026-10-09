@@ -3,7 +3,7 @@
 //   node scripts/focus-style-e2e.mjs [--dist dir] [--theme light|dark] [--layout tv|desktop]
 //
 // In both themes at 1920x1080 and 1280x720:
-//  - media cards (Home rail card, library grid card, calendar agenda, week and month cards) show NO outline and no fill when focused, lift upward
+//  - media cards (Home rail card, library grid card, calendar agenda, week and month cards) show NO outline and no fill when focused, draw the red/pink glow ring (owner 2026-10-09), lift upward
 //    by at least 4px and cast the focus shadow (on the art, or on the card itself when the card is the visible box);
 //  - controls (Back, the Filters pill, the search field) show the theme ring (white in dark theme, the ink in light theme),
 //    3px wide, with no fill change and no scale.
@@ -109,6 +109,9 @@ for (const theme of THEMES) {
       if (!s) return;
       check(`${label} ${name}: no ring`, s.outlineStyle === "none" || s.outlineWidth === "0px", `${s.outlineStyle} ${s.outlineWidth}`);
       check(`${label} ${name}: lifts`, s.ty <= -4, `ty=${s.ty}`);
+      const shadow = selfShadow ? s.shadow : s.artShadow;
+      const ring = /rgba?\((\d+), (\d+), (\d+)(?:, [\d.]+)?\) 0px 0px 0px (\d+(?:\.\d+)?)px/.exec(shadow ?? "");
+      check(`${label} ${name}: red/pink glow ring (2.4.13: >= 2px, red hue)`, !!ring && Number(ring[4]) >= 2 && Number(ring[1]) > Number(ring[2]) + 40, `shadow=${shadow}`);
       check(`${label} ${name}: casts the focus shadow`, /\b(2[2-6])(\.\d+)?px\b/.test(selfShadow ? s.shadow : s.artShadow), `shadow=${selfShadow ? s.shadow : s.artShadow}`);
     };
 
