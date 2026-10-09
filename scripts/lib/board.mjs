@@ -110,3 +110,43 @@ export const openRowEta = (c, now = Date.now()) => {
   if (t < now) return { warning: `ETA ${c[6]} is in the past; update it or move the row out of ${c[2]}` };
   return {};
 };
+
+// ---- epic heading resolution -------------------------------------------------------------------
+// Fragments written before the epic headings were renamed (#465, #467, #469) still carry the old
+// `section:` text. Resolving it against the live headings (instead of creating a heading for anything
+// unknown) keeps stale epics from coming back.
+export const normaliseSection = (s) => s.replace(/^\s*(?:active|planned):\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Old heading (normalised: no "Active: "/"Planned: " prefix, lower case) -> current heading text.
+// A value of null rejects the section with the message in REJECTED_SECTIONS.
+const SECTION_ALIASES = {
+  'server performance, security and relay cut-over (2026-10-03)': 'Server performance and security (2026-10-03)',
+  'owner actions (blocked on the owner)': null,
+  'games, tv/pvr, playarros and clients hub (2026-09-05): games library': 'Games library',
+  'games, tv/pvr, playarros and clients hub (2026-09-05): live tv and pvr': 'Live TV and recording',
+  'games, tv/pvr, playarros and clients hub (2026-09-05): playarros': 'PlayarrOS',
+  'games, tv/pvr, playarros and clients hub (2026-09-05): clients hub listings (no epic; each epic owns its listing sub-item)': 'Client listings on the clients hub',
+  'player audit fixes': 'Player progress and resume (2026-10-07)',
+  'player progress data-loss fixes (2026-10-08)': 'Player progress and resume (2026-10-07)',
+  'player progress and resume fixes (2026-10-07)': 'Player progress and resume (2026-10-07)',
+  'pixel parity campaign': 'Pixel parity campaign (2026-10-07)',
+};
+const REJECTED_SECTIONS = {
+  'owner actions (blocked on the owner)': 'the "Owner actions" epic no longer exists; put the row in the epic it belongs to (for example "Public repository readiness (2026-10-05)" or "Release automation (2026-10-07)")',
+};
+
+// Resolves a fragment's `section:` text against the board's `## ` headings. Returns
+// { heading } with the current heading text, or { error } with a message for the fragment author.
+export function resolveSection(name, headings) {
+  const byKey = new Map(headings.map((h) => [normaliseSection(h), h]));
+  const key = normaliseSection(name);
+  if (byKey.has(key)) return { heading: byKey.get(key) };
+  if (key in SECTION_ALIASES) {
+    const to = SECTION_ALIASES[key];
+    if (to === null) return { error: `section "${name}" is retired: ${REJECTED_SECTIONS[key]}` };
+    const h = byKey.get(normaliseSection(to));
+    if (h) return { heading: h };
+  }
+  const list = headings.map((h) => `  - ${h}`).join('\n');
+  return { error: `section "${name}" matches no heading on the board (a leading "Active: "/"Planned: " is ignored). Use one of:\n${list}\nTo create a new epic on purpose, use a "section-new: <name>" line instead.` };
+}

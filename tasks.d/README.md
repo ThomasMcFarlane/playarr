@@ -16,9 +16,13 @@ Depends and ETA may be empty (write a single space between the pipes). ETA is
 (`| n | Task | status | owner | Notes |`) is still accepted and converted when it folds.
 
 - Updating an existing row: the fragment holds the complete new row; it replaces the row with that number
-  in place (the `section:` line may be omitted).
-- New row: the `section:` line is required; the row is appended to that section's table (the section
-  is created at the top if it does not exist). Pick an unused number; a clash shows up as an add/add
+  in place, in its current epic (a `section:` line is ignored and may be omitted).
+- New row: the `section:` line is required; the row is appended to that epic's table. The name is
+  matched against the current `## ` headings after dropping a leading `Active: ` or `Planned: ` and
+  ignoring case, and known renamed headings map to their new names (the table is `SECTION_ALIASES` in
+  `scripts/lib/board.mjs`). A name that still matches no heading fails `--check` and the fold, listing the
+  current headings; the fold never creates a heading from `section:`. To start a new epic on purpose,
+  write `section-new: <name>` instead (it reuses an existing heading of that name). Pick an unused number; a clash shows up as an add/add
   conflict on `tasks.d/<n>.md`.
 - Validate locally: `node scripts/fold-fragments.mjs --check`.
 - Removing a row: a fragment holding the line `remove: <row-number>` deletes that row from the board

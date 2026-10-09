@@ -47,7 +47,7 @@ const H = '| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |';
 test('a canonical fragment replaces its row in place and a new row creates an epic table', () => {
   const { r, tasks } = run({
     '1.md': '| 1 | One | in_progress | agent | feat/one | | 2026-10-10 14:00 ICT | a |\n',
-    '3.md': 'section: Fresh epic\n| 3 | Three | todo | | | 1 | | c |\n',
+    '3.md': 'section-new: Fresh epic\n| 3 | Three | todo | | | 1 | | c |\n',
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(tasks, /^\| 1 \| One \| in_progress \| agent \| feat\/one \| \| 2026-10-10 14:00 ICT \| a \|$/m);
@@ -135,4 +135,86 @@ test('--check judges the board as it will be after the fragments fold', () => {
   assert.notEqual(check().status, 0);
   fs.writeFileSync(path.join(root, 'tasks.d', '1.md'), '| 1 | One | todo | | | | | a |\n');
   assert.equal(check().status, 0, check().stderr);
+});
+
+const section = (name, n = 3) => `section: ${name}\n| ${n} | Three | todo | | | | | c |\n`;
+const rowIn = (tasks, heading, n) => {
+  const part = tasks.split(/^## /m).find((p) => p.startsWith(`${heading}\n`));
+  return part ? new RegExp(`^\\| ${n} \\|`, 'm').test(part) : false;
+};
+
+test('an existing row ignores its section line and stays in its epic', () => {
+  const { r, tasks } = run({ '1.md': 'section: Totally unknown\n| 1 | One v2 | todo | | | | | a |\n' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(rowIn(tasks, 'Active', 1));
+  assert.ok(!/Totally unknown/.test(tasks));
+  assert.equal(run({ '1.md': 'section: Totally unknown\n| 1 | One v2 | todo | | | | | a |\n' }, ['--check']).r.status, 0);
+});
+
+test('a new row resolves Active:/Planned: prefixes and case', () => {
+  for (const name of ['Active: Active', 'planned: active', 'ACTIVE']) {
+    const { r, tasks } = run({ '3.md': section(name) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(rowIn(tasks, 'Active', 3), name);
+    assert.equal((tasks.match(/^## /gm) ?? []).length, 1);
+  }
+});
+
+const boardWith = (headings) => `# Tasks\n\n${headings.map((h) => `## ${h}\n\n${H}\n|---|---|---|---|---|---|---|---|\n`).join('\n')}`;
+const runOn = (text, fragments, extra = []) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+  fs.mkdirSync(path.join(root, 'tasks.d'));
+  fs.writeFileSync(path.join(root, 'TASKS.md'), text);
+  for (const [name, body] of Object.entries(fragments)) fs.writeFileSync(path.join(root, 'tasks.d', name), body);
+  const r = spawnSync('node', [script, ...extra, root], { encoding: 'utf8' });
+  return { r, tasks: fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8') };
+};
+
+test('renamed and merged headings resolve through the alias table', () => {
+  const cases = [
+    ['Active: Server performance, security and relay cut-over (2026-10-03)', 'Server performance and security (2026-10-03)'],
+    ['Planned: Games, TV/PVR, PlayarrOS and clients hub (2026-09-05): Games Library', 'Games library'],
+    ['Planned: Games, TV/PVR, PlayarrOS and clients hub (2026-09-05): Live TV and PVR', 'Live TV and recording'],
+    ['Planned: Games, TV/PVR, PlayarrOS and clients hub (2026-09-05): PlayarrOS', 'PlayarrOS'],
+    ['Planned: Games, TV/PVR, PlayarrOS and clients hub (2026-09-05): Clients hub listings (no epic; each epic owns its listing sub-item)', 'Client listings on the clients hub'],
+    ['Player audit fixes', 'Player progress and resume (2026-10-07)'],
+    ['Active: player progress data-loss fixes (2026-10-08)', 'Player progress and resume (2026-10-07)'],
+    ['Active: Player progress and resume fixes (2026-10-07)', 'Player progress and resume (2026-10-07)'],
+    ['Pixel parity campaign', 'Pixel parity campaign (2026-10-07)'],
+  ];
+  const targets = [...new Set(cases.map((c) => c[1]))];
+  for (const [old, now] of cases) {
+    const { r, tasks } = runOn(boardWith(targets), { '3.md': section(old) });
+    assert.equal(r.status, 0, `${old}: ${r.stderr}`);
+    assert.ok(rowIn(tasks, now, 3), old);
+    assert.equal((tasks.match(/^## /gm) ?? []).length, targets.length, old);
+  }
+});
+
+test('the retired Owner actions epic is rejected with a message', () => {
+  const { r } = runOn(boardWith(['Release automation (2026-10-07)']), { '3.md': section('Active: Owner actions (blocked on the owner)') }, ['--check']);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Owner actions.*retired/);
+});
+
+test('--check fails on an unknown section, lists headings and creates nothing; fold also fails', () => {
+  const text = boardWith(['Alpha epic', 'Beta epic']);
+  const c = runOn(text, { '3.md': section('Gamma epic') }, ['--check']);
+  assert.notEqual(c.r.status, 0);
+  assert.match(c.r.stderr, /matches no heading/);
+  assert.match(c.r.stderr, /- Alpha epic/);
+  assert.match(c.r.stderr, /- Beta epic/);
+  assert.match(c.r.stderr, /section-new/);
+  const f = runOn(text, { '3.md': section('Gamma epic') });
+  assert.notEqual(f.r.status, 0);
+  assert.equal(f.tasks, text);
+});
+
+test('section-new creates a heading on purpose and --check accepts it', () => {
+  const text = boardWith(['Alpha epic']);
+  const frag = { '3.md': 'section-new: Gamma epic\n| 3 | Three | todo | | | | | c |\n' };
+  assert.equal(runOn(text, frag, ['--check']).r.status, 0);
+  const { r, tasks } = runOn(text, frag);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(rowIn(tasks, 'Gamma epic', 3));
 });

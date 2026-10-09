@@ -10,7 +10,9 @@
 //                                      `## [Unreleased]`. Categories: added changed fixed removed
 //                                      security deprecated documentation performance testing.
 //   tasks.d/<row-number>.md            optional first line `section: <heading text of a "## " section>`
-//                                      (required when the row is new), then one or more table rows
+//                                      (required when the row is new; ignored when the row exists, which stays in its epic;
+//                                      old names resolve through an alias table, an unknown one fails, and
+//                                      `section-new: <name>` is how to create an epic on purpose), then one or more table rows
 //                                      `| 330 | Task | todo | owner | branch | depends | ETA | Notes |` (the eight
 //                                      canonical columns; the former five-column row is still accepted and
 //                                      converted). A row whose number already exists replaces it
@@ -22,7 +24,7 @@
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
-import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta } from './lib/board.mjs';
+import { resolveSection, HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -87,7 +89,13 @@ const tkFrags = [];
 for (const f of tkFiles) {
   const lines = fs.readFileSync(path.join(root, 'tasks.d', f), 'utf8').split('\n').map((l) => l.replace(/\s+$/, '')).filter(Boolean);
   let section = null;
-  if (lines[0]?.startsWith('section:')) section = lines.shift().slice(8).trim();
+  let sectionNew = false;
+  // `section: <heading>` resolves against the board (see resolveSection); `section-new: <name>` deliberately creates an epic.
+  while (lines[0]?.startsWith('section:') || lines[0]?.startsWith('section-new:')) {
+    const l = lines.shift();
+    sectionNew = l.startsWith('section-new:');
+    section = l.slice(l.indexOf(':') + 1).trim();
+  }
   const removes = lines.filter((l) => /^remove:\s*\d+$/.test(l));
   const rows = lines.filter((l) => l.startsWith('|'));
   if ((!rows.length && !removes.length) || rows.length + removes.length !== lines.length) { err(`tasks.d/${f}: after the optional "section:" line every line must be a table row starting with "|" or "remove: <row-number>"`); continue; }
@@ -100,7 +108,7 @@ for (const f of tkFiles) {
     else if (!cells) err(`tasks.d/${f}: row ${n} must have the eight columns ${HEADER_LINE}`);
     else {
       for (const pr of rowProblems(cells)) err(`tasks.d/${f}: row ${n}: ${pr}`);
-      tkFrags.push({ f, n, section, row: formatRow(cells), cells });
+      tkFrags.push({ f, n, section, sectionNew, row: formatRow(cells), cells });
     }
   }
 }
@@ -108,15 +116,22 @@ for (const f of tkFiles) {
 // Applies the task fragments to the board lines (replace in place, append, create a section, remove) and
 // returns the new lines. `fail(message)` reports a fragment that cannot apply and the fragment is skipped.
 function applyTasks(lines, fail) {
-  for (const { f, n, section, row, remove } of tkFrags) {
+  for (const { f, n, section: wanted, sectionNew, row, remove } of tkFrags) {
     const idx = lines.findIndex((l) => new RegExp(`^\\|\\s*${n}\\s*\\|`).test(l));
     if (remove) {
       if (idx < 0) { fail(`tasks.d/${f}: cannot remove row ${n}: no such row`); continue; }
       lines.splice(idx, 1);
       continue;
     }
+    // An existing row stays in its current epic: its `section:` line is ignored.
     if (idx >= 0) { lines[idx] = row; continue; }
-    if (!section) { fail(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); continue; }
+    if (!wanted) { fail(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); continue; }
+    let section = wanted;
+    if (!sectionNew) {
+      const r = resolveSection(wanted, lines.filter((l) => l.startsWith('## ')).map((l) => l.slice(3)));
+      if (r.error) { fail(`tasks.d/${f}: row ${n}: ${r.error}`, true); continue; }
+      section = r.heading;
+    }
     const h = lines.findIndex((l) => l.replace(/^##\s+/, '') === section && l.startsWith('## '));
     if (h < 0) {
       const first = lines.findIndex((l) => l.startsWith('## '));
@@ -153,7 +168,7 @@ if (check) {
   }
   // The board as it will be once the fragments fold, so a fragment may fix a row the current board gets wrong.
   if (fs.existsSync(boardFile)) {
-    const folded = applyTasks(fs.readFileSync(boardFile, 'utf8').split('\n'), () => {}).filter((l) => !/^ETA: /.test(l));
+    const folded = applyTasks(fs.readFileSync(boardFile, 'utf8').split('\n'), (m, isSection) => { if (isSection) err(m); }).filter((l) => !/^ETA: /.test(l));
     for (const m of checkBoard(folded.join('\n'))) err(`TASKS.md${tkFrags.length ? ' (after fold)' : ''}: ${m}`);
   }
 }
