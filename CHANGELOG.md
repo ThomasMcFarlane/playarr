@@ -172,6 +172,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.
 - A music album whose tracks have no cover art shows a basic initials placeholder (neutral tile, theme tokens) instead of an empty gap.
 - Storybook: a composition story for every page and settings section, and a test that fails when a component or page has no story.
 - Storybook: one interactive story with Controls for every shared component, using a fixture API client; the Request latency table scrolls with the keyboard.
