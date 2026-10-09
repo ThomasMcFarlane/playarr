@@ -19,7 +19,7 @@
   --stage-rail-width: 62%;
   --page-header-top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
   --page-end: clamp(24px, calc(4 * var(--vw)), 96px);
-  --page-control-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
+  --page-control-height: clamp(44px, calc(2.8 * var(--vw)), 50px);
   --action-pill-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
   --action-pill-height: clamp(52px, calc(5.2 * var(--vw)), 72px);
   --action-pill-radius: 14px;
@@ -189,7 +189,7 @@
 
 .app-clock-date {
   max-width: 10rem;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.52rem, calc(0.58 * var(--vw)), 0.72rem);
   font-weight: 640;
   letter-spacing: 0.04em;
@@ -239,7 +239,7 @@
 .tv-library-heading > .page-header-title-block > span {
   padding-left: var(--page-header-gap);
   border-left: 1px solid var(--line-strong);
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
   font-weight: 680;
   letter-spacing: 0.045em;
@@ -307,9 +307,9 @@
     display: none;
   }
   .tv-page-back {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
   }
 }
 

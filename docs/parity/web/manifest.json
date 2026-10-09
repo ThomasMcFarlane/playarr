@@ -17,60 +17,6 @@
     {
       "layout": "tv",
       "theme": "light",
-      "id": "home",
-      "route": "/",
-      "user": "fx-viewer",
-      "file": "tv/light/home.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
-      "id": "movies",
-      "route": "/movies",
-      "user": "fx-viewer",
-      "file": "tv/light/movies.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
-      "id": "series",
-      "route": "/series",
-      "user": "fx-viewer",
-      "file": "tv/light/series.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
-      "id": "film-detail",
-      "route": "/movies/{movie:Test Movie A}",
-      "user": "fx-viewer",
-      "file": "tv/light/film-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
-      "id": "series-detail",
-      "route": "/series/{series:Sample Series 1}",
-      "user": "fx-viewer",
-      "file": "tv/light/series-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
-      "id": "search",
-      "route": "/search",
-      "user": "fx-viewer",
-      "file": "tv/light/search.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
       "id": "calendar",
       "route": "/calendar",
       "user": "fx-viewer",
@@ -248,60 +194,6 @@
       "route": "/",
       "user": "fx-child-locked",
       "file": "tv/light/household-blocked.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "home",
-      "route": "/",
-      "user": "fx-viewer",
-      "file": "tv/dark/home.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "movies",
-      "route": "/movies",
-      "user": "fx-viewer",
-      "file": "tv/dark/movies.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "series",
-      "route": "/series",
-      "user": "fx-viewer",
-      "file": "tv/dark/series.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "film-detail",
-      "route": "/movies/{movie:Test Movie A}",
-      "user": "fx-viewer",
-      "file": "tv/dark/film-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "series-detail",
-      "route": "/series/{series:Sample Series 1}",
-      "user": "fx-viewer",
-      "file": "tv/dark/series-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "search",
-      "route": "/search",
-      "user": "fx-viewer",
-      "file": "tv/dark/search.png",
       "pageErrors": 0
     },
     {
@@ -489,60 +381,6 @@
     {
       "layout": "mobile",
       "theme": "light",
-      "id": "home",
-      "route": "/",
-      "user": "fx-viewer",
-      "file": "mobile/light/home.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
-      "id": "movies",
-      "route": "/movies",
-      "user": "fx-viewer",
-      "file": "mobile/light/movies.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
-      "id": "series",
-      "route": "/series",
-      "user": "fx-viewer",
-      "file": "mobile/light/series.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
-      "id": "film-detail",
-      "route": "/movies/{movie:Test Movie A}",
-      "user": "fx-viewer",
-      "file": "mobile/light/film-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
-      "id": "series-detail",
-      "route": "/series/{series:Sample Series 1}",
-      "user": "fx-viewer",
-      "file": "mobile/light/series-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
-      "id": "search",
-      "route": "/search",
-      "user": "fx-viewer",
-      "file": "mobile/light/search.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
       "id": "calendar",
       "route": "/calendar",
       "user": "fx-viewer",
@@ -725,60 +563,6 @@
     {
       "layout": "mobile",
       "theme": "dark",
-      "id": "home",
-      "route": "/",
-      "user": "fx-viewer",
-      "file": "mobile/dark/home.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "movies",
-      "route": "/movies",
-      "user": "fx-viewer",
-      "file": "mobile/dark/movies.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "series",
-      "route": "/series",
-      "user": "fx-viewer",
-      "file": "mobile/dark/series.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "film-detail",
-      "route": "/movies/{movie:Test Movie A}",
-      "user": "fx-viewer",
-      "file": "mobile/dark/film-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "series-detail",
-      "route": "/series/{series:Sample Series 1}",
-      "user": "fx-viewer",
-      "file": "mobile/dark/series-detail.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "search",
-      "route": "/search",
-      "user": "fx-viewer",
-      "file": "mobile/dark/search.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
       "id": "calendar",
       "route": "/calendar",
       "user": "fx-viewer",
@@ -956,6 +740,222 @@
       "route": "/",
       "user": "fx-child-locked",
       "file": "mobile/dark/household-blocked.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "tv/light/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "tv/light/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "tv/light/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "tv/light/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "tv/light/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "tv/light/search.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "tv/dark/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "tv/dark/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "tv/dark/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "tv/dark/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "tv/dark/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "tv/dark/search.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "mobile/light/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "mobile/light/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "mobile/light/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "mobile/light/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "mobile/light/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "mobile/light/search.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "mobile/dark/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "mobile/dark/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "mobile/dark/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "mobile/dark/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "mobile/dark/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "mobile/dark/search.png",
       "pageErrors": 0
     }
   ]
