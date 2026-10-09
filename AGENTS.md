@@ -158,7 +158,8 @@ on a personal account do not get.
   Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `parked`, `done`. **Do not
   edit it directly in a PR** (CI rejects that). Add or update rows with fragment files
   `tasks.d/<row-number>.md` (a `section:` line plus the complete eight-column row; an existing row
-  number replaces that row in place). The merge train folds them into `TASKS.md` when the PR lands.
+  number replaces that row in place and keeps its epic; `section:` must name a current epic heading
+  (old names are aliased, an unknown one fails `--check`); `section-new: <name>` creates an epic on purpose). The merge train folds them into `TASKS.md` when the PR lands.
   See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
 - Every `in_progress` and `in_review` row carries an ETA (`YYYY-MM-DD HH:MM ICT`; the board zone is
