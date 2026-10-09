@@ -45,13 +45,12 @@
     Playarr.Xbox.csproj's TargetPlatformMinVersion/TargetPlatformVersion
     exactly — see that file's comment on the same pair of values.
     Windows.Universal (rather than the narrower Windows.Xbox device family)
-    is deliberate for now: it's the widest family that still installs on
-    an Xbox, so this manifest sideloads and packages cleanly today without
-    first confirming Windows.Xbox-only distribution is what this project
-    actually wants for its eventual Store listing. Narrow this to
-    Windows.Xbox once that's confirmed — a Windows.Xbox-only package
-    can't be sideloaded or run on a desktop debug session at all, which
-    would be a bad default while this app is still being built.
+    is deliberate. Owner decision 2026-10-09: keep Windows.Universal and do
+    not narrow it to Windows.Xbox. The app also runs on Windows desktop, and
+    Windows desktop will be added as a supported client once it is verified
+    to work (see the Windows desktop client row on the task board). A
+    Windows.Xbox-only package can't be sideloaded or run on a desktop debug
+    session at all.
   -->
   <!--
     Keep TargetDeviceFamily the first child of Dependencies: the .NET Native
