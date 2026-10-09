@@ -24,3 +24,9 @@ Depends and ETA may be empty (write a single space between the pipes). ETA is
 - Removing a row: a fragment holding the line `remove: <row-number>` deletes that row from the board
   (an unknown row number fails the fold). Work in other repositories (for example Dubarr) is not
   tracked on this board, so do not add rows for it.
+
+- ETA rule: every `in_progress` and `in_review` row needs an ETA (for `in_review`, the expected merge).
+  `node scripts/fold-fragments.mjs --check` fails when one is missing and only warns when it is already
+  in the past (a hard failure would break CI as time passes), so update or move the row. Rows nobody is
+  working are `todo` (Owner empty), `blocked` or `blocked_on_owner`, with no ETA. The board mod computes
+  and shows the epic ETA itself.

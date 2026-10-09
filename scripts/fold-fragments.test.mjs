@@ -72,3 +72,66 @@ test('--check validates the board itself', () => {
   assert.notEqual(bad(board.replace('| One | todo |', '|  One  | todo |')).status, 0);
   assert.notEqual(bad(`${board}| 2 | Dup | todo | | | | | x |\n`).status, 0);
 });
+
+test('fold does not write epic ETA lines under headings', () => {
+  const { r, tasks } = run({ '1.md': '| 1 | One | in_progress | agent | | | 2026-10-10 14:00 ICT | a |\n' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!/^ETA: /m.test(tasks));
+  assert.match(tasks, /## Active\n\n\| ID/);
+});
+
+test('fold drops legacy epic ETA lines left under headings', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+  fs.mkdirSync(path.join(root, 'tasks.d'));
+  fs.writeFileSync(path.join(root, 'TASKS.md'), board.replace('## Active\n', '## Active\nETA: 2026-10-10 05:00 ICT (2026-10-09 23:00 BST) (2 open)\n'));
+  fs.writeFileSync(path.join(root, 'tasks.d', '1.md'), '| 1 | One | todo | | | | | a |\n');
+  assert.equal(spawnSync('node', [script, root], { encoding: 'utf8' }).status, 0);
+  assert.ok(!/^ETA: /m.test(fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8')));
+});
+
+test('--check: open rows need a valid ETA; a past ETA only warns', () => {
+  const frag = (status, eta, notes = 'a') => ({ '1.md': `| 1 | One | ${status} | agent | | | ${eta} | ${notes} |\n` });
+  const chk = (f, now = '2026-10-10T00:00:00Z') => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+    fs.mkdirSync(path.join(root, 'tasks.d'));
+    fs.writeFileSync(path.join(root, 'TASKS.md'), board);
+    for (const [n, b] of Object.entries(f)) fs.writeFileSync(path.join(root, 'tasks.d', n), b);
+    return spawnSync('node', [script, '--check', root], { encoding: 'utf8', env: { ...process.env, FOLD_NOW: now } });
+  };
+  // missing ETA fails
+  assert.notEqual(chk(frag('in_progress', ' ')).status, 0);
+  assert.notEqual(chk(frag('in_review', ' ', 'PR open: #5')).status, 0);
+  // valid future ETA passes without warning
+  let r = chk(frag('in_progress', '2026-10-10 14:00 ICT'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!/warning/.test(r.stderr));
+  // past ETA warns, exit 0
+  r = chk(frag('in_progress', '2026-10-09 14:00 ICT'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /warning: .*row 1: ETA 2026-10-09 14:00 ICT is in the past/);
+  // other statuses need no ETA
+  assert.equal(chk(frag('todo', ' ')).status, 0);
+  assert.equal(chk(frag('done', ' ')).status, 0);
+});
+
+test('--check applies the ETA rule to the board itself', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+  const check = (text) => {
+    fs.writeFileSync(path.join(root, 'TASKS.md'), text);
+    return spawnSync('node', [script, '--check', root], { encoding: 'utf8', env: { ...process.env, FOLD_NOW: '2026-10-10T00:00:00Z' } });
+  };
+  assert.notEqual(check(board.replace('| 1 | One | todo |', '| 1 | One | in_progress |')).status, 0);
+  const past = check(board.replace('| 1 | One | todo | | | | |', '| 1 | One | in_progress | a | | | 2026-10-09 01:00 ICT |'));
+  assert.equal(past.status, 0, past.stderr);
+  assert.match(past.stderr, /warning: TASKS\.md line \d+: row 1: ETA .* in the past/);
+});
+
+test('--check judges the board as it will be after the fragments fold', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+  fs.mkdirSync(path.join(root, 'tasks.d'));
+  fs.writeFileSync(path.join(root, 'TASKS.md'), board.replace('| 1 | One | todo |', '| 1 | One | in_progress |'));
+  const check = () => spawnSync('node', [script, '--check', root], { encoding: 'utf8', env: { ...process.env, FOLD_NOW: '2026-10-10T00:00:00Z' } });
+  assert.notEqual(check().status, 0);
+  fs.writeFileSync(path.join(root, 'tasks.d', '1.md'), '| 1 | One | todo | | | | | a |\n');
+  assert.equal(check().status, 0, check().stderr);
+});

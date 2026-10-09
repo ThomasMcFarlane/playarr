@@ -78,3 +78,33 @@ export const rowProblems = (c) => {
   if (c[6] && !ETA_RE.test(c[6])) p.push(`ETA "${c[6]}" is not YYYY-MM-DD HH:MM <timezone>`);
   return p;
 };
+
+// ---- ETA instants ------------------------------------------------------------------------------
+// Fixed offsets in minutes for the zone abbreviations an ETA may carry (rows may also use +HH:MM).
+const ZONE_OFFSETS = { ICT: 420, UTC: 0, GMT: 0, BST: 60, CET: 60, CEST: 120, EST: -300, EDT: -240, PST: -480, PDT: -420, JST: 540, IST: 330, SGT: 480 };
+
+// Milliseconds since the epoch for an ETA string, or null when the zone is unknown.
+export const etaInstant = (eta) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) (\S+)$/.exec(eta);
+  if (!m) return null;
+  const z = m[6];
+  let off = ZONE_OFFSETS[z];
+  const num = /^([+-])(\d{2}):(\d{2})$/.exec(z);
+  if (num) off = (num[1] === '-' ? -1 : 1) * (Number(num[2]) * 60 + Number(num[3]));
+  if (off === undefined) return null;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - off * 60000;
+};
+
+// Open rows (in_progress, in_review) must carry an ETA; the mod computes the epic ETA itself.
+export const OPEN_STATUSES = ['in_progress', 'in_review'];
+
+// For an open row: an error when the ETA is missing or malformed, a warning when it is already past.
+export const openRowEta = (c, now = Date.now()) => {
+  if (!OPEN_STATUSES.includes(c[2])) return {};
+  if (!c[6]) return { error: `${c[2]} row needs an ETA (YYYY-MM-DD HH:MM <timezone>)` };
+  if (!ETA_RE.test(c[6])) return {};
+  const t = etaInstant(c[6]);
+  if (t === null) return { error: `ETA "${c[6]}" has an unknown timezone` };
+  if (t < now) return { warning: `ETA ${c[6]} is in the past; update it or move the row out of ${c[2]}` };
+  return {};
+};
