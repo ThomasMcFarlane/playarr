@@ -286,6 +286,29 @@ try {
     check("calendar: on a phone the navigation is mounted once, with one default marker", phone.defaults === 1 && phone.groups === 1 && phone.header === 0, JSON.stringify(phone));
     await context.close();
   }
+
+  // ---- Audit K19: the range label announces once the period stops changing ----
+  {
+    const { context, page } = await open("week", { width: 1920, height: 1080 });
+    const live = page.locator(".period-picker [aria-live='polite']");
+    check("range label: the live region is outside the trigger button", (await page.locator(".period-picker-trigger [aria-live]").count()) === 0 && (await live.count()) === 1);
+    const seen = [];
+    await page.exposeFunction("__rangeSeen", (text) => seen.push(text));
+    await page.evaluate(() => {
+      new MutationObserver(() => window.__rangeSeen(document.querySelector(".period-picker [aria-live='polite']").textContent)).observe(
+        document.querySelector(".period-picker [aria-live='polite']"),
+        { childList: true, characterData: true, subtree: true },
+      );
+    });
+    await page.evaluate(() => document.querySelector("[data-tv-focus-default]").nextElementSibling?.focus());
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(80);
+    }
+    await page.waitForTimeout(1200);
+    check("range label: six quick period steps announce once, with the final label", seen.length === 1, JSON.stringify(seen));
+    await context.close();
+  }
 } finally {
   await browser.close();
   server.close?.();

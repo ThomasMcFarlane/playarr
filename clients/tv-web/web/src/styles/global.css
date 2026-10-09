@@ -30,6 +30,10 @@
   --success: #224c3a;
   --shadow-soft: 0 22px 65px rgba(56, 38, 33, 0.09);
   --shadow-focus: 0 24px 70px rgba(56, 38, 33, 0.2);
+  --scrim: rgba(0, 0, 0, 0.5);
+  /* Layer scale for popovers and modals; drawers, menus and toasts sit above at 1200+. */
+  --z-popover: 40;
+  --z-modal: 1100;
   --font: "Nunito Sans", "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   --header-height: clamp(78px, calc(8.5 * var(--viewport-unit)), 112px);
@@ -10844,7 +10848,7 @@ body[data-input-mode="remote"] :is(
   line-height: 1.5;
 }
 
-.tv-filter-drawer .calendar-link-instructions {
+.tv-filter-drawer .calendar-subscription-instructions {
   display: grid;
   gap: 0.5rem;
   margin: 0;
