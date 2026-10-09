@@ -865,3 +865,25 @@ jobs:
           fi
 
           echo "All required jobs passed or were skipped (not applicable to this change)."
+
+  # ---------------------------------------------------------------------
+  # Resume the merge train the moment the batch CI finishes. The train's workflow_run trigger on this
+  # workflow was observed to drop the completion of a long-running dispatched run (a green batch sat
+  # for 6 minutes), so the batch's own CI run starts the train explicitly. The schedule and the
+  # workflow_run trigger stay as fallbacks. Only the train's scratch branch; a dispatch with
+  # GITHUB_TOKEN is allowed to start workflows.
+  # ---------------------------------------------------------------------
+  kick-train:
+    name: Resume merge train
+    needs: ci-required
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref_name == 'train/batch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch the merge train
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run merge-train.yml --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false

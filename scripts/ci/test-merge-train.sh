@@ -263,6 +263,22 @@ ogit "$be" rev-parse -q --verify refs/heads/train/batch >/dev/null && bad "batch
 [ -z "$(ogit "$be" for-each-ref 'refs/train/*')" ] && ok "batch: no pre-fold refs left" || bad "batch: stale pre-fold ref"
 rm -rf "$be"
 
+# The batch's own CI run resumes the train explicitly (workflow_run dropped a completion once), and a
+# manual dispatch is a real run by default.
+python3 - "$root/.github/workflows/ci.yml" "$root/.github/workflows/merge-train.yml" <<'PY' && ok "ci.yml kicks the train after a train/batch run; dispatch defaults to a real run" || bad "train resume trigger missing"
+import sys, yaml
+ci = yaml.safe_load(open(sys.argv[1])); mt = yaml.safe_load(open(sys.argv[2]))
+k = ci['jobs']['kick-train']
+assert k['needs'] == 'ci-required' or k['needs'] == ['ci-required']
+assert 'always()' in k['if'] and "train/batch" in k['if'] and 'workflow_dispatch' in k['if']
+cmd = ' '.join(s.get('run', '') for s in k['steps'])
+assert 'gh workflow run merge-train.yml' in cmd and 'dry_run=false' in cmd
+assert k['permissions']['actions'] == 'write'
+on = mt.get(True, mt.get('on'))
+assert on['workflow_dispatch']['inputs']['dry_run']['default'] is False
+assert 'workflow_run' in on and 'schedule' in on
+PY
+
 # resolve_shared_conflicts: PNG captures take the PR's version, board files the stack's, anything else fails.
 rs=$(mktemp -d)
 (

@@ -31,9 +31,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run: merge main locally and report, push/label/merge nothing'
+        description: 'Dry run: merge main locally and report, push/label/merge nothing (default off: a dispatch resumes the train)'
         type: boolean
-        default: true
+        default: false
       pr:
         description: 'Only process this PR number (blank: whole ready queue)'
         type: string
