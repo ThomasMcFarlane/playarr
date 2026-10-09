@@ -1827,6 +1827,7 @@ export function WorkDetailPage() {
     activeProgress?.state === "part_watched"
       ? t("pages.workDetail.resumeFrom", { position: formatClock(activeProgress.position_ms) })
       : t("pages.workDetail.play");
+  const resumePlanPending = work.kind === "series" && resumePlanSettledFor !== work.id;
   const activeResumePlan =
     work.kind === "series" && resumePlan?.series_work_id === work.id && resumePlan.target
       ? resumePlan
@@ -2060,14 +2061,15 @@ export function WorkDetailPage() {
             {t("pages.workDetail.unavailable")}
           </span>
         ) : null}
-        <div
-          className="tv-detail-actions tv-detail-watchlist"
-          data-plan-pending={work.kind === "series" && resumePlanSettledFor !== work.id ? "true" : undefined}
-        >
-          {work.kind === "series" && resumePlanSettledFor !== work.id ? (
+        <div className="tv-detail-actions tv-detail-watchlist">
+          {resumePlanPending ? (
             // The Resume button (and "ask again") arrive with the resume plan: its space is held and the other buttons
-            // wait for it (CSS), so nothing visible shifts when it lands.
-            <SkeletonBlock className="tv-detail-play-pending" />
+            // wait for it, so nothing visible shifts when it lands.
+            <SkeletonBlock
+              className="tv-detail-play-pending"
+              // The Resume button's own minimum width and height (.tv-detail-play).
+              style={{ display: "inline-block", flex: "none", width: "clamp(112px, calc(8.5 * var(--vw)), 156px)", height: "clamp(44px, calc(4.2 * var(--vw)), 64px)", borderRadius: 999 }}
+            />
           ) : null}
           {activeResumePlan?.target ? (
             <button
@@ -2112,34 +2114,38 @@ export function WorkDetailPage() {
               <strong>{t("pages.workDetail.resumeAskAgain")}</strong>
             </button>
           ) : null}
-          <WatchlistToggle
-            snapshot={snapshotFromWork(work)}
-            className="tv-detail-download"
-            focusKey={`detail:${work.id}:watchlist`}
-          />
-          <button
-            type="button"
-            className="tv-detail-download"
-            aria-haspopup="dialog"
-            data-navigation-focus-key={`detail:${work.id}:add-to-playlist`}
-            onClick={(event) =>
-              detailMediaContext.openAction(
-                "playlists",
-                {
-                  work,
-                  detailRoute,
-                  parentRoute: backTo,
-                  progress: activeProgress,
-                  preferredMediaFileId: playMediaFileId,
-                  preferredEpisodeId: selectedEpisode?.episode.id,
-                },
-                event.currentTarget
-              )
-            }
-          >
-            <span aria-hidden="true">+</span>
-            <strong>{t("components.mediaContextMenu.addToPlaylist")}</strong>
-          </button>
+          {resumePlanPending ? null : (
+            <>
+              <WatchlistToggle
+                snapshot={snapshotFromWork(work)}
+                className="tv-detail-download"
+                focusKey={`detail:${work.id}:watchlist`}
+              />
+              <button
+                type="button"
+                className="tv-detail-download"
+                aria-haspopup="dialog"
+                data-navigation-focus-key={`detail:${work.id}:add-to-playlist`}
+                onClick={(event) =>
+                  detailMediaContext.openAction(
+                    "playlists",
+                    {
+                      work,
+                      detailRoute,
+                      parentRoute: backTo,
+                      progress: activeProgress,
+                      preferredMediaFileId: playMediaFileId,
+                      preferredEpisodeId: selectedEpisode?.episode.id,
+                    },
+                    event.currentTarget
+                  )
+                }
+              >
+                <span aria-hidden="true">+</span>
+                <strong>{t("components.mediaContextMenu.addToPlaylist")}</strong>
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
