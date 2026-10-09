@@ -1121,6 +1121,22 @@ export function WorkDetailPage() {
   const detailWorkId = detailWork?.id ?? null;
   const detailWorkGenres = detailWork?.genres.join("\u0000") ?? "";
   const resumeSeriesId = detailWork?.kind === "series" ? detailWork.id : null;
+  // `progressByMedia` is every title's progress and gets a new identity on any progress event, so the
+  // resume plan keys on this series' own episodes instead: it is only re-read when one of them moved.
+  const seriesProgressKey = useMemo(() => {
+    if (!resumeSeriesId || state.status !== "ready") return "";
+    const children = state.data.children;
+    if (typeof children !== "object" || children === null || !("Series" in children)) return "";
+    const parts: string[] = [];
+    for (const season of children.Series) {
+      for (const episode of season.episodes) {
+        const mediaFileId = episode.media_file_id;
+        const progress = mediaFileId ? progressByMedia.get(mediaFileId) : undefined;
+        if (mediaFileId && progress) parts.push(`${mediaFileId}:${progress.state}:${progress.position_ms}`);
+      }
+    }
+    return parts.join("|");
+  }, [resumeSeriesId, state, progressByMedia]);
   useEffect(() => {
     if (!resumeSeriesId) return;
     let cancelled = false;
@@ -1141,7 +1157,7 @@ export function WorkDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, resumeSeriesId, progressByMedia]);
+  }, [client, resumeSeriesId, seriesProgressKey]);
   const artworkWork =
     state.status === "ready"
       ? state.data.work
@@ -1386,12 +1402,14 @@ export function WorkDetailPage() {
     if (runtimeByMedia.has(mediaFileId) || runtimeRequestsRef.current.has(mediaFileId)) return;
     runtimeRequestsRef.current.add(mediaFileId);
 
-    let cancelled = false;
+    // Not cancelled by the effect lifecycle: this effect re-runs whenever `runtimeByMedia` changes, and
+    // the request guard above would then skip the re-run, dropping a result that is still wanted. The
+    // result is keyed by media file id, so storing it late is always correct.
     client
       .getMediaMetadata(mediaFileId)
       .then((metadata) => {
         runtimeRequestsRef.current.delete(mediaFileId);
-        if (cancelled || metadata.duration_ms <= 0) return;
+        if (metadata.duration_ms <= 0) return;
         setRuntimeByMedia((current) => {
           const next = new Map(current);
           next.set(mediaFileId, metadata.duration_ms);
@@ -1403,9 +1421,6 @@ export function WorkDetailPage() {
         // A genuinely unreadable/missing source stays unavailable; opening
         // another episode retries only that file, never the whole library.
       });
-    return () => {
-      cancelled = true;
-    };
   }, [client, runtimeByMedia, runtimeTarget]);
 
   useEffect(() => {
