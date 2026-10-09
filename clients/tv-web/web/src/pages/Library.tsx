@@ -65,6 +65,8 @@ import {
   storedLibraryView,
   LIBRARY_PAGE_SIZE,
   libraryFirstPageKey,
+  libraryLoadedKey,
+  type LibraryLoadedList,
   libraryImageKinds,
   libraryFirstPageParams,
   type ArtworkSize,
@@ -214,9 +216,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // Stale-while-revalidate on the very first render: a stored first page (Back, a revisit, a tab switch) is read
   // here, not in an effect, so the page never paints a skeleton frame before content it already has.
   const [seed] = useState(() => {
-    const stored = client.queries.peek<CatalogPage>(
-      libraryFirstPageKey(libraryFirstPageParams(kind, sort, order, languageParams))
-    );
+    const params = libraryFirstPageParams(kind, sort, order, languageParams);
+    // The whole list scrolled through before (Back from a title opened deep in it), else the first page.
+    const loaded = client.queries.peek<LibraryLoadedList<Work>>(libraryLoadedKey(params));
+    if (loaded) return { items: loaded.data.items, total: loaded.data.total };
+    const stored = client.queries.peek<CatalogPage>(libraryFirstPageKey(params));
     if (!stored) return null;
     const ordered = orderWorks(stored.data.items, sort, order);
     return { items: ordered, total: stored.data.total ?? ordered.length };
@@ -250,6 +254,17 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     `${kind}:${artworkSize}:${items?.length ?? 0}:${items !== null && items.length > 0}`
   );
 
+  /** Remembers the whole loaded list, so Back from a title opened deep in it paints that list at once. */
+  const storeLoadedList = useCallback(() => {
+    if (itemsRef.current.length <= PAGE_SIZE) return;
+    const params = libraryFirstPageParams(kind, sort, order, languageParams);
+    client.queries.set(
+      libraryLoadedKey(params),
+      { items: itemsRef.current, total: totalRef.current ?? itemsRef.current.length } satisfies LibraryLoadedList<Work>,
+      ["catalog"]
+    );
+  }, [client, kind, languageParams, order, sort]);
+
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
@@ -257,9 +272,14 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     const kindChanged = loadedKindRef.current !== kind;
     const firstPageParams = libraryFirstPageParams(kind, sort, order, languageParams);
     const cacheKey = libraryFirstPageKey(firstPageParams);
-    // Stale-while-revalidate: a stored first page paints at once (Back, revisits, tab switches);
-    // the request below revalidates it and swaps in only what changed.
-    const stored = client.queries.peek<CatalogPage>(cacheKey);
+    // Stale-while-revalidate: a stored list paints at once (Back, revisits, tab switches); the request below
+    // revalidates its first page and swaps in only what changed. The loaded list (every page scrolled
+    // through) wins over the first page, so Back to a deep title does not start from the top.
+    const loadedList = client.queries.peek<LibraryLoadedList<Work>>(libraryLoadedKey(firstPageParams));
+    const storedPage = client.queries.peek<CatalogPage>(cacheKey);
+    const stored = loadedList
+      ? { data: { items: loadedList.data.items, total: loadedList.data.total } as CatalogPage }
+      : storedPage;
     const hasVisibleItems = !kindChanged && itemsRef.current.length > 0;
     loadedKindRef.current = kind;
 
@@ -267,7 +287,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     totalRef.current = null;
     requestRef.current = null;
     if (stored) {
-      const orderedItems = orderWorks(stored.data.items, sort, order);
+      const orderedItems = loadedList ? loadedList.data.items : orderWorks(stored.data.items, sort, order);
       itemsRef.current = orderedItems;
       totalRef.current = stored.data.total ?? orderedItems.length;
       // The first render already holds this copy (see `seed`): keep that array so nothing re-renders for it.
@@ -293,10 +313,19 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       .fetch(cacheKey, () => client.browseCatalog(firstPageParams), { tags: ["catalog"] })
       .then((page) => {
         if (cancelled || generation !== generationRef.current) return;
-        const orderedItems = orderWorks(page.items, sort, order);
+        const head = orderWorks(page.items, sort, order);
+        // A stored list longer than the first page keeps the rows past it: only the head is revalidated
+        // (the same merge a live catalogue change does), so the grid never collapses to its first page.
+        const keptTail =
+          loadedList && itemsRef.current.length > head.length
+            ? itemsRef.current.slice(head.length).filter((work) => !head.some((first) => first.id === work.id))
+            : [];
+        const orderedItems = keptTail.length > 0 ? orderWorks([...head, ...keptTail], sort, order) : head;
+        const nextTotal = page.total ?? orderedItems.length;
         if (
           stored &&
           itemsRef.current.length > 0 &&
+          nextTotal === totalRef.current &&
           JSON.stringify(orderedItems) === JSON.stringify(itemsRef.current)
         ) {
           // Nothing changed since the stored copy: keep the grid, selection and focus as they are.
@@ -304,9 +333,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           return;
         }
         itemsRef.current = orderedItems;
-        totalRef.current = page.total ?? orderedItems.length;
+        totalRef.current = nextTotal;
         setItems(orderedItems);
         setTotal(totalRef.current);
+        if (orderedItems.length > PAGE_SIZE) storeLoadedList();
         if (!stored) {
           setSelectedId(orderedItems[0]?.id ?? null);
           previewStore.set(null);
@@ -388,10 +418,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
             totalRef.current = nextTotal;
             setItems(merged);
             setTotal(nextTotal);
+            storeLoadedList();
           })
           .catch(() => undefined);
       }),
-    [client, kind, languageParams, liveCatalog, order, sort]
+    [client, kind, languageParams, liveCatalog, order, sort, storeLoadedList]
   );
 
   // Facets follow the other active filters, so only offer languages that
@@ -632,8 +663,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     };
   }, [itemCount, selectedId, view]);
 
-  // Reset mount prefix when the catalogue kind changes.
+  // Reset mount prefix when the catalogue kind changes. Not on mount: the layout effect that mounts rows up to the
+  // title a Back returns to has already run by then, and resetting here unmounted it again (Back from a title
+  // past the first rows landed on the first card).
+  const mountedKindRef = useRef(kind);
   useEffect(() => {
+    if (mountedKindRef.current === kind) return;
+    mountedKindRef.current = kind;
     setMountedEnd(INITIAL_MOUNTED);
   }, [kind]);
 
@@ -724,6 +760,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         totalRef.current = page.total ?? totalRef.current ?? merged.length;
         setItems(merged);
         setTotal(totalRef.current);
+        storeLoadedList();
         return uniqueItems;
       })
       .catch((error: unknown) => {
@@ -741,7 +778,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
     requestRef.current = request;
     return request;
-  }, [client, kind, languageParams, order, sort]);
+  }, [client, kind, languageParams, order, sort, storeLoadedList]);
 
   const hasMore =
     !refreshing && items !== null && (total === null || items.length < total);
@@ -797,7 +834,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const letters = useMemo(() => items?.map(workLetter) ?? [], [items]);
   const navigationLayer = useNavigationLayer(
     `${kind}:${view}:${artworkSize}:${sort}:${order}:${itemIdsKey}`,
-    items !== null && !hasMore
+    // Not while the stored list is being revalidated: `hasMore` is false then only because loading more waits for
+    // it, and a restore attempt that cannot find its title yet must not give up and drop the saved position.
+    items !== null && !refreshing && !hasMore
   );
   const restoreFocusPrefix = `library:${kind}:`;
   const restoreWorkId = navigationLayer.focusKey?.startsWith(restoreFocusPrefix)

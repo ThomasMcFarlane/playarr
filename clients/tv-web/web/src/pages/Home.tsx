@@ -189,10 +189,6 @@ export function HomePage() {
       setOnDeck(stored.data.entries);
       setOnDeckSettled(true);
     }
-    const giveUp =
-      liveOnDeckRevision === 0 && !stored
-        ? window.setTimeout(() => setOnDeckSettled(true), ON_DECK_WAIT_MS)
-        : undefined;
     // Title details are shared with the detail pages through the query cache.
     const detailTags = ["catalog", "progress", "watchlist"] as const;
     let latestProgress: WatchProgress[] = [];
@@ -235,7 +231,6 @@ export function HomePage() {
 
     return () => {
       cancelled = true;
-      if (giveUp !== undefined) window.clearTimeout(giveUp);
     };
   }, [client, liveOnDeckRevision]);
 
@@ -307,6 +302,15 @@ export function HomePage() {
       railsState.status === "error") &&
     siteState.status !== "idle" &&
     siteState.status !== "loading";
+  // The wait for On Deck is counted from the moment the rails themselves are ready, not from mount: on a cold
+  // start the page mounts long before the first request can go out (sign-in refresh, version probe), and a
+  // deadline counted from mount ran out before On Deck had even been asked for. Home then painted "Start
+  // watching", and the rail swapped to "On deck" a second later (cards replaced and the stack re-centred).
+  useEffect(() => {
+    if (onDeckSettled || !homeDataSettled) return;
+    const giveUp = window.setTimeout(() => setOnDeckSettled(true), ON_DECK_WAIT_MS);
+    return () => window.clearTimeout(giveUp);
+  }, [onDeckSettled, homeDataSettled]);
   const railsKey = useMemo(() => rails.map((rail) => rail.id).join(":"), [rails]);
   const navigationLayer = useNavigationLayer(
     rails

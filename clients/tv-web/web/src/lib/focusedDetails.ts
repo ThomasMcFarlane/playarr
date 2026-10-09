@@ -98,13 +98,23 @@ export class FocusedDetails {
   }
 
   /** The stored detail for `id` (any age) and when it was stored. */
-  peek(id: string): { data: WorkDetail; at: number } | undefined {
+  peek(id: string): { data: WorkDetail; at: number; stale: boolean } | undefined {
     return this.client.queries.peek<WorkDetail>(keyOf(id));
   }
 
   private isFresh(id: string): boolean {
     const hit = this.peek(id);
-    return hit !== undefined && Date.now() - hit.at < DETAIL_FRESH_MS;
+    return hit !== undefined && !hit.stale && Date.now() - hit.at < DETAIL_FRESH_MS;
+  }
+
+  /**
+   * Idle warm-up only fills what is missing or was invalidated. An old copy is not worth a request on
+   * its own: a page opened from it paints it and revalidates then (see `focus`), so re-warming every
+   * stored copy each `DETAIL_FRESH_MS` made a steady stream of requests (and re-renders) on an idle page.
+   */
+  private isWarm(id: string): boolean {
+    const hit = this.peek(id);
+    return hit !== undefined && !hit.stale;
   }
 
   subscribe(id: string, listener: Listener): () => void {
@@ -247,7 +257,7 @@ export class FocusedDetails {
     }
     this.warm = this.warmResolve()
       .slice(0, WARM_LIMIT)
-      .filter((id) => id !== this.focused && !this.isFresh(id));
+      .filter((id) => id !== this.focused && !this.isWarm(id));
     const { queued, running } = this.scheduler.stats();
     const room = WARM_BATCH - queued - running;
     const fresh = this.warm.filter((id) => !this.scheduler.has(id));

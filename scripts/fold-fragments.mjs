@@ -65,6 +65,21 @@ for (const f of tkFiles) {
   }
 }
 
+// Board hygiene, enforced when validating (not when the train folds):
+//  - a fragment whose status says "PR open" must name its PR number (`#123` or `PR 123`), or the board
+//    cannot flip the row when that PR lands (scripts/board-sync.mjs);
+//  - a row that is not on the board yet needs a "section:" line.
+if (check) {
+  const boardFile = path.join(root, 'TASKS.md');
+  const onBoard = new Set(fs.existsSync(boardFile) ? [...fs.readFileSync(boardFile, 'utf8').matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) => m[1]) : []);
+  for (const fr of tkFrags) {
+    if (fr.remove) continue;
+    const status = fr.row.split(' | ')[2] ?? '';
+    if (/\bPR open\b/i.test(status) && !/(#|PR\s+)\d+/.test(status)) err(`tasks.d/${fr.f}: status says "PR open" but names no PR number (write "PR open: #123")`);
+    if (!fr.section && !onBoard.has(fr.n)) err(`tasks.d/${fr.f}: row ${fr.n} is not on the board, so the fragment needs a "section:" line`);
+  }
+}
+
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 if (check) { console.log(`ok: ${clFrags.length} changelog and ${tkFrags.length} task fragment row(s)`); process.exit(0); }
 if (!clFrags.length && !tkFrags.length) { console.log('no fragments'); process.exit(0); }

@@ -28,7 +28,7 @@ describe("prefetchCalendar", () => {
     expect(getCalendar).not.toHaveBeenCalled();
   });
 
-  it("a calendar live event drops the stored window", async () => {
+  it("a calendar live event marks the stored window stale", async () => {
     const queries = new QueryCache();
     queries.setScope("profile");
     const getCalendar = vi.fn(async () => ({ entries: [], sources: [] }));
@@ -38,6 +38,6 @@ describe("prefetchCalendar", () => {
     });
     await vi.waitFor(() => expect(queries.peek(calendarCacheKey("2026-11-01", "2026-11-30"))).toBeDefined());
     queries.invalidate(["calendar"]);
-    expect(queries.peek(calendarCacheKey("2026-11-01", "2026-11-30"))).toBeUndefined();
+    expect(queries.peek(calendarCacheKey("2026-11-01", "2026-11-30"))?.stale).toBe(true);
   });
 });

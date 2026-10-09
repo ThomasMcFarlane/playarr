@@ -9,8 +9,11 @@
  * scope never stores its result.
  *
  * Freshness: a hit is only ever the first paint. Callers revalidate in the background (see
- * `useAsyncData`), and any mutation the client sends invalidates the entries that depend on it
- * (`invalidate`), so a watch-state change is never hidden behind an old copy.
+ * `useAsyncData`), and any mutation the client sends or live event that arrives invalidates the
+ * entries that depend on it (`invalidate`). Invalidation marks an entry stale instead of deleting
+ * it: `peek` still returns it (flagged `stale`) so a page that mounts next paints the old copy at
+ * once instead of a skeleton, while `fetch` never treats it as fresh, so every caller revalidates and
+ * the new copy replaces it in place. Only a scope change or `clear` removes data.
  */
 
 export type QueryTag =
@@ -32,6 +35,8 @@ interface Entry {
   data: unknown;
   at: number;
   tags: readonly QueryTag[];
+  /** Set by `invalidate`: still shown as a first paint, never served as fresh. */
+  stale?: boolean;
 }
 
 export interface FetchQueryOptions {
@@ -125,15 +130,18 @@ export class QueryCache {
     return `${this.scope}\u0000${key}`;
   }
 
-  /** The stored value and when it was stored, or `undefined`. Marks the entry recently used. */
-  peek<T>(key: string): { data: T; at: number } | undefined {
+  /**
+   * The stored value, when it was stored and whether an invalidation has made it stale since, or
+   * `undefined`. Marks the entry recently used.
+   */
+  peek<T>(key: string): { data: T; at: number; stale: boolean } | undefined {
     if (!this.enabled) return undefined;
     const id = this.scoped(key);
     const entry = this.entries.get(id);
     if (!entry) return undefined;
     this.entries.delete(id);
     this.entries.set(id, entry);
-    return { data: entry.data as T, at: entry.at };
+    return { data: entry.data as T, at: entry.at, stale: entry.stale === true };
   }
 
   private store(key: string, data: unknown, tags: readonly QueryTag[], at: number = this.now()): void {
@@ -159,7 +167,7 @@ export class QueryCache {
     const id = this.scoped(key);
     if (options.ttlMs !== undefined) {
       const hit = this.entries.get(id);
-      if (hit && this.now() - hit.at < options.ttlMs) return Promise.resolve(hit.data as T);
+      if (hit && !hit.stale && this.now() - hit.at < options.ttlMs) return Promise.resolve(hit.data as T);
     }
     const running = this.inflight.get(id);
     // A request every caller walked away from is as good as gone: a new caller starts a fresh one.
@@ -228,17 +236,21 @@ export class QueryCache {
     return this.epoch;
   }
 
-  /** Drops the entries carrying any of `tags` (all entries when none are given). */
+  /**
+   * Marks the entries carrying any of `tags` stale (all entries when none are given). They stay
+   * readable through `peek` as a first paint but are no longer fresh, and requests in flight lose
+   * their right to store.
+   */
   invalidate(tags?: readonly QueryTag[]): void {
     this.epoch += 1;
     if (!tags || tags.length === 0) {
-      this.entries.clear();
+      for (const entry of this.entries.values()) entry.stale = true;
       this.inflight.clear();
       this.notify({ tags: undefined, scopeChange: false });
       return;
     }
-    for (const [id, entry] of this.entries) {
-      if (entry.tags.some((tag) => tags.includes(tag))) this.entries.delete(id);
+    for (const entry of this.entries.values()) {
+      if (entry.tags.some((tag) => tags.includes(tag))) entry.stale = true;
     }
     this.inflight.clear();
     this.notify({ tags, scopeChange: false });

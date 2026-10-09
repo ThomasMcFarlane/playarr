@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0 }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -49,6 +49,10 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
   const handleApi = (url, req, res, delivered = false) => {
     const p = url.pathname;
     const q = url.searchParams;
+    // Optional: Home's rail and site-browse calls answer late (a cold start where the first request goes out late).
+    if (railsDelayMs > 0 && !delivered && (p === "/api/v1/home/rails" || (p === "/api/v1/catalog" && q.get("kind") === "site"))) {
+      return void setTimeout(() => handleApi(url, req, res, true), railsDelayMs);
+    }
     if (p === "/api/v1/auth/login") {
       return json(res, { access_token: "nav-perf-token", refresh_token: "nav-perf-refresh", expires_in: 86400, token_type: "Bearer", user_id: userId });
     }
@@ -110,6 +114,14 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
         ...(work.kind === "movie" ? { media_file_id: `mf-${work.id}`, runtime_ms: mockRuntimeMinutes(work.id) * 60_000 } : {}),
       };
       if (detailDelay > 0) return void setTimeout(() => json(res, body), detailDelay);
+      return json(res, body);
+    }
+    // Optional: a series resume plan (a "Resume" button on the detail page), delivered after `resumePlanDelayMs`.
+    const planMatch = resumePlanDelayMs >= 0 ? p.match(/^\/api\/v1\/catalog\/([^/]+)\/resume-plan$/) : null;
+    if (planMatch && byId.has(planMatch[1])) {
+      const option = { duration_ms: 2_400_000, episode_id: `e0-0-${planMatch[1]}`, episode_number: 1, kind: "next_in_series", label: "S01E01", media_file_id: `mf0-0-${planMatch[1]}`, position_ms: 0, progress_percent: 0, season_number: 1, title: "Episode 1" };
+      const body = { action: "resume", ask_reasons: [], needs_choice: false, options: [option], reason: "next_in_order", series_work_id: planMatch[1], target: option };
+      if (resumePlanDelayMs > 0) return void setTimeout(() => json(res, body), resumePlanDelayMs);
       return json(res, body);
     }
     if (p === "/api/v1/playback/progress" && progressDelayMs > 0 && !delivered) {
