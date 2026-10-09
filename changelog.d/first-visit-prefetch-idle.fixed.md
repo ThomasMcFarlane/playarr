@@ -1,0 +1,1 @@
+- Web: after Home loads, every nav section (Movies, Series, Music, Calendar, Watchlist, Playlists) is warmed at idle, nav items prefetch after 150 ms of focus and keep going when focus leaves the nav, and an Enter release no longer opens the card a cached page focuses within the same key press.

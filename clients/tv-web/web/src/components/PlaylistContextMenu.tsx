@@ -87,6 +87,8 @@ export function usePlaylistContextMenu({
   const parentTriggerRef = useRef<HTMLButtonElement | null>(null);
   const longPressTimerRef = useRef<number | undefined>(undefined);
   const longPressTriggeredRef = useRef(false);
+  // The card whose Enter keydown is still held: a release that lands on another card belongs to what was pressed.
+  const pressedRef = useRef<EventTarget | null>(null);
 
   const clearLongPress = useCallback(() => {
     window.clearTimeout(longPressTimerRef.current);
@@ -259,6 +261,7 @@ export function usePlaylistContextMenu({
         clearLongPress();
         longPressTriggeredRef.current = false;
         const origin = event.currentTarget;
+        pressedRef.current = origin;
         longPressTimerRef.current = window.setTimeout(() => {
           longPressTriggeredRef.current = true;
           open(playlist, origin, false);
@@ -273,13 +276,19 @@ export function usePlaylistContextMenu({
         event.preventDefault();
         event.stopPropagation();
         clearLongPress();
+        const pressedHere = pressedRef.current === event.currentTarget;
+        pressedRef.current = null;
+        if (!pressedHere) return;
         if (!longPressTriggeredRef.current) event.currentTarget.click();
         else {
           window.requestAnimationFrame(() => firstActionRef.current?.focus());
         }
         longPressTriggeredRef.current = false;
       },
-      onBlur: clearLongPress,
+      onBlur: () => {
+        pressedRef.current = null;
+        clearLongPress();
+      },
     }),
     [clearLongPress, open]
   );
