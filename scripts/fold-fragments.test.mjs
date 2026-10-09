@@ -112,6 +112,7 @@ test('--check: open rows need a valid ETA; a past ETA only warns', () => {
   // other statuses need no ETA
   assert.equal(chk(frag('todo', ' ')).status, 0);
   assert.equal(chk(frag('done', ' ')).status, 0);
+  assert.equal(chk(frag('parked', ' ', 'Parked by owner 2026-10-09: hold; resumes when web is done')).status, 0);
 });
 
 test('--check applies the ETA rule to the board itself', () => {

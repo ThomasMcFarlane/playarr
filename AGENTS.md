@@ -155,7 +155,7 @@ on a personal account do not get.
 
 - `TASKS.md` stays the live board, in the canonical "epic table" format: one `## ` heading per epic and
   one table per epic with the header `| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |`.
-  Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `done`. **Do not
+  Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `parked`, `done`. **Do not
   edit it directly in a PR** (CI rejects that). Add or update rows with fragment files
   `tasks.d/<row-number>.md` (a `section:` line plus the complete eight-column row; an existing row
   number replaces that row in place). The merge train folds them into `TASKS.md` when the PR lands.
@@ -164,7 +164,7 @@ on a personal account do not get.
 - Every `in_progress` and `in_review` row carries an ETA (`YYYY-MM-DD HH:MM ICT`; the board zone is
   ICT, Asia/Bangkok; for `in_review` it is the expected merge). `fold-fragments.mjs --check` fails on a
   missing ETA and warns on a past one: revise it as soon as it slips. Work nobody is doing is `todo`
-  (Owner empty), `blocked` or `blocked_on_owner`, never a stale `in_progress`. The board mod computes
+  (Owner empty), `blocked`, `blocked_on_owner` or `parked`, never a stale `in_progress`. The board mod computes
   the epic ETA itself; do not add ETA lines under headings.
 - A PR merged directly (`gh pr merge --squash`) skips the train, so the `Fold board` workflow
   (`fold-board.yml`, `scripts/fold-main.sh`) folds any pending fragments on every push to `main`, committing
