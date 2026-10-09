@@ -36,6 +36,7 @@ import { ensureDelegatedCastCredentials, persistRotatedDelegatedCastCredentials 
 import { setRemotePlayer } from "../lib/remote/playerBridge";
 import { PlayOnDeviceDialog } from "../components/remote/PlayOnDeviceDialog";
 import { buildPlayarrCastLoadRequest, requestPlayarrCastLoad } from "../lib/cast/castLoad";
+import { runCastHandoff } from "../lib/cast/castHandoff";
 import {
   sendPlayarrCastMessage,
   subscribeToPlayarrCastMessages,
@@ -680,54 +681,59 @@ function PlayerPageInner({
     // accurate position -- see this component's build report for why this
     // is the closest available substitute for a dedicated "close this
     // session" call, which `usePlaybackEngine` does not expose publicly.
-    player.pause();
+    await runCastHandoff({
+      pauseLocal: () => player.pause(),
+      resumeLocal: () => player.play(),
+      endSession,
+      start: async () => {
+        const credentials = await ensureDelegatedCastCredentials({
+          apiBaseUrl: castServerBaseUrl,
+          fetchImpl: (input) => fetch(input),
+          getSenderAccessToken: getCastSenderAccessToken,
+        });
+        setCastCredentials(credentials);
 
-    const credentials = await ensureDelegatedCastCredentials({
-      apiBaseUrl: castServerBaseUrl,
-      fetchImpl: (input) => fetch(input),
-      getSenderAccessToken: getCastSenderAccessToken,
+        const request = buildPlayarrCastLoadRequest({
+          serverBaseUrl: castServerBaseUrl,
+          credentials,
+          item: activePlaylistItem,
+          startPositionSeconds: player.engineState.currentTimeSeconds,
+          durationSeconds: player.engineState.durationSeconds,
+          autoplay: true,
+          selectedAudioTrackId: player.selectedAudioTrackId,
+          selectedSubtitleTrackId: player.selectedSubtitleTrackId,
+          audioTracks: player.audioTracks,
+          subtitleTracks: player.subtitleTracks,
+          activeQualityId: player.activeQualityId,
+          qualityOptions: player.qualityOptions,
+          queue: playlistItems.slice(activePlaylistIndex + 1),
+          senderLanguage: typeof navigator === "undefined" ? "en" : navigator.language,
+        });
+
+        await requestPlayarrCastLoad(newSession, request);
+
+        // Give a fast-failing receiver (e.g. `insecure_server`, discovered as
+        // soon as it tries to negotiate against `castServerBaseUrl`) a short
+        // window to surface through this SAME attempt, rather than only ever
+        // showing up later, disconnected from the click that triggered it.
+        const earlyOutcome = await waitForFirstPlayarrCastMessage(
+          newSession,
+          (message) => message.type === "error",
+          { timeoutMs: 4000 }
+        );
+        if (earlyOutcome?.type === "error") {
+          if (earlyOutcome.code === "insecure_server") {
+            throw new CastUnavailableError("insecure-server", earlyOutcome.message);
+          }
+          throw new Error(earlyOutcome.message || `Cast error: ${earlyOutcome.code}`);
+        }
+
+        void sendPlayarrCastMessage(newSession, {
+          protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
+          type: "state.request",
+        }).catch(() => undefined);
+      },
     });
-    setCastCredentials(credentials);
-
-    const request = buildPlayarrCastLoadRequest({
-      serverBaseUrl: castServerBaseUrl,
-      credentials,
-      item: activePlaylistItem,
-      startPositionSeconds: player.engineState.currentTimeSeconds,
-      durationSeconds: player.engineState.durationSeconds,
-      autoplay: true,
-      selectedAudioTrackId: player.selectedAudioTrackId,
-      selectedSubtitleTrackId: player.selectedSubtitleTrackId,
-      audioTracks: player.audioTracks,
-      subtitleTracks: player.subtitleTracks,
-      activeQualityId: player.activeQualityId,
-      qualityOptions: player.qualityOptions,
-      queue: playlistItems.slice(activePlaylistIndex + 1),
-      senderLanguage: typeof navigator === "undefined" ? "en" : navigator.language,
-    });
-
-    await requestPlayarrCastLoad(newSession, request);
-
-    // Give a fast-failing receiver (e.g. `insecure_server`, discovered as
-    // soon as it tries to negotiate against `castServerBaseUrl`) a short
-    // window to surface through this SAME attempt, rather than only ever
-    // showing up later, disconnected from the click that triggered it.
-    const earlyOutcome = await waitForFirstPlayarrCastMessage(
-      newSession,
-      (message) => message.type === "error",
-      { timeoutMs: 4000 }
-    );
-    if (earlyOutcome?.type === "error") {
-      if (earlyOutcome.code === "insecure_server") {
-        throw new CastUnavailableError("insecure-server", earlyOutcome.message);
-      }
-      throw new Error(earlyOutcome.message || `Cast error: ${earlyOutcome.code}`);
-    }
-
-    void sendPlayarrCastMessage(newSession, {
-      protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
-      type: "state.request",
-    }).catch(() => undefined);
   }, [
     activePlaylistIndex,
     activePlaylistItem,

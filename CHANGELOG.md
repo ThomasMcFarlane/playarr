@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- CI: the layout parity focus pin settles the reloaded page (fonts, network, idle) and waits for two identical captures before comparing at 0 pixels, so it no longer flakes (13 mismatched pixels once on a train batch).
+- Web player: a failed cast start resumes local playback instead of leaving it paused, and the music visualiser, tap timer and cancelled negotiations clean up after themselves.
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
 - Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web: opening or closing a side panel (Filters) no longer replays the page-enter transition, so the page content stays still and the panel slides in once instead of jumping, resetting and animating half; every right-side panel is always the full viewport height from its first frame.
@@ -335,6 +337,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Merge train: a batch whose CI failed only on tiny layout-parity pixel pins (at most 100 px) has its failed jobs re-run once before it is halved, so a flake no longer costs two halving rounds.
 - Request failures returned by the API no longer name the request service or its product (details stay in the server log).
 - The web client and admin no longer name source providers in user-visible text; a new audit test (with an allowlist for admin integration setup screens) fails on new occurrences.
 - Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
