@@ -33,7 +33,8 @@ pub use repo::{
     SqlxRefreshTokenRepo, SqlxRemoteRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo,
     SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SqlxWatchlistRepo,
     SyncConflictLog, SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo,
-    UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
+    UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo,
+    WorkIdentity, WorkRepo,
 };
 pub use write_queue::{
     write, write_latest, WriteFuture, WriteQueue, WriteQueueConfig, WriteQueueStats,

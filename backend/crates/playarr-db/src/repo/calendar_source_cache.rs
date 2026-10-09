@@ -95,10 +95,21 @@ impl SqlxCalendarSourceCacheRepo {
 
     /// Drops chunks of months before `oldest_month` and of instances not in `keep`.
     pub async fn prune(&self, oldest_month: &str, keep: &[String]) -> Result<(), DbError> {
-        sqlx::query("DELETE FROM calendar_source_chunks WHERE month < ?")
-            .bind(oldest_month)
-            .execute(&self.pool)
-            .await?;
+        // The refresher calls this every pass (every 15 s) and there is almost
+        // never anything to drop; a DELETE that matches nothing still takes the
+        // write lock, so look first.
+        let has_old: i64 = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM calendar_source_chunks WHERE month < ?)",
+        )
+        .bind(oldest_month)
+        .fetch_one(&self.pool)
+        .await?;
+        if has_old != 0 {
+            sqlx::query("DELETE FROM calendar_source_chunks WHERE month < ?")
+                .bind(oldest_month)
+                .execute(&self.pool)
+                .await?;
+        }
         for table in ["calendar_source_chunks", "calendar_source_health"] {
             let existing: Vec<String> =
                 sqlx::query_scalar(&format!("SELECT DISTINCT instance_id FROM {table}"))
@@ -207,5 +218,8 @@ mod tests {
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].month, "2026-10");
         assert!(repo.all_health().await.unwrap().is_empty());
+        // A pass with nothing to drop leaves everything as it was.
+        repo.prune("2026-07", &["a".to_string()]).await.unwrap();
+        assert_eq!(repo.all_chunks().await.unwrap().len(), 1);
     }
 }
