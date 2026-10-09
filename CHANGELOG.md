@@ -351,6 +351,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web TV: the library Cover Flow now glides calmly. One step takes 380 ms on an ease-out curve with no overshoot (320 ms when a press lands mid-glide, 240 ms on a held key); presses retarget from the current position and speed instead of restarting, and each cover's rotation, scale and depth follow the live scroll position frame by frame (transform only) instead of snapping per selection. The settled look is unchanged. `scripts/motion-e2e.mjs` gains Cover Flow cases.
 - Merge train: while the batch CI is still waiting for a runner, the train cancels the queued CI runs of pull requests that are not ready; they re-run when the PR is labelled ready.
 - Web: text colour tokens now meet WCAG 2.2 AAA contrast (7:1) on every surface in both themes: `--ink-soft`, `--ink-muted`, `--accent`, `--danger` and `--success` change lightness (hues kept); new `--brand-ink` (brand-hued text) and `--brand-strong` (fill under white text); always-dark surfaces (player, end screen, playback health, media-context drawer, PIN dialog) take the dark tokens in both themes; native `select` is themed. Owner request 2026-10-09.
 - Calendar, calendar feed and folder root list responses for users now carry a neutral `display_label` per source ("Movies", "Series 2") and no longer return the admin-chosen instance name, which could be a provider's name. Admin routes still return real names.

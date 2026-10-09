@@ -5615,9 +5615,14 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   filter: brightness(0.78) saturate(0.82);
   transform: perspective(1000px) rotateY(58deg) translateX(18%) scale(0.79);
   transform-origin: 100% 50%;
-  transition:
-    filter 360ms ease,
-    transform 440ms cubic-bezier(0.16, 1, 0.3, 1);
+  /*
+   * No transform transition: `useCoverflowMotion` (lib/libraryCoverflow.ts) writes each cover's transform, origin
+   * and depth inline from the live scroll position, so rotation and scale glide with the one velocity-preserving
+   * scroll curve (380 ms ease-out from rest, 320 ms retargeted, 240 ms on a held key). These class poses are the
+   * settled / far-cover state and what the inline poses equal at rest. Dimming stays a filter transition. The
+   * !important beats the remote-mode card transition rule, which would otherwise lag the inline poses by 260 ms.
+   */
+  transition: filter 360ms ease !important;
   will-change: transform;
 }
 

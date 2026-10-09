@@ -73,6 +73,7 @@ import {
   type LibraryView,
   type SortOrder,
 } from "../lib/libraryView";
+import { useCoverflowMotion } from "../lib/libraryCoverflow";
 import { usePanelParam } from "../lib/usePanelParam";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
@@ -247,6 +248,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     gridRef,
     view === "cover-flow" ? "horizontal" : "vertical",
     `${kind}:${view}:${artworkSize}:${items?.length ?? 0}`
+  );
+  const coverflowProfile = useCoverflowMotion(
+    gridRef,
+    view === "cover-flow",
+    `${kind}:${artworkSize}:${items?.length ?? 0}:${items !== null && items.length > 0}`
   );
 
   useEffect(() => {
@@ -949,13 +955,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       if (grid) {
         const targetLeft =
           card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
-        smoothScrollTo(grid, { left: Math.max(0, targetLeft) });
+        smoothScrollTo(grid, { left: Math.max(0, targetLeft) }, coverflowProfile);
       }
     }
     if (state.items && index >= state.items.length - 12 && state.hasMore) {
       void state.appendNextPage().catch(() => undefined);
     }
-  }, [focusWork]);
+  }, [focusWork, coverflowProfile]);
 
   // In remote mode real DOM focus trails the virtual focus marker by its settle time, so the preview follows the
   // marker itself: the card carrying `data-remote-active` is the one the user is looking at.
