@@ -70,15 +70,12 @@ const MEDIA_CARD =
  * Focus rules that are not controls and stay as they are. Each entry says why. The list may only shrink.
  *  - nav rail and logo: owned by the navigation work (it keeps its label expansion);
  *  - the scrubber and the mini player draw their own ring-and-thumb marker inside the player;
- *  - the dead classes have no TSX user and are removed by the cleanup work.
  */
 const NON_CONTROL_FOCUS = [
   /\.app-nav-link/,
   /\.app-logo/,
   /\.player-seek-track/,
   /\.mini-player-hit-target/,
-  /\.editorial-item/,
-  /\.poster-card/,
   /\.tv-primary-action/,
   /\.tv-back\b/,
   /\.tv-season-switcher/,
@@ -87,7 +84,6 @@ const NON_CONTROL_FOCUS = [
   /\.tv-alphabet button\.is-active/,
   /\.app-user-identity-cluster/,
   /\.tv-download-row-copy/,
-  /\.tv-discovery-item/,
   /\.player-video/,
 ];
 
@@ -179,7 +175,7 @@ describe("media cards: shadow and lift, no ring", () => {
     const CARD_TOKENS =
       /\b(tv-title-card|tv-home-card|tv-episode-card|tv-search-result|folders-card|calendar-entry|calendar-chip|tv-music-album-card|end-screen-tile|tv-download-row)(?![\w-])/;
     for (const { file, text } of sources()) {
-      if (/NavPerfHarness|WorkCard\.tsx/.test(file)) continue; // dev harness and dead component
+      if (/NavPerfHarness/.test(file)) continue; // dev harness
       for (const [index, line] of text.split("\n").entries()) {
         if (!/className=/.test(line)) continue;
         if (/skeleton/i.test(line)) continue;
