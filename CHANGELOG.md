@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
+- Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web: opening or closing a side panel (Filters) no longer replays the page-enter transition, so the page content stays still and the panel slides in once instead of jumping, resetting and animating half; every right-side panel is always the full viewport height from its first frame.
 - Web: at 1101 to 1280 px the Release Calendar title steps down and wraps onto two lines instead of running under the shell clock (the clock keeps Home's position).
 - Web TV: Alt, Ctrl and Meta arrow chords and already-handled arrows are no longer turned into spatial moves.
@@ -805,6 +807,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Removed the unused single-use approval mechanism, per the owner decision of 9 Oct 2026 (follow-up to the removal of purchase and install approvals): the `POST /api/v1/household/approvals/{id}/consume` endpoint, its repository method and response type, and the `max_uses` and `uses` fields and columns (migration 0082 rebuilds `household_approvals` without them). Approvals are only content and time grants bounded by their expiry; older peers that still send `max_uses` or `uses` are tolerated because unknown fields are ignored.
 - Guardian approvals no longer have `purchase` or `install` kinds (owner decision, 9 October 2026: Playarr has no store, so approvals cover only `content` and `time`). The kinds are gone from the model, API, OpenAPI contract, generated web types and the admin and web UI. Migration 0081 strips the two values from stored household policies and deletes their approval rows; reading a policy also skips unknown approval kinds, so old or replicated data never fails to load.
 - Removed the unused `pages.player.preparingPlayback`, `pages.player.preparingMessage` and `pages.player.oneMoment` translation strings.
