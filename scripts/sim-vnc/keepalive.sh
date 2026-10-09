@@ -2,7 +2,7 @@
 # Keeps the live simulator session healthy until a deadline (used by .github/workflows/tvos-live-sim.yml).
 # Every 30 s it restarts what died (VNC server, idb companion, the simulator and the app) and checks the tailnet node;
 # every 5 min it logs a heartbeat with the runner load. A final failure is written to the job summary.
-# env: SIM_UDID IDB APP_BUNDLE_ID VNC_PORT TS_IP DEADLINE (epoch s) RUNNER_TEMP PLAYARR_VNC_PASSWORD
+# env: SIM_UDID IDB APP_BUNDLE_ID VNC_PORT TS_IP DEADLINE (epoch s) RUNNER_TEMP JOB_START PLAYARR_VNC_PASSWORD
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 vnc_log="$RUNNER_TEMP/sim-vnc.log"
@@ -22,7 +22,7 @@ start_companion() {
 start_vnc() {
   rm -f "$RUNNER_TEMP/vnc.ready"
   nohup nice -n 5 python3 "$here/sim_vnc.py" --udid "$SIM_UDID" --bind "$TS_IP" --port "$VNC_PORT" --idb "$IDB" --fps 24 \
-    --ready-file "$RUNNER_TEMP/vnc.ready" >> "$vnc_log" 2>&1 &
+    --metrics-file "$RUNNER_TEMP/health.txt" --ready-file "$RUNNER_TEMP/vnc.ready" >> "$vnc_log" 2>&1 &
   echo $! > "$RUNNER_TEMP/sim-vnc.pid"
   for _ in $(seq 1 60); do [[ -s "$RUNNER_TEMP/vnc.ready" ]] && return 0; sleep 1; done
   return 1
@@ -39,6 +39,19 @@ recover_simulator() {
   start_companion
   kill "$(cat "$RUNNER_TEMP/sim-vnc.pid" 2>/dev/null)" 2>/dev/null
   start_vnc
+}
+
+# One snapshot of runner health, served at port+1 by the VNC server so it can be read from outside while the job runs.
+snapshot() {
+  {
+    echo "time $(date -u +%FT%TZ) job_age_s=$(( $(date +%s) - JOB_START ))"
+    echo "load $(sysctl -n vm.loadavg | tr -d '{}')"
+    vm_stat | awk '/page size/ {ps=$8} /^Pages (free|active|inactive|wired down)|occupied by compressor/ {l=$0; sub(/:.*/,"",l); v=$NF; gsub(/\./,"",v); printf "mem %s=%dMB\n", l, v*ps/1048576}'
+    echo "swap $(sysctl -n vm.swapusage)"
+    echo "disk $(df -h / | awk 'NR==2 {print $4" free"}')"
+    echo "top cpu:"; ps -Ao pcpu,pmem,rss,comm -r | head -6 | tail -5
+    echo "top mem:"; ps -Ao pcpu,pmem,rss,comm -m | head -6 | tail -5
+  } > "$RUNNER_TEMP/health.tmp" 2>/dev/null && mv "$RUNNER_TEMP/health.tmp" "$RUNNER_TEMP/health.txt"
 }
 
 heartbeat() {
@@ -65,6 +78,7 @@ while (( $(date +%s) < DEADLINE )); do
     say "the tailnet node looks offline: asking tailscale to reconnect"
     sudo tailscale up --timeout 30s >/dev/null 2>&1 || true
   fi
+  snapshot
   if (( now - last_heartbeat >= 300 )); then heartbeat; last_heartbeat=$now; fi
   sleep 30
 done
