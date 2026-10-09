@@ -81,7 +81,6 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "components/tv/TvStage.tsx": 2,
     "pages/Calendar.tsx": 4,
     "pages/Clients.tsx": 2,
-    "pages/Library.tsx": 1,
     "pages/NavPerfHarness.tsx": 1,
     "pages/Playlists.tsx": 1,
     "pages/Profiles.tsx": 1,

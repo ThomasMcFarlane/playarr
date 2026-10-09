@@ -45,7 +45,6 @@ import {
 } from "../lib/navigationLayer";
 import { rememberWorks } from "../lib/knownWorks";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
   formatLanguageParam,
@@ -53,7 +52,7 @@ import {
   parseLanguageParam,
   toggleLanguage,
 } from "../lib/languageFilters";
-import { TvRailSurface } from "../components/tv/TvStage";
+import { ListPanel } from "../components/tv/ListPanel";
 import { useDwellPrefetch } from "../lib/prefetch";
 import { createPreviewStore } from "../lib/previewStore";
 import { gridNeighbours } from "../lib/detailNeighbours";
@@ -77,7 +76,12 @@ import {
 import { useCoverflowMotion } from "../lib/libraryCoverflow";
 import { usePanelParam } from "../lib/usePanelParam";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
-import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
+import {
+  FilterSection,
+  FiltersDrawer,
+  PageLayout,
+  ViewToggle,
+} from "../components/shell";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
 const INITIAL_MOUNTED = 48;
@@ -117,14 +121,24 @@ const TITLE_COLLATOR = new Intl.Collator(undefined, {
   sensitivity: "base",
 });
 
-function orderWorks(items: Work[], sort: LibrarySort, order: SortOrder): Work[] {
+function orderWorks(
+  items: Work[],
+  sort: LibrarySort,
+  order: SortOrder,
+): Work[] {
   const direction = order === "asc" ? 1 : -1;
   if (sort === "date_added") {
-    const added = new Map(items.map((work) => [work.id, new Date(work.added_at).getTime()]));
-    return [...items].sort((a, b) => (added.get(a.id)! - added.get(b.id)!) * direction);
+    const added = new Map(
+      items.map((work) => [work.id, new Date(work.added_at).getTime()]),
+    );
+    return [...items].sort(
+      (a, b) => (added.get(a.id)! - added.get(b.id)!) * direction,
+    );
   }
   return [...items].sort(
-    (a, b) => TITLE_COLLATOR.compare(a.sort_title || a.title, b.sort_title || b.title) * direction
+    (a, b) =>
+      TITLE_COLLATOR.compare(a.sort_title || a.title, b.sort_title || b.title) *
+      direction,
   );
 }
 
@@ -134,7 +148,9 @@ function sameWorkIds(a: Work[] | null, b: Work[]): boolean {
 
 function afterTwoFrames(): Promise<void> {
   return new Promise((resolve) => {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => resolve()),
+    );
   });
 }
 
@@ -172,7 +188,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const emptyGraphic =
     kind === "movie" ? "movies" : kind === "artist" ? "music" : "series";
   const collectionNoun =
-    kind === "artist" ? t("pages.library.collectionNoun.artists") : t("pages.library.collectionNoun.titles");
+    kind === "artist"
+      ? t("pages.library.collectionNoun.artists")
+      : t("pages.library.collectionNoun.titles");
   useDocumentTitle(plural);
 
   const client = useApiClient();
@@ -185,7 +203,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [panel, setPanel] = usePanelParam(["filters"] as const);
   const filtersOpen = panel === "filters";
   const setFiltersOpen = (next: boolean | ((open: boolean) => boolean)) =>
-    setPanel((typeof next === "function" ? next(filtersOpen) : next) ? "filters" : null);
+    setPanel(
+      (typeof next === "function" ? next(filtersOpen) : next)
+        ? "filters"
+        : null,
+    );
   const previousKind = useRef(kind);
   // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
   // so they survive reloads and can be shared or bookmarked.
@@ -199,18 +221,27 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     order,
   } = useMemo(
     () => parseLibraryView(searchParams, kind, storedLibraryView(kind)),
-    [kind, searchParams]
+    [kind, searchParams],
   );
   const audioKey = searchParams.get("audio") ?? "";
   const subtitleKey = searchParams.get("subs") ?? "";
   const audioLangs = useMemo(() => parseLanguageParam(audioKey), [audioKey]);
-  const subtitleLangs = useMemo(() => parseLanguageParam(subtitleKey), [subtitleKey]);
+  const subtitleLangs = useMemo(
+    () => parseLanguageParam(subtitleKey),
+    [subtitleKey],
+  );
   const languageParams = useMemo(
     () => ({
       audio_lang: formatLanguageParam(audioLangs),
       subtitle_lang: formatLanguageParam(subtitleLangs),
     }),
-    [audioLangs, subtitleLangs]
+    [audioLangs, subtitleLangs],
+  );
+  const [languageFacets, setLanguageFacets] = useState<LanguageFacets | null>(
+    null,
+  );
+  const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(
+    null,
   );
   // Stale-while-revalidate on the very first render: a stored first page (Back, a revisit, a tab switch) is read
   // here, not in an effect, so the page never paints a skeleton frame before content it already has.
@@ -261,7 +292,12 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     generationRef.current = generation;
     let cancelled = false;
     const kindChanged = loadedKindRef.current !== kind;
-    const firstPageParams = libraryFirstPageParams(kind, sort, order, languageParams);
+    const firstPageParams = libraryFirstPageParams(
+      kind,
+      sort,
+      order,
+      languageParams,
+    );
     const cacheKey = libraryFirstPageKey(firstPageParams);
     // Stale-while-revalidate: a stored first page paints at once (Back, revisits, tab switches);
     // the request below revalidates it and swaps in only what changed.
@@ -296,7 +332,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     setRefreshing(hasVisibleItems || Boolean(stored));
 
     client.queries
-      .fetch(cacheKey, () => client.browseCatalog(firstPageParams), { tags: ["catalog"] })
+      .fetch(cacheKey, () => client.browseCatalog(firstPageParams), {
+        tags: ["catalog"],
+      })
       .then((page) => {
         if (cancelled || generation !== generationRef.current) return;
         const orderedItems = orderWorks(page.items, sort, order);
@@ -370,18 +408,33 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     () =>
       liveCatalog(() => {
         const generation = generationRef.current;
-        const firstPageParams = libraryFirstPageParams(kind, sort, order, languageParams);
+        const firstPageParams = libraryFirstPageParams(
+          kind,
+          sort,
+          order,
+          languageParams,
+        );
         // The change makes any stored copy stale: drop it, then refetch (and store) the first page.
         client.queries.invalidate(["catalog"]);
         client.queries
-          .fetch(libraryFirstPageKey(firstPageParams), () => client.browseCatalog(firstPageParams), {
-            tags: ["catalog"],
-          })
+          .fetch(
+            libraryFirstPageKey(firstPageParams),
+            () => client.browseCatalog(firstPageParams),
+            {
+              tags: ["catalog"],
+            },
+          )
           .then((page) => {
-            if (generation !== generationRef.current || itemsRef.current.length === 0) return;
+            if (
+              generation !== generationRef.current ||
+              itemsRef.current.length === 0
+            )
+              return;
             const head = orderWorks(page.items, sort, order);
             const headIds = new Set(head.map((work) => work.id));
-            const tail = itemsRef.current.slice(PAGE_SIZE).filter((work) => !headIds.has(work.id));
+            const tail = itemsRef.current
+              .slice(PAGE_SIZE)
+              .filter((work) => !headIds.has(work.id));
             const merged = orderWorks([...head, ...tail], sort, order);
             const nextTotal = page.total ?? merged.length;
             if (
@@ -397,7 +450,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           })
           .catch(() => undefined);
       }),
-    [client, kind, languageParams, liveCatalog, order, sort]
+    [client, kind, languageParams, liveCatalog, order, sort],
   );
 
   // Facets follow the other active filters, so only offer languages that
@@ -427,7 +480,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         else params.delete(which);
         return params;
       },
-      { replace: true }
+      { replace: true },
     );
   }
 
@@ -439,13 +492,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         params.delete("subs");
         return params;
       },
-      { replace: true }
+      { replace: true },
     );
   }
 
   function languageOptions(
     facets: LanguageFacets["audio"] | undefined,
-    selected: string[]
+    selected: string[],
   ): { code: string; name: string; count: number | null }[] {
     const rows = (facets ?? []).map((facet) => ({
       code: facet.code,
@@ -454,14 +507,25 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     }));
     for (const code of selected) {
       if (!rows.some((row) => row.code === code)) {
-        rows.push({ code, name: languageDisplayName(code, uiLanguage), count: null });
+        rows.push({
+          code,
+          name: languageDisplayName(code, uiLanguage),
+          count: null,
+        });
       }
     }
     return rows;
   }
 
   /** Each view/size/sort change is its own history entry, so back/forward step through them. */
-  function updateView(patch: Partial<{ view: LibraryView; size: ArtworkSize; sort: LibrarySort; order: SortOrder }>) {
+  function updateView(
+    patch: Partial<{
+      view: LibraryView;
+      size: ArtworkSize;
+      sort: LibrarySort;
+      order: SortOrder;
+    }>,
+  ) {
     rememberLibraryView(kind, patch);
     setSearchParams((current) => applyLibraryView(current, patch));
   }
@@ -518,7 +582,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       const styles = window.getComputedStyle(content);
       const colCount = Math.max(
         1,
-        styles.gridTemplateColumns.split(" ").filter(Boolean).length
+        styles.gridTemplateColumns.split(" ").filter(Boolean).length,
       );
       const gap = Number.parseFloat(styles.rowGap || styles.gap || "0") || 0;
       const rowHeight = Math.max(120, sample.offsetHeight + gap);
@@ -546,7 +610,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         index,
         totalItems,
         cols,
-        18
+        18,
       );
       if (nextEnd <= mountedEndRef.current) return;
       flushSync(() => {
@@ -576,14 +640,22 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       const gridRect = grid.getBoundingClientRect();
       const contentTop = content.getBoundingClientRect().top;
       const lastIndex = Math.max(0, itemsRef.current.length - 1);
-      const firstRow = Math.max(0, Math.floor((gridRect.top - contentTop) / rowHeight));
-      const lastRow = Math.max(firstRow, Math.floor((gridRect.bottom - contentTop) / rowHeight));
+      const firstRow = Math.max(
+        0,
+        Math.floor((gridRect.top - contentTop) / rowHeight),
+      );
+      const lastRow = Math.max(
+        firstRow,
+        Math.floor((gridRect.bottom - contentTop) / rowHeight),
+      );
       const first = Math.min(lastIndex, firstRow * cols);
       const last = Math.min(lastIndex, (lastRow + 1) * cols - 1);
       const start = Math.max(0, first - ARTWORK_MARGIN_ROWS * cols);
       const end = last + 1 + ARTWORK_MARGIN_ROWS * cols;
       setArtworkRange((current) =>
-        current.start === start && current.end === end ? current : { start, end }
+        current.start === start && current.end === end
+          ? current
+          : { start, end },
       );
     };
     const schedule = () => {
@@ -611,11 +683,14 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     if (view === "cover-flow" || itemCount === 0) return;
     const cols = Math.max(1, gridMetricsRef.current.cols);
     const settledIndex = selectedId
-      ? Math.max(0, itemsRef.current.findIndex((work) => work.id === selectedId))
+      ? Math.max(
+          0,
+          itemsRef.current.findIndex((work) => work.id === selectedId),
+        )
       : 0;
     const desired = Math.min(
       itemCount,
-      settledIndex + (PREMOUNT_AHEAD_ROWS + 1) * cols
+      settledIndex + (PREMOUNT_AHEAD_ROWS + 1) * cols,
     );
     let cursor = mountedEndRef.current;
     if (desired <= cursor) return;
@@ -624,7 +699,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     const step = () => {
       cursor = Math.min(desired, cursor + cols * PREMOUNT_SLICE_ROWS);
       const next = cursor;
-      startTransition(() => setMountedEnd((current) => Math.max(current, next)));
+      startTransition(() =>
+        setMountedEnd((current) => Math.max(current, next)),
+      );
       if (cursor < desired) {
         gap = window.setTimeout(() => {
           cancelIdle = whenNavigationIdle(step);
@@ -663,7 +740,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       let closestDistance = Infinity;
       for (const card of grid.querySelectorAll<HTMLElement>(".tv-title-card")) {
         const rect = card.getBoundingClientRect();
-        if (rect.right <= gridRect.left || rect.left >= gridRect.right) continue;
+        if (rect.right <= gridRect.left || rect.left >= gridRect.right)
+          continue;
         const distance = Math.abs(rect.left + rect.width / 2 - trackingLine);
         if (distance < closestDistance) {
           closestDistance = distance;
@@ -681,9 +759,16 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     if (!content || !(rowHeight > 0)) return;
     const cols = Math.max(1, rawCols);
     const trackingLine = gridRect.top + Math.min(64, grid.clientHeight * 0.1);
-    const row = Math.max(0, Math.floor((trackingLine - content.getBoundingClientRect().top) / rowHeight));
+    const row = Math.max(
+      0,
+      Math.floor(
+        (trackingLine - content.getBoundingClientRect().top) / rowHeight,
+      ),
+    );
     const lastIndex = Math.max(0, itemsRef.current.length - 1);
-    const card = grid.querySelector<HTMLElement>(`[data-library-index="${Math.min(lastIndex, row * cols)}"]`);
+    const card = grid.querySelector<HTMLElement>(
+      `[data-library-index="${Math.min(lastIndex, row * cols)}"]`,
+    );
     const visibleLetter = card?.dataset.libraryLetter;
     if (visibleLetter) setActiveLetter(visibleLetter);
   }, [view]);
@@ -702,7 +787,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
   const appendNextPage = useCallback((): Promise<Work[]> => {
     if (requestRef.current) return requestRef.current;
-    if (totalRef.current !== null && itemsRef.current.length >= totalRef.current) {
+    if (
+      totalRef.current !== null &&
+      itemsRef.current.length >= totalRef.current
+    ) {
       return Promise.resolve([]);
     }
 
@@ -724,8 +812,14 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       .then((page) => {
         if (generation !== generationRef.current) return [];
         const existingIds = new Set(itemsRef.current.map((work) => work.id));
-        const uniqueItems = page.items.filter((work) => !existingIds.has(work.id));
-        const merged = orderWorks([...itemsRef.current, ...uniqueItems], sort, order);
+        const uniqueItems = page.items.filter(
+          (work) => !existingIds.has(work.id),
+        );
+        const merged = orderWorks(
+          [...itemsRef.current, ...uniqueItems],
+          sort,
+          order,
+        );
         itemsRef.current = merged;
         totalRef.current = page.total ?? totalRef.current ?? merged.length;
         setItems(merged);
@@ -767,7 +861,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         rootMargin:
           view === "cover-flow" ? "0px 800px 0px 0px" : "0px 0px 800px 0px",
         threshold: 0,
-      }
+      },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -775,35 +869,37 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
   const selected = useMemo(
     () => items?.find((work) => work.id === selectedId) ?? items?.[0] ?? null,
-    [items, selectedId]
+    [items, selectedId],
   );
   const progressByWork = useMemo(
     () => indexWatchProgressByWork(watchProgress ?? []),
-    [watchProgress]
+    [watchProgress],
   );
   const handleProgressChanged = useCallback(
     (_workId: string, updated: WatchProgress[]) => {
-      const updatedIds = new Set(updated.map((progress) => progress.media_file_id));
+      const updatedIds = new Set(
+        updated.map((progress) => progress.media_file_id),
+      );
       setWatchProgress((current) => [
         ...(current ?? []).filter(
-          (progress) => !updatedIds.has(progress.media_file_id)
+          (progress) => !updatedIds.has(progress.media_file_id),
         ),
         ...updated,
       ]);
     },
-    []
+    [],
   );
   const mediaContext = useMediaContextMenu({
     onProgressChanged: handleProgressChanged,
   });
   const itemIdsKey = useMemo(
     () => items?.map((work) => work.id).join(",") ?? "loading",
-    [items]
+    [items],
   );
   const letters = useMemo(() => items?.map(workLetter) ?? [], [items]);
   const navigationLayer = useNavigationLayer(
     `${kind}:${view}:${artworkSize}:${sort}:${order}:${itemIdsKey}`,
-    items !== null && !hasMore
+    items !== null && !hasMore,
   );
   const restoreFocusPrefix = `library:${kind}:`;
   const restoreWorkId = navigationLayer.focusKey?.startsWith(restoreFocusPrefix)
@@ -833,23 +929,30 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // mounted on demand, so mount up to it before the restore looks for it.
   useLayoutEffect(() => {
     if (!restoreWorkId || view === "cover-flow") return;
-    const index = itemsRef.current.findIndex((work) => work.id === restoreWorkId);
+    const index = itemsRef.current.findIndex(
+      (work) => work.id === restoreWorkId,
+    );
     if (index < 0) return;
-    setMountedEnd((current) => Math.max(current, index + PREMOUNT_AHEAD_ROWS * 3));
+    setMountedEnd((current) =>
+      Math.max(current, index + PREMOUNT_AHEAD_ROWS * 3),
+    );
   }, [restoreWorkId, items, view]);
 
   async function jumpToLetter(letter: string) {
     setJumpingLetter(letter);
     try {
-      const letters = order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
-      const targetPosition = letters.indexOf(letter as (typeof ALPHABET)[number]);
+      const letters =
+        order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
+      const targetPosition = letters.indexOf(
+        letter as (typeof ALPHABET)[number],
+      );
       // First title at or after the letter in the current sort order (a letter
       // with no titles lands on the next one that has some).
       const findIndex = () => {
         const list = itemsRef.current;
         for (let i = 0; i < list.length; i += 1) {
           const position = letters.indexOf(
-            workLetter(list[i]!) as (typeof ALPHABET)[number]
+            workLetter(list[i]!) as (typeof ALPHABET)[number],
           );
           if (position >= targetPosition) return i;
         }
@@ -858,7 +961,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       let index = findIndex();
       while (
         index < 0 &&
-        (totalRef.current === null || itemsRef.current.length < totalRef.current)
+        (totalRef.current === null ||
+          itemsRef.current.length < totalRef.current)
       ) {
         let added: Work[];
         try {
@@ -878,7 +982,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       ensureLibraryIndex(grid, index);
       await afterTwoFrames();
       const destination = grid?.querySelector<HTMLElement>(
-        `[data-library-index="${index}"]`
+        `[data-library-index="${index}"]`,
       );
       if (!grid || !destination) return;
       destination.focus({ preventScroll: true });
@@ -931,13 +1035,16 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       details.focus(work.id);
       pendingSelectIdRef.current = work.id;
       window.clearTimeout(selectTimerRef.current);
-      selectTimerRef.current = window.setTimeout(() => {
-        const id = pendingSelectIdRef.current;
-        if (!id) return;
-        startTransition(() => {
-          setSelectedId(id);
-        });
-      }, remote ? SELECT_SETTLE_MS : 0);
+      selectTimerRef.current = window.setTimeout(
+        () => {
+          const id = pendingSelectIdRef.current;
+          if (!id) return;
+          startTransition(() => {
+            setSelectedId(id);
+          });
+        },
+        remote ? SELECT_SETTLE_MS : 0,
+      );
     },
     [details, previewStore]
   );
@@ -983,27 +1090,42 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         pageId="library"
         className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
         ariaLabel={t("pages.library.stageAriaLabel", { plural })}
-        header={{ title: plural, back: { label: t("pages.library.backToHome"), to: "/" } }}
+        header={{
+          title: plural,
+          back: { label: t("pages.library.backToHome"), to: "/" },
+        }}
         state={
           initialError
             ? {
                 kind: "error",
                 props: {
                   graphic: emptyGraphic,
-                  title: t("pages.library.errorTitle", { plural: plural.toLowerCase() }),
+                  title: t("pages.library.errorTitle", {
+                    plural: plural.toLowerCase(),
+                  }),
                   description: initialError,
                   onRetry: () => setReloadAttempt((value) => value + 1),
                   retryLabel: t("components.states.retry"),
                 },
               }
             : items === null
-              ? { kind: "loading", skeleton: "grid", label: t("pages.library.preparingLabel", { label: plural.toLowerCase() }) }
+              ? {
+                  kind: "loading",
+                  skeleton: "grid",
+                  label: t("pages.library.preparingLabel", {
+                    label: plural.toLowerCase(),
+                  }),
+                }
               : {
                   kind: "empty",
                   props: {
                     graphic: emptyGraphic,
-                    title: t("pages.library.emptyTitle", { plural: plural.toLowerCase() }),
-                    description: t("pages.library.emptyDescription", { collectionNoun }),
+                    title: t("pages.library.emptyTitle", {
+                      plural: plural.toLowerCase(),
+                    }),
+                    description: t("pages.library.emptyDescription", {
+                      collectionNoun,
+                    }),
                   },
                 }
         }
@@ -1014,7 +1136,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const alphabet = order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
   const selectedIndex = Math.max(
     0,
-    items.findIndex((item) => item.id === selected.id)
+    items.findIndex((item) => item.id === selected.id),
   );
 
   return (
@@ -1042,116 +1164,133 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         ],
       }}
     >
-      <LibraryPreview store={previewStore} fallback={selected} singular={singular} />
+      <LibraryPreview
+        store={previewStore}
+        fallback={selected}
+        singular={singular}
+      />
 
-      <TvRailSurface
-        className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}`}
-        mode="content"
+      <ListPanel
+        panelClassName={`is-${view} artwork-${artworkSize}`}
         ariaLabel={t("pages.library.railAriaLabel", { plural, collectionNoun })}
+        scrollKey={`library:${kind}:grid`}
+        refreshKey={`${kind}:${view}:${artworkSize}:${items?.length ?? 0}`}
+        axis={view === "cover-flow" ? "horizontal" : "vertical"}
+        gridRef={gridRef}
+        gridProps={{
+          onScroll: updateActiveLetter,
+          onFocus: handleGridFocus,
+          "data-library-count": items.length,
+          "aria-busy": refreshing,
+        }}
+        overlay={
+          refreshing ? (
+            <span
+              className="tv-library-refreshing"
+              role="status"
+              aria-label={t("pages.library.updatingLibrary")}
+            >
+              <span className="tv-mini-loader" aria-hidden="true" />
+            </span>
+          ) : null
+        }
+        contentStyle={(() => {
+          // Only additive bottom spacer when more rows exist off-mount.
+          // Never write paddingTop: 0 — that wipes --library-rail-top.
+          if (view === "cover-flow") return undefined;
+          const cols = Math.max(1, gridMetricsRef.current.cols);
+          const rowHeight = gridMetricsRef.current.rowHeight;
+          const spacerBottom = Math.max(
+            0,
+            (Math.ceil(items.length / cols) -
+              Math.ceil(renderWindow.end / cols)) *
+              rowHeight,
+          );
+          if (spacerBottom <= 0) return undefined;
+          const style: CSSProperties = {
+            paddingBottom: `calc(var(--library-rail-bottom) + ${spacerBottom}px)`,
+          };
+          return style;
+        })()}
+        footer={
+          loadMoreError ? (
+            <button
+              type="button"
+              className="tv-inline-error"
+              onClick={() => void appendNextPage().catch(() => undefined)}
+            >
+              {t("pages.library.retryLoadMore")}
+            </button>
+          ) : null
+        }
       >
-        {refreshing ? (
-          <span className="tv-library-refreshing" role="status" aria-label={t("pages.library.updatingLibrary")}>
-            <span className="tv-mini-loader" aria-hidden="true" />
-          </span>
-        ) : null}
-        <div
-          className="tv-title-grid"
-          ref={gridRef}
-          onScroll={updateActiveLetter}
-          onFocus={handleGridFocus}
-          data-tv-scroll-container
-          data-tv-scroll-axis={view === "cover-flow" ? "horizontal" : "vertical"}
-          data-navigation-scroll-key={`library:${kind}:grid`}
-          data-library-count={items.length}
-          aria-busy={refreshing}
-        >
-          <div
-            className="tv-title-grid-content"
-            style={(() => {
-              // Only additive bottom spacer when more rows exist off-mount.
-              // Never write paddingTop: 0 — that wipes --library-rail-top.
-              if (view === "cover-flow") return undefined;
-              const cols = Math.max(1, gridMetricsRef.current.cols);
-              const rowHeight = gridMetricsRef.current.rowHeight;
-              const spacerBottom = Math.max(
-                0,
-                (Math.ceil(items.length / cols) -
-                  Math.ceil(renderWindow.end / cols)) *
-                  rowHeight
+        {view === "cover-flow"
+          ? items.map((work, index) => {
+              const letter = letters[index] ?? workLetter(work);
+              return (
+                <LibraryTitleCard
+                  key={work.id}
+                  work={work}
+                  index={index}
+                  routeBase={routeBase}
+                  kind={kind}
+                  view={view}
+                  imageKinds={libraryImageKinds("cover")}
+                  letter={letter}
+                  isSelected={work.id === selected.id}
+                  coverFlowOffset={Math.max(
+                    -4,
+                    Math.min(4, index - selectedIndex),
+                  )}
+                  progress={progressByWork.get(work.id)}
+                  showUnwatched={watchProgress !== null}
+                  singular={singular}
+                  navigationOrigin={navigationLayer.origin}
+                  onCapture={navigationLayer.captureLink}
+                  itemProps={mediaContext.itemProps}
+                  artworkEnabled
+                />
               );
-              if (spacerBottom <= 0) return undefined;
-              const style: CSSProperties = {
-                paddingBottom: `calc(var(--library-rail-bottom) + ${spacerBottom}px)`,
-              };
-              return style;
-            })()}
-          >
-            {view === "cover-flow"
-              ? items.map((work, index) => {
-                  const letter = letters[index] ?? workLetter(work);
-                  return (
-                    <LibraryTitleCard
-                      key={work.id}
-                      work={work}
-                      index={index}
-                      routeBase={routeBase}
-                      kind={kind}
-                      view={view}
-                      imageKinds={libraryImageKinds("cover")}
-                      letter={letter}
-                      isSelected={work.id === selected.id}
-                      coverFlowOffset={Math.max(-4, Math.min(4, index - selectedIndex))}
-                      progress={progressByWork.get(work.id)}
-                      showUnwatched={watchProgress !== null}
-                      singular={singular}
-                      navigationOrigin={navigationLayer.origin}
-                      onCapture={navigationLayer.captureLink}
-                      itemProps={mediaContext.itemProps}
-                      artworkEnabled
-                    />
-                  );
-                })
-              : libraryChunkRanges(renderWindow.end).map(({ chunk, start, end }) => (
-                  <LibraryChunk
-                    key={chunk}
-                    items={items}
-                    start={start}
-                    end={end}
-                    selectedId={
-                      selectedIndex >= start && selectedIndex < end ? selected.id : null
-                    }
-                    routeBase={routeBase}
-                    kind={kind}
-                    view={view}
-                    progressByWork={progressByWork}
-                    showUnwatched={watchProgress !== null}
-                    singular={singular}
-                    navigationOrigin={navigationLayer.origin}
-                    onCapture={navigationLayer.captureLink}
-                    itemProps={mediaContext.itemProps}
-                    artworkFrom={Math.min(end, Math.max(start, artworkRange.start))}
-                    artworkTo={Math.max(start, Math.min(end, artworkRange.end))}
-                  />
-                ))}
+            })
+          : libraryChunkRanges(renderWindow.end).map(
+              ({ chunk, start, end }) => (
+                <LibraryChunk
+                  key={chunk}
+                  items={items}
+                  start={start}
+                  end={end}
+                  selectedId={
+                    selectedIndex >= start && selectedIndex < end
+                      ? selected.id
+                      : null
+                  }
+                  routeBase={routeBase}
+                  kind={kind}
+                  view={view}
+                  progressByWork={progressByWork}
+                  showUnwatched={watchProgress !== null}
+                  singular={singular}
+                  navigationOrigin={navigationLayer.origin}
+                  onCapture={navigationLayer.captureLink}
+                  itemProps={mediaContext.itemProps}
+                  artworkFrom={Math.min(
+                    end,
+                    Math.max(start, artworkRange.start),
+                  )}
+                  artworkTo={Math.max(start, Math.min(end, artworkRange.end))}
+                />
+              ),
+            )}
 
-            <div ref={sentinelRef} className="tv-grid-sentinel" aria-live="polite">
-              {loadingMore ? (
-                <span className="tv-mini-loader" aria-label={t("pages.library.loadingMoreTitles")} />
-              ) : null}
-            </div>
-          </div>
+        <div ref={sentinelRef} className="tv-grid-sentinel" aria-live="polite">
+          {loadingMore ? (
+            <span
+              className="tv-mini-loader"
+              aria-label={t("pages.library.loadingMoreTitles")}
+            />
+          ) : null}
         </div>
-
-        {loadMoreError && (
-          <button
-            type="button"
-            className="tv-inline-error"
-            onClick={() => void appendNextPage().catch(() => undefined)}
-          >
-            {t("pages.library.retryLoadMore")}
-          </button>
-        )}
-      </TvRailSurface>
+      </ListPanel>
 
       <FiltersDrawer
         id={`${kind}-library-filters`}
@@ -1162,135 +1301,165 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         closeLabel={t("pages.library.closeFilters")}
         onClose={() => setFiltersOpen(false)}
       >
-          <FilterSection title={t("pages.library.view")}>
-            <ViewToggle
-              ariaLabel={t("pages.library.view")}
-              value={view}
-              onChange={changeView}
-              options={(
-                (kind === "artist"
-                  ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
-                  : (["list", "screen", "cover"] as LibraryView[])
-                ).map((option) => ({
-                  value: option,
-                  icon: option,
-                  label:
-                    option === "cover-flow"
-                      ? t("pages.library.viewCoverFlow")
-                      : option === "list"
-                        ? t("pages.library.viewList")
-                        : option === "screen"
-                          ? t("pages.library.viewScreen")
-                          : t("pages.library.viewCover"),
-                }))
-              )}
-            />
-          </FilterSection>
+        <FilterSection title={t("pages.library.view")}>
+          <ViewToggle
+            ariaLabel={t("pages.library.view")}
+            value={view}
+            onChange={changeView}
+            options={(kind === "artist"
+              ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
+              : (["list", "screen", "cover"] as LibraryView[])
+            ).map((option) => ({
+              value: option,
+              icon: option,
+              label:
+                option === "cover-flow"
+                  ? t("pages.library.viewCoverFlow")
+                  : option === "list"
+                    ? t("pages.library.viewList")
+                    : option === "screen"
+                      ? t("pages.library.viewScreen")
+                      : t("pages.library.viewCover"),
+            }))}
+          />
+        </FilterSection>
 
-          <FilterSection title={t("pages.library.artworkSize")}>
-            <div className="tv-filter-choice-grid">
-              {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={artworkSize === size ? "is-active" : ""}
-                  onClick={() => changeArtworkSize(size)}
-                  aria-pressed={artworkSize === size}
-                >
-                  {size === "small"
-                    ? t("pages.library.sizeSmall")
-                    : size === "large"
-                      ? t("pages.library.sizeLarge")
-                      : t("pages.library.sizeMedium")}
-                </button>
-              ))}
-            </div>
-          </FilterSection>
+        <FilterSection title={t("pages.library.artworkSize")}>
+          <div className="tv-filter-choice-grid">
+            {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={artworkSize === size ? "is-active" : ""}
+                onClick={() => changeArtworkSize(size)}
+                aria-pressed={artworkSize === size}
+              >
+                {size === "small"
+                  ? t("pages.library.sizeSmall")
+                  : size === "large"
+                    ? t("pages.library.sizeLarge")
+                    : t("pages.library.sizeMedium")}
+              </button>
+            ))}
+          </div>
+        </FilterSection>
 
-          <FilterSection title={t("pages.library.sortBy")}>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={sort === "title" ? "is-active" : ""}
-                onClick={() => changeSort("title")}
-                aria-pressed={sort === "title"}
-              >
-                {t("pages.library.sortTitle")}
-              </button>
-              <button
-                type="button"
-                className={sort === "date_added" ? "is-active" : ""}
-                onClick={() => changeSort("date_added")}
-                aria-pressed={sort === "date_added"}
-              >
-                {t("pages.library.sortDateAdded")}
-              </button>
-            </div>
-          </FilterSection>
+        <FilterSection title={t("pages.library.sortBy")}>
+          <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+            <button
+              type="button"
+              className={sort === "title" ? "is-active" : ""}
+              onClick={() => changeSort("title")}
+              aria-pressed={sort === "title"}
+            >
+              {t("pages.library.sortTitle")}
+            </button>
+            <button
+              type="button"
+              className={sort === "date_added" ? "is-active" : ""}
+              onClick={() => changeSort("date_added")}
+              aria-pressed={sort === "date_added"}
+            >
+              {t("pages.library.sortDateAdded")}
+            </button>
+          </div>
+        </FilterSection>
 
-          <FilterSection title={t("pages.library.order")}>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={order === "asc" ? "is-active" : ""}
-                onClick={() => changeOrder("asc")}
-                aria-pressed={order === "asc"}
-              >
-                {sort === "title" ? t("pages.library.sortAscAlpha") : t("pages.library.sortAscDate")}
-              </button>
-              <button
-                type="button"
-                className={order === "desc" ? "is-active" : ""}
-                onClick={() => changeOrder("desc")}
-                aria-pressed={order === "desc"}
-              >
-                {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
-              </button>
-            </div>
-          </FilterSection>
+        <FilterSection title={t("pages.library.order")}>
+          <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+            <button
+              type="button"
+              className={order === "asc" ? "is-active" : ""}
+              onClick={() => changeOrder("asc")}
+              aria-pressed={order === "asc"}
+            >
+              {sort === "title"
+                ? t("pages.library.sortAscAlpha")
+                : t("pages.library.sortAscDate")}
+            </button>
+            <button
+              type="button"
+              className={order === "desc" ? "is-active" : ""}
+              onClick={() => changeOrder("desc")}
+              aria-pressed={order === "desc"}
+            >
+              {sort === "title"
+                ? t("pages.library.sortDescAlpha")
+                : t("pages.library.sortDescDate")}
+            </button>
+          </div>
+        </FilterSection>
 
-          {(
+        {(
+          [
             [
-              ["audio", t("pages.library.audioLanguage"), languageFacets?.audio, audioLangs],
-              ["subs", t("pages.library.subtitleLanguage"), languageFacets?.subtitle, subtitleLangs],
-            ] as const
-          ).map(([which, heading, facets, selected]) => {
-            const options = languageOptions(facets, [...selected]);
-            return (
-              <FilterSection key={which} title={heading} data-language-filter={which}>
-                {options.length === 0 ? (
-                  <p>{t("pages.library.noLanguages")}</p>
-                ) : (
-                  <div className="tv-filter-choice-grid">
-                    {options.map((option) => (
-                      <button
-                        key={option.code}
-                        type="button"
-                        className={selected.includes(option.code) ? "is-active" : ""}
-                        onClick={() => changeLanguages(which, toggleLanguage(selected, option.code))}
-                        aria-pressed={selected.includes(option.code)}
-                      >
-                        {option.count === null ? option.name : `${option.name} · ${option.count}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </FilterSection>
-            );
-          })}
-          {audioLangs.length + subtitleLangs.length > 0 ? (
-            <FilterSection>
-              <div className="tv-filter-choice-grid">
-                <button type="button" onClick={clearLanguages}>
-                  {t("pages.library.clearLanguages")}
-                </button>
-              </div>
+              "audio",
+              t("pages.library.audioLanguage"),
+              languageFacets?.audio,
+              audioLangs,
+            ],
+            [
+              "subs",
+              t("pages.library.subtitleLanguage"),
+              languageFacets?.subtitle,
+              subtitleLangs,
+            ],
+          ] as const
+        ).map(([which, heading, facets, selected]) => {
+          const options = languageOptions(facets, [...selected]);
+          return (
+            <FilterSection
+              key={which}
+              title={heading}
+              data-language-filter={which}
+            >
+              {options.length === 0 ? (
+                <p>{t("pages.library.noLanguages")}</p>
+              ) : (
+                <div className="tv-filter-choice-grid">
+                  {options.map((option) => (
+                    <button
+                      key={option.code}
+                      type="button"
+                      className={
+                        selected.includes(option.code) ? "is-active" : ""
+                      }
+                      onClick={() =>
+                        changeLanguages(
+                          which,
+                          toggleLanguage(selected, option.code),
+                        )
+                      }
+                      aria-pressed={selected.includes(option.code)}
+                    >
+                      {option.count === null
+                        ? option.name
+                        : `${option.name} · ${option.count}`}
+                    </button>
+                  ))}
+                </div>
+              )}
             </FilterSection>
-          ) : null}
+          );
+        })}
+        {audioLangs.length + subtitleLangs.length > 0 ? (
+          <FilterSection>
+            <div className="tv-filter-choice-grid">
+              <button type="button" onClick={clearLanguages}>
+                {t("pages.library.clearLanguages")}
+              </button>
+            </div>
+          </FilterSection>
+        ) : null}
       </FiltersDrawer>
 
       {sort === "title" ? (
-        <nav className="tv-alphabet" aria-label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}>
+        <nav
+          className="tv-alphabet"
+          aria-label={t("pages.library.jumpThrough", {
+            plural: plural.toLowerCase(),
+          })}
+        >
           {alphabet.map((letter) => (
             <button
               key={letter}
@@ -1298,7 +1467,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               className={activeLetter === letter ? "is-active" : ""}
               onClick={() => void jumpToLetter(letter)}
               aria-current={activeLetter === letter ? "true" : undefined}
-              aria-label={letter === "#" ? t("pages.library.numbersAndSymbols") : letter}
+              aria-label={
+                letter === "#" ? t("pages.library.numbersAndSymbols") : letter
+              }
             >
               <span>{jumpingLetter === letter ? "·" : letter}</span>
             </button>
@@ -1330,7 +1501,6 @@ interface LibraryTitleCardProps {
   itemProps: MediaItemProps;
   artworkEnabled: boolean;
 }
-
 
 interface LibraryChunkProps {
   items: Work[];
@@ -1399,7 +1569,7 @@ const LibraryChunk = memo(
           onCapture={onCapture}
           itemProps={itemProps}
           artworkEnabled={index >= artworkFrom && index < artworkTo}
-        />
+        />,
       );
     }
     return <>{cards}</>;
@@ -1417,7 +1587,7 @@ const LibraryChunk = memo(
     prev.onCapture === next.onCapture &&
     prev.itemProps === next.itemProps &&
     prev.artworkFrom === next.artworkFrom &&
-    prev.artworkTo === next.artworkTo
+    prev.artworkTo === next.artworkTo,
 );
 
 /**
@@ -1452,7 +1622,7 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
   });
   const linkState = useMemo(
     () => ({ backTo: routeBase, navigationOrigin }),
-    [routeBase, navigationOrigin]
+    [routeBase, navigationOrigin],
   );
   return (
     <Link
@@ -1504,4 +1674,3 @@ const LibraryTitleCard = memo(function LibraryTitleCard({
     </Link>
   );
 });
-

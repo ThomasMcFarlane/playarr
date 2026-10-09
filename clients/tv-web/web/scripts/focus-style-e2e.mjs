@@ -73,6 +73,17 @@ const readStyle = (page) => page.evaluate(() => {
   };
 });
 
+/** A card's lift is a transition: poll up to 2 s for it so a late frame is not read as "no lift". */
+const settled = async (page) => {
+  let s = null;
+  for (let i = 0; i < 20; i += 1) {
+    s = await snapshot(page);
+    if (s && s.ty <= -4) break;
+    await page.waitForTimeout(100);
+  }
+  return s;
+};
+
 const restBackground = (page, selector) => page.evaluate((s) => {
   const el = document.querySelector(s);
   return el ? getComputedStyle(el).backgroundColor : null;
@@ -107,7 +118,7 @@ for (const theme of THEMES) {
     await page.waitForTimeout(1500);
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(700);
-    expectCard("home card", await snapshot(page));
+    expectCard("home card", await settled(page));
 
     // Library grid card.
     await page.goto(`${base}/series`);
@@ -115,7 +126,7 @@ for (const theme of THEMES) {
     await page.waitForTimeout(1500);
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(700);
-    expectCard("library grid card", await snapshot(page));
+    expectCard("library grid card", await settled(page));
 
     // Calendar cards in every view (agenda rows, week entries, month chips): the card is the visible box and carries the
     // shadow itself; focus is the shared lift, never a ring or a white border.
@@ -135,7 +146,7 @@ for (const theme of THEMES) {
         await page.focus(".calendar-chip, .calendar-entry");
       }
       await page.waitForTimeout(900);
-      const chip = await snapshot(page);
+      const chip = await settled(page);
       expectCard(`calendar ${view} card`, chip, { selfShadow: true });
       const border = await page.evaluate(() => {
         const el = document.activeElement;
