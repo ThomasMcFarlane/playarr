@@ -4561,10 +4561,31 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   right: clamp(8px, calc(1 * var(--vw)), 22px);
   height: min(calc(66 * var(--viewport-unit)), 720px);
   display: flex;
-  flex-flow: column wrap;
-  align-content: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  /* One column always. When the 44px letters do not fit, the column scrolls (shared edge fade, useScrollEdges). */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 6px;
+  scroll-padding-block: 22px;
   transform: translateY(-50%);
+}
+
+.tv-alphabet::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe centring: auto margins centre a short column but never push the first letter out of reach. */
+.tv-alphabet > button:first-child {
+  margin-top: auto;
+}
+
+.tv-alphabet > button:last-child {
+  margin-bottom: auto;
 }
 
 .tv-alphabet button {
@@ -4980,14 +5001,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
   --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
-  /* Alphabet rail: 44px targets in two columns on a tall stage, three on a short one (WCAG 2.5.5). */
-  --directory-alphabet-width: 88px;
-}
-
-@media (max-height: 960px) {
-  .tv-directory {
-    --directory-alphabet-width: 132px;
-  }
+  /* Alphabet rail: one column of 44px targets (WCAG 2.5.5) plus 6px padding each side; it scrolls when the letters do not fit. */
+  --directory-alphabet-width: 56px;
 }
 
 .tv-filter-launcher {
@@ -5760,7 +5775,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   top: clamp(214px, calc(25 * var(--viewport-unit)), 286px);
   width: auto;
   height: min(calc(64 * var(--viewport-unit)), 690px);
-  align-items: center;
   transform: none;
 }
 
