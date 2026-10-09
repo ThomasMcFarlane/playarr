@@ -50,9 +50,9 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
    Input: the Vega CLI; on the virtual device, `inputd-cli` (full command set after `vsm developer-mode enable`).
 4. **Legacy Fire OS.** Android based, so the Android emulator and `adb` apply. An Amazon-specific emulator image: ❓
    unverified. Reference only.
-5. **iOS and tvOS.** Xcode includes iPhone and Apple TV simulators; a real device needs a signing team, and Developer Mode
+5. **iOS and tvOS.** Xcode includes iPhone and Apple TV simulators; a real device needs a development signing team, and Developer Mode
    on iOS ([running in Simulator or on a device](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device)).
-   Input: XCUITest, `xcrun simctl`. TestFlight distributes builds to real devices.
+   Input: XCUITest, `xcrun simctl`.
 6. **Roku.** No emulator or simulator; testing is on physical devices only
    ([automated channel testing](https://developer.roku.com/docs/developer-program/dev-tools/automated-channel-testing/automated-testing-overview.md)).
    Real device: Developer Mode, sideload through the developer installer. Input: ECP, or the Roku WebDriver server (needs
@@ -71,12 +71,10 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
    behaviour ([simulator](https://webostv.developer.lge.com/develop/tools/simulator-introduction)). Real TV: Developer
    Mode app from the LG Content Store. Input and debugging: the `ares-*` CLI
    ([CLI introduction](https://webostv.developer.lge.com/develop/tools/webos-tv-cli-introduction)).
-9. **VIDAA.** A real Hisense VIDAA TV works: Playarr is installed and signed in on one. VIDAA's official emulator or
-   simulator (if any) and its developer documentation sit behind the gated developer portal, so both are ❓ unverified;
-   VIDAA's web app guide covers remote debugging but is marked confidential
-   ([WebApp development guide](https://www.vidaa.com/wp-content/uploads/2020/12/WebApp_Development_Guide_for_VIDAA.pdf)).
-   Third-party guides describe sideloading a URL through the TV's browser; unofficial. A desktop browser is not a vendor
-   method.
+9. **VIDAA.** Run and test on a real Hisense VIDAA TV: Playarr is installed and signed in on one. Install by sideloading
+   the hosted web client's URL through the TV's browser debug install page (third-party guide, unofficial). Debug with the
+   TV's remote-debugging mode. No public emulator or simulator found, so both are ❓ unverified. A desktop browser is not a
+   vendor method.
 10. **Xbox.** Dev Mode turns any retail console into a development console; deploy UWP apps from Visual Studio over the
    network with a signed-in user ([activation](https://learn.microsoft.com/windows/uwp/xbox-apps/devkit-activation),
    [environment setup](https://learn.microsoft.com/en-us/windows/uwp/xbox-apps/development-environment-setup)). UWP apps
