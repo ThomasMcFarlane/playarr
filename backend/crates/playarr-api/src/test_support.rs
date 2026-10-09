@@ -778,6 +778,10 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         live_events,
         calendar_cache: Arc::new(crate::calendar::CalendarCache::new()),
+        // No reuse in tests, so a test sees the files it just changed.
+        own_availability: Arc::new(crate::own_availability::OwnAvailabilityCache::new(
+            std::time::Duration::ZERO,
+        )),
         portability: Arc::new(crate::portability::ExportRegistry::new()),
         availability_event_repo: Arc::new(playarr_db::SqlxAvailabilityEventRepo::new(pool.clone())),
         folder_repo: Arc::new(playarr_db::SqlxFolderRepo::new(pool.clone())),

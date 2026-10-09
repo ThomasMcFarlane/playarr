@@ -1846,6 +1846,9 @@ async fn boot_api(
             playarr_db::SqlxCalendarSourceCacheRepo::new(pool.clone())
                 .with_write_queue(write_queue.clone()),
         )),
+        own_availability: Arc::new(playarr_api::own_availability::OwnAvailabilityCache::new(
+            playarr_api::own_availability::DEFAULT_TTL,
+        )),
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
         calendar_feed_token_repo,
         availability_event_repo,
