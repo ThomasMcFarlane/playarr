@@ -1610,12 +1610,21 @@ export function useNativeScrollRoot(): void {
 }
 
 /** Directional focus bridge for pre-auth surfaces without route-back handling. */
-export function useTvDirectionalNavigation(disabled = false): void {
+export function useTvDirectionalNavigation(disabled = false, onBack?: () => void): void {
+  // Read through a ref so a new callback identity each render never re-binds the listeners.
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
   useEffect(() => {
     if (disabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      handleDirectionalKeyDown(event);
+      if (handleDirectionalKeyDown(event)) return;
+      // The remote Back key does what the on-screen Back button does (audit A7). A dialog or open
+      // selector that already used the press has marked it handled.
+      if (!event.defaultPrevented && isBackKey(event) && onBackRef.current) {
+        event.preventDefault();
+        onBackRef.current();
+      }
     };
     const handlePointer = () => {
       document.body.dataset.inputMode = "pointer";

@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: with a minimised player active, Back now closes an open drawer, dialog or menu first and the mini player on the next press.
+- Web TV: Back and Escape work on the signed-out pages (Login, Sign up, Link, legal pages), matching the on-screen Back.
+- Web TV: the Playlists drawers close on Back even after focus has moved out of them.
 - Web TV: removing the focused Watchlist row (or any focused row that unmounts after input) hands focus to the next row instead of dropping it to the page body; only the first Watchlist row is the default focus.
 - Web TV: the Resume chooser, Server choice and Play-on-device dialogs return focus to the control that opened them.
 - Web TV: the player Cast button stays focusable while a cast attempt is pending, and its error message clears itself.

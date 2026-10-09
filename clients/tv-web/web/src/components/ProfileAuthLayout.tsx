@@ -16,6 +16,16 @@ export function authFocusBridgeDestination(
   return null;
 }
 
+/**
+ * Back for pages that show no on-screen Back button (Sign up, Link, the legal pages): one step back in
+ * history, or the app root when this page was opened directly (audit A7).
+ */
+export function defaultAuthBack(): void {
+  if (typeof window === "undefined") return;
+  if (window.history.length > 1) window.history.back();
+  else window.location.assign("/");
+}
+
 interface ProfileAuthLayoutProps {
   backLabel?: string;
   children: ReactNode;
@@ -31,7 +41,7 @@ export function ProfileAuthLayout({
   onBack,
   transitionFromProfiles = false,
 }: ProfileAuthLayoutProps) {
-  useTvDirectionalNavigation();
+  useTvDirectionalNavigation(false, onBack ?? defaultAuthBack);
   useNativeScrollRoot();
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
