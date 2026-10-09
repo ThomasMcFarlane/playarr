@@ -29,7 +29,7 @@ function Actions({ open, count, withNavigation, withLink }: Args) {
     <ShellActionColumnProvider>
       <div id="sb-create" hidden />
       <div id="sb-filters" hidden />
-      <div className="sb-pad">
+      <div className="sb-pad" style={{ paddingTop: 72 }}>{/* clear of the fixed action column on a phone */}
         <PageActions actions={actions} />
       </div>
     </ShellActionColumnProvider>

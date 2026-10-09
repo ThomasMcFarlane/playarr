@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
  *
  *  - Controls (buttons, pills, inputs, chips, selects, the profile chip, Back) show the single theme ring
  *    (`--page-focus-ring`: white in dark theme, the ink in light theme) with no fill, no glow and no scale.
- *  - Media cards (`.media-card`) show a soft shadow and an animated lift on FOCUS (`:focus-visible` and the virtual
- *    remote marker), never a ring or a fill. The pinned values come from commit de371253.
+ *  - Media cards (`.media-card`) show a soft shadow, an animated lift and a subtle red/pink glow ring (owner 2026-10-09) on FOCUS
+ *    (`:focus-visible` and the virtual remote marker), never an outline or a fill. The pinned values come from commit de371253.
  *
  * Every rule below fails on the next stray ring, fill or ringed card.
  */
@@ -152,7 +152,7 @@ describe("controls: ring only", () => {
   });
 });
 
-describe("media cards: shadow and lift, no ring", () => {
+describe("media cards: shadow, lift and glow ring, no outline", () => {
   const sources = (): { file: string; text: string }[] => {
     const out: { file: string; text: string }[] = [];
     const walk = (dir: string) => {
@@ -201,7 +201,11 @@ describe("media cards: shadow and lift, no ring", () => {
     expect(layout).toContain("--card-art-scale: 1.025;");
     expect(layout).toContain("--card-art-duration: 240ms;");
     expect(layout).toContain("--card-shadow-rest: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1);");
-    expect(layout).toContain("--card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2);");
+    expect(layout).toContain("--card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2), var(--card-glow);");
+    // Owner 2026-10-09: a subtle red/pink glow ring on card focus (WCAG 2.4.13), brand-strong in light, brand-ink in dark.
+    expect(layout).toContain("--card-glow-color: var(--brand-strong);");
+    expect(layout).toContain("--card-glow-color: var(--brand-ink);");
+    expect(layout).toMatch(/--card-glow: 0 0 0 3px var\(--card-glow-color\), 0 0 20px 4px/);
     const global = strip(read("styles/global.css")).replace(/\s+/g, " ");
     // Library grid, home and search variants.
     expect(global).toContain("transform: translateY(-5px) scale(1.015);");

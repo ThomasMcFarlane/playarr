@@ -1,5 +1,5 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import { mapWithLimit } from "../lib/mapWithLimit";
-import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
 import {
@@ -31,7 +31,6 @@ import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
-  isNavigationLayerRestoring,
   navigationOriginFromState,
   useNavigationLayer,
 } from "../lib/navigationLayer";
@@ -46,6 +45,7 @@ import {
   indexWatchProgressByWork,
   WatchStateOverlay,
 } from "../components/WatchStateOverlay";
+import { RailStack, centreTrackInStack } from "../components/tv/RailStack";
 import {
   TvMediaTrack,
   TvRailSurface,
@@ -128,19 +128,6 @@ function orderPlaylistTracks(
     );
     return order === "asc" ? comparison : -comparison;
   });
-}
-
-function centreTrack(
-  container: HTMLElement,
-  section: HTMLElement,
-  behaviour: ScrollBehavior
-): void {
-  const target =
-    section.offsetTop + section.offsetHeight / 2 - container.clientHeight / 2;
-  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-  const top = Math.max(0, Math.min(maxScrollTop, target));
-  if (behaviour === "smooth") smoothScrollTo(container, { top });
-  else setScrollInstant(container, { top });
 }
 
 function playlistRoute(
@@ -601,7 +588,7 @@ export function PlaylistsPage() {
           section.querySelector(".tv-home-card")
       ) ?? sections.find((section) => section.querySelector(".tv-home-card"));
     if (!container || !targetSection) return;
-    centreTrack(container, targetSection, "auto");
+    centreTrackInStack(targetSection, { animate: false });
     focusedTrackRef.current = targetSection.dataset.tvTrackId ?? null;
   }, [
     activeTrackId,
@@ -756,21 +743,10 @@ export function PlaylistsPage() {
     );
   }
 
-  function focusFromTrack(
-    trackId: string,
-    itemId: string,
-    section: HTMLElement
-  ) {
-    const enteredNewTrack = focusedTrackRef.current !== trackId;
+  // RailStack centres the track that takes focus; this only records the selection.
+  function focusFromTrack(trackId: string, itemId: string) {
     focusedTrackRef.current = trackId;
     selectFromTrack(trackId, itemId);
-    if (!enteredNewTrack || isNavigationLayerRestoring()) return;
-    window.requestAnimationFrame(() => {
-      const container = tracksRef.current;
-      if (container && section.isConnected) {
-        centreTrack(container, section, "smooth");
-      }
-    });
   }
 
   function updatePlaylistFilters(
@@ -1200,56 +1176,45 @@ export function PlaylistsPage() {
         ],
       }}
     >
-      <aside
+      <DetailsPanel
         className="tv-home-feature tv-playlist-feature"
         key={`playlist-feature-${selectedDetailItem?.id ?? featureTrack?.playlist.id}`}
         aria-hidden={drawer ? true : undefined}
-      >
-        <p className="tv-provider">
-          {featureTrack
-            ? `${t(
-                playlistMediaTypeKey(featureTrack.playlist.media_type)
-              )} · ${
+        eyebrow={
+          featureTrack
+            ? `${t(playlistMediaTypeKey(featureTrack.playlist.media_type))} · ${
                 featureTrack.playlist.is_system
                   ? t("pages.playlists.sharedPlaylist")
                   : t("pages.playlists.yourPlaylist")
               }`
-            : t("pages.playlists.yourCollection")}
-        </p>
-        <h2>{featureTitle}</h2>
-        <p>{featureOverview}</p>
-        {editablePlaylist && !editablePlaylist.is_system ? (
-          <div className="tv-playlist-feature-actions">
-            <button
-              type="button"
-              onClick={(event) =>
-                playlistContext.openEdit(editablePlaylist, event.currentTarget)
-              }
-            >
-              <span aria-hidden="true">✎</span>
-              <strong>{t("components.playlistContextMenu.edit")}</strong>
-            </button>
-            <button
-              type="button"
-              className="is-delete"
-              onClick={(event) =>
-                playlistContext.openDelete(
-                  editablePlaylist,
-                  event.currentTarget
-                )
-              }
-            >
-              <span aria-hidden="true">−</span>
-              <strong>{t("components.playlistContextMenu.delete")}</strong>
-            </button>
-          </div>
-        ) : null}
-      </aside>
+            : t("pages.playlists.yourCollection")
+        }
+        title={featureTitle}
+        overview={featureOverview}
+        actions={
+          editablePlaylist && !editablePlaylist.is_system ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={(event) => playlistContext.openEdit(editablePlaylist, event.currentTarget)}
+              >
+                {t("components.playlistContextMenu.edit")}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={(event) => playlistContext.openDelete(editablePlaylist, event.currentTarget)}
+              >
+                {t("components.playlistContextMenu.delete")}
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {isDetail ? (
-        <TvRailSurface
+        <RailStack
           ref={tracksRef}
-          mode="vertical-tracks"
+          spacing="related"
           scrollKey={`playlists:detail:${selectedPlaylist?.playlist.id ?? requestedPlaylistId}`}
           ariaLabel={t("pages.playlists.tracksAriaLabel", {
             name: selectedPlaylist?.playlist.name ?? t("pages.playlists.playlistFallback"),
@@ -1295,7 +1260,7 @@ export function PlaylistsPage() {
               description={t("pages.playlists.playlistUnavailableDescription")}
             />
           )}
-        </TvRailSurface>
+        </RailStack>
       ) : (
         <TvRailSurface
           className={`tv-rail-panel tv-library-grid-panel is-screen artwork-medium tv-playlist-directory-panel`}

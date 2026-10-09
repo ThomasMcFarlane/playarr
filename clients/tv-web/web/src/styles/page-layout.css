@@ -19,7 +19,7 @@
   --stage-rail-width: 62%;
   --page-header-top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
   --page-end: clamp(24px, calc(4 * var(--vw)), 96px);
-  --page-control-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
+  --page-control-height: clamp(44px, calc(2.8 * var(--vw)), 50px);
   --action-pill-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
   --action-pill-height: clamp(52px, calc(5.2 * var(--vw)), 72px);
   --action-pill-radius: 14px;
@@ -54,7 +54,10 @@
   --card-art-scale: 1.025;
   --card-art-duration: 240ms;
   --card-shadow-rest: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1);
-  --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2);
+  --card-glow-color: var(--brand-strong);
+  /* Owner 2026-10-09: a subtle red/pink glow ring on card focus (WCAG 2.4.13: a 3px ring, 3:1 against the unfocused state). */
+  --card-glow: 0 0 0 3px var(--card-glow-color), 0 0 20px 4px color-mix(in srgb, var(--card-glow-color) 45%, transparent);
+  --card-shadow-focus: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2), var(--card-glow);
   /* The scroll-edge fade (the rail-panel glow). */
   --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
   --page-edge-fade-floor: 0.3;
@@ -62,6 +65,7 @@
 
 :root[data-theme="dark"] {
   --focus-ring-color: #ffffff;
+  --card-glow-color: var(--brand-ink);
 }
 
 /* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */
@@ -163,7 +167,7 @@
 
 .app-clock-date {
   max-width: 10rem;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.52rem, calc(0.58 * var(--vw)), 0.72rem);
   font-weight: 640;
   letter-spacing: 0.04em;
@@ -206,8 +210,8 @@
 .tv-library-heading > .page-header-title-block > span {
   padding-left: var(--page-header-gap);
   border-left: 1px solid var(--line-strong);
-  color: var(--ink-muted);
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
+  color: var(--ink);
+  font-size: clamp(0.62rem, calc(0.58 * var(--vw)), 0.72rem);
   font-weight: 680;
   letter-spacing: 0.045em;
   text-transform: uppercase;
@@ -274,9 +278,9 @@
     display: none;
   }
   .tv-page-back {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
   }
 }
 
@@ -740,7 +744,7 @@ body[data-input-mode="remote"] .action-pill {
 
 .page-header-detail.is-section small {
   overflow: hidden;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.58rem, calc(0.66 * var(--vw)), 0.76rem);
   font-weight: 480;
   letter-spacing: 0;

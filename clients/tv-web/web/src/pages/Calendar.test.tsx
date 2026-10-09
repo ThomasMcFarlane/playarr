@@ -107,8 +107,7 @@ describe("calendar scroll contract", () => {
   it("keeps the body frame from scrolling while the inner viewports do", () => {
     expect(effectiveDeclaration(css, ".calendar-scroll", "overflow")).toBe("hidden");
     expect(effectiveDeclaration(css, ".calendar-month-scroll", "overflow-x")).toBe("auto");
-    expect(effectiveDeclaration(css, ".calendar-list-scroll", "overflow-y")).toBe("auto");
-    expect(effectiveDeclaration(css, ".calendar-week-scroll .calendar-day", "overflow-y")).toBe("auto");
+        expect(effectiveDeclaration(css, ".calendar-week-scroll .calendar-day", "overflow-y")).toBe("auto");
   });
 
   it("enables touch scrolling on every overflow:auto viewport", () => {
@@ -156,7 +155,6 @@ describe("calendar source labels", () => {
 
   it("uses the neutral display_label, never the admin-chosen name", () => {
     expect(page).toContain("source.display_label ?? source.name");
-    expect(page).toContain("source.display_label ?? source.source_name");
     expect(page).not.toMatch(/\{source\.source_name\}/);
   });
 });

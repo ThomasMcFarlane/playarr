@@ -45,7 +45,6 @@ import {
 } from "../lib/navigationLayer";
 import { rememberWorks } from "../lib/knownWorks";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
   formatLanguageParam,
@@ -53,7 +52,7 @@ import {
   parseLanguageParam,
   toggleLanguage,
 } from "../lib/languageFilters";
-import { TvRailSurface } from "../components/tv/TvStage";
+import { ListPanel } from "../components/tv/ListPanel";
 import { useDwellPrefetch } from "../lib/prefetch";
 import { createPreviewStore } from "../lib/previewStore";
 import { gridNeighbours } from "../lib/detailNeighbours";
@@ -249,11 +248,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const gridMetricsRef = useRef({ cols: 3, rowHeight: 180 });
   const mountedEndRef = useRef(mountedEnd);
   mountedEndRef.current = mountedEnd;
-  useScrollEdges(
-    gridRef,
-    view === "cover-flow" ? "horizontal" : "vertical",
-    `${kind}:${view}:${artworkSize}:${items?.length ?? 0}`
-  );
   const coverflowProfile = useCoverflowMotion(
     gridRef,
     view === "cover-flow",
@@ -1083,48 +1077,50 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     >
       <LibraryPreview store={previewStore} fallback={selected} singular={singular} />
 
-      <TvRailSurface
-        className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}`}
-        mode="content"
+      <ListPanel
+        panelClassName={`is-${view} artwork-${artworkSize}`}
         ariaLabel={t("pages.library.railAriaLabel", { plural, collectionNoun })}
+        scrollKey={`library:${kind}:grid`}
+        refreshKey={`${kind}:${view}:${artworkSize}:${items.length}`}
+        axis={view === "cover-flow" ? "horizontal" : "vertical"}
+        gridRef={gridRef}
+        gridProps={{
+          onScroll: updateActiveLetter,
+          onFocus: handleGridFocus,
+          "data-library-count": items.length,
+          "aria-busy": refreshing,
+        }}
+        overlay={
+          refreshing ? (
+            <span className="tv-library-refreshing" role="status" aria-label={t("pages.library.updatingLibrary")}>
+              <span className="tv-mini-loader" aria-hidden="true" />
+            </span>
+          ) : null
+        }
+        contentStyle={(() => {
+          // Only additive bottom spacer when more rows exist off-mount.
+          // Never write paddingTop: 0 — that wipes --library-rail-top.
+          if (view === "cover-flow") return undefined;
+          const cols = Math.max(1, gridMetricsRef.current.cols);
+          const rowHeight = gridMetricsRef.current.rowHeight;
+          const spacerBottom = Math.max(
+            0,
+            (Math.ceil(items.length / cols) - Math.ceil(renderWindow.end / cols)) * rowHeight
+          );
+          if (spacerBottom <= 0) return undefined;
+          const style: CSSProperties = {
+            paddingBottom: `calc(var(--library-rail-bottom) + ${spacerBottom}px)`,
+          };
+          return style;
+        })()}
+        footer={
+          loadMoreError ? (
+            <button type="button" className="tv-inline-error" onClick={() => void appendNextPage().catch(() => undefined)}>
+              {t("pages.library.retryLoadMore")}
+            </button>
+          ) : null
+        }
       >
-        {refreshing ? (
-          <span className="tv-library-refreshing" role="status" aria-label={t("pages.library.updatingLibrary")}>
-            <span className="tv-mini-loader" aria-hidden="true" />
-          </span>
-        ) : null}
-        <div
-          className="tv-title-grid"
-          ref={gridRef}
-          onScroll={updateActiveLetter}
-          onFocus={handleGridFocus}
-          data-tv-scroll-container
-          data-tv-scroll-axis={view === "cover-flow" ? "horizontal" : "vertical"}
-          data-navigation-scroll-key={`library:${kind}:grid`}
-          data-library-count={items.length}
-          aria-busy={refreshing}
-        >
-          <div
-            className="tv-title-grid-content"
-            style={(() => {
-              // Only additive bottom spacer when more rows exist off-mount.
-              // Never write paddingTop: 0 — that wipes --library-rail-top.
-              if (view === "cover-flow") return undefined;
-              const cols = Math.max(1, gridMetricsRef.current.cols);
-              const rowHeight = gridMetricsRef.current.rowHeight;
-              const spacerBottom = Math.max(
-                0,
-                (Math.ceil(items.length / cols) -
-                  Math.ceil(renderWindow.end / cols)) *
-                  rowHeight
-              );
-              if (spacerBottom <= 0) return undefined;
-              const style: CSSProperties = {
-                paddingBottom: `calc(var(--library-rail-bottom) + ${spacerBottom}px)`,
-              };
-              return style;
-            })()}
-          >
             {view === "cover-flow"
               ? items.map((work, index) => {
                   const letter = letters[index] ?? workLetter(work);
@@ -1178,19 +1174,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 <span className="tv-mini-loader" aria-label={t("pages.library.loadingMoreTitles")} />
               ) : null}
             </div>
-          </div>
-        </div>
-
-        {loadMoreError && (
-          <button
-            type="button"
-            className="tv-inline-error"
-            onClick={() => void appendNextPage().catch(() => undefined)}
-          >
-            {t("pages.library.retryLoadMore")}
-          </button>
-        )}
-      </TvRailSurface>
+      </ListPanel>
 
       <FiltersDrawer
         id={`${kind}-library-filters`}

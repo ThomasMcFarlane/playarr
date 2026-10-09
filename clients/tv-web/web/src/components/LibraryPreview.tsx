@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ImageKind, Work } from "@playarr-tv/api-client";
+import { DetailsPanel } from "./DetailsPanel";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { PreviewStore } from "../lib/previewStore";
@@ -28,16 +29,19 @@ export function LibraryPreview({
   const year = yearRangeLabel(work);
   const runtime = runtimeLabel(useFocusedDetail(work.id), t);
   return (
-    <aside className="tv-library-preview">
-      <p className="tv-provider">{work.genres[0] ?? singular}</p>
-      <h2>{work.title}</h2>
-      <p className="tv-preview-meta">
-        {year !== null ? <span>{year}</span> : null}
-        <span>{work.genres.slice(0, 2).join(" · ") || singular}</span>
-        {runtime !== null ? <span data-detail-field="runtime">{runtime}</span> : null}
-      </p>
-      <p className="tv-preview-overview">{work.overview ?? t("pages.library.noSynopsis")}</p>
-    </aside>
+    <DetailsPanel
+      className="tv-library-preview"
+      eyebrow={work.genres[0] ?? singular}
+      title={work.title}
+      meta={
+        <>
+          {year !== null ? <span>{year}</span> : null}
+          <span>{work.genres.slice(0, 2).join(" · ") || singular}</span>
+          {runtime !== null ? <span data-detail-field="runtime">{runtime}</span> : null}
+        </>
+      }
+      overview={work.overview ?? t("pages.library.noSynopsis")}
+    />
   );
 }
 

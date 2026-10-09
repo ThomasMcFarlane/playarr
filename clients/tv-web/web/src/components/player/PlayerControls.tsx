@@ -403,7 +403,7 @@ export function PlayerControls({
   );
   const volumeTrackStyle = useMemo(
     () => ({
-      background: `linear-gradient(to right, var(--player-accent) ${volumePct}%, rgba(255,255,255,0.25) ${volumePct}%)`,
+      backgroundImage: `linear-gradient(to right, var(--player-accent) ${volumePct}%, rgba(255,255,255,0.25) ${volumePct}%)`,
     }),
     [volumePct]
   );

@@ -3,7 +3,7 @@
 //   node scripts/focus-style-e2e.mjs [--dist dir] [--theme light|dark] [--layout tv|desktop]
 //
 // In both themes at 1920x1080 and 1280x720:
-//  - media cards (Home rail card, library grid card, calendar chip) show NO outline and no fill when focused, lift upward
+//  - media cards (Home rail card, library grid card, calendar agenda, week and month cards) show NO outline and no fill when focused, draw the red/pink glow ring (owner 2026-10-09), lift upward
 //    by at least 4px and cast the focus shadow (on the art, or on the card itself when the card is the visible box);
 //  - controls (Back, the Filters pill, the search field) show the theme ring (white in dark theme, the ink in light theme),
 //    3px wide, with no fill change and no scale.
@@ -73,6 +73,17 @@ const readStyle = (page) => page.evaluate(() => {
   };
 });
 
+/** A card's lift is a transition: poll up to 2 s for it so a late frame is not read as "no lift". */
+const settled = async (page) => {
+  let s = null;
+  for (let i = 0; i < 20; i += 1) {
+    s = await snapshot(page);
+    if (s && s.ty <= -4) break;
+    await page.waitForTimeout(100);
+  }
+  return s;
+};
+
 const restBackground = (page, selector) => page.evaluate((s) => {
   const el = document.querySelector(s);
   return el ? getComputedStyle(el).backgroundColor : null;
@@ -98,7 +109,10 @@ for (const theme of THEMES) {
       if (!s) return;
       check(`${label} ${name}: no ring`, s.outlineStyle === "none" || s.outlineWidth === "0px", `${s.outlineStyle} ${s.outlineWidth}`);
       check(`${label} ${name}: lifts`, s.ty <= -4, `ty=${s.ty}`);
-      check(`${label} ${name}: casts the focus shadow`, /\b(24|26|22)px\b/.test(selfShadow ? s.shadow : s.artShadow), `shadow=${selfShadow ? s.shadow : s.artShadow}`);
+      const shadow = selfShadow ? s.shadow : s.artShadow;
+      const ring = /rgba?\((\d+), (\d+), (\d+)(?:, [\d.]+)?\) 0px 0px 0px (\d+(?:\.\d+)?)px/.exec(shadow ?? "");
+      check(`${label} ${name}: red/pink glow ring (2.4.13: >= 2px, red hue)`, !!ring && Number(ring[4]) >= 2 && Number(ring[1]) > Number(ring[2]) + 40, `shadow=${shadow}`);
+      check(`${label} ${name}: casts the focus shadow`, /\b(2[2-6])(\.\d+)?px\b/.test(selfShadow ? s.shadow : s.artShadow), `shadow=${selfShadow ? s.shadow : s.artShadow}`);
     };
 
     // Home: a rail card, focused with real keys.
@@ -107,7 +121,7 @@ for (const theme of THEMES) {
     await page.waitForTimeout(1500);
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(700);
-    expectCard("home card", await snapshot(page));
+    expectCard("home card", await settled(page));
 
     // Library grid card.
     await page.goto(`${base}/series`);
@@ -115,20 +129,45 @@ for (const theme of THEMES) {
     await page.waitForTimeout(1500);
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(700);
-    expectCard("library grid card", await snapshot(page));
+    expectCard("library grid card", await settled(page));
 
-    // Calendar chip (the card is the visible box: it carries the shadow itself).
-    await page.goto(`${base}/calendar`);
-    await page.waitForSelector(".calendar-chip, .calendar-entry");
-    await page.waitForTimeout(1500);
-    for (let i = 0; i < 8; i += 1) {
-      await page.keyboard.press("ArrowDown");
-      await page.waitForTimeout(250);
-      const focused = await page.evaluate(() => document.activeElement?.className ?? "");
-      if (/calendar-(chip|entry)/.test(String(focused))) break;
+    // Calendar cards in every view (agenda rows, week entries, month chips): the card is the visible box and carries the
+    // shadow itself; focus is the shared lift, never a ring or a white border.
+    for (const view of ["agenda", "week", "month"]) {
+      await page.goto(`${base}/calendar?view=${view}`);
+      await page.waitForSelector(".calendar-chip, .calendar-entry");
+      await page.waitForTimeout(1500);
+      for (let i = 0; i < 10; i += 1) {
+        await page.keyboard.press(view === "agenda" ? "ArrowDown" : "ArrowRight");
+        await page.waitForTimeout(250);
+        const focused = await page.evaluate(() => document.activeElement?.className ?? "");
+        if (/calendar-(chip|entry)/.test(String(focused))) break;
+      }
+      if (!/calendar-(chip|entry)/.test(await page.evaluate(() => String(document.activeElement?.className ?? "")))) {
+        // Keyboard focus lands on a card (month chips sit behind the header controls in the arrow order).
+        await page.keyboard.press("Shift");
+        await page.focus(".calendar-chip, .calendar-entry");
+      }
+      await page.waitForTimeout(900);
+      const chip = await settled(page);
+      expectCard(`calendar ${view} card`, chip, { selfShadow: true });
+      const border = await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const probe = document.createElement("i");
+        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--ink");
+        document.body.appendChild(probe);
+        const ink = getComputedStyle(probe).color;
+        probe.remove();
+        const seen = (w, c) => (parseFloat(w) > 0 ? c : "none");
+        return { ink, top: seen(cs.borderTopWidth, cs.borderTopColor), right: seen(cs.borderRightWidth, cs.borderRightColor), bottom: seen(cs.borderBottomWidth, cs.borderBottomColor), shadow: cs.boxShadow };
+      });
+      if (border) {
+        check(`${label} calendar ${view} card: no white border`, border.top !== border.ink && border.right !== border.ink && border.bottom !== border.ink, JSON.stringify(border));
+        check(`${label} calendar ${view} card: no inset ring`, !/inset/.test(border.shadow), border.shadow);
+      }
     }
-    const chip = await snapshot(page);
-    expectCard("calendar entry", chip, { selfShadow: true });
 
     // Controls, reached with Tab: Back, the Filters pill, and (search page) the search field.
     const controls = [

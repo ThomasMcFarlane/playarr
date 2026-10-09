@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { WorkDetail } from "@playarr-tv/api-client";
 import { useApiClient } from "./ApiClientProvider";
 import { focusedDetailsFor, type FocusedDetails } from "./focusedDetails";
@@ -23,6 +23,10 @@ export function useFocusedDetail(workId: string | undefined): WorkDetail | undef
     (listener: () => void) => (workId ? controller.subscribe(workId, listener) : () => undefined),
     [controller, workId]
   );
+  // A panel that shows an item the focus has not reached yet (the page's first paint) still reads the disk copy.
+  useEffect(() => {
+    if (workId) controller.hydrate(workId);
+  }, [controller, workId]);
   return useSyncExternalStore(
     subscribe,
     () => (workId ? controller.peek(workId)?.data : undefined),

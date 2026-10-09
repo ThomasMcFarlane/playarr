@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The shared rail stack (Home's rails, a show's seasons) centres the focused rail exactly, whatever keys got it there.
+// The shared rail stack (Home's rails, a show's seasons, a playlist and its sub-playlists) centres the focused rail exactly, whatever keys got it there.
 //
 // Owner bug (9 Oct 2026): on a series page, Down then Up overshot the rail until a Left/Right corrected it, because
 // the centre target was computed from a rail position mid-glide. After every sequence below (single presses, a
@@ -9,7 +9,7 @@
 //   node scripts/nav-rail-centre-e2e.mjs [--no-build] [--dist dir]
 import { boot } from "./e2e-common.mjs";
 
-const { check, open, finish } = await boot({ movies: 40, series: 12, seasons: 4, seasonEpisodes: 10 });
+const { check, open, finish } = await boot({ movies: 40, series: 12, seasons: 4, seasonEpisodes: 10, playlists: 4, playlistItems: 12, nestedPlaylists: true });
 
 const SEQUENCES = [
   ["Down", ["ArrowDown"], 0],
@@ -70,6 +70,7 @@ for (const size of [
   { width: 1280, height: 720 },
 ]) {
   await run("Home", "/", ".tv-home-rails", size);
+  await run("Playlist", "/playlists?playlist=00000000-0000-4000-8000-000000000100", ".tv-rail-surface.is-vertical-tracks", size);
   await run("Series", `/series/${seriesId}`, ".tv-series-browser", size);
 }
 await finish();
