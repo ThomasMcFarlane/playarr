@@ -337,7 +337,7 @@ try {
     }, { base: slowBase, userId: USER_ID });
     const page = await context.newPage();
     await page.goto(`${slowBase}/`);
-    await page.waitForSelector(".tv-home-card", { timeout: 15_000 });
+    await page.waitForSelector(".tv-home-card:not(.is-skeleton)", { timeout: 15_000 });
     await page.waitForTimeout(600);
     await press(page, "ArrowRight", 2);
     await page.waitForTimeout(500);

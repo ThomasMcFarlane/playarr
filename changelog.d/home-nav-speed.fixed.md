@@ -1,0 +1,3 @@
+- Web: Home rail changes start on the key press and settle in about 200 ms (they waited 370 ms for real focus before), and the left panel follows focus within a frame, in place, instead of 620 ms later with a replayed fade-in.
+- Web: Down then Up on a series page no longer overshoots the rail; Home, seasons, Cast and Similar titles share one rail stack with a small gap between related rails and a larger one between different rails.
+- Web: the Home loading skeleton is the rail stack itself, so it sits exactly where the loaded rails render.

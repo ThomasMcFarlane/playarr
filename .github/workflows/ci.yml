@@ -617,17 +617,19 @@ jobs:
   # built web client with the deterministic mock API of scripts/nav-perf.
   # ---------------------------------------------------------------------
   web-layout-parity:
-    # Three shards (measured 18.5 min as one job: 7.3 + 5.2 + 4.3 min of independent steps), each
-    # a separate runner; ci-required reads the combined result of the matrix under this job id.
+    # Four shards, each a separate runner; ci-required reads the combined result of the matrix under this job id.
+    # The nav steps alone measured ~14.6 min as one shard (run 37938948043: 18 scripts, 15 min timeout hit), so they
+    # are split by measured script time into nav-a (~7 min) and nav-b (~7.5 min). nav-b takes every nav-*-e2e script
+    # not listed under nav-a, so a new script is never skipped.
     name: web layout parity (${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.tv-web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [layout, drawer, nav]
+        shard: [layout, drawer, nav-a, nav-b]
     permissions:
       contents: read
     steps:
@@ -682,10 +684,21 @@ jobs:
         run: node scripts/edge-fade-e2e.mjs
 
       - name: Keyboard e2e (BACK keys, focus start and restore)
-        if: matrix.shard == 'nav'
+        if: startsWith(matrix.shard, 'nav-')
         working-directory: clients/tv-web/web
         run: |
-          for script in scripts/nav-*-e2e.mjs; do node "$script" --no-build --dist dist || exit 1; done
+          shard_a="nav-back nav-details nav-drawer-focus nav-focus nav-home-skeleton nav-home-speed nav-keys nav-layers nav-library-drawer nav-mobile-stage"
+          for script in scripts/nav-*-e2e.mjs; do
+            name=$(basename "$script" -e2e.mjs)
+            case " $shard_a " in *" $name "*) in_a=1 ;; *) in_a=0 ;; esac
+            want_a=0
+            [ "${{ matrix.shard }}" = nav-a ] && want_a=1
+            if [ "$in_a" = "$want_a" ]; then
+              echo "=== $name"; start=$SECONDS
+              node "$script" --no-build --dist dist || exit 1
+              echo "--- $name: passed ($((SECONDS - start))s)"
+            fi
+          done
 
       - name: Upload the diff images
         if: failure()
