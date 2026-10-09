@@ -1554,12 +1554,13 @@ async fn boot_api(
     // context gathering (`playarr_api::playback::
     // resolve_route_for_local_media_file`/`by_external_ref_playback_info_handler`,
     // §5.2) -- hence the clone before this `Arc` is moved into `catalog`.
-    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
-        Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> = Arc::new(
+        SqlxPeerLeafAvailabilityRepo::new(pool.clone()).with_write_queue(write_queue.clone()),
+    );
     let peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo> =
         Arc::new(SqlxPeerSourceInstanceRepo::new(pool.clone()));
     let peer_sync_state_repo: Arc<dyn PeerSyncStateRepo> =
-        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()));
+        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()).with_write_queue(write_queue.clone()));
     let sync_conflict_log_repo: Arc<dyn SyncConflictLogRepo> =
         Arc::new(SqlxSyncConflictLogRepo::new(pool.clone()));
     let peer_leaf_availability_repo_for_state = peer_leaf_availability_repo.clone();
@@ -1836,10 +1837,14 @@ async fn boot_api(
         peer_http,
         peer_transport_routes,
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
-        remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
+        remote_repo: Arc::new(
+            playarr_db::repo::SqlxRemoteRepo::new(pool.clone())
+                .with_write_queue(write_queue.clone()),
+        ),
         live_events,
         calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::persistent(
-            playarr_db::SqlxCalendarSourceCacheRepo::new(pool.clone()),
+            playarr_db::SqlxCalendarSourceCacheRepo::new(pool.clone())
+                .with_write_queue(write_queue.clone()),
         )),
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
         calendar_feed_token_repo,
@@ -2759,10 +2764,11 @@ async fn boot_worker(
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
-    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
-        Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> = Arc::new(
+        SqlxPeerLeafAvailabilityRepo::new(pool.clone()).with_write_queue(write_queue.clone()),
+    );
     let peer_sync_state_repo: Arc<dyn PeerSyncStateRepo> =
-        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()));
+        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()).with_write_queue(write_queue.clone()));
     let sync_conflict_log_repo: Arc<dyn SyncConflictLogRepo> =
         Arc::new(SqlxSyncConflictLogRepo::new(pool.clone()));
     // One shared `reqwest::Client` (an `Arc`-backed connection pool
