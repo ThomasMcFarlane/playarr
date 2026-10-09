@@ -164,10 +164,6 @@ pub struct Approval {
     pub decided_at: Option<chrono::DateTime<chrono::Utc>>,
     /// An approved grant is unusable at or after this time.
     pub grant_expires_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// `None` = unlimited uses within the grant window (content/time grants
-    /// are re-checked on every request).
-    pub max_uses: Option<u32>,
-    pub uses: u32,
     /// Extra watch seconds for a `Time`/`budget` grant.
     pub bonus_seconds: i64,
 }
@@ -186,5 +182,19 @@ mod retired_kind_tests {
             controls.approval_required,
             vec![ApprovalKind::Content, ApprovalKind::Time]
         );
+    }
+
+    #[test]
+    fn approval_ignores_retired_single_use_fields_from_older_peers() {
+        let approval: Approval = serde_json::from_str(
+            r#"{"id":"00000000-0000-0000-0000-000000000001",
+                "profile_user_id":"00000000-0000-0000-0000-000000000002",
+                "kind":"content","subject":"w","note":null,"status":"pending",
+                "requested_at":"2026-10-09T10:00:00Z","request_expires_at":"2026-10-09T10:15:00Z",
+                "decided_by":null,"decided_at":null,"grant_expires_at":null,
+                "max_uses":1,"uses":0,"bonus_seconds":0}"#,
+        )
+        .unwrap();
+        assert_eq!(approval.kind, ApprovalKind::Content);
     }
 }
