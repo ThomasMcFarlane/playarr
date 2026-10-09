@@ -172,6 +172,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A music album whose tracks have no cover art shows a basic initials placeholder (neutral tile, theme tokens) instead of an empty gap.
 - Storybook: a composition story for every page and settings section, and a test that fails when a component or page has no story.
 - Storybook: one interactive story with Controls for every shared component, using a fixture API client; the Request latency table scrolls with the keyboard.
 - CI builds and signs the Android (TV and phone) APK from every push to `main` and uploads it as a workflow artefact named `playarr-android-main-<version>-main.<commits>`, with a versionCode above every release so it installs over one without uninstalling.

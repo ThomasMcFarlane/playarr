@@ -11,6 +11,11 @@ interface MediaThumbnailArtworkProps {
   rootMargin?: string;
   positionMs?: number;
   /**
+   * Shown as a basic generated tile (initials on a neutral surface) when the server has no frame or cover art
+   * for this file. Without it a miss leaves `fallback` (or nothing) in place.
+   */
+  placeholderLabel?: string;
+  /**
    * The episode's own still, preferred over the extracted frame when the
    * catalogue says the source supplied one. Failure falls back to the frame
    * thumbnail, then to `fallback`.
@@ -157,6 +162,15 @@ function observeNearViewport(element: Element, onNear: () => void): () => void {
  * transient failures with capped backoff, so restoring a media mount repairs
  * an already-open page without a navigation or reload.
  */
+/** Up to two initials from a title; empty when it has no letters or digits. */
+export function placeholderInitials(label: string): string {
+  const words = label.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return words
+    .slice(0, 2)
+    .map((word) => Array.from(word)[0]!.toUpperCase())
+    .join("");
+}
+
 export function MediaThumbnailArtwork({
   mediaFileId,
   fallback,
@@ -165,18 +179,21 @@ export function MediaThumbnailArtwork({
   intersectionRootSelector,
   rootMargin = "0px 360px",
   positionMs,
+  placeholderLabel,
   still,
 }: MediaThumbnailArtworkProps) {
   const client = useApiClient();
   const containerRef = useRef<HTMLSpanElement>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
   const [source, setSource] = useState<string | null>(fallback);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     const cachedSource = mediaThumbnailCache(client).get(
       mediaThumbnailKey(mediaFileId, positionMs)
     )?.url;
     setSource(cachedSource ?? fallback);
+    setMissing(false);
     if (cachedSource) {
       setShouldLoad(true);
       return;
@@ -234,10 +251,15 @@ export function MediaThumbnailArtwork({
         setSource(record.url);
         return;
       }
-      if (record.missing) return;
+      if (record.missing) {
+        setMissing(true);
+        return;
+      }
       record.promise
         .then((url) => {
-          if (!cancelled && url) setSource(url);
+          if (cancelled) return;
+          if (url) setSource(url);
+          else setMissing(true);
         })
         .catch((error: unknown) => {
           if (cancelled) return;
@@ -279,6 +301,11 @@ export function MediaThumbnailArtwork({
   return (
     <span className={className} ref={containerRef}>
       {source ? <img src={source} alt="" /> : null}
+      {!source && missing && placeholderLabel ? (
+        <span className="media-art-placeholder" data-media-art-placeholder aria-hidden="true">
+          {placeholderInitials(placeholderLabel) || "\u266A"}
+        </span>
+      ) : null}
       {children}
     </span>
   );

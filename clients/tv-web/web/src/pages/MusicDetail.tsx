@@ -308,6 +308,7 @@ function AlbumCoverFlow({
                       mediaFileId={firstTrack.media_file_id}
                       positionMs={0}
                       fallback={null}
+                      placeholderLabel={album.album.title}
                       className="tv-music-album-art-fallback"
                     />
                   }

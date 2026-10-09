@@ -11971,3 +11971,18 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 [data-drawer-ghost] {
   pointer-events: none;
 }
+
+/* A file with no frame or cover art: initials on a neutral tile, so the gap reads as "no artwork" without a loud box. */
+.media-art-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: clamp(1.2rem, calc(3 * var(--vw)), 3rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  user-select: none;
+}
