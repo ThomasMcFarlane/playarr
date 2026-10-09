@@ -25,6 +25,8 @@ import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { AvailabilityLagNote } from "../components/AvailabilityLag";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
+import { knownWork } from "../lib/knownWorks";
+import { SkeletonBlock, SkeletonLines, SkeletonRails } from "../components/shell";
 import { CachedArtworkImage, PersonHeadshot, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { DownloadsIcon } from "../components/NavIcons";
@@ -1032,6 +1034,49 @@ function SeasonEpisodeTrack({
   );
 }
 
+/**
+ * The detail page while its data loads: the real frame (the same copy column and track surface as the loaded page, so
+ * every block sits where its final version will), filled from the card the viewer opened when it is known and with
+ * shimmer blocks for the rest.
+ */
+function DetailPending({ work, fallbackKind, label }: { work: Work | undefined; fallbackKind: "series" | "movie"; label: string }) {
+  const series = (work?.kind ?? fallbackKind) === "series";
+  return (
+    <>
+      <aside className="tv-detail-copy" role="status" aria-busy="true" aria-label={label}>
+        {work?.genres[0] ? (
+          <p className="tv-detail-kicker">{work.genres[0]}</p>
+        ) : (
+          <SkeletonBlock height="0.8rem" width="6rem" />
+        )}
+        {work ? (
+          <h2 className="tv-detail-title">{work.title}</h2>
+        ) : (
+          <div className="skeleton-detail-title" aria-hidden="true">
+            <SkeletonBlock height="3.4rem" width="min(18rem, 90%)" />
+            <SkeletonBlock height="3.4rem" width="min(12rem, 60%)" />
+          </div>
+        )}
+        <div className="tv-detail-meta" aria-hidden="true">
+          <SkeletonBlock height="0.8rem" width="12rem" />
+        </div>
+        <div className="skeleton-detail-synopsis" aria-hidden="true">
+          <SkeletonLines count={3} />
+        </div>
+        <div className="tv-detail-actions" aria-hidden="true">
+          <SkeletonBlock height="3.2rem" width="8rem" style={{ borderRadius: 999 }} />
+          <SkeletonBlock height="3.2rem" width="8rem" style={{ borderRadius: 999 }} />
+        </div>
+      </aside>
+      <TvRailSurface className={series ? "tv-series-browser" : "tv-movie-browser"} mode="content">
+        <div className="skeleton-detail-track" aria-hidden="true">
+          <SkeletonRails rails={series ? 2 : 1} cards={5} />
+        </div>
+      </TvRailSurface>
+    </>
+  );
+}
+
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
   const { t } = useLanguage();
@@ -1640,6 +1685,7 @@ export function WorkDetailPage() {
       search: location.search,
       t,
     });
+    const preview = knownWork(workId);
     const pendingSection = location.pathname.startsWith("/search/")
       ? t("shell.nav.search")
       : location.pathname.startsWith("/playlists/")
@@ -1654,9 +1700,18 @@ export function WorkDetailPage() {
         pageId="work-detail"
         className="tv-detail"
         ariaLabel={t("pages.workDetail.loadingTitleDetailsAriaLabel")}
+        backdrop={
+          preview
+            ? {
+                artKey: preview.id,
+                art: <CachedArtworkImage work={preview} kinds={["backdrop", "poster"]} alt="" fallback={<span>{preview.title}</span>} />,
+              }
+            : undefined
+        }
         header={{
           variant: "detail",
           title: pendingSection,
+          detail: preview?.title,
           back: {
             label: t("pages.workDetail.backTo", { destination: pendingBack.backLabel }),
             onBack: () => {
@@ -1677,9 +1732,17 @@ export function WorkDetailPage() {
                     description: t("pages.workDetail.titleDetailsUnavailableDescription"),
                   },
                 }
-              : { kind: "loading", skeleton: "detail", label: t("pages.workDetail.loadingDetails") }
+              : undefined
         }
-      />
+      >
+        {state.status === "error" || state.status === "empty" ? null : (
+          <DetailPending
+            work={preview}
+            fallbackKind={pendingBase === "/series" ? "series" : "movie"}
+            label={t("pages.workDetail.loadingDetails")}
+          />
+        )}
+      </PageLayout>
     );
   }
 

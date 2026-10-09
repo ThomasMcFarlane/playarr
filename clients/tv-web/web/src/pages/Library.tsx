@@ -41,6 +41,7 @@ import {
   isNavigationLayerRestoring,
   useNavigationLayer,
 } from "../lib/navigationLayer";
+import { rememberWorks } from "../lib/knownWorks";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -122,6 +123,10 @@ function orderWorks(items: Work[], sort: LibrarySort, order: SortOrder): Work[] 
   );
 }
 
+function sameWorkIds(a: Work[] | null, b: Work[]): boolean {
+  return a !== null && a.length === b.length && a.every((work, i) => work.id === b[i]!.id);
+}
+
 function afterTwoFrames(): Promise<void> {
   return new Promise((resolve) => {
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
@@ -166,15 +171,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   useDocumentTitle(plural);
 
   const client = useApiClient();
-  const [items, setItems] = useState<Work[] | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [initialError, setInitialError] = useState<string | null>(null);
   const [reloadAttempt, setReloadAttempt] = useState(0);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [activeLetter, setActiveLetter] = useState("#");
   const [jumpingLetter, setJumpingLetter] = useState<string | null>(null);
   // The open Filters panel lives in the URL (`?panel=filters`) so refresh and deep links restore it.
   const [panel, setPanel] = usePanelParam(["filters"] as const);
@@ -207,6 +207,21 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     }),
     [audioLangs, subtitleLangs]
   );
+  // Stale-while-revalidate on the very first render: a stored first page (Back, a revisit, a tab switch) is read
+  // here, not in an effect, so the page never paints a skeleton frame before content it already has.
+  const [seed] = useState(() => {
+    const stored = client.queries.peek<CatalogPage>(
+      libraryFirstPageKey(libraryFirstPageParams(kind, sort, order, languageParams))
+    );
+    if (!stored) return null;
+    const ordered = orderWorks(stored.data.items, sort, order);
+    return { items: ordered, total: stored.data.total ?? ordered.length };
+  });
+  const [items, setItems] = useState<Work[] | null>(seed?.items ?? null);
+  const [total, setTotal] = useState<number | null>(seed?.total ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(seed?.items[0]?.id ?? null);
+  const [refreshing, setRefreshing] = useState(Boolean(seed));
+  const [activeLetter, setActiveLetter] = useState(seed?.items[0] ? workLetter(seed.items[0]) : "#");
   const [languageFacets, setLanguageFacets] = useState<LanguageFacets | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   // Expand-only virtual mount: grow DOM prefix as focus moves, never shrink.
@@ -214,8 +229,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const itemsRef = useRef<Work[]>([]);
-  const totalRef = useRef<number | null>(null);
+  const itemsRef = useRef<Work[]>(seed?.items ?? []);
+  const totalRef = useRef<number | null>(seed?.total ?? null);
   const requestRef = useRef<Promise<Work[]> | null>(null);
   const generationRef = useRef(0);
   const loadedKindRef = useRef(kind);
@@ -251,9 +266,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       const orderedItems = orderWorks(stored.data.items, sort, order);
       itemsRef.current = orderedItems;
       totalRef.current = stored.data.total ?? orderedItems.length;
-      setItems(orderedItems);
+      // The first render already holds this copy (see `seed`): keep that array so nothing re-renders for it.
+      setItems((current) => (sameWorkIds(current, orderedItems) ? current : orderedItems));
       setTotal(totalRef.current);
-      setSelectedId(orderedItems[0]?.id ?? null);
+      setSelectedId((current) => (current && orderedItems.some((work) => work.id === current) ? current : orderedItems[0]?.id ?? null));
       previewStore.set(null);
       setActiveLetter(orderedItems[0] ? workLetter(orderedItems[0]) : "#");
     } else {
@@ -464,6 +480,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     updateView({ order: nextOrder });
   }
 
+  useEffect(() => rememberWorks(items), [items]);
   const itemCount = items?.length ?? 0;
   // Expand-only: start fixed at 0 so we never remount sliding windows mid-hold.
   const renderWindow = useMemo(() => {
