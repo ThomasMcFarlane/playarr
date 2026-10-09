@@ -178,7 +178,8 @@ function animateAxis(
   el: HTMLElement,
   axis: Axis,
   target: number,
-  profile?: ScrollProfile
+  profile?: ScrollProfile,
+  fixedDuration?: number
 ): void {
   if (!profile && axis === "left" && owned.has(el)) return;
   const current = read(el, axis);
@@ -212,8 +213,9 @@ function animateAxis(
         ? profile.repeatMs
         : profile.retargetMs
     : running
-      ? retargetDuration(sinceLast)
-      : durationForDistance(target - current);
+      ? // A caller-chosen duration shortens a fresh glide; a retarget is never slower than the repeat rules.
+        Math.min(fixedDuration ?? Infinity, retargetDuration(sinceLast))
+      : (fixedDuration ?? durationForDistance(target - current));
   const travel = target - current;
   // From rest the glide opens at `restSlope`; mid-glide it keeps the speed it had, so a retarget never jolts. A
   // same-direction retarget never opens slower than linear, so a held key is not left trailing the focus.
@@ -243,10 +245,11 @@ function animateAxis(
 export function smoothScrollTo(
   el: HTMLElement,
   target: { left?: number; top?: number },
-  profile?: ScrollProfile
+  profile?: ScrollProfile,
+  options: { duration?: number } = {}
 ): void {
-  if (target.left !== undefined) animateAxis(el, "left", target.left, profile);
-  if (target.top !== undefined) animateAxis(el, "top", target.top, profile);
+  if (target.left !== undefined) animateAxis(el, "left", target.left, profile, options.duration);
+  if (target.top !== undefined) animateAxis(el, "top", target.top, profile, options.duration);
 }
 
 /**

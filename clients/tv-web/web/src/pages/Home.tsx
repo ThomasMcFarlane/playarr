@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -27,6 +28,8 @@ import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
+import { createPreviewStore, type PreviewStore } from "../lib/previewStore";
+import { useRemoteMarkerFollow } from "../lib/remoteMarkerFollow";
 import { useDwellPrefetch } from "../lib/prefetch";
 import { railNeighbours, railsByDistance } from "../lib/detailNeighbours";
 import { useFocusedDetailsController } from "../lib/useFocusedDetails";
@@ -39,7 +42,8 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useHomeView, type HomeViewPreference } from "../lib/homeView";
 import { rememberWorks } from "../lib/knownWorks";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
-import { TvMediaTrack, TvRailSurface } from "../components/tv/TvStage";
+import { TvMediaTrack } from "../components/tv/TvStage";
+import { RailStack, centreTrackInStack } from "../components/tv/RailStack";
 import { ResumeChooserModal } from "../components/ResumeChooserModal";
 import {
   resumePlayerState,
@@ -96,19 +100,13 @@ const EMPTY_WORKS: Work[] = [];
 /** Longest Home holds its first render for the On Deck detail calls. */
 const ON_DECK_WAIT_MS = 2500;
 
-function centreHomeRail(
-  container: HTMLElement,
-  section: HTMLElement,
-  animate: boolean
-): void {
-  const target =
-    section.offsetTop + section.offsetHeight / 2 - container.clientHeight / 2;
-  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-  const top = Math.max(0, Math.min(maxScrollTop, target));
-  // Eased, interruptible, retargeting scroll (shared with remote navigation);
-  // the focused rail glides to a stable vertical anchor at the viewport centre.
-  if (animate) smoothScrollTo(container, { top });
-  else setScrollInstant(container, { top });
+/** How long focus must rest before the page-level selection (backdrop art, prefetch) follows it under remote keys. */
+const REMOTE_SELECT_SETTLE_MS = 140;
+
+/** What the left panel shows: a work as it sits in one rail (the primary rail may carry an On Deck episode). */
+interface HomeFocus {
+  rail: HomeRailId;
+  work: Work;
 }
 
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
@@ -155,6 +153,9 @@ export function HomePage() {
   const pendingHomeSelectRef = useRef<{ rail: HomeRailId; id: string } | null>(
     null
   );
+  // The panel on the left follows the focus marker through this store (no page re-render per key).
+  const [featureStore] = useState(() => createPreviewStore<HomeFocus>());
+  const followedRef = useRef<{ rail: HomeRailId; id: string } | null>(null);
   const handleProgressChanged = useCallback(
     (workId: string, updated: WatchProgress[]) => {
       const updatedIds = new Set(updated.map((progress) => progress.media_file_id));
@@ -315,10 +316,9 @@ export function HomePage() {
 
   useLayoutEffect(() => {
     if (navigationLayer.hasSnapshot) return;
-    const container = railsRef.current;
-    const firstSection = container?.querySelector<HTMLElement>(".tv-media-track");
-    if (!container || !firstSection) return;
-    centreHomeRail(container, firstSection, false);
+    const firstSection = railsRef.current?.querySelector<HTMLElement>(".tv-media-track");
+    if (!firstSection) return;
+    centreTrackInStack(firstSection, { animate: false });
     focusedRailRef.current =
       (firstSection.dataset.tvTrackId as HomeRailId | undefined) ?? null;
   }, [navigationLayer.hasSnapshot, railsKey]);
@@ -362,8 +362,6 @@ export function HomePage() {
     });
     return () => details.release();
   }, [details]);
-  const selectedOnDeck =
-    activeRail === "primary" && selected ? onDeckByWork.get(selected.id) : undefined;
   const isLoading =
     !onDeckSettled ||
     railsState.status === "idle" ||
@@ -373,10 +371,45 @@ export function HomePage() {
   const error =
     railsState.status === "error" && siteItems.length === 0 ? railsState.message : null;
 
+  const focusByKey = useMemo(() => {
+    const map = new Map<string, HomeFocus>();
+    for (const rail of rails) {
+      for (const work of rail.items) map.set(`home:${rail.id}:${work.id}`, { rail: rail.id, work });
+    }
+    return map;
+  }, [rails]);
+  const focusByKeyRef = useRef(focusByKey);
+  focusByKeyRef.current = focusByKey;
+  // Under remote keys real focus trails the marker by 320 ms: the panel and the rail glide follow the marker.
+  useRemoteMarkerFollow(
+    railsRef,
+    (card) => {
+      const focus = focusByKeyRef.current.get(card.dataset.navigationFocusKey ?? "");
+      const section = card.closest<HTMLElement>(".tv-media-track");
+      if (focus && section) focusFromRailRef.current(focus.rail, focus.work.id, section);
+    },
+    !isLoading && !error && Boolean(selected)
+  );
+
   // Home has no back, no title and no action button (Customise Home lives in Settings).
   const homeHeader = { kind: "none" as const };
 
-  if (isLoading || error || !selected) {
+  if (isLoading && !error) {
+    // The skeleton is the rail stack itself in loading mode, so it sits exactly where the loaded rails render.
+    return (
+      <PageLayout pageId="home" className="tv-home" ariaLabel={t("pages.home.title")} header={homeHeader}>
+        <RailStack
+          className="tv-home-rails"
+          spacing="section"
+          scrollKey="home:rails"
+          ariaLabel={t("pages.home.mediaTracksAriaLabel")}
+          skeleton={{ tracks: 3, cards: 10, label: t("pages.home.preparingHome") }}
+        />
+      </PageLayout>
+    );
+  }
+
+  if (error || !selected) {
     // The header actions stay up while Home loads, fails or is empty.
     return (
       <PageLayout
@@ -398,17 +431,6 @@ export function HomePage() {
     );
   }
 
-  const selectedEpisode = selectedOnDeck?.episode;
-  const featureTitle =
-    selectedEpisode?.detail.episode.title ??
-    (selectedEpisode
-      ? t("pages.home.episodeLabel", { number: selectedEpisode.detail.episode.episode_number })
-      : selected.title);
-  const featureOverview =
-    selectedEpisode?.detail.episode.overview ??
-    selected.overview ??
-    t("pages.home.noSynopsis");
-
   function selectFromRail(rail: HomeRailId, id: string) {
     setActiveRail(rail);
     setSelectedByRail((current) =>
@@ -417,28 +439,30 @@ export function HomePage() {
   }
 
   function focusFromRail(rail: HomeRailId, id: string, section: HTMLElement) {
+    // Real focus catching up with a card the marker already handled changes nothing.
+    const followed = followedRef.current;
+    if (followed && followed.rail === rail && followed.id === id) return;
+    followedRef.current = { rail, id };
     const enteredNewRail = focusedRailRef.current !== rail;
     focusedRailRef.current = rail;
     detailFocusRef.current = { rail, id };
     details.focus(id);
     const remote = document.body.dataset.inputMode === "remote";
-    // Debounce stage selection under remote holds so React does not re-render
-    // the whole home stage on every key (dominant lag on limited TV CPUs).
+    // The left panel follows at once, from the card data (no request, no re-render of the page).
+    const focus = focusByKeyRef.current.get(`home:${rail}:${id}`);
+    if (focus) featureStore.set(focus);
+    // Backdrop art and prefetch follow once focus rests, so a held key does not re-render the whole stage.
     pendingHomeSelectRef.current = { rail, id };
     window.clearTimeout(homeSelectTimerRef.current);
     homeSelectTimerRef.current = window.setTimeout(() => {
       const pending = pendingHomeSelectRef.current;
       if (!pending) return;
       selectFromRail(pending.rail, pending.id);
-    }, remote ? 280 : 0);
+    }, remote ? REMOTE_SELECT_SETTLE_MS : 0);
     if (!enteredNewRail || isNavigationLayerRestoring()) return;
 
-    window.requestAnimationFrame(() => {
-      const container = railsRef.current;
-      if (container && section.isConnected) {
-        centreHomeRail(container, section, true);
-      }
-    });
+    // The rail glide starts in the key's own frame under remote keys; the stack centres pointer focus itself.
+    if (remote && section.isConnected) centreTrackInStack(section);
   }
 
   focusFromRailRef.current = focusFromRail;
@@ -490,27 +514,17 @@ export function HomePage() {
       }}
       header={homeHeader}
     >
-      <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
-        <p className="tv-provider">
-          {selectedEpisode
-            ? t("pages.home.episodeProvider", {
-                title: selected.title,
-                season: String(selectedEpisode.seasonNumber).padStart(2, "0"),
-                episode: String(selectedEpisode.detail.episode.episode_number).padStart(2, "0"),
-              })
-            : t("pages.home.kindGenre", {
-                kind: workKindLabel(selected, t),
-                genre: selected.genres[0] ?? t("pages.home.defaultGenre"),
-              })}
-        </p>
-        <h2>{featureTitle}</h2>
-        <p>{featureOverview}</p>
-      </aside>
+      <HomeFeature
+        store={featureStore}
+        focusByKey={focusByKey}
+        fallback={{ rail: activeRail, work: selected }}
+        onDeckByWork={onDeckByWork}
+      />
 
-      <TvRailSurface
+      <RailStack
         className="tv-home-rails"
         ref={railsRef}
-        mode="vertical-tracks"
+        spacing="section"
         scrollKey="home:rails"
         ariaLabel={t("pages.home.mediaTracksAriaLabel")}
       >
@@ -534,7 +548,7 @@ export function HomePage() {
             view={homeView}
           />
         ))}
-      </TvRailSurface>
+      </RailStack>
       {resumeChooser ? (
         <ResumeChooserModal
           plan={resumeChooser.plan}
@@ -544,6 +558,55 @@ export function HomePage() {
         />
       ) : null}
     </PageLayout>
+  );
+}
+
+/**
+ * The left panel of Home: genre line, title and synopsis of the card the remote is on. It reads the focus store, so
+ * a key press re-renders only this component, and it changes in place (no remount, so no blank and no replayed
+ * enter animation). Everything comes from the rail data already loaded.
+ */
+function HomeFeature({
+  store,
+  focusByKey,
+  fallback,
+  onDeckByWork,
+}: {
+  store: PreviewStore<HomeFocus>;
+  focusByKey: Map<string, HomeFocus>;
+  fallback: HomeFocus;
+  onDeckByWork: Map<string, OnDeckEntry>;
+}) {
+  const { t } = useLanguage();
+  const stored = useSyncExternalStore(store.subscribe, store.get, store.get);
+  // A stored focus from before the rails changed (a late On Deck swap) is not shown.
+  const current =
+    stored && focusByKey.get(`home:${stored.rail}:${stored.work.id}`) === stored ? stored : fallback;
+  const work = current.work;
+  const episode = current.rail === "primary" ? onDeckByWork.get(work.id)?.episode : undefined;
+  const title =
+    episode?.detail.episode.title ??
+    (episode
+      ? t("pages.home.episodeLabel", { number: episode.detail.episode.episode_number })
+      : work.title);
+  const overview = episode?.detail.episode.overview ?? work.overview ?? t("pages.home.noSynopsis");
+  return (
+    <aside className="tv-home-feature">
+      <p className="tv-provider">
+        {episode
+          ? t("pages.home.episodeProvider", {
+              title: work.title,
+              season: String(episode.seasonNumber).padStart(2, "0"),
+              episode: String(episode.detail.episode.episode_number).padStart(2, "0"),
+            })
+          : t("pages.home.kindGenre", {
+              kind: workKindLabel(work, t),
+              genre: work.genres[0] ?? t("pages.home.defaultGenre"),
+            })}
+      </p>
+      <h2>{title}</h2>
+      <p>{overview}</p>
+    </aside>
   );
 }
 
