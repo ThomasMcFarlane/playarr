@@ -1,3 +1,4 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import { smoothScrollIntoView } from "../lib/smoothScroll";
 import {
   memo,
@@ -757,30 +758,30 @@ export function SearchPage() {
         </div>
 
         {selectedWork ? (
-          <aside className="tv-search-preview" key={`search-preview-${selectedWork.id}`}>
-            <p>{labelWithYear(workTypeLabel(selectedWork, t), selectedWork)}</p>
-            <h2>{selectedWork.title}</h2>
-            <div>
-              {releaseYear(selectedWork) !== null ? <span>{yearRangeLabel(selectedWork)}</span> : null}
-              <span>
-                {selectedWork.genres.slice(0, 2).join(" · ") ||
-                  t("pages.search.availableToPlay")}
-              </span>
-            </div>
-            <p>{selectedWork.overview ?? t("pages.search.noSynopsis")}</p>
-          </aside>
+          <DetailsPanel
+            placement="flow"
+            className="tv-search-preview"
+            key={`search-preview-${selectedWork.id}`}
+            eyebrow={labelWithYear(workTypeLabel(selectedWork, t), selectedWork)}
+            title={selectedWork.title}
+            meta={
+              <>
+                {releaseYear(selectedWork) !== null ? <span>{yearRangeLabel(selectedWork)}</span> : null}
+                <span>
+                  {selectedWork.genres.slice(0, 2).join(" · ") || t("pages.search.availableToPlay")}
+                </span>
+              </>
+            }
+            overview={selectedWork.overview ?? t("pages.search.noSynopsis")}
+          />
         ) : selectedPlaylist ? (
-          <aside
+          <DetailsPanel
+            placement="flow"
             className="tv-search-preview is-playlist"
             key={`search-preview-playlist-${selectedPlaylist.id}`}
-          >
-            <p>
-              {selectedPlaylist.is_system
-                ? t("pages.search.systemPlaylist")
-                : t("pages.search.playlist")}
-            </p>
-            <h2>{selectedPlaylist.name}</h2>
-          </aside>
+            eyebrow={selectedPlaylist.is_system ? t("pages.search.systemPlaylist") : t("pages.search.playlist")}
+            title={selectedPlaylist.name}
+          />
         ) : (
           <p className="tv-search-prompt">
             {requestedQuery

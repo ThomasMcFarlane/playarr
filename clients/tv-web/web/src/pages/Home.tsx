@@ -1,3 +1,4 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import {
   memo,
   useCallback,
@@ -464,9 +465,11 @@ export function HomePage() {
       }}
       header={homeHeader}
     >
-      <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
-        <p className="tv-provider">
-          {selectedEpisode
+      <DetailsPanel
+        className="tv-home-feature"
+        key={`home-feature-${selected.id}`}
+        eyebrow={
+          selectedEpisode
             ? t("pages.home.episodeProvider", {
                 title: selected.title,
                 season: String(selectedEpisode.seasonNumber).padStart(2, "0"),
@@ -475,11 +478,11 @@ export function HomePage() {
             : t("pages.home.kindGenre", {
                 kind: workKindLabel(selected, t),
                 genre: selected.genres[0] ?? t("pages.home.defaultGenre"),
-              })}
-        </p>
-        <h2>{featureTitle}</h2>
-        <p>{featureOverview}</p>
-      </aside>
+              })
+        }
+        title={featureTitle}
+        overview={featureOverview}
+      />
 
       <TvRailSurface
         className="tv-home-rails"

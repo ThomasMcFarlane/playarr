@@ -339,6 +339,23 @@ export function entryState(entry: Pick<CalendarEntry, "has_file" | "monitored">)
   return entry.monitored ? "monitored" : "notMonitored";
 }
 
+export type EntryPillTone = "available" | "upcoming" | "missing" | "neutral";
+
+/** The one status an entry shows as a pill: have it, not out yet, out but absent, or nothing to report. */
+export function entryPillTone(entry: CalendarEntry, today: Day): EntryPillTone {
+  if (entry.has_file) return "available";
+  if (entryLocalDay(entry) > today) return "upcoming";
+  return entry.monitored ? "missing" : "neutral";
+}
+
+/** A series group reports its worst state: missing, then upcoming, then available. */
+export function itemPillTone(item: CalendarItem, today: Day): EntryPillTone {
+  const entries = item.kind === "single" ? [item.entry] : item.entries;
+  const tones = entries.map((entry) => entryPillTone(entry, today));
+  for (const tone of ["missing", "upcoming", "neutral"] as const) if (tones.includes(tone)) return tone;
+  return "available";
+}
+
 /**
  * Availability drives the coloured left border of every calendar entry: we have the item (a file in the
  * library the viewer can play) versus not (upcoming, missing or not playable by this viewer). It is never

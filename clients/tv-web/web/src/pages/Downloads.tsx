@@ -1,3 +1,4 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { DownloadKeepUntilPolicy, DownloadRecord } from "../lib/downloadsDb";
@@ -382,24 +383,27 @@ export function DownloadsPage() {
       }}
     >
       {focused ? (
-        <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>
-          {focusedPreview?.detail ? (
-            <>
-              <p className="tv-provider">
-                {focusedPreview.episode
-                  ? focusedPreview.detail.work.title
-                  : focusedPreview.detail.work.genres[0] ??
-                    workDetailKindLabel(focusedPreview.detail.work, t)}
-              </p>
-              <h2>
-                {focusedPreview.episode
-                  ? focusedPreview.episode.episodeTitle ??
-                    t("pages.workDetail.episodeNumber", {
-                      number: focusedPreview.episode.episodeNumber,
-                    })
-                  : focusedPreview.detail.work.title}
-              </h2>
-              <p className="tv-preview-meta">
+        <DetailsPanel
+          className="tv-library-preview tv-downloads-preview"
+          key={`preview-${focused.id}`}
+          eyebrow={
+            focusedPreview?.detail
+              ? focusedPreview.episode
+                ? focusedPreview.detail.work.title
+                : focusedPreview.detail.work.genres[0] ?? workDetailKindLabel(focusedPreview.detail.work, t)
+              : focused.qualityLabel
+          }
+          title={
+            focusedPreview?.detail
+              ? focusedPreview.episode
+                ? focusedPreview.episode.episodeTitle ??
+                  t("pages.workDetail.episodeNumber", { number: focusedPreview.episode.episodeNumber })
+                : focusedPreview.detail.work.title
+              : focused.title
+          }
+          meta={
+            focusedPreview?.detail ? (
+              <>
                 {focusedPreview.episode ? (
                   <span>
                     {`S${String(focusedPreview.episode.seasonNumber).padStart(2, "0")} · E${String(
@@ -414,24 +418,18 @@ export function DownloadsPage() {
                   {focusedPreview.detail.work.genres.slice(0, 2).join(" · ") ||
                     workDetailKindLabel(focusedPreview.detail.work, t)}
                 </span>
-              </p>
-              <p className="tv-preview-overview">
-                {(focusedPreview.episode?.episodeOverview ?? focusedPreview.detail.work.overview) ??
-                  t("pages.library.noSynopsis")}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="tv-provider">{focused.qualityLabel}</p>
-              <h2>{focused.title}</h2>
-              {focused.subtitle ? (
-                <p className="tv-preview-meta">
-                  <span>{focused.subtitle}</span>
-                </p>
-              ) : null}
-            </>
-          )}
-        </aside>
+              </>
+            ) : focused.subtitle ? (
+              <span>{focused.subtitle}</span>
+            ) : undefined
+          }
+          overview={
+            focusedPreview?.detail
+              ? (focusedPreview.episode?.episodeOverview ?? focusedPreview.detail.work.overview) ??
+                t("pages.library.noSynopsis")
+              : undefined
+          }
+        />
       ) : null}
 
       <TvRailSurface
