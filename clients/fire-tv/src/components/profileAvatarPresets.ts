@@ -19,19 +19,11 @@
  * algorithm must be mirrored here by hand; there is no build step that keeps
  * the two in sync.
  *
- * Kept intentionally narrower than the web version in one respect: this
- * module only re-derives the *preset* half of `ProfileAvatarPreference`
- * (`{kind: 'preset', preset}`), not the `{kind: 'custom', dataUrl}` photo-
- * upload half. Custom avatar upload (`settings/profile-avatar`) is out of
- * scope for v1 (design doc §7's screen inventory marks it "requires image
- * upload/crop -- no file picker on a TV remote", deferred to v2), and there
- * is no profile-avatar sync wiring on this client yet either (that needs
- * `src/auth/**`'s profile-session plumbing, a later build-order step) -- so
- * there is nothing yet that could ever hand this module a real `dataUrl` to
- * render. Adding that dead half of the type now would be speculative; the
- * day sync lands, this file (and `ProfileAvatar.tsx`) is exactly where that
- * variant gets added back in, alongside the component that actually renders
- * it.
+ * The preset artwork itself is no longer copied by hand: `profileAvatarArt.generated.ts` is generated from the shared
+ * `clients/shared/profile-avatars/presets.json` (`scripts/gen-avatar-art.mjs`), and `ProfileAvatar.tsx` also renders the
+ * account's custom photo (`{kind: 'custom', dataUrl}`) from the server preference. The colour pairs and the hash below
+ * stay here because they are needed without the SVG layer; `profileAvatarArt.test.ts` fails if they drift from
+ * `presets.json`.
  */
 
 export interface ProfileAvatarPreset {

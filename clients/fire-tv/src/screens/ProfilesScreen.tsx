@@ -75,7 +75,7 @@ import {Box, T, u} from '../tv/kit';
 import {ROUTES, type RouteName} from '../navigation/routes';
 import {APP_SHELL_ROUTE} from '../navigation/AppShellNavigator';
 import {AvatarHighlight, ProfileAvatar} from '../components/ProfileAvatar';
-import {syncAvatarPreset} from '../lib/profileAvatarPref';
+import {syncAvatar} from '../lib/profileAvatarPref';
 import {TvEmptyState} from '../components/TvEmptyState';
 
 type LoadState = {status: 'loading'} | {status: 'ready'} | {status: 'error'; message: string};
@@ -322,7 +322,7 @@ export function ProfilesScreen(): React.ReactElement {
         setProfiles(available);
         setLoadState({status: 'ready'});
         const signedIn = available.find((profile) => profile.is_current);
-        if (signedIn) void syncAvatarPreset(client, apiBaseUrl, signedIn.id).catch(() => undefined);
+        if (signedIn) void syncAvatar(client, apiBaseUrl, signedIn.id).catch(() => undefined);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
