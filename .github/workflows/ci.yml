@@ -545,13 +545,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm 11 needs Node >= 22.13: install Node before pnpm/action-setup runs (same toolchain as tv-web-ci.yml).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.13.0
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
@@ -585,10 +591,10 @@ jobs:
 
       # Unit tests for the same affected set (packages that define a `test` script
       # are selected with their dependents, exactly like lint and typecheck). The web
-      # package's own `lint` script already runs the layout guards (pageHeaderRegistry,
-      # buttonAudit, drawerAudit); this step runs its whole vitest suite too, so the
-      # guards gate every PR that touches clients/tv-web before merge, not only the
-      # post-merge deploy workflow.
+      # package's own `lint` script runs the layout guards (`src/lib/*Audit.test.ts`,
+      # `*Registry.test.ts` and `pageLayoutCss.test.ts`); this step runs its whole vitest
+      # suite too, so the guards gate every PR that touches clients/tv-web before merge,
+      # not only the post-merge deploy workflow.
       - name: Test (vitest)
         env:
           FILTERS: ${{ needs.changes.outputs.tv_web_filters }}
@@ -599,7 +605,9 @@ jobs:
 
       # The exact command the post-merge deploy (web-ci.yml) runs, unconditionally, so a web test
       # failure there (for example an unbuilt workspace package) is caught before merge.
+      # An unfiltered run already ran the whole web suite in "Test (vitest)" above, so it is skipped then.
       - name: Test web client (deploy parity)
+        if: needs.changes.outputs.tv_web_filters != ''
         run: pnpm --filter @playarr-tv/web run test
 
   # ---------------------------------------------------------------------
@@ -625,13 +633,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm 11 needs Node >= 22.13: install Node before pnpm/action-setup runs (same toolchain as tv-web-ci.yml).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.13.0
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
@@ -793,13 +807,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm 11 needs Node >= 22.13: install Node before pnpm/action-setup runs (same toolchain as tv-web-ci.yml).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.13.0
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
@@ -838,13 +858,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm 11 needs Node >= 22.13: install Node before pnpm/action-setup runs (same toolchain as tv-web-ci.yml).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.13.0
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 

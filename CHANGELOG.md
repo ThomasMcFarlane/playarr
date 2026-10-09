@@ -2558,6 +2558,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web CI guards: the page layout audit counts legacy scroll bodies, scans `.ts` helpers and handles `=>` in attributes; ci.yml matches the tv-web pnpm and Node versions.
 - Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).
 - CI: a `web behaviour` job runs every web Playwright smoke and behaviour script in pull requests and is part of `ci-required`; the layout owner-request gate covers all web stylesheets and shell components; native parity captures are manual (`workflow_dispatch`) only, enforced by a check; the brand red is the `--brand` token.
 - Added a keyboard e2e check that the shared side-panel drawer returns focus to its opener (Filters on Movies, Search and Calendar; Escape and remote Back; both themes).
