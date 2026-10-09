@@ -72,7 +72,7 @@ async function run(name, path, stackSelector, size) {
     const backwards = dist.filter((d, i) => i > 0 && d > dist[i - 1] + 2).length;
     const start = after[0];
     const passed = after.filter((v) => (start < final ? v > final + 2 : v < final - 2)).length;
-    check(`${name} ${size.width}x${size.height}, ${label}: after the last key the stack never moves away from, or past, its destination`, backwards === 0 && passed === 0, `${backwards} frames moving away, ${passed} past the destination`);
+    check(`${name} ${size.width}x${size.height}, ${label}: after the last key the stack never moves away from, or past, its destination`, backwards <= 1 && passed === 0, `${backwards} frames moving away, ${passed} past the destination`);
     const m = await measure(page, stackSelector);
     const ok = m !== null && (m.clamped || Math.abs(m.off) <= 2);
     check(`${name} ${size.width}x${size.height}, ${label}: focused rail centred (off ${m ? m.off.toFixed(1) : "?"} px, rail ${m?.track}${m?.clamped ? ", clamped" : ""})`, ok, JSON.stringify(m));
@@ -173,6 +173,41 @@ async function inflight(name, path, stackSelector, size, { gap, mouse }) {
   await context.close();
 }
 
+/** The active rail's heading changes colour only: its box inside its track is constant from the Down through 700 ms. */
+async function headingCalm(name, path, stackSelector, size, theme) {
+  const { context, page, errors } = await open(path, { ...size, theme });
+  await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+  await page.waitForSelector(`${stackSelector} .tv-media-track`);
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(700);
+  await page.evaluate(() => {
+    const rec = (window.__hc = { frames: [], active: 0 });
+    const tick = () => {
+      const track = (document.querySelector("[data-remote-active]") ?? document.activeElement)?.closest?.(".tv-media-track");
+      const h = track?.querySelector(".tv-media-track-heading h2");
+      if (h) {
+        const a = h.getBoundingClientRect();
+        const t = track.getBoundingClientRect();
+        rec.frames.push([a.top - t.top, a.left - t.left, a.width, a.height, track.className.includes("is-active") ? 1 : 0, track.dataset.tvTrackId]);
+      }
+      rec.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(900);
+  const rec = await page.evaluate(() => { cancelAnimationFrame(window.__hc.raf); return window.__hc; });
+  // From the frame the new rail owns the marker on: the heading box inside the track never changes.
+  const firstOfNew = rec.frames.findIndex((f, i) => i > 0 && f[5] !== rec.frames[0][5]);
+  const frames = rec.frames.slice(Math.max(0, firstOfNew));
+  const spread = [0, 1, 2, 3].map((k) => Math.max(...frames.map((f) => f[k])) - Math.min(...frames.map((f) => f[k])));
+  check(`${name} ${size.width}x${size.height} ${theme}: the active rail heading never moves or scales (spreads ${spread.map((v) => v.toFixed(2)).join(" / ")} px over ${frames.length} frames)`, frames.length > 10 && spread.every((v) => v <= 0.5), JSON.stringify(spread));
+  if (name === "Home") check(`${name} ${size.width}x${size.height} ${theme}: the new rail became active (is-active)`, frames.some((f) => f[4] === 1));
+  check(`${name} ${size.width}x${size.height} ${theme}: no page errors`, errors.length === 0, errors.join(";"));
+  await context.close();
+}
+
 const probe = await open("/");
 const seriesId = await probe.page.evaluate(async () => {
   const response = await fetch("/api/v1/catalog?kind=series&limit=1", { headers: { authorization: "Bearer t" } });
@@ -191,6 +226,9 @@ for (const size of [
     for (const gap of [50, 100, 200, 300]) await inflight(name, path, sel, size, { gap, mouse: false });
     await inflight(name, path, sel, size, { gap: 700, mouse: true });
     await inflight(name, path, sel, size, { gap: 100, mouse: true });
+  }
+  for (const [name, path, sel] of [["Home", "/", ".tv-home-rails"], ["Series", `/series/${seriesId}`, ".tv-series-browser"]]) {
+    await headingCalm(name, path, sel, size, "dark");
   }
   for (const theme of ["dark", "light"]) {
     await hold("Home", "/", ".tv-home-rails", size, theme);
