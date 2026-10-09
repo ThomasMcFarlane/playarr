@@ -33,7 +33,8 @@
     "nav-perf": "a performance measurement, not a pass/fail check",
     "layout-parity": "runs in the `web layout parity` job (it diffs against the committed pins)",
     "drawer-close": "runs in the `web layout parity` job",
-    "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)"
+    "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)",
+    "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)"
   },
   "tracked": {
     "nav-smoke": "search Left past the first column fails on a loaded CI runner (row 9623)",
