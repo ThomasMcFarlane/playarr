@@ -161,8 +161,11 @@ on a personal account do not get.
   number replaces that row in place). The merge train folds them into `TASKS.md` when the PR lands.
   See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
-- When a PR merges, the `Board sync` workflow (`scripts/board-sync.mjs`) opens a `board-sync/pr-<n>` PR
-  with fragments that flip rows naming it from `in_review` (or `in_progress` with "PR open" in Notes)
+- A PR merged directly (`gh pr merge --squash`) skips the train, so the `Fold board` workflow
+  (`fold-board.yml`, `scripts/fold-main.sh`) folds any pending fragments on every push to `main`, committing
+  as the train's identity (`Merge-Train: yes`) with the deploy key. Fragments never sit unfolded for long.
+- When a PR merges, the `Board sync` workflow (`scripts/board-sync.mjs`) folds fragments straight onto `main`
+  (Actions may not open PRs here) that flip rows naming it from `in_review` (or `in_progress` with "PR open" in Notes)
   to `done` with "PR #n merged <date>" appended to Notes, or to `in_progress` while other listed PRs
   are open. A fragment with status `in_review` must name its PR number in Notes (`PR open: #123`);
   `fold-fragments.mjs --check` enforces it.
