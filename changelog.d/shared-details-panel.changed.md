@@ -1,0 +1,2 @@
+- Web: Home, Library, Downloads, Playlists, Search and the calendar agenda share one details panel (background art, kind line, title, metadata, description, actions). Status is shown as pills instead of label/value rows, and the calendar agenda uses the same buttons as the other pages.
+- Web: calendar cards (agenda, week, month) use the shared card focus (shadow and lift) with no white border.

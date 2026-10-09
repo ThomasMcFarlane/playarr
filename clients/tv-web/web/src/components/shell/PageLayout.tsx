@@ -63,6 +63,12 @@ export function PageLayout({ pageId, header, body = "panel", backdrop, state, ch
   if (body === "bleed") {
     return (
       <section className={`page-shell${className ? ` ${className}` : ""}`} aria-label={ariaLabel} data-page-id={pageId} data-page-body="bleed">
+        {backdrop?.art !== undefined ? (
+          <div className="tv-key-art" key={backdrop.artKey}>
+            {backdrop.art}
+          </div>
+        ) : null}
+        {backdrop?.art !== undefined && backdrop.wash !== false ? <div className="tv-stage-wash" /> : null}
         {headerNode}
         <div className={`page-shell-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{content}</div>
       </section>

@@ -7,6 +7,8 @@ import type {
 } from "@playarr-tv/api-client";
 import { CALENDAR_QUERY_TAGS, calendarCacheKey, prefetchCalendar, useAsyncData } from "@playarr-tv/api-client/react";
 import { CalendarLink } from "../components/CalendarLink";
+import { DetailsPanel } from "../components/DetailsPanel";
+import { StatusPill } from "../components/StatusPill";
 import {
   DateRangeField,
   FilterSection,
@@ -34,7 +36,9 @@ import {
   buildMonthGrid,
   buildWeekDays,
   defaultCalendarView,
-  entryState,
+  entryPillTone,
+  itemPillTone,
+  type EntryPillTone,
   itemAvailability,
   entryLocalDay,
   episodeCode,
@@ -153,11 +157,12 @@ const RELEASE_KEYS: Record<CalendarEntry["release_type"], TranslationKey> = {
   release: "pages.calendar.releaseGeneric",
 };
 
-const STATE_KEYS = {
-  inLibrary: "pages.calendar.stateInLibrary",
-  monitored: "pages.calendar.stateMonitored",
-  notMonitored: "pages.calendar.stateNotMonitored",
-} as const satisfies Record<string, TranslationKey>;
+const PILL_KEYS: Record<EntryPillTone, TranslationKey> = {
+  available: "pages.calendar.pillAvailable",
+  upcoming: "pages.calendar.statusUpcoming",
+  missing: "pages.calendar.statusMissing",
+  neutral: "pages.calendar.pillNotTracked",
+};
 
 const FOCUS_URL_DEBOUNCE_MS = 250;
 /** Quiet time after a period paints before its neighbours are loaded. */
@@ -202,11 +207,8 @@ function entrySubtitle(entry: CalendarEntry): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function StateBadge({ entry, t }: { entry: CalendarEntry; t: TFunction }) {
-  const state = entryState(entry);
-  return (
-    <span className={`calendar-badge calendar-badge-${state}`}>{t(STATE_KEYS[state])}</span>
-  );
+function TonePill({ tone, t }: { tone: EntryPillTone; t: TFunction }) {
+  return <StatusPill tone={tone === "neutral" ? "neutral" : tone}>{t(PILL_KEYS[tone])}</StatusPill>;
 }
 
 type SeriesGroup = Extract<CalendarItem, { kind: "series" }>;
@@ -217,11 +219,6 @@ interface SelectHandlers {
   selectedKey: string | null;
   /** `source: "focus"` marks a selection that only followed D-pad focus. */
   onSelect: (item: CalendarItem, target: HTMLElement, source?: "focus") => void;
-}
-
-function groupState(group: SeriesGroup): "inLibrary" | "monitored" | "notMonitored" {
-  if (group.entries.every((entry) => entry.has_file)) return "inLibrary";
-  return group.entries.some((entry) => entry.monitored) ? "monitored" : "notMonitored";
 }
 
 function itemEntry(item: CalendarItem): CalendarEntry {
@@ -257,6 +254,7 @@ const ItemRow = memo(function ItemRow({
   item,
   t,
   locale,
+  today,
   selected,
   onSelect,
   selectOnFocus,
@@ -264,6 +262,7 @@ const ItemRow = memo(function ItemRow({
   item: CalendarItem;
   t: TFunction;
   locale: string;
+  today: Day;
   selected: boolean;
   onSelect: SelectHandlers["onSelect"];
   selectOnFocus?: boolean;
@@ -274,7 +273,7 @@ const ItemRow = memo(function ItemRow({
   const subtitle = isGroup
     ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
     : entrySubtitle(item.entry);
-  const state = isGroup ? groupState(item) : entryState(first);
+  const tone = itemPillTone(item, today);
   return (
     <li>
       <button
@@ -295,7 +294,7 @@ const ItemRow = memo(function ItemRow({
             </span>
             <span>{t(RELEASE_KEYS[first.release_type])}</span>
             {isGroup ? null : <span>{t(KIND_KEYS[first.media_kind])}</span>}
-            <span className={`calendar-badge calendar-badge-${state}`}>{t(STATE_KEYS[state])}</span>
+            <TonePill tone={tone} t={t} />
           </span>
         </span>
       </button>
@@ -368,6 +367,7 @@ function DaySections({
                       item={item}
                       t={t}
                       locale={locale}
+                      today={today}
                       selected={selectedKey === item.key}
                       onSelect={onSelect}
                       selectOnFocus={selectOnFocus}
@@ -549,22 +549,23 @@ function MonthGrid({
   );
 }
 
-/** Details of the selected item: facts, plus Open (in library) or Request / Watchlist (not yet). */
+/** Details of the selected item in the shared details panel: pills for its state, then Play, Open, Request, Watchlist. */
 function ItemDetails({
   item,
   t,
   locale,
+  today,
   onOpen,
   onPlay,
 }: {
   item: CalendarItem;
   t: TFunction;
   locale: string;
+  today: Day;
   onOpen: ((route: string) => void) | null;
   onPlay: ((mediaFileId: string, title: string) => void) | null;
 }) {
   const first = itemEntry(item);
-  const entries = item.kind === "series" ? item.entries : [item.entry];
   const time = entryTime(first);
   const route = workRouteForEntry(first);
   const subtitle = item.kind === "series"
@@ -577,116 +578,96 @@ function ItemDetails({
   const snapshot = plan.snapshot ?? legacySnapshot(first);
   const showRequest = plan.legacy ? !openRoute : plan.request !== null;
   const showWatchlist = plan.legacy ? !openRoute : plan.watchlist !== null;
+  const tone = itemPillTone(item, today);
+  const requested = Boolean(plan.request?.requested);
+  const when = time ? (
+    <time dateTime={first.release_at ?? undefined}>
+      {new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(time)}
+    </time>
+  ) : (
+    <>
+      <time dateTime={first.date}>{formatDayHeading(first.date, locale)}</time>
+      {" · "}
+      {t("pages.calendar.allDay")}
+    </>
+  );
+  const hints = [
+    plan.request && !plan.request.enabled && plan.request.reason ? plan.request.reason : null,
+    plan.watchlist && !plan.watchlist.enabled && plan.watchlist.reason ? plan.watchlist.reason : null,
+  ].filter((hint): hint is string => Boolean(hint));
   return (
-    <article className="calendar-details">
-      <p className="page-kicker">
-        {t(KIND_KEYS[first.media_kind])} · {t(RELEASE_KEYS[first.release_type])}
-      </p>
-      <h2 id="calendar-details-title">{itemTitle(item)}</h2>
-      {subtitle ? <p className="calendar-sheet-subtitle">{subtitle}</p> : null}
-      <dl className="calendar-sheet-facts">
-        <div>
-          <dt>{t("pages.calendar.sheetWhen")}</dt>
-          <dd>
-            {time ? (
-              <time dateTime={first.release_at ?? undefined}>
-                {new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(time)}
-              </time>
-            ) : (
-              <>
-                <time dateTime={first.date}>{formatDayHeading(first.date, locale)}</time>
-                {" · "}
-                {t("pages.calendar.allDay")}
-              </>
-            )}
-          </dd>
-        </div>
-        {item.kind === "series" ? (
-          <div>
-            <dt>{t("pages.calendar.sheetEpisodes")}</dt>
-            <dd>
-              <ul className="calendar-group-episodes">
-                {item.entries.map((entry) => (
-                  <li key={entry.id}>
-                    <span className="calendar-group-code">{episodeCode(entry)}</span>
-                    <span className="calendar-group-name">{entry.subtitle ?? entry.title}</span>
-                    <StateBadge entry={entry} t={t} />
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        ) : (
-          <div>
-            <dt>{t("pages.calendar.sheetState")}</dt>
-            <dd>
-              <StateBadge entry={first} t={t} />
-            </dd>
-          </div>
-        )}
-        {first.average_lag_seconds != null ? (
-          <div>
-            <dt>{t("pages.calendar.sheetUsually")}</dt>
-            <dd>
+    <DetailsPanel
+      placement="flow"
+      className="calendar-details"
+      eyebrow={`${t(KIND_KEYS[first.media_kind])} · ${t(RELEASE_KEYS[first.release_type])}`}
+      title={<span id="calendar-details-title">{itemTitle(item)}</span>}
+      meta={
+        <>
+          {subtitle ? <span>{subtitle}</span> : null}
+          <span>{when}</span>
+        </>
+      }
+      pills={
+        <>
+          <TonePill tone={tone} t={t} />
+          {requested ? <StatusPill tone="requested">{t("pages.calendar.pillRequested")}</StatusPill> : null}
+          {first.average_lag_seconds != null ? (
+            <StatusPill>
               {t("pages.workDetail.availabilityLag", {
                 duration: formatHumanDuration(first.average_lag_seconds, locale),
               })}
-            </dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>{t("pages.calendar.sheetSources")}</dt>
-          <dd>
-            <ul className="calendar-sheet-sources">
-              {[...new Map(entries.flatMap((e) => e.sources).map((s) => [s.source_instance_id, s])).values()].map(
-                (source) => (
-                  <li key={source.source_instance_id}>
-                    {source.source_name} <span className="muted">({source.source_kind})</span>
-                  </li>
-                )
-              )}
-            </ul>
-          </dd>
-        </div>
-      </dl>
-      <div className="calendar-sheet-actions">
-        {plan.play && onPlay ? (
-          <Button variant="primary" onClick={() => onPlay(plan.play!.mediaFileId, first.title)}>
-            {t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")}
-          </Button>
-        ) : null}
-        {openRoute && onOpen ? (
-          <Button variant={plan.play ? "secondary" : "primary"} onClick={() => onOpen(openRoute)}>
-            {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
-          </Button>
-        ) : null}
-        {!openRoute && !plan.play ? <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p> : null}
-        {showRequest ? (
-          <>
+            </StatusPill>
+          ) : null}
+        </>
+      }
+      actions={
+        <>
+          {plan.play && onPlay ? (
+            <Button variant="primary" onClick={() => onPlay(plan.play!.mediaFileId, first.title)}>
+              {t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")}
+            </Button>
+          ) : null}
+          {openRoute && onOpen ? (
+            <Button variant={plan.play ? "secondary" : "primary"} onClick={() => onOpen(openRoute)}>
+              {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
+            </Button>
+          ) : null}
+          {showRequest ? (
             <RequestButton
               snapshot={snapshot}
               className={buttonClassName({ variant: openRoute ? "secondary" : "primary" })}
               disabled={plan.request ? !plan.request.enabled && !plan.request.requested : false}
               alreadyRequested={plan.request?.requested}
             />
-            {plan.request && !plan.request.enabled && plan.request.reason ? (
-              <p className="hint">{plan.request.reason}</p>
-            ) : null}
-          </>
-        ) : null}
-        {showWatchlist ? (
-          plan.watchlist && !plan.watchlist.enabled ? (
-            plan.watchlist.reason ? <p className="hint">{plan.watchlist.reason}</p> : null
-          ) : (
+          ) : null}
+          {showWatchlist && !(plan.watchlist && !plan.watchlist.enabled) ? (
             <WatchlistToggle
               snapshot={snapshot}
               initialListed={plan.watchlist?.listed}
               className={buttonClassName({ variant: "secondary" })}
             />
-          )
-        ) : null}
-      </div>
-    </article>
+          ) : null}
+        </>
+      }
+    >
+      {!openRoute && !plan.play ? <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p> : null}
+      {hints.map((hint) => (
+        <p key={hint} className="hint">
+          {hint}
+        </p>
+      ))}
+      {item.kind === "series" ? (
+        <ul className="calendar-group-episodes" aria-label={t("pages.calendar.sheetEpisodes")}>
+          {item.entries.map((entry) => (
+            <li key={entry.id}>
+              <span className="calendar-group-code">{episodeCode(entry)}</span>
+              <span className="calendar-group-name">{entry.subtitle ?? entry.title}</span>
+              <TonePill tone={entryPillTone(entry, today)} t={t} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </DetailsPanel>
   );
 }
 
@@ -752,7 +733,7 @@ const VIEW_ICONS: Record<CalendarView, "list" | "screen" | "cover"> = {
 };
 
 /**
- * Aggregated release calendar: agenda, week and month views over every connected *arr source.
+ * Aggregated release calendar: agenda, week and month views over every connected library source.
  * All state (view, date, filters, selection, open panel) lives in the URL.
  */
 export function CalendarPage() {
@@ -983,7 +964,7 @@ export function CalendarPage() {
           loading ? (
             <DetailsSkeleton />
           ) : detailItem ? (
-            <ItemDetails item={detailItem} t={t} locale={locale} onOpen={openRoute} onPlay={playFile} />
+            <ItemDetails item={detailItem} t={t} locale={locale} today={today} onOpen={openRoute} onPlay={playFile} />
           ) : (
             <p className="muted calendar-details">{t("pages.calendar.selectPrompt")}</p>
           )
@@ -1012,6 +993,15 @@ export function CalendarPage() {
     );
   }
 
+  // The agenda shows the previewed release's poster as the background art, like Home and Library.
+  const agendaPoster = view === "agenda" && detailItem ? itemEntry(detailItem).poster_url : null;
+  const agendaArt = agendaPoster
+    ? {
+        artKey: agendaPoster,
+        art: <img src={sizedPosterUrl(agendaPoster, 780)} alt="" decoding="async" referrerPolicy="no-referrer" />,
+      }
+    : undefined;
+
   const navButtons = (
     <>
       <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
@@ -1036,6 +1026,7 @@ export function CalendarPage() {
       body="bleed"
       className={`calendar-page calendar-view-${view}`}
       ariaLabel={t("pages.calendar.title")}
+      backdrop={agendaArt}
       header={{
         title: t("pages.calendar.title"),
         back: { label: t("pages.calendar.backToHome"), to: "/" },
@@ -1213,6 +1204,7 @@ export function CalendarPage() {
             item={selectedItem}
             t={t}
             locale={locale}
+            today={today}
             onOpen={(route) => {
               openRoute(route);
             }}

@@ -1,3 +1,4 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import { setScrollInstant, smoothScrollTo } from "../lib/smoothScroll";
 import { usePanelParam } from "../lib/usePanelParam";
 import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
@@ -1146,51 +1147,40 @@ export function PlaylistsPage() {
         ],
       }}
     >
-      <aside
+      <DetailsPanel
         className="tv-home-feature tv-playlist-feature"
         key={`playlist-feature-${selectedDetailItem?.id ?? featureTrack?.playlist.id}`}
         aria-hidden={drawer ? true : undefined}
-      >
-        <p className="tv-provider">
-          {featureTrack
-            ? `${t(
-                playlistMediaTypeKey(featureTrack.playlist.media_type)
-              )} · ${
+        eyebrow={
+          featureTrack
+            ? `${t(playlistMediaTypeKey(featureTrack.playlist.media_type))} · ${
                 featureTrack.playlist.is_system
                   ? t("pages.playlists.sharedPlaylist")
                   : t("pages.playlists.yourPlaylist")
               }`
-            : t("pages.playlists.yourCollection")}
-        </p>
-        <h2>{featureTitle}</h2>
-        <p>{featureOverview}</p>
-        {editablePlaylist && !editablePlaylist.is_system ? (
-          <div className="tv-playlist-feature-actions">
-            <button
-              type="button"
-              onClick={(event) =>
-                playlistContext.openEdit(editablePlaylist, event.currentTarget)
-              }
-            >
-              <span aria-hidden="true">✎</span>
-              <strong>{t("components.playlistContextMenu.edit")}</strong>
-            </button>
-            <button
-              type="button"
-              className="is-delete"
-              onClick={(event) =>
-                playlistContext.openDelete(
-                  editablePlaylist,
-                  event.currentTarget
-                )
-              }
-            >
-              <span aria-hidden="true">−</span>
-              <strong>{t("components.playlistContextMenu.delete")}</strong>
-            </button>
-          </div>
-        ) : null}
-      </aside>
+            : t("pages.playlists.yourCollection")
+        }
+        title={featureTitle}
+        overview={featureOverview}
+        actions={
+          editablePlaylist && !editablePlaylist.is_system ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={(event) => playlistContext.openEdit(editablePlaylist, event.currentTarget)}
+              >
+                {t("components.playlistContextMenu.edit")}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={(event) => playlistContext.openDelete(editablePlaylist, event.currentTarget)}
+              >
+                {t("components.playlistContextMenu.delete")}
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {isDetail ? (
         <TvRailSurface
