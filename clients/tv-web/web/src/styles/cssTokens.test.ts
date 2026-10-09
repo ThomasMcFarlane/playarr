@@ -32,7 +32,7 @@ describe("stylesheet clean-up (web TV audit S7-S10, P16)", () => {
   it("gives player rules tokens, not colour literals, for their text and error colours (P16)", () => {
     const literals = /#(?:ee9297|c5b8bd|776b71|a5969e|f2b2ba|dfdcdd)\b/i;
     const offenders = [...globalCss.matchAll(/([^{}]*player[^{}]*)\{([^{}]*)\}/g)]
-      .filter((match) => literals.test(match[2] ?? ""))
+      .filter((match) => !/:root/.test(match[1] ?? "") && literals.test(match[2] ?? ""))
       .map((match) => (match[1] ?? "").trim());
     expect(offenders).toEqual([]);
   });

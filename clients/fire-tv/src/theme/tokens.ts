@@ -54,9 +54,9 @@ const darkColour = {
   /** --ink -- default body/heading text. */
   ink: '#f4f0f1',
   /** --ink-soft -- secondary/meta text. */
-  inkSoft: '#c5b8bd',
+  inkSoft: '#cdc1c6',
   /** --ink-muted -- placeholder/disabled text, and the page-kicker label colour. */
-  inkMuted: '#887a82',
+  inkMuted: '#c2b5bb',
   /** --line -- low-emphasis hairline dividers. */
   line: 'rgba(223, 220, 221, 0.11)',
   /** --line-strong -- higher-emphasis dividers (e.g. under the nav rail). */
@@ -68,11 +68,11 @@ const darkColour = {
   /** --on-accent -- text/icon colour placed on top of `accent`. */
   onAccent: '#211d21',
   /** --danger -- destructive actions, error text. */
-  danger: '#ee9297',
+  danger: '#f1a4a8',
   /** --danger-soft -- a danger-toned background (e.g. behind a destructive confirm button). */
   dangerSoft: '#392326',
   /** --success -- confirmation states. */
-  success: '#7fc09d',
+  success: '#8ac5a5',
   /** --focus-outline -- the CSS `:focus-visible` outline colour. Distinct from `focusRing` below: this is the plain-outline treatment, `focusRing` is the *arr-family shared token used for the scale/glow-style focus treatment `focusMotion` describes. */
   focusOutline: '#dfdcdd',
 
@@ -84,7 +84,7 @@ const darkColour = {
 
   // --- Harvested from a specific pair of tv-web classes, not the theme's :root block ---
   /** `.tv-provider` / `.tv-detail-kicker` in global.css -- the stage's kicker label and the player's own accent. Distinct from both `accent` above and `navAccent`. */
-  stageKicker: '#cf3157',
+  stageKicker: '#eaa6b6',
 } as const;
 
 
@@ -99,20 +99,20 @@ const lightColour: Colour = {
   surfaceStrong: '#ffffff',
   surfaceSoft: '#dfdcdd',
   ink: '#382621',
-  inkSoft: '#675961',
-  inkMuted: '#a5969e',
+  inkSoft: '#443a40',
+  inkMuted: '#4d4248',
   line: 'rgba(56, 38, 33, 0.14)',
   lineStrong: 'rgba(56, 38, 33, 0.28)',
-  accent: '#675961',
+  accent: '#4d4248',
   accentSoft: '#c5b8bd',
   onAccent: '#ffffff',
-  danger: '#a8464c',
+  danger: '#722f34',
   dangerSoft: '#f2dfe1',
-  success: '#347559',
+  success: '#224c3a',
   focusOutline: '#675961',
   focusRing: sharedColor.brand.primary,
   navAccent: sharedColor.brand.accent,
-  stageKicker: '#cf3157',
+  stageKicker: '#821e36',
 };
 
 export type ColourScheme = 'light' | 'dark';

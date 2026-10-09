@@ -31,7 +31,7 @@ function readGlobalCss(): string {
 }
 
 function extractDarkThemeDeclarations(css: string): string {
-  const match = css.match(/:root\[data-theme="dark"\]\s*\{(?<declarations>[^}]*)\}/);
+  const match = css.match(/:root\[data-theme="dark"\](?:,[^{]*)?\{(?<declarations>[^}]*)\}/);
   const declarations = match?.groups?.declarations;
   if (!declarations) {
     throw new Error(
@@ -92,10 +92,11 @@ describe('theme/tokens colour', () => {
       throw new Error('Could not find the .tv-provider, .tv-detail-kicker rule in global.css.');
     }
     const colorMatch = ruleDeclarations.match(/color:\s*([^;]+);/);
-    // The web stylesheet writes the brand red as `var(--brand)`; resolve it from the first :root block.
+    // The web stylesheet writes the kicker as `var(--brand-ink)` (dark theme: the dark block); older CSS used `var(--brand)`.
     const declared = colorMatch?.[1]?.trim();
     const brand = css.match(/(?:^|\n):root\s*\{[^}]*?--brand:\s*([^;]+);/)?.[1]?.trim();
-    expect(declared === 'var(--brand)' ? brand : declared).toBe(colour.stageKicker);
+    const brandInk = customProperty(declarations, 'brand-ink');
+    expect(declared === 'var(--brand-ink)' ? brandInk : declared === 'var(--brand)' ? brand : declared).toBe(colour.stageKicker);
   });
 
   it.each(Object.entries(colour))('colour.%s is not a leftover placeholder value', (_key, value) => {

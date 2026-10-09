@@ -351,6 +351,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: text colour tokens now meet WCAG 2.2 AAA contrast (7:1) on every surface in both themes: `--ink-soft`, `--ink-muted`, `--accent`, `--danger` and `--success` change lightness (hues kept); new `--brand-ink` (brand-hued text) and `--brand-strong` (fill under white text); always-dark surfaces (player, end screen, playback health, media-context drawer, PIN dialog) take the dark tokens in both themes; native `select` is themed. Owner request 2026-10-09.
 - Calendar, calendar feed and folder root list responses for users now carry a neutral `display_label` per source ("Movies", "Series 2") and no longer return the admin-chosen instance name, which could be a provider's name. Admin routes still return real names.
 - Web styles: one clock block, a `--z-*` stacking scale, player colour tokens, the scrubber focus ring on the shared ring token, dead classes removed, and no backdrop blur on the rail panel and action pills in remote mode.
 - Merge train: a batch whose CI failed only on tiny layout-parity pixel pins (at most 100 px) has its failed jobs re-run once before it is halved, so a flake no longer costs two halving rounds.
@@ -2577,6 +2578,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: `tokenContrast.test.ts` computes the contrast of every text token against every surface it is used on (7:1, both themes); `scripts/a11y-aaa.mjs` and `scripts/a11y-aaa-pages.mjs` run axe-core with the WCAG 2.2 AAA rules over the Storybook stories and the pages.
 - Web CI guards: the page layout audit counts legacy scroll bodies, scans `.ts` helpers and handles `=>` in attributes; ci.yml matches the tv-web pnpm and Node versions.
 - Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).
 - CI: a `web behaviour` job runs every web Playwright smoke and behaviour script in pull requests and is part of `ci-required`; the layout owner-request gate covers all web stylesheets and shell components; native parity captures are manual (`workflow_dispatch`) only, enforced by a check; the brand red is the `--brand` token.
