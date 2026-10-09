@@ -1334,6 +1334,8 @@ export const en = {
   "pages.calendar.statusMissing": "Missing",
   "pages.calendar.groupSummary": "{{count}} episodes · {{codes}}",
   "pages.calendar.openSeries": "Open series",
+  "pages.calendar.playEpisode": "Play {{code}}",
+  "pages.calendar.resumeEpisode": "Resume {{code}}",
   "pages.calendar.filterDrawerAriaLabel": "Release calendar filters",
   "pages.calendar.filterType": "Type",
   "pages.calendar.filterSource": "Source",

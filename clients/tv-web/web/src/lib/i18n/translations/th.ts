@@ -1325,6 +1325,8 @@ export const th: Translations = {
   "pages.calendar.statusMissing": "ขาดหาย",
   "pages.calendar.groupSummary": "{{count}} ตอน · {{codes}}",
   "pages.calendar.openSeries": "เปิดซีรีส์",
+  "pages.calendar.playEpisode": "เล่น {{code}}",
+  "pages.calendar.resumeEpisode": "เล่นต่อ {{code}}",
   "pages.calendar.filterDrawerAriaLabel": "ตัวกรองปฏิทินการเผยแพร่",
   "pages.calendar.filterType": "ประเภท",
   "pages.calendar.filterSource": "แหล่งที่มา",

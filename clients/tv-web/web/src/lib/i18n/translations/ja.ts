@@ -1321,6 +1321,8 @@ export const ja: Translations = {
   "pages.calendar.statusMissing": "未取得",
   "pages.calendar.groupSummary": "{{count}}エピソード · {{codes}}",
   "pages.calendar.openSeries": "シリーズを開く",
+  "pages.calendar.playEpisode": "{{code}} を再生",
+  "pages.calendar.resumeEpisode": "{{code}} を続きから",
   "pages.calendar.filterDrawerAriaLabel": "公開カレンダーのフィルター",
   "pages.calendar.filterType": "種類",
   "pages.calendar.filterSource": "ソース",

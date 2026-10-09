@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
+- Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
+- Web calendar: Play on a group of episodes released together starts the episode with progress (Resume), otherwise the earliest playable one, and the button names the episode (for example "Play S01E02"); it no longer always starts the first.
+- Live updates: a failed background refresh now retries quietly with a growing delay, keeping the data on screen and showing nothing; in the calendar, an open item that a refresh removes or regroups clears its selection and returns focus to where it came from.
 - CI: the layout parity focus pin settles the reloaded page (fonts, network, idle) and waits for two identical captures before comparing at 0 pixels, so it no longer flakes (13 mismatched pixels once on a train batch).
 - Web player: a failed cast start resumes local playback instead of leaving it paused, and the music visualiser, tap timer and cancelled negotiations clean up after themselves.
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
@@ -810,6 +814,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Removed the unused single-use approval mechanism, per the owner decision of 9 Oct 2026 (follow-up to the removal of purchase and install approvals): the `POST /api/v1/household/approvals/{id}/consume` endpoint, its repository method and response type, and the `max_uses` and `uses` fields and columns (migration 0082 rebuilds `household_approvals` without them). Approvals are only content and time grants bounded by their expiry; older peers that still send `max_uses` or `uses` are tolerated because unknown fields are ignored.
 - Guardian approvals no longer have `purchase` or `install` kinds (owner decision, 9 October 2026: Playarr has no store, so approvals cover only `content` and `time`). The kinds are gone from the model, API, OpenAPI contract, generated web types and the admin and web UI. Migration 0081 strips the two values from stored household policies and deletes their approval rows; reading a policy also skips unknown approval kinds, so old or replicated data never fails to load.
