@@ -451,6 +451,11 @@ export function HomePage() {
   }
 
   function focusFromRail(rail: HomeRailId, id: string, section: HTMLElement) {
+    // Real focus trails the marker by a few hundred ms under remote keys. When it lands on a card the marker has
+    // already left (a quick Down then Up), it is stale: acting on it would glide the rails and swap the panel back to
+    // the old card, then forward again (the overshoot). The marker's own card is handled by its key.
+    const marker = document.querySelector<HTMLElement>("[data-remote-active]");
+    if (marker && marker.dataset.navigationFocusKey !== `home:${rail}:${id}`) return;
     // Real focus catching up with a card the marker already handled changes nothing.
     const followed = followedRef.current;
     if (followed && followed.rail === rail && followed.id === id) return;

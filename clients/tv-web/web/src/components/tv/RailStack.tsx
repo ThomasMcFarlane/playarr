@@ -90,7 +90,13 @@ export const RailStack = forwardRef<
       onFocusCapture={(event) => {
         if (isNavigationLayerRestoring()) return;
         const track = (event.target as HTMLElement).closest<HTMLElement>(".tv-media-track");
-        if (track) centreTrackInStack(track);
+        if (!track) return;
+        // Under remote keys real focus trails the marker by a few hundred ms. Focus arriving on a card the marker has
+        // already left (a quick Down then Up) must not pull the stack back to that old rail: the marker's own rail has
+        // been centring since its key, and the stack would otherwise glide away and return (the overshoot).
+        const marker = document.querySelector<HTMLElement>("[data-remote-active]");
+        if (marker && marker.closest(".tv-media-track") !== track) return;
+        centreTrackInStack(track);
       }}
     >
       <TvTrackSpacingContext.Provider value={spacing}>{children}</TvTrackSpacingContext.Provider>

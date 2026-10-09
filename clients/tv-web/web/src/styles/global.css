@@ -15,6 +15,8 @@
   --surface-strong: #ffffff;
   --surface-soft: #dfdcdd;
   --ink: #382621;
+  /* Full-contrast text for captions that sit under a lifted card's shadow (WCAG AAA over the darkened page). */
+  --ink-max: #000;
   --ink-soft: #443a40;
   --ink-muted: #4d4248;
   --line: rgba(56, 38, 33, 0.14);
@@ -351,6 +353,7 @@
   --surface-strong: #211d21;
   --surface-soft: #312a30;
   --ink: #f4f0f1;
+  --ink-max: #fff;
   --ink-soft: #cdc1c6;
   --ink-muted: #c2b5bb;
   --line: rgba(223, 220, 221, 0.11);
@@ -11158,18 +11161,21 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 }
 
 /*
- * WCAG AAA (1.4.6): the lifted card's shadow darkens the caption beneath it, so the selected caption gets a
- * near-opaque surface backing that the shadow cannot tint (the lift and shadow themselves are unchanged).
+ * WCAG AAA (1.4.6): the lifted card's shadow darkens the page behind the caption beneath it. Captions on the page
+ * background get no backing box (owner design rule: no boxes); the selected caption takes the full-contrast ink token
+ * (--ink-max), which holds 7:1 over the shadow-tinted background in both themes.
  */
 .tv-title-card.is-selected .tv-title-card-copy,
+.tv-title-card.is-selected .tv-title-card-copy strong,
+.tv-title-card.is-selected .tv-title-card-copy small,
 .tv-episode-card.is-selected .tv-episode-copy,
+.tv-episode-card.is-selected .tv-episode-copy strong,
+.tv-episode-card.is-selected .tv-episode-copy small,
 .tv-home-card.is-selected > strong,
 .tv-home-card.is-selected > small,
-.tv-episode-card[aria-current="true"] .tv-episode-copy {
-  position: relative;
-  z-index: 1;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+.tv-episode-card[aria-current="true"] .tv-episode-copy,
+.tv-episode-card[aria-current="true"] .tv-episode-copy small {
+  color: var(--ink-max);
 }
 
 /* WCAG 2.5.5: checkboxes keep their small drawn box but get a 44px hit area (the input itself is the target). */
