@@ -163,8 +163,8 @@ export function FoldersPage() {
     <div className="page">
       <h1 className="page-title">Folders</h1>
       <p className="muted" style={{ maxWidth: 680, marginBottom: "1rem" }}>
-        Choose which folders are scanned for media that Radarr, Sonarr and the other source
-        applications do not manage. Enabled folders appear as Folders in the apps for people with
+        Choose which folders are scanned for media that your library sources
+        do not manage. Enabled folders appear as Folders in the apps for people with
         access to the folder&apos;s library. Nothing is scanned until you enable it.
       </p>
       {error && <p className="error-text" role="alert">{error}</p>}

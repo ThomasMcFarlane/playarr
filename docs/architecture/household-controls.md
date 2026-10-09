@@ -86,15 +86,14 @@ server decisions above do not depend on a client calling it.
 ### Guardian approvals
 
 `household_approvals(id, profile_user_id, kind, subject, requested_at,
-expires_at, status, decided_by, decided_at, max_uses, uses, bonus_seconds)`.
+expires_at, status, decided_by, decided_at, bonus_seconds)`.
 
 * A profile creates a request (`POST /api/v1/household/approvals`); it can never
   decide one. `decide` requires the caller to be listed in the profile's
   `guardian_user_ids`, to be a different user, and, if the guardian has a PIN,
   to present it (step-up; shares the lockout below).
-* Approvals are bounded: `expires_at` (default end of day for time/content), `max_uses` (default 1), consumed atomically
-  (`UPDATE ... WHERE uses < max_uses AND expires_at > now`), so reuse and
-  replay fail.
+* Approvals are bounded in time only: `expires_at` (default end of day for time/content). There is no
+  single-use path; a grant is re-checked against its window on every request.
 * Server-enforceable kinds: `content` (lets one work through the rating gate
   until expiry) and `time` (adds bonus seconds to today's budget/overrides the
   schedule until expiry).
@@ -127,7 +126,6 @@ the TTL is short and online playback is always server-evaluated.
 | `POST /api/v1/household/approvals` | the requesting profile | create a pending request |
 | `GET /api/v1/household/approvals` | profile or its guardians | own requests plus those of guarded profiles |
 | `POST /api/v1/household/approvals/{id}/decision` | a listed guardian with a PIN | approve (PIN step-up, bounded duration) or deny |
-| `POST /api/v1/household/approvals/{id}/consume` | the requesting profile | spend one use |
 | `GET/PUT /api/v1/admin/users/{id}/household` | admin | rating, tags, schedule, timezone, budget, guardians |
 
 A blocked request is `403 household_blocked` with

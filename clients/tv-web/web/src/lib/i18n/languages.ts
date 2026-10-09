@@ -9,6 +9,13 @@ export const LANGUAGE_NAMES: Record<ResolvedLanguage, string> = {
   ja: "日本語",
 };
 
+const LOCALE_TAGS: Record<ResolvedLanguage, string> = { en: "en-GB", th: "th-TH", ja: "ja-JP" };
+
+/** The BCP 47 tag the UI formats dates, times and numbers with for a language. */
+export function localeTagFor(language: string): string {
+  return LOCALE_TAGS[language as ResolvedLanguage] ?? LOCALE_TAGS.en;
+}
+
 const DEFAULT_LANGUAGE: ResolvedLanguage = "en";
 
 function isResolvedLanguage(value: string): value is ResolvedLanguage {

@@ -125,6 +125,33 @@ class NavigationContractTests(unittest.TestCase):
                     f"missing avatar-{preset}.png referenced by ProfileAvatar.brs",
                 )
 
+    def test_every_client_renders_the_server_avatar_preference(self) -> None:
+        # The same account must show the same avatar on every device: the server preference (a preset id or a custom
+        # JPEG), the shared preset art, and the id-hash default only when nothing is set.
+        scene = (ROOT / "components" / "MainScene.xml").read_text(encoding="utf-8")
+        self.assertNotIn('uri="pkg:/images/avatar-robot.png"', scene, "the identity chip must not hard-code a preset")
+        self.assertIn('<MaskGroup id="userAvatarCustomMask"', scene)
+        self.assertIn('/api/v1/users/me/profile-avatar', MAIN)
+        self.assertIn("sub acceptProfileAvatar(", MAIN)
+        self.assertIn('data:image/jpeg;base64,', MAIN)
+        self.assertIn("sub applyShellAvatar()", MAIN)
+        self.assertIn("item.presetId = currentAvatarPresetId(profile.id)", MAIN)
+        self.assertIn("item.customUri = m.avatarCustomUri", MAIN)
+        component = (ROOT / "components" / "ProfileAvatar.xml").read_text(encoding="utf-8")
+        self.assertIn('<MaskGroup id="customMask"', component)
+        self.assertTrue((ROOT / "images" / "avatar-mask.png").is_file())
+
+    def test_preset_avatar_pngs_are_the_shared_plates(self) -> None:
+        # One source of truth: clients/shared/profile-avatars (rendered from the web client's art).
+        shared = ROOT.parent / "shared" / "profile-avatars" / "plates"
+        for preset in ("astronaut", "cat", "dinosaur", "robot", "pirate", "alien"):
+            with self.subTest(preset=preset):
+                self.assertEqual(
+                    (ROOT / "images" / f"avatar-{preset}.png").read_bytes(),
+                    (shared / f"{preset}.png").read_bytes(),
+                    f"avatar-{preset}.png differs from the shared plate: run python3 scripts/make_assets.py",
+                )
+
     def test_video_uses_the_native_roku_surface(self) -> None:
         self.assertRegex(SCENE, r'<Video id="video"')
         self.assertIn('m.video.control = "play"', MAIN)

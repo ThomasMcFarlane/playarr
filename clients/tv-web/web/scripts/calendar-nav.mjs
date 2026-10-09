@@ -73,7 +73,7 @@ const focusInfo = (page) =>
     return {
       cls: el.className?.toString(),
       x: r.x, y: r.y, w: r.width, h: r.height,
-      day: day?.getAttribute("aria-label") ?? null,
+      day: day?.querySelector("time")?.getAttribute("datetime") ?? null,
       cell: cell ? [...cell.parentElement.children].indexOf(cell) + ":" + [...cell.closest(".calendar-month-body").children].indexOf(cell.parentElement) : null,
       title: el.querySelector(".calendar-entry-title")?.textContent ?? el.textContent,
       inView: s ? r.top >= s.top - 1 && r.bottom <= s.bottom + 1 && r.left >= s.left - 1 && r.right <= s.right + 1 : true,
@@ -244,6 +244,35 @@ try {
     check(`border (${theme}): available entries use --success`, have.length > 0 && have.every((r) => r.border === m.success && r.width === "4px"), JSON.stringify({ m: m.success, have: have[0] }));
     check(`border (${theme}): unavailable entries use --ink-muted`, lack.length > 0 && lack.every((r) => r.border === m.muted), JSON.stringify({ m: m.muted, lack: lack[0] }));
     check(`border (${theme}): no media-kind colour classes remain`, m.rows.every((r) => !/calendar-kind-/.test(r.cls)), m.rows[0]?.cls);
+    await context.close();
+  }
+
+  // ---- Audit K14/K18/K19/K21: one default-focus marker, scroll attributes, settled announcement, no fake grid ----
+  {
+    const { context, page } = await open("week", { width: 1920, height: 1080 });
+    const week = await page.evaluate(() => ({
+      defaults: document.querySelectorAll(".calendar-page [data-tv-focus-default]").length,
+      cols: [...document.querySelectorAll(".calendar-day")].map((d) => [d.hasAttribute("data-tv-scroll-container"), d.getAttribute("data-navigation-scroll-key")]),
+    }));
+    check("calendar: one default-focus marker on a wide screen", week.defaults === 1, JSON.stringify(week));
+    check("calendar: no second Previous/Today/Next group mounted on a wide screen", (await page.locator(".calendar-nav-inline").count()) === 0);
+    check("week: every day column carries the scroll attributes and a key", week.cols.length > 0 && week.cols.every(([c, k]) => c && /^calendar:day:/.test(k ?? "")), JSON.stringify(week.cols));
+    await context.close();
+  }
+  {
+    const { context, page } = await open("month", { width: 1280, height: 800 });
+    const roles = await page.evaluate(() => document.querySelectorAll("[role='grid'], [role='gridcell'], [role='row'], [role='columnheader']").length);
+    check("month: no grid roles on cells nothing can focus", roles === 0, String(roles));
+    await context.close();
+  }
+  {
+    const { context, page } = await open("agenda", { width: 390, height: 844 });
+    const phone = await page.evaluate(() => ({
+      defaults: document.querySelectorAll(".calendar-page [data-tv-focus-default]").length,
+      groups: document.querySelectorAll(".calendar-nav-inline").length,
+      header: document.querySelectorAll(".page-actions-navigation").length,
+    }));
+    check("calendar: on a phone the navigation is mounted once, with one default marker", phone.defaults === 1 && phone.groups === 1 && phone.header === 0, JSON.stringify(phone));
     await context.close();
   }
 } finally {

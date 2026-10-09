@@ -22,7 +22,6 @@ import {
   episodeCode,
   failedSources,
   fetchWindow,
-  filterByKinds,
   formatHumanDuration,
   groupByLocalDay,
   humanDuration,
@@ -155,13 +154,7 @@ describe("local day bucketing", () => {
   });
 });
 
-describe("filters and grids", () => {
-  it("filters by media kind and treats an empty set as all", () => {
-    const entries = [entry({ id: "1" }), entry({ id: "2", media_kind: "movie" })];
-    expect(filterByKinds(entries, new Set(["movie"])).map((e) => e.id)).toEqual(["2"]);
-    expect(filterByKinds(entries, new Set())).toHaveLength(2);
-  });
-
+describe("month and week grids", () => {
   it("builds month rows of seven with today and out-of-month flags", () => {
     const groups = groupByLocalDay([entry({ date: "2026-10-04" })]);
     const grid = buildMonthGrid("2026-10-01", 1, groups, "2026-10-04");

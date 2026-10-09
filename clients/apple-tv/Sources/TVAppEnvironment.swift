@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PlayarrKit
+import UIKit
 
 protocol TVDeviceAuthorizing: Sendable {
     /// The server this authorizer talks to — lets the retry-across-known-
@@ -99,8 +100,15 @@ final class TVAppEnvironment {
     private(set) var householdBlocked = false
     /// The signed-in user's id (access token subject); picks the profile avatar like the web does.
     private(set) var currentUserID = ""
-    /// The server-backed avatar preset id of the signed-in user, when one is set.
-    private(set) var currentAvatarPreset: String?
+    /// The server-backed avatar of the signed-in user: a preset id or a custom JPEG; `nil` when none is set.
+    private(set) var currentAvatar: ProfileAvatarPreference?
+    /// The decoded custom photo, when `currentAvatar` is a usable custom JPEG.
+    private(set) var currentAvatarImage: UIImage?
+    /// The server-backed preset id, when the avatar is a preset.
+    var currentAvatarPreset: String? {
+        guard let currentAvatar, currentAvatar.kind == .preset else { return nil }
+        return currentAvatar.value
+    }
     /// The signed-in profile's display name (shared PlayarrKit rule: never the typed username).
     private(set) var profileName: String?
     private(set) var pairingState: TVPairingState = .signedOut
@@ -225,11 +233,23 @@ final class TVAppEnvironment {
         return object["sub"] as? String
     }
 
+    private func applyAvatar(_ preference: ProfileAvatarPreference?) {
+        currentAvatar = preference
+        if case .custom(let dataURL) = TVProfileAvatarSource.resolve(preference: preference, userID: currentUserID) {
+            currentAvatarImage = TVProfileAvatarSource.image(fromDataURL: dataURL)
+        } else {
+            currentAvatarImage = nil
+        }
+    }
+
     func refreshShellState() async {
         if currentUserID.isEmpty, let session = await tokenStore.currentSession() {
             currentUserID = Self.subject(ofJWT: session.accessToken.exposeSecret()) ?? ""
         }
-        currentAvatarPreset = (try? await apiClient.fetchProfileAvatarPreset()) ?? nil
+        // A failed read keeps what the shell already shows; an account with no preference clears it.
+        if let setting = try? await apiClient.getProfileAvatar() {
+            applyAvatar(setting.preference)
+        }
         if let resolved = await apiClient.resolveCurrentProfileName(currentUserID: UUID(uuidString: currentUserID)) {
             profileName = resolved
         }
@@ -478,6 +498,7 @@ final class TVAppEnvironment {
     func signOut() {
         Task { try? await tokenStore.clearSession() }
         pairingState = .signedOut
+        applyAvatar(nil)
     }
 
     /// Household profiles for the current session (`GET /api/v1/users/profiles`).

@@ -910,7 +910,6 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/household/approvals", method: "GET" },
   { schemaPath: "/api/v1/household/approvals", method: "POST" },
   { schemaPath: "/api/v1/household/approvals/{id}/decision", method: "POST" },
-  { schemaPath: "/api/v1/household/approvals/{id}/consume", method: "POST" },
   { schemaPath: "/api/v1/admin/users/{id}/household", method: "GET" },
   { schemaPath: "/api/v1/admin/users/{id}/household", method: "PUT" },
   { schemaPath: "/api/v1/folders/roots", method: "GET" },

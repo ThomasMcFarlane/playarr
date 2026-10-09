@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useVisiblePolling } from "../../lib/visiblePolling";
 import type { RemotePairing, RemoteTarget } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
@@ -9,6 +10,9 @@ import { useRemoteHost } from "../../lib/remote/RemoteProvider";
 import { RemotePad } from "../../components/remote/RemotePad";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 import { Button } from "../../components/ui";
+
+/** Device lists change rarely; a pairing in progress has its own faster poll below. */
+const REFRESH_INTERVAL_MS = 15_000;
 
 export function SettingsRemotePage() {
   const { t } = useLanguage();
@@ -35,11 +39,9 @@ export function SettingsRemotePage() {
     }
   }, [client, t]);
 
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+  // No live event covers devices coming and going, so the lists poll gently: every 15 s, only while the
+  // tab is visible, never overlapping, and once straight away when the tab returns.
+  useVisiblePolling(refresh, REFRESH_INTERVAL_MS);
 
   // While a pairing is pending, poll until the target approves or denies it.
   useEffect(() => {

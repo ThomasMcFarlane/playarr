@@ -34,7 +34,8 @@
     "layout-parity": "runs in the `web layout parity` job (it diffs against the committed pins)",
     "drawer-close": "runs in the `web layout parity` job",
     "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)",
-    "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)"
+    "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)",
+    "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate"
   },
   "tracked": {
     "nav-smoke": "search Left past the first column fails on a loaded CI runner (row 9623)",

@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CalendarPage } from "../../src/pages/Calendar";
 
-const SOURCE = { source_instance_id: "00000000-0000-4000-8000-0000000000a1", source_kind: "sonarr", source_name: "Sample Source", arr_id: 1 };
+const SOURCE = { source_instance_id: "00000000-0000-4000-8000-0000000000a1", source_kind: "series_source", source_name: "Sample Source", arr_id: 1 };
 const day = (offset: number) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -28,7 +28,7 @@ function calendar(entriesCount: number, start: string, end: string) {
       episode_number: episode ? i + 1 : null,
     };
   });
-  return { start, end, entries, sources: [{ entry_count: entriesCount, kind: "sonarr", name: "Sample Source", source_instance_id: SOURCE.source_instance_id, status: "ok" }] };
+  return { start, end, entries, sources: [{ entry_count: entriesCount, kind: "series_source", name: "Sample Source", source_instance_id: SOURCE.source_instance_id, status: "ok" }] };
 }
 
 /** The real Calendar page over a fixture server. */

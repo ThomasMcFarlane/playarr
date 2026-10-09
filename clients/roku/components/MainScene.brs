@@ -343,6 +343,15 @@ sub init()
     m.deviceId = m.session.deviceId
     publishArtAuthHeaders()
     m.profileLabel.text = m.session.profileName
+    m.profileId = m.session.profileId
+    if m.profileId = invalid then m.profileId = ""
+    m.avatarKind = ""
+    m.avatarValue = ""
+    m.avatarCustomUri = ""
+    m.userAvatar = m.top.findNode("userAvatar")
+    m.userAvatarCustomMask = m.top.findNode("userAvatarCustomMask")
+    m.userAvatarCustom = m.top.findNode("userAvatarCustom")
+    applyShellAvatar()
     m.detailActions.playMode = "play"
 
     applyAppTheme()
@@ -710,7 +719,7 @@ sub onApiResult(event as Object)
     else if action = "calendarFeed"
         acceptCalendarFeed(result.data)
     else if action = "avatarGet" or action = "avatarSave"
-        if result.data <> invalid and result.data.preference <> invalid then m.avatarPreset = result.data.preference.value
+        acceptProfileAvatar(result.data)
         settingsRefresh()
     else if action = "watchProgress"
         acceptWatchProgress(result.data)
@@ -1459,12 +1468,14 @@ end sub
 sub showProfiles(data as Dynamic)
     if data = invalid then data = []
     m.profiles = data
+    rememberCurrentProfileId(data)
     buildProfileAvatarContent(data)
     applyProfilesChrome()
     showOnly("profiles")
     m.top.screenState = "profiles"
     focusProfilesRowOnCurrent()
     updateProfileActionsLayout()
+    loadProfileAvatar()
 end sub
 
 sub focusProfilesRowOnCurrent()
@@ -1633,6 +1644,7 @@ sub signOutFromProfiles()
     m.profiles = []
     publishArtAuthHeaders()
     if m.profileLabel <> invalid then m.profileLabel.text = ""
+    resetProfileAvatar()
     beginPairing()
 end sub
 
@@ -1673,7 +1685,14 @@ sub buildProfileAvatarContent(profiles as Object)
         item = rowNode.CreateChild("ContentNode")
         item.title = name
         item.AddField("presetId", "string", false)
+        item.AddField("customUri", "string", false)
         item.presetId = profileAvatarPresetId(profile.id)
+        item.customUri = ""
+        if profile.is_current = true
+            ' Only the signed-in account's server preference is known; every other profile keeps the id-hash default.
+            item.presetId = currentAvatarPresetId(profile.id)
+            item.customUri = m.avatarCustomUri
+        end if
         item.AddField("initial", "string", false)
         ' Empty initial: avatar-*.png assets carry the full mascot art (no letter
         ' overlay), matching tv-web's illustrated presets rather than "R".
@@ -1691,6 +1710,8 @@ sub buildProfileAvatarContent(profiles as Object)
     addItem.title = "Sign in"
     addItem.AddField("presetId", "string", false)
     addItem.presetId = "add"
+    addItem.AddField("customUri", "string", false)
+    addItem.customUri = ""
     addItem.AddField("initial", "string", false)
     addItem.initial = "+"
     addItem.AddField("statusText", "string", false)
@@ -1753,6 +1774,125 @@ function profileAvatarPresetId(id as String) as String
     presetIndex = ((hash mod n) + n) mod n
     return presets[presetIndex]
 end function
+
+' ---------------------------------------------------------------------------
+' Profile avatar: the account's server preference, the same on every device.
+'
+' GET /api/v1/users/me/profile-avatar returns { preference: { kind: "preset", value: <id> } } or
+' { kind: "custom", value: "data:image/jpeg;base64,..." }, or no preference. A preset draws the shared art
+' (images/avatar-<id>.png, rendered from clients/shared/profile-avatars); a custom photo is decoded to a file in tmp:/
+' (a Poster cannot read a data URL) and clipped to the circle by a MaskGroup. With no preference, the preset is picked
+' from a hash of the profile id, as the web client does.
+' ---------------------------------------------------------------------------
+
+sub loadProfileAvatar()
+    sendApi("avatarGet", "GET", "/api/v1/users/me/profile-avatar", invalid, true)
+end sub
+
+sub rememberCurrentProfileId(profiles as Object)
+    if profiles = invalid then return
+    for each p in profiles
+        if type(p) = "roAssociativeArray" and p.is_current = true and p.id <> invalid and p.id <> ""
+            if m.profileId <> p.id
+                m.profileId = p.id
+                SaveProfileId(p.id)
+                applyShellAvatar()
+            end if
+            return
+        end if
+    end for
+end sub
+
+sub resetProfileAvatar()
+    deleteCustomAvatarFile()
+    m.profileId = ""
+    m.avatarKind = ""
+    m.avatarValue = ""
+    m.avatarCustomUri = ""
+    applyShellAvatar()
+end sub
+
+function currentAvatarPresetId(profileId as String) as String
+    if m.avatarKind = "preset" and m.avatarValue <> "" then return m.avatarValue
+    return profileAvatarPresetId(profileId)
+end function
+
+sub deleteCustomAvatarFile()
+    if m.avatarCustomUri <> invalid and m.avatarCustomUri <> "" then DeleteFile(m.avatarCustomUri)
+end sub
+
+function isAvatarPresetId(value as Dynamic) as Boolean
+    if type(value) <> "roString" and type(value) <> "String" then return false
+    for each id in ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"]
+        if id = value then return true
+    end for
+    return false
+end function
+
+' Decodes a JPEG data URL into tmp:/ and returns the file's path, or "" when it is not a usable JPEG.
+function writeCustomAvatarFile(dataUrl as String) as String
+    prefix = "data:image/jpeg;base64,"
+    if Left(dataUrl, Len(prefix)) <> prefix then return ""
+    bytes = CreateObject("roByteArray")
+    bytes.FromBase64String(Mid(dataUrl, Len(prefix) + 1))
+    ' A JPEG starts with FF D8; anything else did not decode.
+    if bytes.Count() < 4 or bytes[0] <> 255 or bytes[1] <> 216 then return ""
+    ' A new name per image, so the Poster never shows a cached older photo.
+    path = "tmp:/profile-avatar-" + bytes.Count().ToStr() + "-" + bytes.GetCRC32().ToStr() + ".jpg"
+    if not bytes.WriteFile(path) then return ""
+    return path
+end function
+
+sub acceptProfileAvatar(data as Dynamic)
+    kind = ""
+    value = ""
+    customUri = ""
+    if data <> invalid and type(data) = "roAssociativeArray" and data.preference <> invalid
+        preference = data.preference
+        if preference.kind = "preset" and isAvatarPresetId(preference.value)
+            kind = "preset"
+            value = preference.value
+        else if preference.kind = "custom" and type(preference.value) = "roString"
+            customUri = writeCustomAvatarFile(preference.value)
+            if customUri <> ""
+                kind = "custom"
+                value = customUri
+            end if
+        end if
+    end if
+    previousUri = m.avatarCustomUri
+    changed = kind <> m.avatarKind or value <> m.avatarValue
+    m.avatarKind = kind
+    m.avatarValue = value
+    m.avatarCustomUri = customUri
+    if previousUri <> invalid and previousUri <> "" and previousUri <> customUri then DeleteFile(previousUri)
+    applyShellAvatar()
+    if not changed then return
+    if m.top.screenState = "profiles" and m.profiles <> invalid and m.profilesRow <> invalid
+        ' Redraw the row under the same focus.
+        focus = m.profilesFocusIndex
+        buildProfileAvatarContent(m.profiles)
+        if focus <> invalid
+            m.profilesFocusIndex = focus
+            m.profilesRow.jumpToRowItem = [0, focus]
+            updateProfileActionsLayout()
+        end if
+    end if
+    if m.settingsPanel = "avatar" then settingsRefresh()
+end sub
+
+' The identity chip's avatar (bottom left of every shell page).
+sub applyShellAvatar()
+    if m.userAvatar = invalid then return
+    if m.avatarKind = "custom" and m.avatarCustomUri <> ""
+        m.userAvatarCustom.uri = m.avatarCustomUri
+        m.userAvatarCustomMask.visible = true
+        m.userAvatar.uri = ""
+    else
+        m.userAvatarCustomMask.visible = false
+        m.userAvatar.uri = "pkg:/images/avatar-" + currentAvatarPresetId(m.profileId) + ".png"
+    end if
+end sub
 
 ' First non-space character of `name`, upper-cased, for ProfileAvatar's
 ' initial-letter overlay (see its header comment for why: Roku has no SVG
@@ -3384,6 +3524,7 @@ end function
 sub enterHome(profileName as String)
     SaveProfileName(profileName)
     m.profileLabel.text = profileName
+    loadProfileAvatar()
     m.currentProfileName = profileName
     m.homeContinueEntries = []
     m.homeServerRails = []

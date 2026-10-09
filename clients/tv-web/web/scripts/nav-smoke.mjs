@@ -98,7 +98,29 @@ const press = async (page, key, n = 1, delay = 60) => {
     await page.waitForTimeout(delay);
   }
 };
-const settle = (page) => page.waitForTimeout(700);
+/** Waits until the page is quiet instead of sleeping for a fixed time: no running transition or animation, and no scroll
+ *  container moved for four consecutive animation frames (a smooth scroll or a late layout under a loaded runner takes
+ *  longer than any fixed sleep). Capped at 8 s so a page that never settles still fails its own check. */
+const settle = async (page, floor = 150) => {
+  await page.waitForTimeout(floor);
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const started = performance.now();
+        let last = "";
+        let still = 0;
+        const frame = () => {
+          const running = document.getAnimations().some((a) => a.playState === "running" && Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+          const offsets = [...document.querySelectorAll("[data-tv-scroll-container], [data-tv-scroll-axis]")].filter((e) => e.scrollLeft || e.scrollTop).map((e) => `${e.scrollLeft}:${e.scrollTop}`).join("|") + `@${scrollX}:${scrollY}`;
+          still = !running && offsets === last ? still + 1 : 0;
+          last = offsets;
+          if (still >= 4 || performance.now() - started > 8000) resolve();
+          else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      })
+  );
+};
 
 try {
   // 1. Movies: remote navigation keeps one visible focus target through a long walk.
@@ -128,7 +150,7 @@ try {
     await page.keyboard.press("Escape");
     await page.waitForURL(/\/movies$/, { timeout: 10_000 }).catch(() => {});
     await page.waitForSelector("[data-library-index]");
-    await page.waitForTimeout(1500);
+    await settle(page, 1000);
     const after = await focusedInfo(page);
     check("movies: Back restores a visible focused title", Boolean(after?.visible), JSON.stringify(after));
     check("movies: Back restores the same title", after?.index === before?.index, `${before?.index} -> ${after?.index}`);
@@ -256,7 +278,7 @@ try {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.waitForTimeout(2000);
     await page.evaluate(() => {
-      const rail = () => document.activeElement?.closest("[data-tv-scroll-axis=horizontal]") ?? document.querySelector("[data-tv-scroll-axis=horizontal]");
+      const rail = () => (document.querySelector("[data-remote-active]") ?? document.activeElement)?.closest("[data-tv-scroll-axis=horizontal]") ?? document.querySelector("[data-tv-scroll-axis=horizontal]");
       const probe = { offsets: [], offscreen: 0, running: true };
       window.__navProbe = probe;
       const loop = () => {

@@ -135,8 +135,10 @@ struct TVSettingsPanel: View {
 
     private var avatar: some View {
         let frames: [(CGFloat, CGFloat)] = [(959.3 - 185.5, 210), (959.3, 210), (1144.8, 210), (1330.3, 210), (773.8, 395.5), (959.3, 395.5)]
-        let current = avatarOverride ?? environment.currentAvatarPreset
-            ?? Self.presets[TVProfileAvatar.presetIndex(for: environment.currentUserID)]
+        // A custom photo (chosen on another device) highlights no preset.
+        let current: String? = avatarOverride ?? (environment.currentAvatarImage != nil ? nil : (
+            environment.currentAvatarPreset ?? Self.presets[TVProfileAvatar.presetIndex(for: environment.currentUserID)]
+        ))
         return ZStack(alignment: .topLeading) {
             ForEach(Array(Self.presets.enumerated()), id: \.offset) { index, preset in
                 let active = preset == current

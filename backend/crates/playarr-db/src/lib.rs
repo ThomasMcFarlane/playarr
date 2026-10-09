@@ -13,6 +13,7 @@ mod codec;
 pub mod error;
 pub mod pool;
 pub mod repo;
+pub mod write_queue;
 pub use repo::remote_wake;
 pub use repo::seed_default_rails;
 
@@ -34,6 +35,7 @@ pub use repo::{
     SyncConflictLog, SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo,
     UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
 };
+pub use write_queue::{WriteFuture, WriteQueue, WriteQueueConfig, WriteQueueStats};
 
 pub use repo::{
     match_request, MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo,
