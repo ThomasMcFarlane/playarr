@@ -13,7 +13,7 @@ import type { PlayarrCastStateMessage } from "@playarr-tv/cast-protocol";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
-import { IS_TIZEN, type PlayarrWebPlatform } from "../../lib/clientPlatform";
+import { IS_TIZEN, IS_TV, type PlayarrWebPlatform } from "../../lib/clientPlatform";
 import { usesTenFootChrome } from "../../lib/productSurfaces";
 import { createDoubleTapDetector, DOUBLE_TAP_WINDOW_MS } from "../../lib/doubleTapSeek";
 import { isPlayerBackKey, resolvePlayerBack } from "../../lib/playerMounting";
@@ -259,10 +259,25 @@ function useMusicAudioVisualiser(
   mediaRef: RefObject<HTMLVideoElement>,
   active: boolean,
   playing: boolean,
-  reducedMotion: boolean
+  /** Minimum milliseconds between redraws; 0 draws every animation frame. */
+  minFrameMs: number
 ) {
   const graphRef = useRef<MusicAudioGraph | null>(null);
+  const activatedElementRef = useRef<HTMLMediaElement | null>(null);
   const [ready, setReady] = useState(false);
+
+  // A browser allows only a handful of AudioContexts. The element dies with the player, so close its context then.
+  useEffect(
+    () => () => {
+      const element = activatedElementRef.current;
+      const graph = element ? musicAudioGraphs.get(element) : undefined;
+      if (!element || !graph) return;
+      musicAudioGraphs.delete(element);
+      graphRef.current = null;
+      if (graph.context.state !== "closed") void graph.context.close().catch(() => undefined);
+    },
+    []
+  );
 
   const activate = useCallback(async () => {
     if (!active || !mediaRef.current) return;
@@ -293,6 +308,7 @@ function useMusicAudioVisualiser(
           frequencyData: new Uint8Array(analyser.frequencyBinCount),
         };
         musicAudioGraphs.set(mediaElement, graph);
+        activatedElementRef.current = mediaElement;
       } catch {
         // If a TV browser blocks Web Audio, leave native playback untouched.
         // Bars remain at rest rather than pretending to react.
@@ -326,19 +342,25 @@ function useMusicAudioVisualiser(
     let animationFrame = 0;
     let cancelled = false;
     let lastRenderAt = 0;
+    // The bars are looked up again only when one has left the document (the player moved between the full
+    // screen and the mini player), not on every frame.
+    let barGroups: HTMLElement[][] = [];
+    const refreshBars = () => {
+      barGroups = [...visualisers()].map((visualiser) => [...visualiser.querySelectorAll<HTMLElement>("i")]);
+    };
     const render = (now = 0) => {
       const graph = graphRef.current;
       if (!graph || cancelled) return;
 
-      if (reducedMotion && now - lastRenderAt < 50) {
+      if (minFrameMs > 0 && now - lastRenderAt < minFrameMs) {
         animationFrame = window.requestAnimationFrame(render);
         return;
       }
       lastRenderAt = now;
 
       graph.analyser.getByteFrequencyData(graph.frequencyData);
-      for (const visualiser of visualisers()) {
-        const bars = visualiser.querySelectorAll<HTMLElement>("i");
+      if (barGroups.length === 0 || barGroups.some((bars) => bars[0] && !bars[0].isConnected)) refreshBars();
+      for (const bars of barGroups) {
         const finalBin = Math.max(1, graph.frequencyData.length - 1);
         bars.forEach((bar, index) => {
           const position = index / Math.max(1, bars.length - 1);
@@ -366,7 +388,7 @@ function useMusicAudioVisualiser(
       cancelled = true;
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [activate, active, playing, ready, reducedMotion]);
+  }, [activate, active, playing, ready, minFrameMs]);
 
   return activate;
 }
@@ -589,7 +611,7 @@ export function PlayerSurface({
     videoRef,
     Boolean(musicContext),
     engineState.state === "playing",
-    systemVolumeOnly
+    systemVolumeOnly ? 50 : IS_TV ? 33 : 0
   );
   const playlistContext = useMediaContextMenu();
   const interactionPinned =
@@ -727,6 +749,15 @@ export function PlayerSurface({
     }
     return () => window.clearTimeout(hideTimerRef.current);
   }, [engineState.state, inlineMusic, interactionPinned, minimised, scheduleHide]);
+
+  // A single tap waits out the double-tap window; leaving the player inside it must not toggle a dead engine.
+  useEffect(
+    () => () => {
+      window.clearTimeout(pendingTapToggleRef.current);
+      pendingTapToggleRef.current = undefined;
+    },
+    []
+  );
 
   useEffect(() => {
     const handleChange = () => {
