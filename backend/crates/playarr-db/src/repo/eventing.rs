@@ -382,6 +382,18 @@ impl WorkRepo for EventingWorkRepo {
     ) -> Result<Option<Work>, DbError> {
         self.inner.find_by_external_ref(provider, external_id).await
     }
+    // Reads the inner repo answers better than the trait defaults do; without
+    // these the production wrapper would fall back to one query per ref and a
+    // paged walk of full works.
+    async fn find_by_external_refs(
+        &self,
+        refs: &[playarr_model::ExternalRef],
+    ) -> Result<std::collections::HashMap<playarr_model::ExternalRef, Work>, DbError> {
+        self.inner.find_by_external_refs(refs).await
+    }
+    async fn list_identities(&self, kind: WorkKind) -> Result<Vec<super::WorkIdentity>, DbError> {
+        self.inner.list_identities(kind).await
+    }
 }
 
 pub struct EventingMediaFileRepo {
@@ -452,5 +464,80 @@ impl MediaFileRepo for EventingMediaFileRepo {
             self.emit_files(&persisted).await;
         }
         Ok(persisted)
+    }
+}
+
+#[cfg(test)]
+mod work_repo_forwarding_tests {
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use playarr_model::{ExternalRef, WorkKind};
+
+    use super::*;
+    use crate::pool::test_sqlite_pool;
+    use crate::repo::WorkIdentity;
+
+    /// Answers only the batched reads and fails the per-item defaults, to show
+    /// the eventing wrapper hands them on instead of falling back.
+    #[derive(Default)]
+    struct BatchedOnly {
+        batched_ref_calls: AtomicUsize,
+        identity_calls: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl WorkRepo for BatchedOnly {
+        async fn get(&self, _id: Uuid) -> Result<Work, DbError> {
+            Err(DbError::NotFound)
+        }
+        async fn list_by_kind(&self, _: WorkKind, _: i64, _: i64) -> Result<Vec<Work>, DbError> {
+            panic!("the wrapper must use list_identities")
+        }
+        async fn upsert(&self, _work: &Work) -> Result<(), DbError> {
+            Ok(())
+        }
+        async fn delete(&self, _id: Uuid) -> Result<(), DbError> {
+            Ok(())
+        }
+        async fn find_by_external_ref(
+            &self,
+            _: &ExternalProvider,
+            _: &str,
+        ) -> Result<Option<Work>, DbError> {
+            panic!("the wrapper must use find_by_external_refs")
+        }
+        async fn find_by_external_refs(
+            &self,
+            _refs: &[ExternalRef],
+        ) -> Result<HashMap<ExternalRef, Work>, DbError> {
+            self.batched_ref_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(HashMap::new())
+        }
+        async fn list_identities(&self, _kind: WorkKind) -> Result<Vec<WorkIdentity>, DbError> {
+            self.identity_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Vec::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn eventing_work_repo_forwards_the_batched_reads() {
+        let inner = Arc::new(BatchedOnly::default());
+        let repo = EventingWorkRepo::new(
+            inner.clone(),
+            LiveEventPublisher::from_pool(test_sqlite_pool().await),
+        );
+        let refs = [ExternalRef {
+            provider: ExternalProvider::Tmdb,
+            external_id: "1".to_string(),
+        }];
+        assert!(repo.find_by_external_refs(&refs).await.unwrap().is_empty());
+        assert!(repo
+            .list_identities(WorkKind::Movie)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(inner.batched_ref_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(inner.identity_calls.load(Ordering::SeqCst), 1);
     }
 }

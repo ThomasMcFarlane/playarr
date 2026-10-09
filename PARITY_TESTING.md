@@ -1,87 +1,91 @@
 # Parity testing
 
-Which clients can be tested in which ways, and where each way runs.
+Which ways each platform vendor lets you run a client, and how to start each one.
 
 > **Native parity is ON HOLD** until the owner is happy with the web client. The web client is the source of truth
-> (`docs/parity/README.md`): native clients are matched to it, never the other way round. Until the hold lifts, the native
-> columns below describe what is *available*, not what is being run.
+> (`docs/parity/README.md`): native clients are matched to it, never the other way round.
 
-Legend: ✅ available and working. ❌ not available. ⚠️ partial (see the note). ❓ unverified (not confirmed from the repo
-or from the owner; do not rely on it).
+The matrix lists what each **platform vendor supports or offers**: capability only, not what we have set up. Columns are
+only the ways to *run* the client. Taking screenshots and driving input work in every run environment, so they are not
+columns; the tool for driving input on each platform is named in the notes.
 
-Where things run: **CI** is GitHub-hosted runners only (the repository is public, so no self-hosted runners).
-**Workstation** is the owner's Arch Linux machine. **MacBook** is the owner's MacBook, reached over SSH.
+Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found). ⚠️ limited (see the note). ❓ unverified
+(could not be confirmed from an official source). Numbers refer to the notes below.
 
 ## Matrix
 
-| Client | Unit / component (CI) | Fixture e2e (CI) | Desktop browser | Emulator | Simulator | Real device | Live VNC to owner | Screenshot parity vs web |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Web client (TV and mobile layouts) | ✅ vitest | ✅ Playwright, Storybook, axe [1] | ✅ [2] | ❌ n/a | ❌ n/a | ❌ n/a | ❌ | ✅ is the reference [3] |
-| Admin web app (`clients/tv-web/admin`) | ⚠️ [4] | ❌ | ✅ | ❌ n/a | ❌ n/a | ❌ n/a | ❌ | ❌ |
-| Android TV | ✅ [5] | ❌ | ❌ | ✅ workstation [6] | ❌ n/a | ✅ [7] | ✅ [6] | ⚠️ manual script [8] |
-| Android phone | ✅ [5] | ❌ | ❌ | ⚠️ local only [9] | ❌ n/a | ❓ unverified | ❌ | ⚠️ manual script [8] |
-| Fire TV (Vega OS) | ✅ jest, typecheck | ❌ | ❌ | ❌ [10] | ❌ | ✅ [10] | ❌ | ⚠️ manual script [10] |
-| iOS | ✅ [11] | ❌ | ❌ | ❌ n/a | ✅ CI [11] | ❓ unverified [12] | ❌ | ⚠️ manual CI [13] |
-| tvOS (Apple TV) | ✅ [11] | ❌ | ❌ | ❌ n/a | ✅ CI and MacBook [14] | ❌ none mentioned | ✅ [14] | ⚠️ manual CI [13] |
-| Roku | ⚠️ validate script [15] | ❌ | ❌ | ❌ none exists | ❌ | ✅ [15] | ❌ | ⚠️ manual script [15] |
-| Xbox | ✅ dotnet test (core only) [16] | ❌ | ⚠️ Edge route [16] | ❌ | ❌ | ❓ unverified | ❌ | ❌ |
-| HarmonyOS | ⚠️ validate and core tests [17] | ❌ | ❌ | ❌ none available [17] | ❌ | ❌ none | ❌ | ❌ |
-| VIDAA (Hisense) | ⚠️ shared web CI [18] | ⚠️ shared web CI [18] | ⚠️ with the `?platform=tv-vidaa` flag | ❌ | ❌ | ⚠️ owner's TV, paused [18] | ❌ | ❌ |
-| webOS (LG) | ⚠️ shared web CI [19] | ⚠️ shared web CI [19] | ⚠️ web client only | ❌ not set up [19] | ❌ | ❌ none | ❌ | ❌ |
-| Tizen (Samsung) | ⚠️ shared web CI [20] | ⚠️ shared web CI [20] | ⚠️ web client only | ❌ not set up [20] | ❌ not set up [20] | ❌ none | ❌ | ❌ |
+| Client | Desktop browser or native desktop host | Emulator | Simulator | Real device (dev mode or sideload) |
+| --- | --- | --- | --- | --- |
+| Web client (TV and mobile layouts) | ✅ [1] | ❌ | ⚠️ DevTools and Playwright device emulation [1] | ✅ [1] |
+| Admin web app (`clients/tv-web/admin`) | ✅ [1] | ❌ | ⚠️ device emulation [1] | ✅ [1] |
+| Android TV | ❌ | ✅ [2] | ❌ | ✅ [2] |
+| Android phone | ❌ | ✅ [2] | ❌ | ✅ [2] |
+| Fire TV, Vega OS | ❌ | ✅ [3] | ❌ | ✅ [3] |
+| Fire TV, legacy Fire OS (Android based) | ❌ | ⚠️ [4] | ❌ | ✅ [4] |
+| iOS | ❌ | ❌ | ✅ [5] | ✅ [5] |
+| tvOS (Apple TV) | ❌ | ❌ | ✅ [5] | ✅ [5] |
+| Roku | ❌ | ❌ | ❌ | ✅ [6] |
+| Samsung Tizen | ❌ | ✅ [7] | ✅ [7] | ✅ [7] |
+| LG webOS | ❌ | ⚠️ [8] | ✅ [8] | ✅ [8] |
+| Hisense VIDAA | ❌ [9] | ❓ [9] | ❓ [9] | ✅ [9] |
+| Xbox | ✅ [10] | ❌ | ❌ | ✅ [10] |
+| HarmonyOS | ❌ | ✅ [11] | ⚠️ Previewer [11] | ✅ [11] |
 
-## Notes
+## Notes (vendor support, with official sources)
 
-1. CI jobs in `.github/workflows/ci.yml`: `tv-web-check` (vitest), `web-behaviour` (3 shards of the `nav-*-e2e` Playwright
-   scripts, motion e2e and axe AAA checks against a built bundle and a fixture/mock server, via `scripts/web-behaviour.mjs`),
-   `web-layout-parity` (layout pins, drawer, edge fade, keyboard e2e), `web-storybook` (Storybook build plus a render and
-   accessibility smoke). All run on `ubuntu-latest`.
-2. Live checks use the device test account against <https://playarr.app>. Local: `pnpm --filter @playarr-tv/web run dev`
-   from `clients/tv-web`.
-3. References are committed under `docs/parity/web/{tv,mobile}/{light,dark}`, produced by `scripts/parity/capture-web.mjs`.
-   `scripts/parity/diff.mjs` compares any native capture with them (at most 1% of pixels may differ).
-4. The admin app sits in the same pnpm workspace, so the recursive lint, typecheck and vitest in `tv-web-check` cover it.
-   It has no e2e or screenshot checks of its own.
-5. `android-check` runs Gradle on `ubuntu-latest` (`./gradlew` with tasks from `scripts/ci/android-scope.sh`: affected
-   modules on pull requests, a full build otherwise). `android-apk` builds a signed APK on main (artifact
-   `playarr-android-main-*`). Android TV and phone share one codebase (`clients/android`). Whether every Gradle task
-   runs instrumented tests: ❓ unverified (JVM unit tests only, as far as the workflow shows).
-6. An Android TV emulator runs on the workstation: `emulator-5560`, Android TV 1080p, API 36, systemd user unit
-   `playarr-android-tv-vnc`, display Xvnc `:98`. It is VNC-streamed to the owner's PC screen 2. Local only; there is no
-   emulator in CI. Emulator is software-rendered, so timings are not real-device figures
-   (`docs/validation/remote-emulator-run-2026-10-07.md`).
-7. A real Android TV exists. It has not been used for recent runs.
-8. `scripts/parity/android-tv/capture.sh` and `scripts/parity/android-mobile/capture.sh` capture over `adb` from a running
-   device (sideload debug build, fixture server from `scripts/fixtures/up.sh --fresh`). Manual, not in CI.
-9. A phone emulator (API 35) was used for the 2026-10-07 remote-control run, headless and local. No standing setup or CI.
-10. Fire TV runs Vega OS, which is not Android, so no Android emulator applies. The real device is a Fire TV Stick 4K Select
-   . It is driven with the Vega CLI plus helper scripts that live in a scratch directory and are
-    **not in the repo**. In the repo: `scripts/parity/fire-tv/capture.sh` (remote-only driver, needs `FIRETV_VEGA` and
-    `FIRETV_DEVICE`) and `capture-web-live.mjs`. Jest and typecheck run in CI job `firetv-check`.
-11. `ios-tests.yml` (pull requests) and `simulator-tests.yml` (manual) run Xcode tests on iPhone and Apple TV simulators on
-    `macos-latest`. TestFlight external group distribution covers iOS builds for real devices (see `docs/apple-testflight`).
-12. No iOS real-device testing is recorded in the repo. TestFlight makes it possible; whether the owner runs it: ❓ unverified.
-13. `parity-apple.yml` (Actions, Run workflow, choose `tvos` or `ios`) builds the fixture server and web client, drives the
-    simulator and diffs against the web references. Manual only by owner ruling (8 October 2026), never a pull-request check.
-    Local equivalents: `scripts/parity/apple/capture-ios.sh`, `capture-tvos.sh`.
-14. tvOS simulator on the owner's MacBook over SSH: `~/playarr-sim`, launchd agent `app.playarr.sim-live`, app "Playarr Live
-    ATV", VNC-streamed to the owner's screen 3 (`scripts/sim-vnc`). A GitHub-hosted variant exists, `tvos-live-sim.yml`
-    (`macos-latest`), but it is unreliable: runners have dropped after 1 to 2 hours (memory pressure, from memory).
-15. Real device: Roku Streaming Stick 4K. Deploy with `make deploy` in `clients/roku`; capture with
-    `ROKU_DEV_TARGET=<ip> ROKU_DEV_PASSWORD=<pw> node scripts/parity/roku/capture.mjs <out-dir>` (ECP on port 8060, dev
-    installer screenshots; the clock is masked in the diff). `scripts/parity/roku/verify-playback.mjs` checks playback.
-    `clients/roku/scripts/validate.py` is a static check; whether it runs in CI: ❓ unverified. There is no Roku emulator.
-16. `xbox-check` in `ci.yml` builds and tests `Playarr.Core` only (`dotnet test`); the UWP/XAML shell is not built in CI.
-    Today the usable route is the Edge browser (`docs/clients/xbox.md`). No Xbox device or emulator is recorded.
-17. `harmony-check` runs `node scripts/validate.mjs` and `node tools/run-core-tests.mjs` (offline structure and logic checks).
-    `clients/harmony/README.md` states there is no HarmonyOS device, emulator or previewer available.
-18. VIDAA runs the hosted web client (`docs/clients/vidaa.md`), so it is covered by the web CI. The owner's real Hisense
-    VIDAA TV exists; testing is paused while the owner uses it. There are no VIDAA-specific scripts in the repo.
-19. webOS has an app shell at `clients/tv-web/apps/tv-webos`; CI only covers the shared packages. LG's SDK includes an
-    emulator, but it is **not set up**.
-20. Tizen has an app shell at `clients/tv-web/apps/tv-tizen`. Samsung's Tizen Studio TV emulator (TV Extension 9.0 or 10.0,
-    needs KVM) and the TV Simulator are **not set up**. The workstation runs Arch, so the emulator would need an Ubuntu container.
-    There is no Samsung TV device.
+1. **Web.** Every desktop browser runs the client. Playwright device emulation sets viewport, user agent and touch to
+   mimic a phone or tablet, but it is not a real mobile engine
+   ([Playwright emulation](https://playwright.dev/docs/emulation)). Any real phone or TV browser also runs it. Input:
+   Playwright. The admin app uses the same browsers. The TV web shells (Tizen, webOS, VIDAA) reuse the web client.
+2. **Android phone and Android TV.** The Android Emulator takes a phone or an Android TV hardware profile and system
+   image ([Android TV emulator](https://developer.android.com/training/tv/start/start),
+   [create and manage virtual devices](https://developer.android.com/studio/run/managing-avds)). Real devices use USB
+   debugging from Developer options (same TV page). Input: `adb` ([adb](https://developer.android.com/tools/adb)).
+3. **Fire TV on Vega OS.** Amazon's Vega SDK ships a **Vega Virtual Device** started with `vega virtual-device start` and
+   run with `vega run-app`; Amazon's docs call it a virtual device, and some of its wording calls it a simulator
+   ([run your app](https://developer.amazon.com/docs/vega/0.24/run-apps),
+   [guide to building for Fire TV on Vega OS](https://developer.amazon.com/apps-and-games/blogs/2026/07/guide-to-building-for-fire-tv-on-vega-os)).
+   Its build must match the host architecture. Amazon recommends real hardware for production-ready checks. Real device:
+   Developer Mode on the Fire TV, then `vega devmode login`, `vega devmode enable-device`, `vega device install-app`.
+   Input: the Vega CLI; on the virtual device, `inputd-cli` (full command set after `vsm developer-mode enable`).
+4. **Legacy Fire OS.** Android based, so the Android emulator and `adb` apply. An Amazon-specific emulator image: ❓
+   unverified. Reference only.
+5. **iOS and tvOS.** Xcode includes iPhone and Apple TV simulators; a real device needs a development signing team, and Developer Mode
+   on iOS ([running in Simulator or on a device](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device)).
+   Input: XCUITest, `xcrun simctl`.
+6. **Roku.** No emulator or simulator; testing is on physical devices only
+   ([automated channel testing](https://developer.roku.com/docs/developer-program/dev-tools/automated-channel-testing/automated-testing-overview.md)).
+   Real device: Developer Mode, sideload through the developer installer. Input: ECP, or the Roku WebDriver server (needs
+   Roku OS 9.1 or later, addresses the device by IP, translates to ECP).
+7. **Samsung Tizen.** Tizen Studio's TV Extension (10.0.0, released 26 February 2026) provides the **TV Emulator**, which
+   needs CPU virtualisation and at least 1024 MB RAM, and is slower than a real TV; 4K video, DRM and some Samsung APIs
+   are unsupported ([TV emulator](https://developer.samsung.com/tv/develop/getting-started/using-sdk/tv-emulator),
+   [release history](https://developer.samsung.com/smarttv/develop/tools/tv-extension/release-history.html)). The **TV
+   Simulator** is lighter, uses a different web engine from the TV and emulator, and does not support hardware-bound APIs
+   ([TV Simulator](https://developer.samsung.com/tv/develop/getting-started/using-sdk/tv-simulator)). Real TV: Developer
+   Mode ([TV device](https://developer.samsung.com/tv/develop/getting-started/using-sdk/tv-device)). Debugging and input:
+   Web Inspector and the virtual remote ([Web Inspector](https://developer.samsung.com/SmartTV/develop/getting-started/using-sdk/web-inspector.html)).
+8. **LG webOS.** The **webOS TV Emulator** (VirtualBox 6.1, at least 3 GB RAM) is deprecated and not provided for webOS
+   TV 22 and later; Apple silicon unsupported ([emulator](https://webostv.developer.lge.com/develop/tools/emulator-installation)).
+   The **webOS TV Simulator** runs on a PC with the TV's Chromium version, web apps only, with no DRM and different media
+   behaviour ([simulator](https://webostv.developer.lge.com/develop/tools/simulator-introduction)). Real TV: Developer
+   Mode app from the LG Content Store. Input and debugging: the `ares-*` CLI
+   ([CLI introduction](https://webostv.developer.lge.com/develop/tools/webos-tv-cli-introduction)).
+9. **VIDAA.** Run and test on a real Hisense VIDAA TV: Playarr is installed and signed in on one. Install by sideloading
+   the hosted web client's URL through the TV's browser debug install page (third-party guide, unofficial). Debug with the
+   TV's remote-debugging mode. No public emulator or simulator found, so both are ❓ unverified. A desktop browser is not a
+   vendor method.
+10. **Xbox.** Dev Mode turns any retail console into a development console; deploy UWP apps from Visual Studio over the
+   network with a signed-in user ([activation](https://learn.microsoft.com/windows/uwp/xbox-apps/devkit-activation),
+   [environment setup](https://learn.microsoft.com/en-us/windows/uwp/xbox-apps/development-environment-setup)). UWP apps
+   also run on a Windows 10 or 11 desktop (stand-in); this page was not fetched to confirm, treat as unverified. No Xbox
+   emulator or simulator found. Windows Device Portal on Xbox: ❓ unverified.
+11. **HarmonyOS.** DevEco Studio provides an emulator, driven from the CLI too
+   ([emulator CLI](https://developer.huawei.com/consumer/en/doc/harmonyos-guides/ide-emulator-command-line)), and real
+   devices over USB or wireless debugging with `hdc`
+   ([developer mode](https://developer.huawei.com/consumer/en/doc/harmonyos-guides/ide-developer-mode)). The Previewer is a
+   UI preview, not a full run. Remote emulator access reportedly needs a verified Huawei account and is time-limited
+   (third-party report); availability outside China: ❓ unverified.
 
 ## How to run each
 
@@ -105,17 +109,3 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 | Roku | `make deploy` in `clients/roku`; `scripts/parity/roku/capture.mjs` | real device |
 | Xbox core | `dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj` in `clients/xbox` | CI, local |
 | HarmonyOS checks | `node scripts/validate.mjs`; `node tools/run-core-tests.mjs` in `clients/harmony` | CI, local |
-
-## Gaps
-
-- No Tizen emulator or simulator is set up, and there is no Samsung TV. Needs an Ubuntu container on the workstation with KVM.
-- No webOS emulator is set up, and no LG TV is recorded.
-- No Roku emulator exists. Roku testing is the real device only and there is no CI for it.
-- Fire TV has no CI beyond jest and typecheck. Its device driver scripts live outside the repo.
-- VIDAA has no scripts of its own and the real TV is paused.
-- HarmonyOS has no device, emulator or previewer, so only offline checks run.
-- Xbox CI covers the core library only; there is no shell build, device or emulator.
-- Android has no emulator in CI; the Android TV emulator on the workstation is local and the real TV is untouched recently.
-- No real iOS device or Apple TV is recorded.
-- Native screenshot parity is manual everywhere (and on hold); none of it is a pull-request check.
-- The hosted tvOS live simulator is unreliable (runner drops after 1 to 2 hours).

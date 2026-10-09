@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use playarr_model::{folder_work_provider, ExternalProvider, ExternalRef, Work, WorkKind};
 use sqlx::any::AnyRow;
 use sqlx::Row;
@@ -14,6 +15,15 @@ use crate::codec::{
 use crate::error::DbError;
 use crate::pool::DbPool;
 use crate::write_queue::{write, WriteQueue};
+
+/// The few fields title/year matching needs, without the images, genres and
+/// external refs a full [`Work`] carries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkIdentity {
+    pub id: Uuid,
+    pub title: String,
+    pub release_date: Option<DateTime<Utc>>,
+}
 
 /// CRUD + lookup surface over the `Work` aggregate root (movies, series,
 /// artists, authors — see `playarr_model::Work`). Season/episode/album/
@@ -31,6 +41,28 @@ pub trait WorkRepo: Send + Sync {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Work>, DbError>;
+
+    /// [`WorkIdentity`] of every catalogue work of `kind`, in the order
+    /// [`Self::list_by_kind`] returns them. The default pages through
+    /// `list_by_kind`; the SQL repo reads the three columns in one query.
+    async fn list_identities(&self, kind: WorkKind) -> Result<Vec<WorkIdentity>, DbError> {
+        const PAGE_SIZE: i64 = 200;
+        let mut out = Vec::new();
+        let mut offset = 0;
+        loop {
+            let page = self.list_by_kind(kind, PAGE_SIZE, offset).await?;
+            let got = page.len() as i64;
+            out.extend(page.into_iter().map(|work| WorkIdentity {
+                id: work.id,
+                title: work.title,
+                release_date: work.release_date,
+            }));
+            if got < PAGE_SIZE {
+                return Ok(out);
+            }
+            offset += PAGE_SIZE;
+        }
+    }
 
     /// Insert-or-update by `Work::id`. Sync pollers call this after
     /// reconciling against a source instance; there is no separate
@@ -281,6 +313,31 @@ impl WorkRepo for SqlxWorkRepo {
             .collect()
     }
 
+    async fn list_identities(&self, kind: WorkKind) -> Result<Vec<WorkIdentity>, DbError> {
+        // Same filter and order as `list_by_kind`.
+        let sql = "SELECT w.id, w.title, w.release_date FROM works w \
+                 WHERE w.kind = ? \
+                 AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
+                                 WHERE r.work_id = w.id AND r.provider = ?) \
+                 ORDER BY w.sort_title";
+        let rows = sqlx::query(sql)
+            .bind(work_kind_to_str(kind))
+            .bind(provider_to_str(&folder_work_provider()))
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                let release_date: Option<String> = row.try_get("release_date")?;
+                Ok(WorkIdentity {
+                    id: parse_uuid(&id)?,
+                    title: row.try_get("title")?,
+                    release_date: release_date.map(|raw| parse_datetime(&raw)).transpose()?,
+                })
+            })
+            .collect()
+    }
+
     async fn upsert(&self, work: &Work) -> Result<(), DbError> {
         let row = Arc::new(WorkBinds::new(work)?);
         write(self.queue.as_ref(), &self.pool, move |conn| {
@@ -526,6 +583,36 @@ mod tests {
         let by_id = |work: &Work| repo_get_refs(work);
         assert_eq!(by_id(&movies[0]), by_id(&movie_a));
         assert_eq!(by_id(&movies[1]), by_id(&movie_b));
+    }
+
+    #[tokio::test]
+    async fn list_identities_matches_list_by_kind_without_folder_works() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxWorkRepo::new(pool);
+        for i in 0..450 {
+            repo.upsert(&sample_work(WorkKind::Movie, &format!("Movie {i:04}")))
+                .await
+                .unwrap();
+        }
+        repo.upsert(&sample_work(WorkKind::Series, "A Series"))
+            .await
+            .unwrap();
+        let mut folder = sample_work(WorkKind::Movie, "Folder Backing Work");
+        folder.external_refs = vec![ExternalRef {
+            provider: folder_work_provider(),
+            external_id: "f".to_string(),
+        }];
+        repo.upsert(&folder).await.unwrap();
+
+        let identities = repo.list_identities(WorkKind::Movie).await.unwrap();
+        let works = repo.list_by_kind(WorkKind::Movie, 1000, 0).await.unwrap();
+        assert_eq!(identities.len(), 450);
+        assert_eq!(
+            identities.iter().map(|i| i.id).collect::<Vec<_>>(),
+            works.iter().map(|w| w.id).collect::<Vec<_>>()
+        );
+        assert_eq!(identities[0].title, works[0].title);
+        assert_eq!(identities[0].release_date, works[0].release_date);
     }
 
     #[tokio::test]

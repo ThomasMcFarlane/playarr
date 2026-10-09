@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: Home rail changes start on the key press and settle in about 200 ms (they waited 370 ms for real focus before), and the left panel follows focus within a frame, in place, instead of 620 ms later with a replayed fade-in.
+- Web: Down then Up on a series page no longer overshoots the rail; Home, seasons, Cast and Similar titles share one rail stack with a small gap between related rails and a larger one between different rails.
+- Web: the Home loading skeleton is the rail stack itself, so it sits exactly where the loaded rails render.
 - Web: `/downloads` shows the storage usage line once; Requests rows are focusable so the remote can step down a long list, and the list paints from the query cache and refreshes in place when a library change arrives.
 - Web: removed the unused `.poster-card` and `.poster-*` styles (no component uses them).
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
@@ -1856,6 +1859,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Resolving a peer's availability rows against the local catalogue no longer loads full works: the live work repository wrapper now passes batched external-ref lookups through to the SQL repository (it used one query per ref), and the title/year fallback reads only id, title and release date for a kind in one query. The 2,000-title, 300-row bench drops from about 0.2 s to about 0.03 s.
+- A peer's availability snapshot is compared with the stored rows before anything is written: an unchanged snapshot (the usual case, every minute) takes no write lock and no commit, and a changed one writes only the rows that differ. The calendar cache prune checks for old months before deleting instead of taking the write lock every 15 seconds.
 - A node's own derived peer availability (walking every work with a media file, building its catalogue tree and checking every file on disk) is shared for up to two minutes between the peers' availability pulls and the node's own pushes, and concurrent callers share one derivation. A file that appears or disappears reaches peers at most two minutes later.
 - Applying a peer's availability snapshot resolves its rows in batches: external refs in a few queries and the title/year fallback from one pass over the catalogue per kind, instead of a full catalogue walk per unmatched row. On a 2,000-title catalogue with 300 unmatched rows this takes about 0.2 s instead of about 56 s (debug build), which was keeping both regional servers near their 2-core limit.
 - More frequent small writes go through the shared write queue, found as the repeat offenders in the `slow statement` log: remote-control target heartbeats and state reports, peer sync cursors, the peer availability snapshot swap, and the calendar source cache chunks and health. Repeated writes of one target, cursor, month or source inside a batch collapse to the newest, which is safe because each is an idempotent "latest value wins" upsert. Every call still returns only after its commit, and `synchronous = FULL` is unchanged.

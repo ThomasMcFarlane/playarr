@@ -142,27 +142,18 @@ pub async fn resolve_local_work(
 }
 
 /// Fallback identity to work id for every local work of `kind`, the first in
-/// `list_by_kind` order winning a shared identity.
+/// `list_identities` order winning a shared identity.
 async fn fallback_index(
     work_repo: &Arc<dyn WorkRepo>,
     kind: WorkKind,
 ) -> Result<HashMap<String, Uuid>, playarr_db::DbError> {
-    const PAGE_SIZE: i64 = 200;
     let mut index: HashMap<String, Uuid> = HashMap::new();
-    let mut offset: i64 = 0;
-    loop {
-        let page = work_repo.list_by_kind(kind, PAGE_SIZE, offset).await?;
-        let got = page.len() as i64;
-        for work in page {
-            index
-                .entry(fallback_identity(work.kind, &work.title, work.release_date))
-                .or_insert(work.id);
-        }
-        if got < PAGE_SIZE {
-            return Ok(index);
-        }
-        offset += PAGE_SIZE;
+    for work in work_repo.list_identities(kind).await? {
+        index
+            .entry(fallback_identity(kind, &work.title, work.release_date))
+            .or_insert(work.id);
     }
+    Ok(index)
 }
 
 /// [`resolve_local_work`] for a whole snapshot, with the same answers.
@@ -173,7 +164,7 @@ async fn fallback_index(
 /// batched queries, and the title/year fallback index of each kind is built
 /// from one pass over the catalogue, only when a row of that kind needs it.
 /// When several local works share a fallback identity, the first in
-/// `list_by_kind` order wins, as in the row-by-row walk.
+/// `list_by_kind` order wins (`list_identities` returns that order), as in the row-by-row walk.
 pub async fn resolve_local_works(
     work_repo: &Arc<dyn WorkRepo>,
     rows: &[AvailabilityRow],

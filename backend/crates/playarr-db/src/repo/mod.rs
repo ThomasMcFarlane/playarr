@@ -117,4 +117,4 @@ pub use user_invite::{SqlxUserInviteRepo, UserInviteRepo};
 pub use user_invite_request::{SqlxUserInviteRequestRepo, UserInviteRequestRepo};
 pub use watch_progress::{SqlxWatchProgressRepo, WatchProgressRepo};
 pub use watchlist::{SqlxWatchlistRepo, WatchlistRepo};
-pub use work::{SqlxWorkRepo, WorkRepo};
+pub use work::{SqlxWorkRepo, WorkIdentity, WorkRepo};
