@@ -25,9 +25,8 @@ Depends and ETA may be empty (write a single space between the pipes). ETA is
   (an unknown row number fails the fold). Work in other repositories (for example Dubarr) is not
   tracked on this board, so do not add rows for it.
 
-- Epic ETA: the fold writes `ETA: <latest ETA among the epic's open rows> (n open)` directly under each
-  `## ` heading that has open (not `done`) rows, in ICT (Asia/Bangkok) with the UK time alongside, for
-  example `ETA: 2026-10-10 05:00 ICT (2026-10-09 23:00 BST) (3 open)`; it reads `ETA: not set (n open)`
-  when no open row has an ETA, and an epic with no open rows has no line. The line is recomputed on every
-  fold from the rows' ETAs, so never edit it by hand: set the row ETAs in fragments instead. Leave the
-  ETA empty for paused or on-hold rows.
+- ETA rule: every `in_progress` and `in_review` row needs an ETA (for `in_review`, the expected merge).
+  `node scripts/fold-fragments.mjs --check` fails when one is missing and only warns when it is already
+  in the past (a hard failure would break CI as time passes), so update or move the row. Rows nobody is
+  working are `todo` (Owner empty), `blocked` or `blocked_on_owner`, with no ETA. The board mod computes
+  and shows the epic ETA itself.
