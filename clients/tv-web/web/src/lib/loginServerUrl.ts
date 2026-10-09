@@ -142,12 +142,20 @@ export async function probeRelayCandidate(
   timeoutMs: number = RELAY_PROBE_TIMEOUT_MS
 ): Promise<boolean> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Race the timeout rather than rely on the abort alone: a fetch that ignores the signal must still give up in time.
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(null);
+    }, timeoutMs);
+  });
   try {
-    const response = await fetchImpl(
-      new Request(`${baseUrl.replace(/\/+$/, "")}/api/system/version`, { signal: controller.signal })
-    );
-    return response.ok;
+    const response = await Promise.race([
+      fetchImpl(new Request(`${baseUrl.replace(/\/+$/, "")}/api/system/version`, { signal: controller.signal })),
+      timeout
+    ]);
+    return response !== null && response.ok;
   } catch {
     return false;
   } finally {
