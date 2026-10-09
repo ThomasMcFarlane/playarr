@@ -240,7 +240,7 @@
 .calendar-chip,
 .calendar-more {
   width: 100%;
-  min-height: 24px;
+  min-height: 44px;
   overflow: hidden;
   padding: 0.1rem 0.35rem;
   border: 0;

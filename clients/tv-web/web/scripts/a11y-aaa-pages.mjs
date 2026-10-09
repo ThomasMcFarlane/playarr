@@ -64,6 +64,9 @@ const PAGES = [
   { id: "not-found", route: "/no-such-page" },
   { id: "movies-filters-drawer", route: "/movies", steps: [click("button[aria-controls], .page-filters-button, .tv-filter-launcher")] },
   { id: "playlists-create-panel", route: "/playlists", steps: [click("button[aria-controls='create-panel']")] },
+  { id: "player-controls", route: "/player/{file}", steps: [{ reveal: true }] },
+  { id: "player-quality-menu", route: "/player/{file}", steps: [{ reveal: true }, click(".player-quality:not(.player-track-selector) > button")] },
+  { id: "player-track-menu", route: "/player/{file}", steps: [{ reveal: true }, click(".player-track-selector > button")] },
   { id: "calendar-filters-panel", route: "/calendar?view=month", steps: [click("button[aria-controls]")] },
 ];
 
@@ -82,6 +85,7 @@ const s = await session();
 const get = async (path) => (await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${s.access_token}` } })).json();
 const firstOf = async (kind) => { try { return (await get(`/api/v1/catalog?kind=${kind}&limit=1`)).items?.[0]?.id ?? ""; } catch { return ""; } };
 const ids = { movie: await firstOf("movie"), series: await firstOf("series"), artist: await firstOf("artist") };
+try { const d = await get(`/api/v1/catalog/${ids.movie}`); ids.file = d.media_file_id ?? d.episodes?.[0]?.media_file_id ?? ""; } catch { ids.file = ""; }
 
 const found = [];
 const probes = [];
@@ -103,13 +107,14 @@ for (const layout of layoutNames) {
     const page = await context.newPage();
     for (const def of PAGES) {
       if (ONLY && !def.id.includes(ONLY)) continue;
-      const route = def.route.replace(/\{(movie|series|artist)\}/g, (_, k) => ids[k] || "missing");
+      const route = def.route.replace(/\{(movie|series|artist|file)\}/g, (_, k) => ids[k] || "missing");
       const label = `${def.id}|${theme}|${layout}`;
       await page.goto(`${base}${route}`, { waitUntil: "load" });
       await page.evaluate(() => document.fonts.ready);
       await page.waitForLoadState("networkidle", { timeout: 2500 }).catch(() => {});
       await page.waitForTimeout(500);
       for (const step of def.steps ?? []) {
+        if (step.reveal) { const vp = page.viewportSize(); for (let i = 0; i < 3; i += 1) await page.mouse.move(vp.width / 2 + i * 9, vp.height / 2 + i * 7); await page.waitForSelector(".player-controls", { state: "visible", timeout: 8000 }).catch(() => {}); }
         if (step.click) await page.locator(step.click).first().click({ timeout: 4000 }).catch(() => {});
         if (step.type) await page.locator(step.type).first().fill(step.text).catch(() => {});
         await page.waitForTimeout(600);
