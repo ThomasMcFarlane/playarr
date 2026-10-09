@@ -1362,7 +1362,7 @@ export const ja: Translations = {
   "pages.calendar.link.errorUnsupported": "このサーバーのバージョンはカレンダーリンクにまだ対応していません。管理者に Playarr Server の更新を依頼してください。",
   "pages.calendar.link.errorSignin": "サインインの有効期限が切れました。もう一度サインインしてください。",
   "pages.calendar.link.errorOther": "カレンダーリンクの取得中に問題が発生しました。もう一度お試しください。",
-  "pages.calendar.title": "公開カレンダー",
+  "pages.calendar.title": "カレンダー",
   "pages.calendar.today": "今日",
   "pages.calendar.previous": "前へ",
   "pages.calendar.next": "次へ",

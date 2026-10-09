@@ -33,10 +33,10 @@ describe("tablet widths: content clears the navigation rail", () => {
     );
   });
 
-  it("wraps the calendar title inside the room left of the clock at 1280 px, keeping the desktop clock where Home puts it", () => {
-    expect(css).toMatch(
-      /@media \(min-width: 1101px\) and \(max-width: 1280px\) \{\s*\.app-shell:has\(\.calendar-page\) \.tv-library-heading > \.page-header-title-block > h1 \{\s*max-width: 5\.8em;/
-    );
+  it("has no calendar-specific title shrink: the shared header stops every title at the clock", () => {
+    expect(css).not.toMatch(/:has\(\.calendar-page\) \.tv-library-heading/);
+    expect(css).toMatch(/\.tv-library-heading h1 \{[^}]*max-width: var\(--page-title-max, none\)/);
+    expect(css).toMatch(/\.tv-library-heading h1 \{[^}]*line-height: var\(--page-control-height\)/);
   });
 
   it("lets the calendar month fit beside the rail instead of cutting off Sunday, without touching phones", () => {

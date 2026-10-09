@@ -1375,7 +1375,7 @@ export const en = {
   "pages.calendar.link.errorUnsupported": "This server version does not support calendar links yet. Ask your server admin to update Playarr Server.",
   "pages.calendar.link.errorSignin": "Your sign-in has expired. Sign in again to get your calendar link.",
   "pages.calendar.link.errorOther": "Something went wrong getting your calendar link. Try again.",
-  "pages.calendar.title": "Release Calendar",
+  "pages.calendar.title": "Calendar",
   "pages.calendar.today": "Today",
   "pages.calendar.previous": "Previous",
   "pages.calendar.next": "Next",

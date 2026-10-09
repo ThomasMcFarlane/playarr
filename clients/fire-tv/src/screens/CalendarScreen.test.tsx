@@ -66,7 +66,7 @@ describe('CalendarScreen', () => {
       await Promise.resolve();
     });
     const text = allText(renderer);
-    expect(text).toContain('Release Calendar');
+    expect(text).toContain('Calendar');
     expect(text).toContain('A Film');
     expect(text).toContain('In library');
     expect(text).toContain('1 source(s) could not be read');

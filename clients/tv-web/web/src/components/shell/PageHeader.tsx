@@ -154,6 +154,32 @@ export function PageHeader({
     };
   }, []);
 
+  // Reserve the clock's column: the title stops at the shell clock (or the header's own actions) at every width, so it
+  // can never run under it. Independent of the detail, which may be absent.
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const title = titleRef.current;
+    if (!header || !title) return;
+    const apply = () => {
+      const clock = document.querySelector<HTMLElement>(".app-clock");
+      const clockLeft = clock && getComputedStyle(clock).display !== "none" ? clock.getBoundingClientRect().left : Infinity;
+      const left = title.getBoundingClientRect().left;
+      const room = clockLeft - left - 16;
+      if (Number.isFinite(room) && room > 0) header.style.setProperty("--page-title-max", `${Math.floor(room)}px`);
+      else header.style.removeProperty("--page-title-max");
+    };
+    apply();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(apply);
+    observer?.observe(header);
+    observer?.observe(document.body);
+    window.addEventListener("resize", apply);
+    void document.fonts?.ready.then(apply);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
   const hasActions = Boolean(pageActions.some((action) => action.kind === "navigation" || action.kind === "status"));
   const classes = [
     "tv-library-heading",
