@@ -1,0 +1,1 @@
+- Reconcile the task board with the merged PRs of 9 October 2026: statuses, owners, new rows for the owner's requests (rows 9895, 9896).
