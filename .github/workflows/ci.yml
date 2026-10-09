@@ -143,6 +143,8 @@ jobs:
 
       - name: Merge train logic tests
         run: scripts/ci/test-merge-train.sh
+      - name: Post-merge fold tests
+        run: scripts/ci/test-fold-main.sh
 
       - name: Android main APK version tests
         run: scripts/ci/test-android-main-version.sh
