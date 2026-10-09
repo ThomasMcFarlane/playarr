@@ -94,7 +94,6 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
       await page.waitForTimeout(800);
       await page.keyboard.press("ArrowRight");
       await page.waitForTimeout(900);
-      await page.screenshot({ path: `/home/Storage/Projects/repositories/.data/ThomasMcFarlane/playarr/scratch/20261010-post-425/shots/local-${name}-${w}-${theme}.png` });
       await inspect(page, `${name} ${w}x${h} ${theme}`);
       await context.close();
     }
