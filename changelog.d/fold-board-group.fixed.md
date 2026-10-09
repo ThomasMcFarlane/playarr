@@ -1,1 +1,0 @@
-- `Fold board` uses its own concurrency group so it no longer cancels queued merge-train runs.

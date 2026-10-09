@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Fold board` uses its own concurrency group so it no longer cancels queued merge-train runs.
+- Web: the "Who's watching?" picker no longer shows profiles left over from another or deleted account before the real list arrives. It shows the current account's tile with skeletons, the profile directory is cached per account and server and cleared on sign-out and switch, and tiles that arrive late no longer jump in.
 - Side panels (Filters on Movies, Series, Music, Search and Calendar, and every other drawer): section labels have clear space above them again. The shared drawer body had lost its section-to-section gap, so each label sat flush against the previous group's items. Covered by `scripts/drawer-spacing-e2e.mjs`.
 - Web: scrolling the Settings menu (and any page body that extends under the page header) no longer lets its items slide under the heading and title. They now fade out at the header's bottom edge with the shared soft edge fade, which only appears once content has scrolled past.
 - Web: the navigation rail, shell and library pages meet WCAG 2.2 AAA: icon-only nav links carry an accessible name, every pointer target is at least 44x44 CSS px (nav links, Back, profile chip, track actions, search field, A to Z rail, which wraps into columns), and header, clock, version and selected-caption text holds 7:1 over artwork and card shadows. Owner request 2026-10-09.
