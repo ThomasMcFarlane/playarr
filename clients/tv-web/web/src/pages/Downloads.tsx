@@ -283,6 +283,13 @@ export function DownloadsPage() {
     orderedDownloads.find((record) => record.id === focusedId) ?? orderedDownloads[0] ?? null;
   const focusedWorkId = focused?.workId ?? null;
 
+  const storageLabel =
+    storageSupported && storageUsage
+      ? t("pages.downloads.storageUsed", {
+          used: formatBytes(storageUsage.usageBytes),
+          quota: formatBytes(storageUsage.quotaBytes),
+        })
+      : "";
   const storagePercent =
     storageUsage && storageUsage.quotaBytes > 0
       ? Math.min(100, Math.round((storageUsage.usageBytes / storageUsage.quotaBytes) * 100))
@@ -433,10 +440,7 @@ export function DownloadsPage() {
         {storageSupported && storageUsage ? (
           <div className="tv-downloads-storage-panel">
             <span>
-              {t("pages.downloads.storageUsed", {
-                used: formatBytes(storageUsage.usageBytes),
-                quota: formatBytes(storageUsage.quotaBytes),
-              })}
+              {storageLabel}
             </span>
             {storagePercent !== null ? (
               <div
@@ -445,10 +449,7 @@ export function DownloadsPage() {
                 aria-valuenow={storagePercent}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label={t("pages.downloads.storageUsed", {
-                  used: formatBytes(storageUsage.usageBytes),
-                  quota: formatBytes(storageUsage.quotaBytes),
-                })}
+                aria-label={storageLabel}
               >
                 <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
               </div>
