@@ -394,6 +394,12 @@ impl WorkRepo for EventingWorkRepo {
     async fn list_identities(&self, kind: WorkKind) -> Result<Vec<super::WorkIdentity>, DbError> {
         self.inner.list_identities(kind).await
     }
+    async fn get_many(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Work>, DbError> {
+        self.inner.get_many(ids).await
+    }
 }
 
 pub struct EventingMediaFileRepo {
@@ -429,6 +435,9 @@ impl MediaFileRepo for EventingMediaFileRepo {
     }
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_by_work_id(work_id).await
+    }
+    async fn list_by_work_ids(&self, work_ids: &[Uuid]) -> Result<Vec<MediaFile>, DbError> {
+        self.inner.list_by_work_ids(work_ids).await
     }
     async fn list_all(&self) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_all().await

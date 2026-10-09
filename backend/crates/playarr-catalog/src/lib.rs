@@ -451,6 +451,34 @@ pub enum WorkChildren {
     Author(Vec<BookDetail>),
 }
 
+/// The files of one library work, as much as the calendar and title
+/// resolution need (never the full detail page).
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkFiles {
+    /// A movie's own file, when one has synced.
+    Movie(Option<Uuid>),
+    /// A series' episode files, in season and episode order. Episodes
+    /// without a file are absent.
+    Series(Vec<EpisodeFile>),
+    /// Artists, authors and anything else.
+    Other,
+}
+
+/// One episode's file inside [`WorkFiles::Series`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EpisodeFile {
+    pub season_number: i32,
+    pub episode_number: i32,
+    pub media_file_id: Uuid,
+}
+
+/// A work visible to a caller plus its [`WorkFiles`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkFileView {
+    pub work: Work,
+    pub files: WorkFiles,
+}
+
 /// [`CatalogService::get_by_id`]'s result: the `Work` aggregate root plus
 /// its full kind-specific tree. A richer type than bare `Work` — returning
 /// just `Work` (as an earlier scaffold of this method's signature did) can
@@ -1797,6 +1825,126 @@ impl CatalogService {
         Ok(detail)
     }
 
+    /// The [`WorkFileView`] of each of `ids` the caller may see, in a few
+    /// queries however many ids there are (the full [`Self::get_by_id`]
+    /// costs several per work, and one per episode). `known` holds works the
+    /// caller already loaded, so they are not read again. Ids that do not
+    /// exist, that the household gate refuses, or that have no file in an
+    /// allowed library are absent, exactly as `get_by_id` answers `NotFound`.
+    pub async fn file_views(
+        &self,
+        ids: &[Uuid],
+        known: &HashMap<Uuid, Work>,
+        access: Access<'_>,
+    ) -> Result<HashMap<Uuid, WorkFileView>, CatalogError> {
+        let missing: Vec<Uuid> = ids
+            .iter()
+            .copied()
+            .filter(|id| !known.contains_key(id))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        let mut loaded = if missing.is_empty() {
+            HashMap::new()
+        } else {
+            self.work_repo.get_many(&missing).await?
+        };
+        let mut works: HashMap<Uuid, Work> = HashMap::new();
+        for id in ids {
+            let work = known.get(id).cloned().or_else(|| loaded.remove(id));
+            if let Some(work) = work.filter(|w| access.permits(w)) {
+                works.insert(*id, work);
+            }
+        }
+        if works.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let wanted: Vec<Uuid> = works.keys().copied().collect();
+        let mut by_work: HashMap<Uuid, Vec<playarr_model::MediaFile>> = HashMap::new();
+        for file in self.media_file_repo.list_by_work_ids(&wanted).await? {
+            by_work.entry(file.work_id).or_default().push(file);
+        }
+        // Episode numbers of every series that has an episode file.
+        let series: Vec<String> = works
+            .values()
+            .filter(|w| matches!(w.kind, WorkKind::Series | WorkKind::Site))
+            .filter(|w| by_work.get(&w.id).is_some_and(|f| !f.is_empty()))
+            .map(|w| w.id.to_string())
+            .collect();
+        let mut numbers: HashMap<Uuid, (i32, i32)> = HashMap::new();
+        for chunk in series.chunks(400) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT e.id AS id, s.season_number AS season_number, e.episode_number AS episode_number \
+                 FROM episodes e JOIN seasons s ON s.id = e.season_id \
+                 WHERE s.series_work_id IN ({placeholders})"
+            );
+            let mut query = sqlx::query(&sql);
+            for id in chunk {
+                query = query.bind(id.clone());
+            }
+            for row in query.fetch_all(&self.pool).await? {
+                numbers.insert(
+                    codec::parse_uuid(&row.try_get::<String, _>("id")?)?,
+                    (
+                        row.try_get::<i64, _>("season_number")? as i32,
+                        row.try_get::<i64, _>("episode_number")? as i32,
+                    ),
+                );
+            }
+        }
+        let mut out = HashMap::new();
+        for (id, work) in works {
+            let files = by_work.remove(&id).unwrap_or_default();
+            if let Some(allowed) = access.allowed {
+                if !files
+                    .iter()
+                    .any(|f| allowed.contains(&f.source_instance_id))
+                {
+                    continue;
+                }
+            }
+            // `files` is ordered by id, so the first file of a leaf is the
+            // one `find_by_leaf` returns.
+            let summary = match work.kind {
+                WorkKind::Movie => WorkFiles::Movie(
+                    files
+                        .iter()
+                        .find(|f| f.leaf_ref == LeafRef::Work)
+                        .map(|f| f.id),
+                ),
+                WorkKind::Series | WorkKind::Site => {
+                    let mut seen = HashSet::new();
+                    let mut episodes: Vec<EpisodeFile> = files
+                        .iter()
+                        .filter_map(|f| match f.leaf_ref {
+                            LeafRef::Episode(episode) if seen.insert(episode) => {
+                                let (season_number, episode_number) = *numbers.get(&episode)?;
+                                Some(EpisodeFile {
+                                    season_number,
+                                    episode_number,
+                                    media_file_id: f.id,
+                                })
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    episodes.sort_by_key(|e| (e.season_number, e.episode_number));
+                    WorkFiles::Series(episodes)
+                }
+                _ => WorkFiles::Other,
+            };
+            out.insert(
+                id,
+                WorkFileView {
+                    work,
+                    files: summary,
+                },
+            );
+        }
+        Ok(out)
+    }
+
     /// The bare `Work` for `id`, `None` if it does not exist. For callers
     /// that must evaluate a per-work restriction (rating/tags) outside a
     /// catalog read.
@@ -2458,6 +2606,35 @@ mod tests {
             source_file_id: Some("1".to_string()),
         };
         repo.create(&file).await.expect("seed media file");
+        file.id
+    }
+
+    /// [`seed_media_file_for_source`] with its own `source_file_id`, for tests
+    /// that seed several files into one source instance.
+    async fn seed_numbered_media_file(
+        pool: &DbPool,
+        work_id: Uuid,
+        leaf_ref: LeafRef,
+        source_instance_id: Uuid,
+        number: u32,
+    ) -> Uuid {
+        let file = MediaFile {
+            id: Uuid::new_v4(),
+            work_id,
+            leaf_ref,
+            path: PathBuf::from("/media/file.mkv"),
+            container: "mkv".to_string(),
+            codec: "h264".to_string(),
+            bitrate: Some(4_000_000),
+            duration_ms: Some(3_600_000),
+            size_bytes: 123_456,
+            source_instance_id,
+            source_file_id: Some(number.to_string()),
+        };
+        media_file_repo(pool.clone())
+            .create(&file)
+            .await
+            .expect("seed media file");
         file.id
     }
 
@@ -3422,6 +3599,112 @@ mod tests {
             }
             other => panic!("expected WorkChildren::Series, got {other:?}"),
         }
+    }
+
+    /// `file_views` must answer what `get_by_id` answers, for the facts the
+    /// calendar uses: visibility, a movie's file, a series' episode files in
+    /// order, and no file for an episode that has none.
+    #[tokio::test]
+    async fn file_views_match_get_by_id_for_movies_series_and_access() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let library = Uuid::new_v4();
+        let other_library = Uuid::new_v4();
+
+        let film = movie("Film", "Film", &[], 0);
+        let film_id = film.id;
+        repo.upsert(&film).await.unwrap();
+        let film_file = seed_numbered_media_file(&pool, film_id, LeafRef::Work, library, 1).await;
+
+        let show = series("Show", "Show");
+        let show_id = show.id;
+        repo.upsert(&show).await.unwrap();
+        let s1 = insert_season(&pool, show_id, 1, "S1").await;
+        let s2 = insert_season(&pool, show_id, 2, "S2").await;
+        let e11 = insert_episode(&pool, s1, 1, "One").await;
+        insert_episode(&pool, s1, 2, "Two (no file)").await;
+        let e21 = insert_episode(&pool, s2, 1, "Three").await;
+        // Seeded out of order on purpose.
+        let f21 = seed_numbered_media_file(&pool, show_id, LeafRef::Episode(e21), library, 2).await;
+        let f11 = seed_numbered_media_file(&pool, show_id, LeafRef::Episode(e11), library, 3).await;
+
+        let unsynced = movie("Unsynced", "Unsynced", &[], 0);
+        let unsynced_id = unsynced.id;
+        repo.upsert(&unsynced).await.unwrap();
+
+        let svc = service(pool, repo);
+        let ids = [film_id, show_id, unsynced_id, Uuid::new_v4()];
+
+        let views = svc
+            .file_views(&ids, &HashMap::new(), Access::default())
+            .await
+            .unwrap();
+        assert_eq!(views.len(), 3, "an unknown id is absent");
+        assert_eq!(views[&film_id].files, WorkFiles::Movie(Some(film_file)));
+        assert_eq!(views[&unsynced_id].files, WorkFiles::Movie(None));
+        assert_eq!(
+            views[&show_id].files,
+            WorkFiles::Series(vec![
+                EpisodeFile {
+                    season_number: 1,
+                    episode_number: 1,
+                    media_file_id: f11
+                },
+                EpisodeFile {
+                    season_number: 2,
+                    episode_number: 1,
+                    media_file_id: f21
+                },
+            ])
+        );
+        // Same facts as the full detail.
+        let detail = svc.get_by_id(show_id, None).await.unwrap();
+        let WorkChildren::Series(seasons) = detail.children else {
+            panic!("series")
+        };
+        let from_detail: Vec<(i32, i32, Uuid)> = seasons
+            .iter()
+            .flat_map(|s| {
+                s.episodes.iter().filter_map(|e| {
+                    Some((
+                        s.season.season_number,
+                        e.episode.episode_number,
+                        e.media_file_id?,
+                    ))
+                })
+            })
+            .collect();
+        let WorkFiles::Series(episodes) = &views[&show_id].files else {
+            panic!("series")
+        };
+        let from_view: Vec<(i32, i32, Uuid)> = episodes
+            .iter()
+            .map(|e| (e.season_number, e.episode_number, e.media_file_id))
+            .collect();
+        assert_eq!(from_detail, from_view);
+
+        // A restricted caller sees only works with a file in an allowed library.
+        let allowed = [library];
+        let views = svc
+            .file_views(&ids, &HashMap::new(), Access::from(Some(&allowed[..])))
+            .await
+            .unwrap();
+        assert_eq!(views.len(), 2);
+        assert!(!views.contains_key(&unsynced_id));
+        let elsewhere = [other_library];
+        assert!(svc
+            .file_views(&ids, &HashMap::new(), Access::from(Some(&elsewhere[..])))
+            .await
+            .unwrap()
+            .is_empty());
+
+        // A work the caller already loaded is not read again.
+        let known: HashMap<Uuid, Work> = HashMap::from([(film_id, views[&film_id].work.clone())]);
+        let again = svc
+            .file_views(&[film_id], &known, Access::default())
+            .await
+            .unwrap();
+        assert_eq!(again[&film_id].files, WorkFiles::Movie(Some(film_file)));
     }
 
     #[tokio::test]
