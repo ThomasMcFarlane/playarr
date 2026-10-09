@@ -373,9 +373,43 @@ function isConfirmKey(event: KeyboardEvent): boolean {
  * every handler (Link activation, long-press context menu) acts on the right
  * title. The matching keyup then goes to the newly focused element.
  */
+/**
+ * A redispatched (synthetic) Enter never triggers a link's or button's native activation. When no handler
+ * consumed it, the committed target must be clicked here. Targets wired through `itemProps` consume the key
+ * (preventDefault) and click on keyup, so they are left alone (audit A11).
+ */
+export function shouldClickAfterRedispatch(input: {
+  consumed: boolean;
+  key: string;
+  keyCode?: number;
+  tagName: string;
+  disabled?: boolean;
+  hasHref?: boolean;
+}): boolean {
+  if (input.consumed || input.disabled) return false;
+  const enterLike =
+    input.key === "Enter" || input.key === "Accept" || input.keyCode === 13 || input.keyCode === 23;
+  if (!enterLike) return false;
+  const tag = input.tagName.toUpperCase();
+  return tag === "BUTTON" || (tag === "A" && input.hasHref === true);
+}
+
+/** Alt/Ctrl/Meta chords (browser back, tab and window shortcuts) are never spatial moves (audit A22). */
+export function isPlainArrowEvent(event: {
+  defaultPrevented: boolean;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}): boolean {
+  return !event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey;
+}
+
 function commitVirtualFocusBeforeConfirm(event: KeyboardEvent): void {
   if (!isConfirmKey(event) || event.defaultPrevented) return;
   flushQueuedMoves();
+  // A field that took focus another way keeps its Enter: never redirect it to a stale virtual card (audit A23).
+  if (formControlDescriptor(event.target)) return;
+  dropStaleVirtualFocus();
   const virtual = remoteFocusElement;
   if (!virtual?.isConnected || document.activeElement === virtual) return;
   if (document.body.dataset.inputMode !== "remote") return;
@@ -393,6 +427,19 @@ function commitVirtualFocusBeforeConfirm(event: KeyboardEvent): void {
   // keyCode is read-only on the constructor; TV handlers still consult it.
   Object.defineProperty(redispatched, "keyCode", { value: event.keyCode });
   virtual.dispatchEvent(redispatched);
+  if (
+    virtual.isConnected &&
+    shouldClickAfterRedispatch({
+      consumed: redispatched.defaultPrevented,
+      key: event.key,
+      keyCode: event.keyCode,
+      tagName: virtual.tagName,
+      disabled: (virtual as HTMLButtonElement).disabled === true,
+      hasHref: virtual.hasAttribute("href"),
+    })
+  ) {
+    virtual.click();
+  }
 }
 
 let confirmCommitUsers = 0;
@@ -1499,6 +1546,7 @@ function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
             ? "right"
             : undefined;
   if (!direction) return false;
+  if (!isPlainArrowEvent(event)) return false;
 
   const formControl = formControlDescriptor(event.target);
   if (formControl && !shouldNavigateFromFormControl(event.key, formControl)) {

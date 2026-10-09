@@ -13,6 +13,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
+- Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
+- Web: opening or closing a side panel (Filters) no longer replays the page-enter transition, so the page content stays still and the panel slides in once instead of jumping, resetting and animating half; every right-side panel is always the full viewport height from its first frame.
+- Web: at 1101 to 1280 px the Release Calendar title steps down and wraps onto two lines instead of running under the shell clock (the clock keeps Home's position).
+- Web TV: Alt, Ctrl and Meta arrow chords and already-handled arrows are no longer turned into spatial moves.
+- Web TV: pressing OK right after an arrow move now opens link results (such as playlist results) that carry no long-press props, and Enter in a text field is never redirected to a stale card.
+- Web: going Back to Library, Home or Search no longer flashes a skeleton before content that is already cached, Search keeps its results when playlists load, and the detail page's loading state now has the loaded page's layout and shows the opened title.
+- Web: the series page re-reads its resume plan only when one of its own episodes' progress changed, not on every progress event for any title, and the runtime lookup for an episode is no longer dropped when the page state changes while it is in flight.
+- Web: Playlists bounds its per-playlist and per-work reads and reports failures instead of showing an empty list; a failed page load while jumping to a letter no longer rejects unhandled, and a stale page load no longer clears the current in-flight marker.
+- Web: the household gate fetches once on mount and ignores out-of-order replies; Remote settings polls every 15 s only while the tab is visible; the hold menu's Enter-release listener is attached only while needed and its work-detail cache no longer outlives the menu.
 - Android: preset profile avatars now use exactly the web client's artwork, gradient and highlight.
 - tvOS: the shell chip and the profile row show the account's custom photo avatar, instead of a preset picked from the profile id.
 - Roku: the identity chip and the profile row show the account's own avatar (preset or custom photo) instead of a hard-coded or id-hash preset, and all six presets now have their artwork.
@@ -797,6 +807,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
+- Removed the unused single-use approval mechanism, per the owner decision of 9 Oct 2026 (follow-up to the removal of purchase and install approvals): the `POST /api/v1/household/approvals/{id}/consume` endpoint, its repository method and response type, and the `max_uses` and `uses` fields and columns (migration 0082 rebuilds `household_approvals` without them). Approvals are only content and time grants bounded by their expiry; older peers that still send `max_uses` or `uses` are tolerated because unknown fields are ignored.
 - Guardian approvals no longer have `purchase` or `install` kinds (owner decision, 9 October 2026: Playarr has no store, so approvals cover only `content` and `time`). The kinds are gone from the model, API, OpenAPI contract, generated web types and the admin and web UI. Migration 0081 strips the two values from stored household policies and deletes their approval rows; reading a policy also skips unknown approval kinds, so old or replicated data never fails to load.
 - Removed the unused `pages.player.preparingPlayback`, `pages.player.preparingMessage` and `pages.player.oneMoment` translation strings.
 - Removed the Postgres backend: the `postgres` cargo features and `sqlx` Postgres driver, `backend/migrations/postgres`, the Postgres coordinator, `LISTEN`/`NOTIFY` cache and Postgres backup/restore paths, the Redis cache (only reachable on the shared-database tier), the `DeploymentTier` and `REDIS_URL` configuration, and the per-backend SQL variants in `playarr-db`. Playarr is SQLite-only (ADR 0002).
@@ -1814,6 +1826,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Added `playarr_db::WriteQueue`, a shared server write queue: one writer task commits whatever small writes are queued as one transaction (up to 64 writes or 5 ms), and every caller is acknowledged only after that commit. `synchronous = FULL` is unchanged. A failing write is rolled back alone; same-key "latest value wins" writes in one batch collapse to the newest; a full queue makes callers wait instead of dropping writes; shutdown drains the queue. Batch size, commit time and queue depth are counted and a slow batch logs a `slow write batch` warning. Measured on a file database with the production pragmas, 500 small writes: 27.8 s as one commit each, 0.24 s through the queue (8 commits). Adopters follow in separate changes.
 - Calendar API: each work's files are read once and concurrently when building per-entry actions, and the time spent resolving titles and files is logged.
 - Calendar API: building per-entry actions reads the viewer's household gate, request backend and watch progress once per request instead of once per entry.
 - Web: Calendar posters load directly from the provider at tile width again; routing them through the artwork proxy finished slower on a high-latency link.
@@ -2542,6 +2555,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web behaviour scripts: `focus-style-e2e` reads the card shadow only after running transitions finish (it caught the 260 ms lift mid-flight at 23.99 px), and `nav-smoke` waits for animations and scroll containers to go quiet instead of sleeping a fixed time (row 9623).
 - CI: a `web behaviour` job runs every web Playwright smoke and behaviour script in pull requests and is part of `ci-required`; the layout owner-request gate covers all web stylesheets and shell components; native parity captures are manual (`workflow_dispatch`) only, enforced by a check; the brand red is the `--brand` token.
 - Added a keyboard e2e check that the shared side-panel drawer returns focus to its opener (Filters on Movies, Search and Calendar; Escape and remote Back; both themes).
 - Web: a per-frame keyboard e2e asserts that opening and closing the library Filters drawer does not move the grid, header or preview (Movies and Series, both themes, 1920x1080 and 1280x720).
@@ -2585,6 +2599,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- App Store review notes and iOS release docs no longer ask for a demo server or review account: Playarr is bring-your-own-server and provides no servers.
 - Roku parity: light-theme measurements for every screen against the live web, with the known causes of the high figures.
 - Page layout spec: owner decisions recorded. The reference action pill is web's library Filters button as of 30 September 2026 (pinned to a commit), the header row grows to the tile height with items centred, Back and the period arrows stay round, focus is a ring with no fill (white in dark theme, ink in light theme), the drawer-open state keeps its ink fill, Customise Home moves into the header row, and the header and Back always show while loading or on error.
 - README, project site and Play listing screenshots show the open-movie demo library on the current UI again (retaken, with the README attribution tables and CC BY credits restored). They are produced by the new `scripts/showcase` setup, which is separate from the parity fixture, and a CI check rejects public screenshots that were not made with it.

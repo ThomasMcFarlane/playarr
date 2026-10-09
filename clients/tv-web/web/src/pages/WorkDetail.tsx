@@ -25,6 +25,8 @@ import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { AvailabilityLagNote } from "../components/AvailabilityLag";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
+import { knownWork } from "../lib/knownWorks";
+import { SkeletonBlock, SkeletonLines, SkeletonRails } from "../components/shell";
 import { CachedArtworkImage, PersonHeadshot, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { DownloadsIcon } from "../components/NavIcons";
@@ -1032,6 +1034,49 @@ function SeasonEpisodeTrack({
   );
 }
 
+/**
+ * The detail page while its data loads: the real frame (the same copy column and track surface as the loaded page, so
+ * every block sits where its final version will), filled from the card the viewer opened when it is known and with
+ * shimmer blocks for the rest.
+ */
+function DetailPending({ work, fallbackKind, label }: { work: Work | undefined; fallbackKind: "series" | "movie"; label: string }) {
+  const series = (work?.kind ?? fallbackKind) === "series";
+  return (
+    <>
+      <aside className="tv-detail-copy" role="status" aria-busy="true" aria-label={label}>
+        {work?.genres[0] ? (
+          <p className="tv-detail-kicker">{work.genres[0]}</p>
+        ) : (
+          <SkeletonBlock height="0.8rem" width="6rem" />
+        )}
+        {work ? (
+          <h2 className="tv-detail-title">{work.title}</h2>
+        ) : (
+          <div className="skeleton-detail-title" aria-hidden="true">
+            <SkeletonBlock height="3.4rem" width="min(18rem, 90%)" />
+            <SkeletonBlock height="3.4rem" width="min(12rem, 60%)" />
+          </div>
+        )}
+        <div className="tv-detail-meta" aria-hidden="true">
+          <SkeletonBlock height="0.8rem" width="12rem" />
+        </div>
+        <div className="skeleton-detail-synopsis" aria-hidden="true">
+          <SkeletonLines count={3} />
+        </div>
+        <div className="tv-detail-actions" aria-hidden="true">
+          <SkeletonBlock height="3.2rem" width="8rem" style={{ borderRadius: 999 }} />
+          <SkeletonBlock height="3.2rem" width="8rem" style={{ borderRadius: 999 }} />
+        </div>
+      </aside>
+      <TvRailSurface className={series ? "tv-series-browser" : "tv-movie-browser"} mode="content">
+        <div className="skeleton-detail-track" aria-hidden="true">
+          <SkeletonRails rails={series ? 2 : 1} cards={5} />
+        </div>
+      </TvRailSurface>
+    </>
+  );
+}
+
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
   const { t } = useLanguage();
@@ -1121,6 +1166,22 @@ export function WorkDetailPage() {
   const detailWorkId = detailWork?.id ?? null;
   const detailWorkGenres = detailWork?.genres.join("\u0000") ?? "";
   const resumeSeriesId = detailWork?.kind === "series" ? detailWork.id : null;
+  // `progressByMedia` is every title's progress and gets a new identity on any progress event, so the
+  // resume plan keys on this series' own episodes instead: it is only re-read when one of them moved.
+  const seriesProgressKey = useMemo(() => {
+    if (!resumeSeriesId || state.status !== "ready") return "";
+    const children = state.data.children;
+    if (typeof children !== "object" || children === null || !("Series" in children)) return "";
+    const parts: string[] = [];
+    for (const season of children.Series) {
+      for (const episode of season.episodes) {
+        const mediaFileId = episode.media_file_id;
+        const progress = mediaFileId ? progressByMedia.get(mediaFileId) : undefined;
+        if (mediaFileId && progress) parts.push(`${mediaFileId}:${progress.state}:${progress.position_ms}`);
+      }
+    }
+    return parts.join("|");
+  }, [resumeSeriesId, state, progressByMedia]);
   useEffect(() => {
     if (!resumeSeriesId) return;
     let cancelled = false;
@@ -1141,7 +1202,7 @@ export function WorkDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, resumeSeriesId, progressByMedia]);
+  }, [client, resumeSeriesId, seriesProgressKey]);
   const artworkWork =
     state.status === "ready"
       ? state.data.work
@@ -1386,12 +1447,14 @@ export function WorkDetailPage() {
     if (runtimeByMedia.has(mediaFileId) || runtimeRequestsRef.current.has(mediaFileId)) return;
     runtimeRequestsRef.current.add(mediaFileId);
 
-    let cancelled = false;
+    // Not cancelled by the effect lifecycle: this effect re-runs whenever `runtimeByMedia` changes, and
+    // the request guard above would then skip the re-run, dropping a result that is still wanted. The
+    // result is keyed by media file id, so storing it late is always correct.
     client
       .getMediaMetadata(mediaFileId)
       .then((metadata) => {
         runtimeRequestsRef.current.delete(mediaFileId);
-        if (cancelled || metadata.duration_ms <= 0) return;
+        if (metadata.duration_ms <= 0) return;
         setRuntimeByMedia((current) => {
           const next = new Map(current);
           next.set(mediaFileId, metadata.duration_ms);
@@ -1403,9 +1466,6 @@ export function WorkDetailPage() {
         // A genuinely unreadable/missing source stays unavailable; opening
         // another episode retries only that file, never the whole library.
       });
-    return () => {
-      cancelled = true;
-    };
   }, [client, runtimeByMedia, runtimeTarget]);
 
   useEffect(() => {
@@ -1625,6 +1685,7 @@ export function WorkDetailPage() {
       search: location.search,
       t,
     });
+    const preview = knownWork(workId);
     const pendingSection = location.pathname.startsWith("/search/")
       ? t("shell.nav.search")
       : location.pathname.startsWith("/playlists/")
@@ -1639,9 +1700,18 @@ export function WorkDetailPage() {
         pageId="work-detail"
         className="tv-detail"
         ariaLabel={t("pages.workDetail.loadingTitleDetailsAriaLabel")}
+        backdrop={
+          preview
+            ? {
+                artKey: preview.id,
+                art: <CachedArtworkImage work={preview} kinds={["backdrop", "poster"]} alt="" fallback={<span>{preview.title}</span>} />,
+              }
+            : undefined
+        }
         header={{
           variant: "detail",
           title: pendingSection,
+          detail: preview?.title,
           back: {
             label: t("pages.workDetail.backTo", { destination: pendingBack.backLabel }),
             onBack: () => {
@@ -1662,9 +1732,17 @@ export function WorkDetailPage() {
                     description: t("pages.workDetail.titleDetailsUnavailableDescription"),
                   },
                 }
-              : { kind: "loading", skeleton: "detail", label: t("pages.workDetail.loadingDetails") }
+              : undefined
         }
-      />
+      >
+        {state.status === "error" || state.status === "empty" ? null : (
+          <DetailPending
+            work={preview}
+            fallbackKind={pendingBase === "/series" ? "series" : "movie"}
+            label={t("pages.workDetail.loadingDetails")}
+          />
+        )}
+      </PageLayout>
     );
   }
 

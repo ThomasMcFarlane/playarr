@@ -462,7 +462,6 @@ fn api_router() -> OpenApiRouter<AppState> {
             household::list_approvals_handler
         ))
         .routes(routes!(household::decide_approval_handler))
-        .routes(routes!(household::consume_approval_handler))
         .routes(routes!(
             household::get_user_household_handler,
             household::put_user_household_handler

@@ -38,7 +38,7 @@ remain pending and are not authorised by this runbook:
 - Review and update Apple-platform coverage in the linked privacy policy (task 285).
 - Replace the source `InstalledAppVersion.appStoreID` placeholder before relying on the App Store
 deep link.
-- Prepare public listing screenshots and metadata, plus complete App Review access instructions.
+- Prepare public listing screenshots and metadata, plus App Review notes explaining the bring-your-own-server model (Playarr provides no demo server or hosted review account; how App Review gets access is an open owner question, task 289).
 - Obtain explicit authorisation before public App Store submission and complete App Review.
 
 Do not interpret internal beta state as public approval or device installation evidence.

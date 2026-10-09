@@ -5623,11 +5623,15 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .tv-filter-drawer {
-  position: absolute;
+  /* Always the full viewport height from the first frame of the slide: placed against the viewport, never a page
+     container (a content-sized ancestor made the Calendar panel open short, then jump to full height). */
+  position: fixed;
   z-index: 60;
   top: 0;
   right: 0;
   bottom: 0;
+  height: calc(100 * var(--viewport-unit));
+  max-height: none;
   width: min(360px, calc(27 * var(--vw)));
   min-width: 300px;
   display: grid;

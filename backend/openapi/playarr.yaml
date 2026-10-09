@@ -4407,32 +4407,6 @@ paths:
           description: Too many pending requests
       security:
       - bearer_auth: []
-  /api/v1/household/approvals/{id}/consume:
-    post:
-      tags:
-      - household
-      operationId: consume_approval_handler
-      parameters:
-      - name: id
-        in: path
-        description: Approval id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: One use of the approval was consumed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConsumeApprovalResponse'
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Approval is not approved, expired, exhausted or belongs to another profile
-      security:
-      - bearer_auth: []
   /api/v1/household/approvals/{id}/decision:
     post:
       tags:
@@ -8818,7 +8792,6 @@ components:
       - status
       - requested_at
       - request_expires_at
-      - uses
       - bonus_seconds
       properties:
         bonus_seconds:
@@ -8846,15 +8819,6 @@ components:
           format: uuid
         kind:
           $ref: '#/components/schemas/ApprovalKind'
-        max_uses:
-          type:
-          - integer
-          - 'null'
-          format: int32
-          description: |-
-            `None` = unlimited uses within the grant window (content/time grants
-            are re-checked on every request).
-          minimum: 0
         note:
           type:
           - string
@@ -8876,10 +8840,6 @@ components:
         subject:
           type: string
           description: '`Content`: the work id. `Time`: `"schedule"` or `"budget"`.'
-        uses:
-          type: integer
-          format: int32
-          minimum: 0
     ApprovalKind:
       type: string
       description: Things a guardian can be asked to approve.
@@ -9827,13 +9787,6 @@ components:
             RFC 3339 timestamp after which `min_supported_version` will be
             ratcheted up; surfaced to clients so they can warn users ahead of
             time rather than being cut off with no notice.
-    ConsumeApprovalResponse:
-      type: object
-      required:
-      - consumed
-      properties:
-        consumed:
-          type: boolean
     CreateApprovalRequest:
       type: object
       required:

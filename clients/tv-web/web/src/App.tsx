@@ -109,6 +109,7 @@ import {
 import { ShellActionColumnProvider } from "./components/shell/ShellActionColumn";
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
+import { localeTagFor } from "./lib/i18n/languages";
 import { DWELL_PREFETCH_MS, prefetchRoute } from "./lib/prefetch";
 import type { TranslationKey } from "./lib/i18n/translations";
 import {
@@ -120,11 +121,6 @@ import { profileAvatarScope } from "./lib/profileAvatar";
 
 const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
 
-const LOCALE_TAGS: Record<string, string> = {
-  en: "en-GB",
-  th: "th-TH",
-  ja: "ja-JP",
-};
 
 interface NavItem {
   to: string;
@@ -197,7 +193,7 @@ function AppShell() {
   const client = useApiClient();
   const [apiBaseUrl] = useApiBaseUrl();
   const { t, language } = useLanguage();
-  const localeTag = LOCALE_TAGS[language] ?? "en-GB";
+  const localeTag = localeTagFor(language);
   // Focusing a nav item for a moment warms the page behind it; moving on cancels.
   const navPrefetchTimer = useRef(0);
   const startNavPrefetch = (path: string) => {

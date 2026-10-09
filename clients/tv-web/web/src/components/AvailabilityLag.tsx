@@ -3,6 +3,7 @@ import { useAsyncData } from "@playarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatHumanDuration } from "../lib/calendar";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { localeTagFor } from "../lib/i18n/languages";
 
 type TFunction = ReturnType<typeof useLanguage>["t"];
 
@@ -42,7 +43,7 @@ export function AvailabilityLagNote({ workId }: { workId: string }) {
   const { t, language } = useLanguage();
   const state = useAsyncData(() => client.getAvailabilityLag(workId), [client, workId]);
   if (state.status !== "ready") return null;
-  const lines = availabilityLagLines(state.data, t, language);
+  const lines = availabilityLagLines(state.data, t, localeTagFor(language));
   return (
     <p className="availability-lag" data-testid="availability-lag">
       <span className="availability-lag-primary">{lines.primary}</span>

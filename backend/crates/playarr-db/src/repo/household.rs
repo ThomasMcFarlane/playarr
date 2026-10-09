@@ -33,7 +33,6 @@ pub trait ApprovalRepo: Send + Sync {
     /// Atomically moves a still-pending, unexpired request to `status`.
     /// Returns whether a row changed (false = not pending, expired or
     /// unknown), so two concurrent decisions cannot both win.
-    #[allow(clippy::too_many_arguments)]
     async fn decide(
         &self,
         id: Uuid,
@@ -41,19 +40,9 @@ pub trait ApprovalRepo: Send + Sync {
         decided_by: Uuid,
         now: DateTime<Utc>,
         grant_expires_at: Option<DateTime<Utc>>,
-        max_uses: Option<u32>,
         bonus_seconds: i64,
     ) -> Result<bool, DbError>;
-    /// Atomically uses one grant of `id` for `profile_user_id`. False when
-    /// the approval is not approved, belongs to another profile, is expired
-    /// or has no uses left.
-    async fn consume(
-        &self,
-        id: Uuid,
-        profile_user_id: Uuid,
-        now: DateTime<Utc>,
-    ) -> Result<bool, DbError>;
-    /// Approved, unexpired, not-exhausted grants of `kind` for a profile.
+    /// Approved, unexpired grants of `kind` for a profile.
     async fn active_grants(
         &self,
         profile_user_id: Uuid,
@@ -97,7 +86,7 @@ impl SqlxHouseholdRepo {
 }
 
 const APPROVAL_COLUMNS: &str = "id, profile_user_id, kind, subject, note, status, requested_at, \
-     request_expires_at, decided_by, decided_at, grant_expires_at, max_uses, uses, bonus_seconds";
+     request_expires_at, decided_by, decided_at, grant_expires_at, bonus_seconds";
 
 fn approval_from_row(row: &AnyRow) -> Result<Approval, DbError> {
     let kind: String = row.try_get("kind")?;
@@ -105,8 +94,6 @@ fn approval_from_row(row: &AnyRow) -> Result<Approval, DbError> {
     let decided_by: Option<String> = row.try_get("decided_by")?;
     let decided_at: Option<String> = row.try_get("decided_at")?;
     let grant_expires_at: Option<String> = row.try_get("grant_expires_at")?;
-    let max_uses: Option<i64> = row.try_get("max_uses")?;
-    let uses: i64 = row.try_get("uses")?;
     let id: String = row.try_get("id")?;
     let profile: String = row.try_get("profile_user_id")?;
     let requested_at: String = row.try_get("requested_at")?;
@@ -128,8 +115,6 @@ fn approval_from_row(row: &AnyRow) -> Result<Approval, DbError> {
             .as_deref()
             .map(parse_datetime)
             .transpose()?,
-        max_uses: max_uses.map(|n| n as u32),
-        uses: uses as u32,
         bonus_seconds: row.try_get("bonus_seconds")?,
     })
 }
@@ -167,7 +152,7 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         let sql =
             "INSERT INTO household_approvals (id, profile_user_id, kind, subject, note, status, \
              requested_at, request_expires_at, decided_by, decided_at, grant_expires_at, \
-             max_uses, uses, bonus_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+             bonus_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(a.id.to_string())
             .bind(a.profile_user_id.to_string())
@@ -180,8 +165,6 @@ impl ApprovalRepo for SqlxHouseholdRepo {
             .bind(a.decided_by.map(|u| u.to_string()))
             .bind(a.decided_at.map(format_datetime))
             .bind(a.grant_expires_at.map(format_datetime))
-            .bind(a.max_uses.map(i64::from))
-            .bind(i64::from(a.uses))
             .bind(a.bonus_seconds)
             .execute(&self.pool)
             .await?;
@@ -230,38 +213,18 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         decided_by: Uuid,
         now: DateTime<Utc>,
         grant_expires_at: Option<DateTime<Utc>>,
-        max_uses: Option<u32>,
         bonus_seconds: i64,
     ) -> Result<bool, DbError> {
         let sql = "UPDATE household_approvals SET status = ?, decided_by = ?, decided_at = ?, \
-             grant_expires_at = ?, max_uses = ?, bonus_seconds = ? \
+             grant_expires_at = ?, bonus_seconds = ? \
              WHERE id = ? AND status = 'pending' AND request_expires_at > ?";
         let result = sqlx::query(sql)
             .bind(status.as_str())
             .bind(decided_by.to_string())
             .bind(format_datetime(now))
             .bind(grant_expires_at.map(format_datetime))
-            .bind(max_uses.map(i64::from))
             .bind(bonus_seconds)
             .bind(id.to_string())
-            .bind(format_datetime(now))
-            .execute(&self.pool)
-            .await?;
-        Ok(result.rows_affected() == 1)
-    }
-
-    async fn consume(
-        &self,
-        id: Uuid,
-        profile_user_id: Uuid,
-        now: DateTime<Utc>,
-    ) -> Result<bool, DbError> {
-        let sql = "UPDATE household_approvals SET uses = uses + 1 \
-             WHERE id = ? AND profile_user_id = ? AND status = 'approved' \
-             AND grant_expires_at > ? AND (max_uses IS NULL OR uses < max_uses)";
-        let result = sqlx::query(sql)
-            .bind(id.to_string())
-            .bind(profile_user_id.to_string())
             .bind(format_datetime(now))
             .execute(&self.pool)
             .await?;
@@ -276,8 +239,7 @@ impl ApprovalRepo for SqlxHouseholdRepo {
     ) -> Result<Vec<Approval>, DbError> {
         let sql = format!(
             "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = ? \
-                 AND kind = ? AND status = 'approved' AND grant_expires_at > ? \
-                 AND (max_uses IS NULL OR uses < max_uses)"
+                 AND kind = ? AND status = 'approved' AND grant_expires_at > ?"
         );
         let rows = sqlx::query(&sql)
             .bind(profile_user_id.to_string())
@@ -382,8 +344,6 @@ mod tests {
             decided_by: None,
             decided_at: None,
             grant_expires_at: None,
-            max_uses: None,
-            uses: 0,
             bonus_seconds: 0,
         }
     }
@@ -409,20 +369,12 @@ mod tests {
         let grant = Some(now + Duration::hours(1));
         let guardian = Uuid::new_v4();
         assert!(repo
-            .decide(
-                a.id,
-                ApprovalStatus::Approved,
-                guardian,
-                now,
-                grant,
-                None,
-                0
-            )
+            .decide(a.id, ApprovalStatus::Approved, guardian, now, grant, 0)
             .await
             .unwrap());
         // A second decision loses.
         assert!(!repo
-            .decide(a.id, ApprovalStatus::Denied, guardian, now, None, None, 0)
+            .decide(a.id, ApprovalStatus::Denied, guardian, now, None, 0)
             .await
             .unwrap());
         let stored = repo.get(a.id).await.unwrap().unwrap();
@@ -433,60 +385,7 @@ mod tests {
         late.request_expires_at = now - Duration::minutes(1);
         repo.insert(&late).await.unwrap();
         assert!(!repo
-            .decide(
-                late.id,
-                ApprovalStatus::Approved,
-                guardian,
-                now,
-                grant,
-                None,
-                0
-            )
-            .await
-            .unwrap());
-    }
-
-    #[tokio::test]
-    async fn consume_is_single_use_scoped_and_expiring() {
-        let repo = SqlxHouseholdRepo::new(test_sqlite_pool().await);
-        let a = approval(ApprovalKind::Content);
-        repo.insert(&a).await.unwrap();
-        let now = Utc::now();
-        // Not approved yet.
-        assert!(!repo.consume(a.id, a.profile_user_id, now).await.unwrap());
-        repo.decide(
-            a.id,
-            ApprovalStatus::Approved,
-            Uuid::new_v4(),
-            now,
-            Some(now + Duration::minutes(10)),
-            Some(1),
-            0,
-        )
-        .await
-        .unwrap();
-        // Another profile cannot use it.
-        assert!(!repo.consume(a.id, Uuid::new_v4(), now).await.unwrap());
-        assert!(repo.consume(a.id, a.profile_user_id, now).await.unwrap());
-        // Second use is refused.
-        assert!(!repo.consume(a.id, a.profile_user_id, now).await.unwrap());
-
-        let b = approval(ApprovalKind::Time);
-        repo.insert(&b).await.unwrap();
-        repo.decide(
-            b.id,
-            ApprovalStatus::Approved,
-            Uuid::new_v4(),
-            now,
-            Some(now + Duration::minutes(10)),
-            Some(1),
-            0,
-        )
-        .await
-        .unwrap();
-        // After expiry.
-        assert!(!repo
-            .consume(b.id, b.profile_user_id, now + Duration::minutes(11))
+            .decide(late.id, ApprovalStatus::Approved, guardian, now, grant, 0)
             .await
             .unwrap());
     }
@@ -510,7 +409,6 @@ mod tests {
                 Uuid::new_v4(),
                 now - Duration::hours(2),
                 Some(expires),
-                None,
                 0,
             )
             .await

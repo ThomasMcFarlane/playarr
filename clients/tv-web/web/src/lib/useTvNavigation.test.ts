@@ -3,7 +3,9 @@ import {
   centredVerticalTrackScrollTop,
   directionalVerticalScrollTop,
   horizontalRevealDelta,
+  isPlainArrowEvent,
   parentRoute,
+  shouldClickAfterRedispatch,
   shouldAutoFocusViewDefault,
   tvBackNavigationTarget,
 } from "./useTvNavigation";
@@ -137,5 +139,36 @@ describe("directional page fallback", () => {
         scrollPaddingLeft: 80,
       })
     ).toBe(-140);
+  });
+});
+
+describe("isPlainArrowEvent (audit A22)", () => {
+  it("accepts a bare arrow", () => {
+    expect(isPlainArrowEvent({ defaultPrevented: false })).toBe(true);
+  });
+
+  it("passes modifier chords and already-handled keys through", () => {
+    expect(isPlainArrowEvent({ defaultPrevented: false, altKey: true })).toBe(false);
+    expect(isPlainArrowEvent({ defaultPrevented: false, ctrlKey: true })).toBe(false);
+    expect(isPlainArrowEvent({ defaultPrevented: false, metaKey: true })).toBe(false);
+    expect(isPlainArrowEvent({ defaultPrevented: true })).toBe(false);
+  });
+});
+
+describe("shouldClickAfterRedispatch (audit A11)", () => {
+  const link = { consumed: false, key: "Enter", tagName: "A", hasHref: true };
+
+  it("clicks a link or button that no handler consumed", () => {
+    expect(shouldClickAfterRedispatch(link)).toBe(true);
+    expect(shouldClickAfterRedispatch({ ...link, tagName: "BUTTON", hasHref: false })).toBe(true);
+    expect(shouldClickAfterRedispatch({ ...link, key: "Unidentified", keyCode: 23 })).toBe(true);
+  });
+
+  it("leaves consumed, disabled, href-less and non-Enter cases alone", () => {
+    expect(shouldClickAfterRedispatch({ ...link, consumed: true })).toBe(false);
+    expect(shouldClickAfterRedispatch({ ...link, disabled: true })).toBe(false);
+    expect(shouldClickAfterRedispatch({ ...link, hasHref: false })).toBe(false);
+    expect(shouldClickAfterRedispatch({ ...link, key: " " })).toBe(false);
+    expect(shouldClickAfterRedispatch({ ...link, tagName: "DIV" })).toBe(false);
   });
 });
