@@ -325,6 +325,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Request failures returned by the API no longer name the request service or its product (details stay in the server log).
 - The web client and admin no longer name source providers in user-visible text; a new audit test (with an allowlist for admin integration setup screens) fails on new occurrences.
 - Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
 - A peer's availability snapshot is replaced in one transaction, and the events one change raises are stored in one transaction, so each does one commit sync instead of one per row (500 rows: 25 s as separate commits, 0.13 s as one, on a busy local disk). Synchronous stays FULL.
