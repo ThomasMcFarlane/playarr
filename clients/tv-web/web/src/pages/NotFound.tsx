@@ -7,9 +7,8 @@ export function NotFoundPage() {
   useDocumentTitle(t("pages.notFound.title"));
 
   return (
-    <section className="not-found-page" aria-labelledby="not-found-heading">
+    <section className="not-found-page" aria-labelledby="not-found-heading" tabIndex={0}>
       <div className="not-found-art" aria-hidden="true">
-        <span className="not-found-code">404</span>
         <svg viewBox="0 0 640 420" focusable="false">
           <path
             className="not-found-orbit"

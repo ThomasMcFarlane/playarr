@@ -27,7 +27,8 @@ describe("NotFoundPage", () => {
     );
 
     expect(markup).toContain('class="not-found-page"');
-    expect(markup).toContain('class="not-found-code">404</span>');
+    // The large 404 is decorative generated content (.not-found-art::before), not text in the document.
+    expect(markup).not.toContain("not-found-code");
     expect(markup).toContain('<h1 id="not-found-heading">Page not found</h1>');
     expect(markup).not.toContain('href="/"');
   });
