@@ -16,7 +16,6 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Datelike, Utc};
 use playarr_arr_client::{LookupTitle, RadarrClient, SonarrClient};
-use playarr_catalog::WorkChildren;
 use playarr_model::discovery::{
     compute_actions, identity_key, merge_candidates, ActionContext, DiscoveryCandidate,
     DiscoveryKind, DiscoveryScope, DiscoveryTitle, ProviderState, ProviderStatus,
@@ -530,6 +529,11 @@ pub async fn discover_handler(
     Ok(Json(DiscoverResponse { titles, providers }))
 }
 
+type RequestsCell = std::sync::Arc<
+    tokio::sync::OnceCell<std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>>,
+>;
+type ProviderCell = std::sync::Arc<tokio::sync::OnceCell<Option<(Uuid, String)>>>;
+
 /// The library work (visible to the caller) matching a snapshot, by id first
 /// and then by any external ref.
 /// Per-request memo for resolving many snapshots for one viewer (the
@@ -541,23 +545,25 @@ pub(crate) struct ResolveMemo {
     gate: tokio::sync::OnceCell<Option<std::sync::Arc<crate::household::HouseholdGate>>>,
     backend: tokio::sync::OnceCell<RequestBackend>,
     progress: tokio::sync::OnceCell<Vec<playarr_model::WatchProgress>>,
-    /// Work details read this request. The viewer's access does not change
-    /// within a request, so a title's detail is loaded (and its cached JSON
-    /// decoded) once however many steps need it.
     /// Works found by external ref this request (`None`: no such work).
     works_by_ref:
         tokio::sync::Mutex<std::collections::HashMap<playarr_model::ExternalRef, Option<Work>>>,
     /// The viewer's watchlist keys, read once.
     watchlist: tokio::sync::OnceCell<std::collections::HashSet<String>>,
     /// Requests per kind (oldest first), read once.
-    requests_by_kind: tokio::sync::Mutex<
-        std::collections::HashMap<
-            DiscoveryKind,
-            std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>,
-        >,
-    >,
-    details: tokio::sync::Mutex<
-        std::collections::HashMap<Uuid, Option<std::sync::Arc<playarr_catalog::WorkDetail>>>,
+    requests_by_kind: tokio::sync::Mutex<std::collections::HashMap<DiscoveryKind, RequestsCell>>,
+    /// Set when a read failed, so the answer built from this memo is partial
+    /// and must not be cached.
+    failed: std::sync::atomic::AtomicBool,
+    /// Work files read this request, `None` for a work the viewer may not
+    /// see. The viewer's access does not change within a request, so each
+    /// work is loaded once, and [`Self::prime`] loads them all in a few
+    /// queries.
+    /// The request provider per kind: the same answer for every title of a
+    /// kind within a request, and reading it can cost a query.
+    providers: tokio::sync::Mutex<std::collections::HashMap<DiscoveryKind, ProviderCell>>,
+    views: tokio::sync::Mutex<
+        std::collections::HashMap<Uuid, Option<std::sync::Arc<playarr_catalog::WorkFileView>>>,
     >,
 }
 
@@ -578,32 +584,105 @@ impl ResolveMemo {
             .clone()
     }
 
+    /// Records refs a caller has already looked up (`None`: no such work).
+    pub(crate) async fn seed_works(
+        &self,
+        found: impl IntoIterator<Item = (playarr_model::ExternalRef, Option<Work>)>,
+    ) {
+        self.works_by_ref.lock().await.extend(found);
+    }
+
     /// Looks up every ref of `snapshots` in a few queries, so the per-title
     /// steps that follow find them in memory.
     pub(crate) async fn prime<'a>(
         &self,
         state: &AppState,
+        viewer: &CatalogViewer,
         snapshots: impl IntoIterator<Item = &'a TitleSnapshot>,
     ) {
+        let snapshots: Vec<&TitleSnapshot> = snapshots.into_iter().collect();
         let mut wanted: Vec<playarr_model::ExternalRef> = Vec::new();
         {
             let known = self.works_by_ref.lock().await;
-            for r in snapshots.into_iter().flat_map(|s| s.external_refs.iter()) {
-                if !known.contains_key(r) && !wanted.contains(r) {
+            let mut seen = std::collections::HashSet::new();
+            for r in snapshots.iter().flat_map(|s| s.external_refs.iter()) {
+                if !known.contains_key(r) && seen.insert(r) {
                     wanted.push(r.clone());
                 }
             }
         }
+        if !wanted.is_empty() {
+            // On failure leave the map unfilled: each ref is then looked up singly.
+            if let Ok(mut found) = state.work_repo.find_by_external_refs(&wanted).await {
+                let mut known = self.works_by_ref.lock().await;
+                for r in wanted {
+                    let work = found.remove(&r);
+                    known.insert(r, work);
+                }
+            }
+        }
+        // Every work any snapshot can resolve to, loaded together.
+        let mut ids: Vec<Uuid> = Vec::new();
+        {
+            let known = self.works_by_ref.lock().await;
+            for snap in &snapshots {
+                ids.extend(snap.work_id);
+                ids.extend(
+                    snap.external_refs
+                        .iter()
+                        .filter_map(|r| known.get(r).and_then(|w| w.as_ref()))
+                        .filter(|w| DiscoveryKind::from(w.kind) == snap.kind)
+                        .map(|w| w.id),
+                );
+            }
+        }
+        self.prime_views(state, viewer, ids).await;
+    }
+
+    /// Loads the files of `ids` (those not loaded yet) in a few queries.
+    async fn prime_views(&self, state: &AppState, viewer: &CatalogViewer, ids: Vec<Uuid>) {
+        let wanted: Vec<Uuid> = {
+            let views = self.views.lock().await;
+            let mut seen = std::collections::HashSet::new();
+            ids.into_iter()
+                .filter(|id| !views.contains_key(id) && seen.insert(*id))
+                .collect()
+        };
         if wanted.is_empty() {
             return;
         }
-        // On failure leave the map unfilled: each ref is then looked up singly.
-        if let Ok(mut found) = state.work_repo.find_by_external_refs(&wanted).await {
-            let mut known = self.works_by_ref.lock().await;
-            for r in wanted {
-                let work = found.remove(&r);
-                known.insert(r, work);
+        let known: std::collections::HashMap<Uuid, Work> = self
+            .works_by_ref
+            .lock()
+            .await
+            .values()
+            .flatten()
+            .map(|w| (w.id, w.clone()))
+            .collect();
+        let allowed = viewer.allowed_libraries();
+        let gate = self.gate(state, viewer).await;
+        let loaded = state
+            .catalog
+            .file_views(
+                &wanted,
+                &known,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
+            .await;
+        // On failure leave them unloaded and flag the memo, so the answer is
+        // not cached: a read error must not look like "not in the library".
+        let mut loaded = match loaded {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                tracing::warn!(?error, "discovery: work files could not be read");
+                self.mark_failed();
+                return;
             }
+        };
+        let mut views = self.views.lock().await;
+        for id in wanted {
+            let view = loaded.remove(&id).map(std::sync::Arc::new);
+            views.insert(id, view);
         }
     }
 
@@ -652,39 +731,58 @@ impl ResolveMemo {
         state: &AppState,
         kind: DiscoveryKind,
     ) -> Option<std::sync::Arc<Vec<playarr_model::requests::MediaRequest>>> {
-        if let Some(found) = self.requests_by_kind.lock().await.get(&kind) {
-            return Some(found.clone());
-        }
-        let rows = std::sync::Arc::new(state.request_sync.requests.list_for_kind(kind).await.ok()?);
-        self.requests_by_kind
+        // One cell per kind, so concurrent titles share one read.
+        let cell = self
+            .requests_by_kind
             .lock()
             .await
-            .insert(kind, rows.clone());
-        Some(rows)
+            .entry(kind)
+            .or_default()
+            .clone();
+        // An error is not memoised: the next title asks again.
+        let rows = cell
+            .get_or_try_init(|| async {
+                state
+                    .request_sync
+                    .requests
+                    .list_for_kind(kind)
+                    .await
+                    .map(std::sync::Arc::new)
+            })
+            .await;
+        match rows {
+            Ok(rows) => Some(rows.clone()),
+            Err(error) => {
+                tracing::warn!(?error, "discovery: request list failed");
+                self.mark_failed();
+                None
+            }
+        }
     }
 
-    pub(crate) async fn detail(
+    pub(crate) fn mark_failed(&self) {
+        self.failed
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// `true` when every read this memo made succeeded.
+    pub(crate) fn complete(&self) -> bool {
+        !self.failed.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The work and its files, `None` when it does not exist or the viewer
+    /// may not see it.
+    pub(crate) async fn view(
         &self,
         state: &AppState,
         viewer: &CatalogViewer,
         id: Uuid,
-    ) -> Option<std::sync::Arc<playarr_catalog::WorkDetail>> {
-        if let Some(found) = self.details.lock().await.get(&id) {
+    ) -> Option<std::sync::Arc<playarr_catalog::WorkFileView>> {
+        if let Some(found) = self.views.lock().await.get(&id) {
             return found.clone();
         }
-        let allowed = viewer.allowed_libraries();
-        let gate = self.gate(state, viewer).await;
-        let loaded = state
-            .catalog
-            .get_by_id_with(
-                id,
-                crate::household::access(allowed.as_deref(), gate.as_deref()),
-            )
-            .await
-            .ok()
-            .map(std::sync::Arc::new);
-        self.details.lock().await.insert(id, loaded.clone());
-        loaded
+        self.prime_views(state, viewer, vec![id]).await;
+        self.views.lock().await.get(&id).cloned().flatten()
     }
 
     async fn backend(&self, state: &AppState) -> RequestBackend {
@@ -722,8 +820,8 @@ async fn find_library_work(
         }
     }
     for id in ids {
-        if let Some(detail) = memo.detail(state, viewer, id).await {
-            return Ok(Some(detail.work.clone()));
+        if let Some(view) = memo.view(state, viewer, id).await {
+            return Ok(Some(view.work.clone()));
         }
     }
     Ok(None)
@@ -745,11 +843,12 @@ async fn request_overlay(
     let num = |p| ref_id(snap, p).and_then(|v| v.parse::<i64>().ok());
     let rows = memo.requests_of(state, snap.kind).await?;
     let row = playarr_db::match_request(
-        rows.iter().cloned(),
+        rows.iter(),
         num(ExternalProvider::Tmdb),
         num(ExternalProvider::Tvdb),
         ref_id(snap, ExternalProvider::Imdb).as_deref(),
-    )?;
+    )?
+    .clone();
     let mine = row.requester_user_id == Some(viewer.user_id);
     Some(RequestOverlay {
         request_id: row.id,
@@ -767,6 +866,17 @@ async fn request_overlay(
 /// The request provider a viewer's request goes to: the Ombi/Seerr
 /// integration when the backend mode selects one, else the first Radarr/Sonarr.
 async fn request_provider(
+    state: &AppState,
+    kind: DiscoveryKind,
+    memo: &ResolveMemo,
+) -> Option<(Uuid, String)> {
+    let cell = memo.providers.lock().await.entry(kind).or_default().clone();
+    cell.get_or_init(|| request_provider_uncached(state, kind, memo))
+        .await
+        .clone()
+}
+
+async fn request_provider_uncached(
     state: &AppState,
     kind: DiscoveryKind,
     memo: &ResolveMemo,
@@ -817,7 +927,7 @@ async fn build_action_context(
         return Ok(ctx);
     };
     ctx.library_work_id = Some(work.id);
-    let detail = memo.detail(state, viewer, work.id).await;
+    let view = memo.view(state, viewer, work.id).await;
     let progress = memo.progress(state, viewer).await?;
     let for_work: Vec<_> = progress.iter().filter(|p| p.work_id == work.id).collect();
     // list_for_user is newest first.
@@ -830,13 +940,10 @@ async fn build_action_context(
             .iter()
             .any(|p| p.media_file_id == file && p.state == WatchState::Watched)
     };
-    ctx.playable_media_file_id = match detail.as_ref().map(|d| (&d.children, d.media_file_id)) {
-        Some((WorkChildren::Movie, file)) => file,
-        Some((WorkChildren::Series(seasons), _)) => {
-            let files: Vec<Uuid> = seasons
-                .iter()
-                .flat_map(|s| s.episodes.iter().filter_map(|e| e.media_file_id))
-                .collect();
+    ctx.playable_media_file_id = match view.as_ref().map(|v| &v.files) {
+        Some(playarr_catalog::WorkFiles::Movie(file)) => *file,
+        Some(playarr_catalog::WorkFiles::Series(episodes)) => {
+            let files: Vec<Uuid> = episodes.iter().map(|e| e.media_file_id).collect();
             files
                 .iter()
                 .copied()

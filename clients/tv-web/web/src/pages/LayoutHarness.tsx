@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageLayout, type ActionIcon, type PageAction } from "../components/shell";
 
-const ICONS: readonly ActionIcon[] = ["filters", "bell", "add", "customise", "prev", "next", "back"];
+const ICONS: readonly ActionIcon[] = ["filters", "bell", "add", "customise", "calendar", "prev", "next", "back"];
 const noop = () => undefined;
 
 /**
@@ -65,9 +65,7 @@ export function LayoutHarnessPage() {
       ariaLabel="Layout harness"
       header={{
         title: params.get("title") ?? "Title",
-        detail: params.get("description")
-          ? { title: params.get("detail") ?? "", description: params.get("description") ?? "" }
-          : (params.get("detail") ?? undefined),
+        detail: params.get("detail") ?? undefined,
         mobileShow: params.get("mobileShow") === "detail" ? "detail" : undefined,
         back: { label: back ?? "Back", to: "/" },
         actions,

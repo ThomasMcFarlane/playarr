@@ -319,7 +319,81 @@ pub fn change_generation(user_id: Uuid) -> (u64, u64) {
     (GLOBAL_GENERATION.load(Ordering::Acquire), user)
 }
 
-fn bump_generation(user_id: Option<Uuid>) {
+/// One published change as the in-process caches see it: which kind of thing
+/// changed, for whom, and which entity. A cache entry built at tick `t` asks
+/// [`changes_since`]`(t)` and decides for itself which of them touch it, so a
+/// change it does not depend on leaves it alone.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChangeRecord {
+    pub tick: u64,
+    /// `None`: a library-wide change.
+    pub user_id: Option<Uuid>,
+    pub kind: &'static str,
+    /// What kind of entity changed (`"work"`, `"playlist"`, ...).
+    pub entity: &'static str,
+    pub entity_id: Option<String>,
+    pub changed: Vec<&'static str>,
+}
+
+/// Records kept for [`changes_since`]; a cache entry older than this many
+/// changes is treated as stale.
+const CHANGE_LOG_CAP: usize = 4096;
+
+#[derive(Default)]
+struct ChangeLog {
+    next: u64,
+    records: std::collections::VecDeque<ChangeRecord>,
+}
+
+static CHANGE_LOG: LazyLock<Mutex<ChangeLog>> = LazyLock::new(Mutex::default);
+
+/// The tick after the latest recorded change. Read it before building a cache
+/// entry, so a change during the build leaves the entry stale rather than
+/// wrongly fresh.
+pub fn change_tick() -> u64 {
+    CHANGE_LOG.lock().unwrap_or_else(|e| e.into_inner()).next
+}
+
+/// Every change recorded at or after `tick`, oldest first. `None` when some of
+/// them have already been dropped: the caller cannot tell what it missed.
+pub fn changes_since(tick: u64) -> Option<Vec<ChangeRecord>> {
+    let log = CHANGE_LOG.lock().unwrap_or_else(|e| e.into_inner());
+    if tick >= log.next {
+        return Some(Vec::new());
+    }
+    let first = log.records.front().map_or(log.next, |r| r.tick);
+    if tick < first {
+        return None;
+    }
+    Some(
+        log.records
+            .iter()
+            .filter(|r| r.tick >= tick)
+            .cloned()
+            .collect(),
+    )
+}
+
+fn record_change(event: &NewLiveEvent) {
+    let mut log = CHANGE_LOG.lock().unwrap_or_else(|e| e.into_inner());
+    let tick = log.next;
+    log.next += 1;
+    if log.records.len() >= CHANGE_LOG_CAP {
+        log.records.pop_front();
+    }
+    log.records.push_back(ChangeRecord {
+        tick,
+        user_id: event.user_id,
+        kind: event.kind,
+        entity: event.entity,
+        entity_id: event.entity_id.clone(),
+        changed: event.changed.clone(),
+    });
+}
+
+fn bump_generation(event: &NewLiveEvent) {
+    record_change(event);
+    let user_id = event.user_id;
     match user_id {
         None => {
             GLOBAL_GENERATION.fetch_add(1, Ordering::AcqRel);
@@ -378,7 +452,7 @@ impl LiveEventPublisher {
             tracing::warn!(%err, kind = event.kind, "failed to publish live event");
             return;
         }
-        bump_generation(event.user_id);
+        bump_generation(&event);
         wake();
         // Retention is enforced opportunistically so no extra job is needed.
         if self.published.fetch_add(1, Ordering::Relaxed) % 200 == 199 {
@@ -398,7 +472,7 @@ impl LiveEventPublisher {
             return;
         }
         for event in &events {
-            bump_generation(event.user_id);
+            bump_generation(event);
         }
         wake();
         let before = self

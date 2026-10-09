@@ -15,6 +15,8 @@
   --surface-strong: #ffffff;
   --surface-soft: #dfdcdd;
   --ink: #382621;
+  /* Full-contrast text for captions that sit under a lifted card's shadow (WCAG AAA over the darkened page). */
+  --ink-max: #000;
   --ink-soft: #443a40;
   --ink-muted: #4d4248;
   --line: rgba(56, 38, 33, 0.14);
@@ -351,6 +353,7 @@
   --surface-strong: #211d21;
   --surface-soft: #312a30;
   --ink: #f4f0f1;
+  --ink-max: #fff;
   --ink-soft: #cdc1c6;
   --ink-muted: #c2b5bb;
   --line: rgba(223, 220, 221, 0.11);
@@ -4393,6 +4396,9 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     linear-gradient(270deg, color-mix(in srgb, var(--surface) 50%, transparent) 0%, transparent 34%);
 }
 
+/* The one small subtitle style (owner rule 2026-10-10): the media-page kicker, the details-panel eyebrow and the page
+   header subtitle of every page share this rule. Never restyle one of them on its own. */
+.page-subtitle,
 .tv-provider,
 .tv-detail-kicker {
   margin-bottom: clamp(18px, calc(2.4 * var(--viewport-unit)), 34px);
@@ -4418,7 +4424,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     0 30px 90px rgba(56, 38, 33, 0.08),
     inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(30px) saturate(112%);
-  animation: tv-rail-in 700ms 120ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* No entrance of its own: the route transition (page-layout.css) owns it. A base animation here replayed (translateX
+     60px, from opacity 0) the moment the route token expired, and on every first paint. */
 }
 
 :root[data-theme="dark"] .tv-rail-panel {
@@ -4561,10 +4568,31 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   right: clamp(8px, calc(1 * var(--vw)), 22px);
   height: min(calc(66 * var(--viewport-unit)), 720px);
   display: flex;
-  flex-flow: column wrap;
-  align-content: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  /* One column always. When the 44px letters do not fit, the column scrolls (shared edge fade, useScrollEdges). */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 6px;
+  scroll-padding-block: 22px;
   transform: translateY(-50%);
+}
+
+.tv-alphabet::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe centring: auto margins centre a short column but never push the first letter out of reach. */
+.tv-alphabet > button:first-child {
+  margin-top: auto;
+}
+
+.tv-alphabet > button:last-child {
+  margin-bottom: auto;
 }
 
 .tv-alphabet button {
@@ -4718,30 +4746,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes tv-rail-in {
-  from {
-    opacity: 0;
-    transform: translateX(60px);
-    backdrop-filter: blur(0);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    backdrop-filter: blur(30px);
-  }
-}
-
-@keyframes tv-rail-surface-in {
-  from {
-    opacity: 0;
-    transform: translateX(60px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -4967,27 +4971,12 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   min-width: 0;
 }
 
-.tv-detail-heading-item > strong {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  font: inherit;
-  font-weight: inherit;
-  text-overflow: ellipsis;
-}
-
 .tv-directory {
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
   --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
-  /* Alphabet rail: 44px targets in two columns on a tall stage, three on a short one (WCAG 2.5.5). */
-  --directory-alphabet-width: 88px;
-}
-
-@media (max-height: 960px) {
-  .tv-directory {
-    --directory-alphabet-width: 132px;
-  }
+  /* Alphabet rail: one column of 44px targets (WCAG 2.5.5) plus 6px padding each side; it scrolls when the letters do not fit. */
+  --directory-alphabet-width: 56px;
 }
 
 .tv-filter-launcher {
@@ -5760,7 +5749,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   top: clamp(214px, calc(25 * var(--viewport-unit)), 286px);
   width: auto;
   height: min(calc(64 * var(--viewport-unit)), 690px);
-  align-items: center;
   transform: none;
 }
 
@@ -6662,7 +6650,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
     color-mix(in srgb, var(--tv-rail-frost) 96%, transparent) 62%,
     var(--tv-rail-frost) 100%
   );
-  animation: tv-rail-in 660ms 100ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* No entrance of its own: the route transition (page-layout.css) owns it. A base animation here replayed (translateX
+     60px, from opacity 0) the moment the route token expired, and on every first paint. */
 }
 
 :root[data-theme="dark"] .tv-rail-surface {
@@ -7119,11 +7108,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   right: clamp(5px, calc(0.4 * var(--vw)), 8px);
   width: clamp(6px, calc(0.5 * var(--vw)), 9px);
   transform: translateY(-50%);
-}
-
-.tv-library-grid-panel,
-.tv-rail-surface {
-  animation-name: tv-rail-surface-in;
 }
 
 .tv-watch-progress {
@@ -8869,6 +8853,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     max-width: 520px;
   }
 
+  .page-subtitle,
   .tv-provider,
   .tv-detail-kicker {
     margin-bottom: 10px;
@@ -11192,18 +11177,21 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 }
 
 /*
- * WCAG AAA (1.4.6): the lifted card's shadow darkens the caption beneath it, so the selected caption gets a
- * near-opaque surface backing that the shadow cannot tint (the lift and shadow themselves are unchanged).
+ * WCAG AAA (1.4.6): the lifted card's shadow darkens the page behind the caption beneath it. Captions on the page
+ * background get no backing box (owner design rule: no boxes); the selected caption takes the full-contrast ink token
+ * (--ink-max), which holds 7:1 over the shadow-tinted background in both themes.
  */
 .tv-title-card.is-selected .tv-title-card-copy,
+.tv-title-card.is-selected .tv-title-card-copy strong,
+.tv-title-card.is-selected .tv-title-card-copy small,
 .tv-episode-card.is-selected .tv-episode-copy,
+.tv-episode-card.is-selected .tv-episode-copy strong,
+.tv-episode-card.is-selected .tv-episode-copy small,
 .tv-home-card.is-selected > strong,
 .tv-home-card.is-selected > small,
-.tv-episode-card[aria-current="true"] .tv-episode-copy {
-  position: relative;
-  z-index: 1;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+.tv-episode-card[aria-current="true"] .tv-episode-copy,
+.tv-episode-card[aria-current="true"] .tv-episode-copy small {
+  color: var(--ink-max);
 }
 
 /* WCAG 2.5.5: checkboxes keep their small drawn box but get a 44px hit area (the input itself is the target). */

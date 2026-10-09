@@ -110,7 +110,7 @@ import { ShellActionColumnProvider } from "./components/shell/ShellActionColumn"
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import { localeTagFor } from "./lib/i18n/languages";
-import { DWELL_PREFETCH_MS, prefetchRoute } from "./lib/prefetch";
+import { NAV_DWELL_PREFETCH_MS, prefetchRoute } from "./lib/prefetch";
 import type { TranslationKey } from "./lib/i18n/translations";
 import {
   createCatalogKindsCacheScope,
@@ -197,17 +197,15 @@ function AppShell() {
   // Focusing a nav item for a moment warms the page behind it; moving on cancels.
   const navPrefetchTimer = useRef(0);
   const navPrefetchCancel = useRef<() => void>(() => undefined);
-  const cancelNavPrefetch = () => {
+  const startNavPrefetch = (path: string) => {
     window.clearTimeout(navPrefetchTimer.current);
-    // Leaving the item before its requests finish drops them; whatever a page joined meanwhile keeps running.
+    // Moving on to another item drops the requests of the previous one (whatever a page joined meanwhile keeps
+    // running). Focus leaving the nav altogether does not: the dwell already showed the intent to go there.
     navPrefetchCancel.current();
     navPrefetchCancel.current = () => undefined;
-  };
-  const startNavPrefetch = (path: string) => {
-    cancelNavPrefetch();
     navPrefetchTimer.current = window.setTimeout(() => {
       navPrefetchCancel.current = prefetchRoute(client, path, language);
-    }, DWELL_PREFETCH_MS);
+    }, NAV_DWELL_PREFETCH_MS);
   };
   const {
     authFailed,
@@ -546,7 +544,7 @@ function AppShell() {
                     }
                     onMouseEnter={() => prefetchRoute(client, to, language)}
                     onFocus={() => startNavPrefetch(to)}
-                    onBlur={cancelNavPrefetch}
+                    onBlur={() => window.clearTimeout(navPrefetchTimer.current)}
                   >
                     <span className="app-nav-icon">
                       <Icon />

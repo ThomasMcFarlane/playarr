@@ -394,6 +394,153 @@ impl WorkRepo for EventingWorkRepo {
     async fn list_identities(&self, kind: WorkKind) -> Result<Vec<super::WorkIdentity>, DbError> {
         self.inner.list_identities(kind).await
     }
+    async fn get_many(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Work>, DbError> {
+        self.inner.get_many(ids).await
+    }
+}
+
+/// Publishes a "calendar may have changed" event for the whole library
+/// whenever a request or the request integration setup changes, so caches of
+/// per-title request actions (the calendar's) drop their copies. Clients
+/// refetch the area, as they do for any `calendar` change.
+async fn emit_request_change(events: &LiveEventPublisher, id: impl ToString) {
+    events
+        .publish(NewLiveEvent::for_library(
+            kind::CALENDAR,
+            "*",
+            id,
+            &["request"],
+            None,
+        ))
+        .await;
+}
+
+pub struct EventingMediaRequestRepo {
+    inner: Arc<dyn super::MediaRequestRepo>,
+    events: LiveEventPublisher,
+}
+
+impl EventingMediaRequestRepo {
+    pub fn new(inner: Arc<dyn super::MediaRequestRepo>, events: LiveEventPublisher) -> Self {
+        Self { inner, events }
+    }
+}
+
+#[async_trait]
+impl super::MediaRequestRepo for EventingMediaRequestRepo {
+    async fn list(&self) -> Result<Vec<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.list().await
+    }
+    async fn list_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.list_for_user(user_id).await
+    }
+    async fn get(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.get(id).await
+    }
+    async fn find_by_title_key(
+        &self,
+        title_key: &str,
+    ) -> Result<Option<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.find_by_title_key(title_key).await
+    }
+    async fn list_for_kind(
+        &self,
+        kind: playarr_model::discovery::DiscoveryKind,
+    ) -> Result<Vec<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.list_for_kind(kind).await
+    }
+    async fn find_match(
+        &self,
+        kind: playarr_model::discovery::DiscoveryKind,
+        tmdb_id: Option<i64>,
+        tvdb_id: Option<i64>,
+        imdb_id: Option<&str>,
+    ) -> Result<Option<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.find_match(kind, tmdb_id, tvdb_id, imdb_id).await
+    }
+    async fn find_by_external(
+        &self,
+        kind: playarr_model::requests::IntegrationKind,
+        external_id: &str,
+    ) -> Result<Option<playarr_model::requests::MediaRequest>, DbError> {
+        self.inner.find_by_external(kind, external_id).await
+    }
+    async fn upsert(&self, request: &playarr_model::requests::MediaRequest) -> Result<(), DbError> {
+        self.inner.upsert(request).await?;
+        emit_request_change(&self.events, request.id).await;
+        Ok(())
+    }
+    async fn delete(&self, id: Uuid) -> Result<bool, DbError> {
+        let removed = self.inner.delete(id).await?;
+        if removed {
+            emit_request_change(&self.events, id).await;
+        }
+        Ok(removed)
+    }
+}
+
+pub struct EventingRequestIntegrationRepo {
+    inner: Arc<dyn super::RequestIntegrationRepo>,
+    events: LiveEventPublisher,
+}
+
+impl EventingRequestIntegrationRepo {
+    pub fn new(inner: Arc<dyn super::RequestIntegrationRepo>, events: LiveEventPublisher) -> Self {
+        Self { inner, events }
+    }
+}
+
+#[async_trait]
+impl super::RequestIntegrationRepo for EventingRequestIntegrationRepo {
+    async fn list(&self) -> Result<Vec<playarr_model::requests::RequestIntegration>, DbError> {
+        self.inner.list().await
+    }
+    async fn get(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<playarr_model::requests::RequestIntegration>, DbError> {
+        self.inner.get(id).await
+    }
+    async fn upsert(
+        &self,
+        integration: &playarr_model::requests::RequestIntegration,
+    ) -> Result<(), DbError> {
+        self.inner.upsert(integration).await?;
+        emit_request_change(&self.events, integration.id).await;
+        Ok(())
+    }
+    async fn delete(&self, id: Uuid) -> Result<bool, DbError> {
+        let removed = self.inner.delete(id).await?;
+        if removed {
+            emit_request_change(&self.events, id).await;
+        }
+        Ok(removed)
+    }
+    async fn record_sync(
+        &self,
+        id: Uuid,
+        at: DateTime<Utc>,
+        error: Option<&str>,
+    ) -> Result<(), DbError> {
+        self.inner.record_sync(id, at, error).await
+    }
+    async fn get_setting(&self, key: &str) -> Result<Option<String>, DbError> {
+        self.inner.get_setting(key).await
+    }
+    async fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError> {
+        self.inner.set_setting(key, value).await?;
+        emit_request_change(&self.events, key).await;
+        Ok(())
+    }
 }
 
 pub struct EventingMediaFileRepo {
@@ -429,6 +576,9 @@ impl MediaFileRepo for EventingMediaFileRepo {
     }
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_by_work_id(work_id).await
+    }
+    async fn list_by_work_ids(&self, work_ids: &[Uuid]) -> Result<Vec<MediaFile>, DbError> {
+        self.inner.list_by_work_ids(work_ids).await
     }
     async fn list_all(&self) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_all().await

@@ -9,7 +9,7 @@ import { PageHeader } from "../shell/PageHeader";
 import { TvStageChrome } from "./TvStage";
 
 describe("detail page heading", () => {
-  it("uses the standard library-heading divider for the selected item", () => {
+  it("renders the selected item as the one shared small subtitle, with no divider", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
         <PageHeader
@@ -22,23 +22,11 @@ describe("detail page heading", () => {
     );
 
     expect(markup).toContain("<h1>Music</h1>");
-    expect(markup).toContain(
-      '<span class="page-header-detail tv-detail-heading-item"><strong>Sample Band</strong></span>'
-    );
+    expect(markup).toContain('<span class="page-header-detail page-subtitle">Sample Band</span>');
     expect(markup).not.toContain(">|<");
 
     const css = readFileSync(new URL("../../styles/page-layout.css", import.meta.url), "utf8");
-    const sharedDividerRule = css.match(
-      /\.tv-library-heading > \.page-header-title-block > span\s*\{(?<declarations>[^}]*)\}/
-    )?.groups?.declarations;
-    const detailItemRule = css.match(
-      /\.tv-library-heading > \.page-header-title-block > \.tv-detail-heading-item\s*\{(?<declarations>[^}]*)\}/
-    )?.groups?.declarations;
-
-    expect(sharedDividerRule).toContain("padding-left: var(--page-header-gap)");
-    expect(sharedDividerRule).toContain("border-left: 1px solid var(--line-strong)");
-    expect(detailItemRule).not.toContain("padding-left");
-    expect(detailItemRule).not.toContain("border-left");
+    expect(css).not.toContain("border-left: 1px solid var(--line-strong)");
   });
 });
 

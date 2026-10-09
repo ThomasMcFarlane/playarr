@@ -25,7 +25,6 @@
   --action-pill-radius: 14px;
   --page-header-gap: clamp(14px, calc(1.2 * var(--vw)), 24px);
   --page-actions-gap: clamp(8px, calc(0.8 * var(--vw)), 16px);
-  --page-header-divider-pad: 20px;
   --page-body-top: clamp(104px, calc(15 * var(--viewport-unit)), 168px);
   /* The profile chip lives bottom-left on every screen; pages must not render beneath it. */
   --page-safe-bottom: clamp(92px, calc(11 * var(--viewport-unit)), 124px);
@@ -195,26 +194,27 @@
 }
 
 .tv-library-heading h1 {
+  /* The title line is exactly as tall as Back, so the two share one centre line on every page, whatever sits under
+     the title (subtitle, wrapped detail). It stops at the clock: PageHeader sets --page-title-max to the room left of
+     the shell clock, and a longer title is cut with an ellipsis instead of running under it. */
+  min-width: 0;
+  max-width: var(--page-title-max, none);
+  overflow: hidden;
   font-size: clamp(1.2rem, calc(1.75 * var(--vw)), 2.35rem);
   font-weight: 580;
   letter-spacing: -0.045em;
-}
-
-.tv-library-heading > .page-header-title-block > .tv-detail-heading-item {
-  min-width: 0;
-  overflow: hidden;
-  text-transform: none;
+  line-height: var(--page-control-height);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tv-library-heading > .page-header-title-block > span {
-  padding-left: var(--page-header-gap);
-  border-left: 1px solid var(--line-strong);
-  color: var(--ink);
-  font-size: clamp(0.62rem, calc(0.58 * var(--vw)), 0.72rem);
-  font-weight: 680;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
+/* The header subtitle takes every typographic value from the one shared .page-subtitle rule in global.css (owner rule
+   2026-10-10). Only layout lives here; a header row is centred on the title, so the subtitle carries no bottom margin. */
+.tv-library-heading > .page-header-title-block > .page-header-detail {
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .tv-page-back {
@@ -292,10 +292,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 /* Shared page header actions + Filters button (components/shell). */
 .tv-library-heading.has-actions {
   right: var(--page-end);
-}
-
-.tv-library-heading > .page-header-title-block > .page-header-detail {
-  min-width: 0;
 }
 
 .page-header-actions {
@@ -388,21 +384,10 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 }
 
 /* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
-   page title (Preferences, Release Calendar). The clock is already hidden on phones; hide it here too. */
+   page title (Preferences). The clock is already hidden on phones; hide it here too. */
 @media (min-width: 761px) and (max-width: 1100px) {
   .app-shell[data-page-header] .app-clock {
     display: none;
-  }
-}
-
-/* The Release Calendar title is the longest page title and ran under the clock at 1280 px. The 1280 px desktop layout
-   keeps the clock where Home puts it on every page (layout-parity stage split and header band), so the title steps down
-   and wraps onto two lines inside the room left of the clock instead. */
-@media (min-width: 1101px) and (max-width: 1280px) {
-  .app-shell:has(.calendar-page) .tv-library-heading > .page-header-title-block > h1 {
-    max-width: 5.8em;
-    font-size: 1.2rem;
-    line-height: 1.05;
   }
 }
 
@@ -413,9 +398,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 
 .tv-library-heading.has-actions > .page-header-title-block > h1 {
   align-self: center;
-  min-height: var(--page-control-height);
-  display: flex;
-  align-items: center;
 }
 
 .tv-library-heading.has-actions > .tv-page-back {
@@ -434,8 +416,14 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   white-space: nowrap;
 }
 
+/* Wrapped (detail under the title): Back stays level with the title line at the top of the block, never centred on the
+   taller block, so extra header content can no longer push it down. */
+.tv-library-heading.is-detail-wrapped > .tv-page-back,
+.tv-library-heading.is-detail-wrapped > .page-header-title-block > h1 {
+  align-self: flex-start;
+}
+
 .tv-library-heading.is-detail-wrapped {
-  --page-header-divider-pad: 20px;
   right: var(--page-end);
   align-items: flex-start;
 }
@@ -457,9 +445,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
 .tv-library-heading.is-detail-wrapped > .page-header-title-block > .page-header-detail {
   max-width: none;
   margin: 0;
-  padding: 0.4rem 0 0;
-  border-top: 1px solid var(--line-strong);
-  border-left: 0;
 }
 
 .action-pill-count {
@@ -735,61 +720,16 @@ body[data-input-mode="remote"] .action-pill {
   gap: 1.4rem;
 }
 
-/*
- * The two-line section detail (Settings): the section name over its description. On phones the header shows
- * either the page title or this detail (data-mobile-show), never both.
- */
-.page-header-detail.is-section {
-  min-width: 0;
-  max-width: min(calc(48 * var(--vw)), 680px);
-  display: grid;
-  gap: 0.22rem;
-  text-transform: none;
-}
-
-.page-header-detail.is-section strong {
-  overflow: hidden;
-  font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.86rem);
-  letter-spacing: 0.045em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.page-header-detail.is-section small {
-  overflow: hidden;
-  color: var(--ink);
-  font-size: clamp(0.58rem, calc(0.66 * var(--vw)), 0.76rem);
-  font-weight: 480;
-  letter-spacing: 0;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 760px) {
-  .tv-library-heading > .page-header-title-block > .page-header-detail.is-section {
-    display: grid;
-  }
-}
-
 @media (max-width: 760px),
   (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
-  .tv-library-heading > .page-header-title-block > .page-header-detail.is-section {
-    display: grid;
-    max-width: calc(calc(100 * var(--vw)) - 250px);
-  }
-
   .page-header[data-mobile-show="title"] > .page-header-title-block > .page-header-detail,
   .page-header[data-mobile-show="detail"] h1 {
     display: none;
   }
 
-  .page-header[data-mobile-show="detail"] > .page-header-title-block > .page-header-detail.is-section {
+  .page-header[data-mobile-show="detail"] > .page-header-title-block > .page-header-detail {
     max-width: calc(calc(100 * var(--vw)) - 150px);
-    display: grid;
-    padding-left: 0;
-    border-left: 0;
+    display: block;
   }
 }
 
@@ -945,4 +885,15 @@ body[data-input-mode="remote"] .action-pill {
 /* A state panel (loading, empty, error) keeps Home's column split too, so the page does not shift when data arrives. */
 .tv-library-grid-panel.page-layout-state {
   width: var(--stage-rail-width);
+}
+/* The library's loading skeleton sits where its cards land: the same padding and gaps as .tv-title-grid-content, so the
+   cards do not jump sideways (about 40 px) when the list arrives. */
+@media (min-width: 761px) {
+  .tv-library-grid-panel.page-layout-state:has(> .skeleton-state.is-grid) {
+    align-items: start;
+  }
+  .tv-library-grid-panel.page-layout-state .skeleton-grid-set {
+    padding: var(--library-rail-top) var(--library-rail-right) 0 var(--library-rail-left);
+    gap: clamp(22px, calc(2.5 * var(--viewport-unit)), 36px) clamp(14px, calc(1.35 * var(--vw)), 28px);
+  }
 }

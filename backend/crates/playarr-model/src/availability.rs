@@ -77,7 +77,12 @@ pub fn compute_lag(events: &[AvailabilityEvent]) -> AvailabilityLag {
 
     let mut first_import: BTreeMap<Key, &AvailabilityEvent> = BTreeMap::new();
     let mut first_grab: BTreeMap<Key, DateTime<Utc>> = BTreeMap::new();
+    // The first air time any event of an item carries, in event order.
+    let mut air_of: BTreeMap<Key, DateTime<Utc>> = BTreeMap::new();
     for event in events {
+        if let Some(air_at) = event.air_at {
+            air_of.entry(key(event)).or_insert(air_at);
+        }
         match event.event_type {
             AvailabilityEventType::Import if !event.is_upgrade => {
                 let slot = first_import.entry(key(event)).or_insert(event);
@@ -101,12 +106,7 @@ pub fn compute_lag(events: &[AvailabilityEvent]) -> AvailabilityLag {
     let mut grab_total = 0i64;
     let mut grab_count = 0i64;
     for (k, import) in &first_import {
-        let air_at = import.air_at.or_else(|| {
-            events
-                .iter()
-                .filter(|e| key(e) == *k)
-                .find_map(|e| e.air_at)
-        });
+        let air_at = import.air_at.or_else(|| air_of.get(k).copied());
         let Some(air_at) = air_at else {
             unknown += 1;
             continue;

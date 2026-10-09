@@ -54,8 +54,8 @@ const referenceFrom = opt("reference-from", "");
 const outDir = resolve(opt("out", join(tmpdir(), "layout-parity")));
 const PINS = join(repo, "docs/parity/web/layout");
 const FIXED_CLOCK = Date.parse("2026-10-07T12:00:00Z");
-/** Glyph anti-aliasing of the icon and label shifts by a sub-pixel between a pill stacked second and the harness pill; real drift is hundreds of pixels. */
-const PILL_AA_TOLERANCE = 24;
+/** Glyph anti-aliasing of the label shifts by a sub-pixel between a pill stacked second and the harness pill, and grows with the label length (a long label such as "Calendar link" reaches about 55 pixels); a wrong icon or label differs by 150 or more. */
+const PILL_AA_TOLERANCE = 64;
 /** A page's own background gradient (Settings) bands differently under the header than the plain harness page; real header drift is hundreds of pixels. */
 const BAND_TOLERANCE = 32;
 const PIN_LAYOUTS = ["tv", "mobile"];
@@ -138,7 +138,6 @@ async function open(page, path, waitFor) {
 const harnessPath = (spec) => {
   const q = new URLSearchParams({ title: spec.title ?? "Title", back: spec.back ?? "Back", actions: spec.actions ?? "" });
   if (spec.detail) q.set("detail", spec.detail);
-  if (spec.description) q.set("description", spec.description);
   if (spec.mobileShow) q.set("mobileShow", spec.mobileShow);
   if (spec.open) q.set("open", "1");
   return `/__layout/header?${q}`;
@@ -391,11 +390,9 @@ for (const layoutId of layoutIds) {
           }));
           const navEl = el.querySelector("[data-action-kind='navigation']");
           const nav = navEl && getComputedStyle(navEl).display !== "none" ? "navigation" : "";
-          const section = el.querySelector(".page-header-detail.is-section");
           return {
             title: text(el.querySelector("h1")),
-            detail: section ? text(section.querySelector("strong")) : text(el.querySelector(".page-header-detail")),
-            description: section ? text(section.querySelector("small")) : "",
+            detail: text(el.querySelector(".page-header-detail")),
             mobileShow: el.getAttribute("data-mobile-show") ?? "",
             pills,
             nav,
@@ -443,7 +440,7 @@ for (const layoutId of layoutIds) {
           await page.addStyleTag({ content: hide });
           const actions = header.nav ? ["navigation"] : [];
           const live = await bandShot(page);
-          await open(harnessPage, harnessPath({ title: header.title, detail: header.detail, description: header.description, mobileShow: header.mobileShow, actions: actions.join(",") }), ".page-header");
+          await open(harnessPage, harnessPath({ title: header.title, detail: header.detail, mobileShow: header.mobileShow, actions: actions.join(",") }), ".page-header");
           await harnessPage.addStyleTag({ content: hide });
           const canonical = await bandShot(harnessPage);
           maskBands([live, canonical], layoutId !== "mobile");

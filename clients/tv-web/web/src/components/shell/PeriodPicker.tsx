@@ -2,8 +2,8 @@ import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import { periodPickerMove } from "../../lib/periodPickerNav";
 import { isBackKey } from "../../lib/backKey";
 import { createSettled } from "../../lib/settled";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Button } from "../ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 interface Props {
   /** Current anchor day (`YYYY-MM-DD`). */
@@ -19,6 +19,13 @@ interface Props {
   onChange: (day: string) => void;
   /** Years offered either side of the current one. */
   yearSpan?: number;
+  /** The jump panel is controlled: the page opens it from its range button in the shell action column. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The range button that opens the panel (clicks on it are not "outside"; BACK returns focus to it). */
+  triggerRef: RefObject<HTMLElement | null>;
+  /** The panel's id, for the button's `aria-controls`. */
+  id: string;
 }
 
 /** The label is announced once it has stopped changing, so holding Next does not read out every period. */
@@ -33,14 +40,11 @@ function pad(n: number): string {
  * (months, years) that work with a mouse wheel, arrow keys and TV D-pad focus.
  * Choosing a month applies the jump (keeping the chosen year) and closes the panel.
  */
-export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, yearLabel, onChange, yearSpan = 15 }: Props) {
-  const [open, setOpen] = useState(false);
+export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, yearLabel, onChange, yearSpan = 15, open, onOpenChange, triggerRef, id }: Props) {
   const year = Number(value.slice(0, 4));
   const month = Number(value.slice(5, 7));
   const [draftYear, setDraftYear] = useState(year);
   const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const dialogId = useId();
   // Starts as the current label so the first render is not announced.
   const [announced, setAnnounced] = useState(label);
   const settledRef = useRef<ReturnType<typeof createSettled<string>> | null>(null);
@@ -73,12 +77,13 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
       if (isBackKey(event)) {
         event.preventDefault();
         event.stopPropagation();
-        setOpen(false);
+        onOpenChange(false);
         triggerRef.current?.focus();
       }
     };
     const onPointer = (event: MouseEvent) => {
-      if (root && !root.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (root && !root.contains(target) && !triggerRef.current?.contains(target)) onOpenChange(false);
     };
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("mousedown", onPointer);
@@ -86,7 +91,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("mousedown", onPointer);
     };
-  }, [open, year]);
+  }, [open, year, onOpenChange, triggerRef]);
 
   function moveFocus(event: React.KeyboardEvent<HTMLElement>) {
     if (!event.key.startsWith("Arrow")) return;
@@ -109,23 +114,11 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
 
   return (
     <div className="period-picker" ref={rootRef}>
-      <Button
-        ref={triggerRef}
-        variant="ghost"
-        className="period-picker-trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={dialogId}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="calendar-range">{label}</span>
-        <span aria-hidden="true">▾</span>
-      </Button>
       <span className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {announced}
       </span>
       {open ? (
-        <div id={dialogId} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel}>
+        <div id={id} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel}>
           <ul role="listbox" aria-label={monthLabel} className="period-picker-list">
             {months.map((name, i) => (
               <li key={name} role="presentation">
@@ -137,7 +130,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
                   onKeyDown={moveFocus}
                   onClick={() => {
                     onChange(`${String(draftYear).padStart(4, "0")}-${pad(i + 1)}-01`);
-                    setOpen(false);
+                    onOpenChange(false);
                     triggerRef.current?.focus();
                   }}
                 >

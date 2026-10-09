@@ -14,9 +14,13 @@ export const RAIL_CENTRE_MS = 180;
  * The target comes from layout alone (the track's position inside the scroller's content), never from where a
  * running glide happens to be, so a reverse press mid-glide lands exactly on the centre instead of overshooting.
  */
+/** The track each stack was last centred on: the vertical position is decided once per rail change. */
+const centredTrack = new WeakMap<HTMLElement, HTMLElement>();
+
 export function centreTrackInStack(track: HTMLElement, options: { animate?: boolean } = {}): void {
   const stack = track.closest<HTMLElement>(".tv-rail-surface.is-vertical-tracks");
   if (!stack) return;
+  centredTrack.set(stack, track);
   const trackRect = track.getBoundingClientRect();
   const stackRect = stack.getBoundingClientRect();
   const contentTop = trackRect.top - stackRect.top + stack.scrollTop;
@@ -90,7 +94,18 @@ export const RailStack = forwardRef<
       onFocusCapture={(event) => {
         if (isNavigationLayerRestoring()) return;
         const track = (event.target as HTMLElement).closest<HTMLElement>(".tv-media-track");
-        if (track) centreTrackInStack(track);
+        if (!track) return;
+        // Under remote keys real focus trails the marker by a few hundred ms. Focus arriving on a card the marker has
+        // already left (a quick Down then Up) must not pull the stack back to that old rail: the marker's own rail has
+        // been centring since its key, and the stack would otherwise glide away and return (the overshoot).
+        const marker = document.querySelector<HTMLElement>("[data-remote-active]");
+        if (marker && marker.closest(".tv-media-track") !== track) return;
+        // Moving along a rail never moves the stack: the rail was centred when it was entered, and a later focus on one
+        // of its cards (the real focus trailing the marker) must not re-measure and nudge it. Remote keys only; a
+        // pointer or a wheel scroll still re-centres on focus.
+        const stack = track.closest<HTMLElement>(".tv-rail-surface.is-vertical-tracks");
+        if (stack && document.body.dataset.inputMode === "remote" && centredTrack.get(stack) === track) return;
+        centreTrackInStack(track);
       }}
     >
       <TvTrackSpacingContext.Provider value={spacing}>{children}</TvTrackSpacingContext.Provider>

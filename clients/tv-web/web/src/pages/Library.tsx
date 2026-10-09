@@ -1,5 +1,6 @@
 import { ensureLibraryIndex, registerEnsureLibraryIndex } from "../lib/libraryIndexRegistry";
 import { smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
+import { useScrollEdges } from "../lib/useScrollEdges";
 import { useRemoteMarkerFollow } from "../lib/remoteMarkerFollow";
 import {
   memo,
@@ -95,6 +96,55 @@ const PREMOUNT_GAP_MS = 24;
 
 const PAGE_SIZE = LIBRARY_PAGE_SIZE;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"] as const;
+
+/**
+ * The letter column: always ONE column of 44px targets. When they do not fit the stage the column scrolls, with the
+ * shared soft edge fade at the top and bottom (present from first paint), and the focused letter is scrolled into view
+ * smoothly. The highlighted letter follows the grid unless the user is on the rail.
+ */
+function AlphabetRail({
+  alphabet,
+  activeLetter,
+  jumpingLetter,
+  label,
+  symbolsLabel,
+  refreshKey,
+  onJump,
+}: {
+  alphabet: readonly string[];
+  activeLetter: string;
+  jumpingLetter: string | null;
+  label: string;
+  symbolsLabel: string;
+  refreshKey: string;
+  onJump: (letter: string) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useScrollEdges(ref, "vertical", refreshKey);
+  useEffect(() => {
+    const rail = ref.current;
+    if (!rail || rail.contains(document.activeElement)) return;
+    const active = rail.querySelector<HTMLElement>("button.is-active");
+    if (active) smoothScrollIntoView(active, { block: "center" });
+  }, [activeLetter, refreshKey]);
+  return (
+    <nav ref={ref} className="tv-alphabet" aria-label={label}>
+      {alphabet.map((letter) => (
+        <button
+          key={letter}
+          type="button"
+          className={activeLetter === letter ? "is-active" : ""}
+          onClick={() => onJump(letter)}
+          onFocus={(event) => smoothScrollIntoView(event.currentTarget)}
+          aria-current={activeLetter === letter ? "true" : undefined}
+          aria-label={letter === "#" ? symbolsLabel : letter}
+        >
+          <span>{jumpingLetter === letter ? "·" : letter}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 function titleLetter(title: string): string {
   const first = title
@@ -1313,20 +1363,15 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       </FiltersDrawer>
 
       {sort === "title" ? (
-        <nav className="tv-alphabet" aria-label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}>
-          {alphabet.map((letter) => (
-            <button
-              key={letter}
-              type="button"
-              className={activeLetter === letter ? "is-active" : ""}
-              onClick={() => void jumpToLetter(letter)}
-              aria-current={activeLetter === letter ? "true" : undefined}
-              aria-label={letter === "#" ? t("pages.library.numbersAndSymbols") : letter}
-            >
-              <span>{jumpingLetter === letter ? "·" : letter}</span>
-            </button>
-          ))}
-        </nav>
+        <AlphabetRail
+          alphabet={alphabet}
+          activeLetter={activeLetter}
+          jumpingLetter={jumpingLetter}
+          label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}
+          symbolsLabel={t("pages.library.numbersAndSymbols")}
+          refreshKey={order}
+          onJump={(letter) => void jumpToLetter(letter)}
+        />
       ) : null}
       {mediaContext.contextMenu}
     </PageLayout>

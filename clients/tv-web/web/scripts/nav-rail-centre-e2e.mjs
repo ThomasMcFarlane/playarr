@@ -16,6 +16,10 @@ const SEQUENCES = [
   ["Down, Up", ["ArrowDown", "ArrowUp"], 60],
   ["Down, Down, Up, Up", ["ArrowDown", "ArrowDown", "ArrowUp", "ArrowUp"], 60],
   ["Down, Up quickly", ["ArrowDown", "ArrowUp"], 25],
+  // A reverse press inside the 320 ms window in which real focus trails the marker: the stale focus must not drag the
+  // stack back to the rail the marker already left.
+  ["Down, Up within the focus trail", ["ArrowDown", "ArrowUp"], 160],
+  ["Down, Down, Up within the focus trail", ["ArrowDown", "ArrowDown", "ArrowUp"], 200],
   ["rapid zig-zag", ["ArrowDown", "ArrowDown", "ArrowUp", "ArrowDown", "ArrowUp", "ArrowUp", "ArrowDown"], 40],
 ];
 
@@ -44,18 +48,76 @@ async function run(name, path, stackSelector, size) {
     // Park focus on a card inside the stack, then start from the first rail.
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(900);
+    // Every frame's scroll offset, from the first key on, to catch a glide that leaves its destination and comes back.
+    await page.evaluate((selector) => {
+      const stack = document.querySelector(selector);
+      const rec = (window.__rc = { frames: [], lastKey: null });
+      addEventListener("keydown", () => { rec.lastKey = performance.now(); }, true);
+      const tick = () => { rec.frames.push([performance.now(), stack.scrollTop]); rec.raf = requestAnimationFrame(tick); };
+      tick();
+    }, stackSelector);
     for (const key of keys) {
       await page.keyboard.press(key);
       if (gap) await page.waitForTimeout(gap);
       else await page.waitForTimeout(700);
     }
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(1200);
+    const rec = await page.evaluate(() => { cancelAnimationFrame(window.__rc.raf); return window.__rc; });
+    // After the last key the stack only moves toward its final offset: never away from it, never past it (overshoot).
+    const final = rec.frames.at(-1)[1];
+    // The key's own glide begins once the page has handled it (a queued move, a slow frame): judge from 120 ms on. The
+    // stale focus this guards against lands 320 ms after the key it trails.
+    const after = rec.frames.filter(([t]) => t >= (rec.lastKey ?? 0) + 120).map(([, v]) => v);
+    const dist = after.map((v) => Math.abs(v - final));
+    const backwards = dist.filter((d, i) => i > 0 && d > dist[i - 1] + 2).length;
+    const start = after[0];
+    const passed = after.filter((v) => (start < final ? v > final + 2 : v < final - 2)).length;
+    check(`${name} ${size.width}x${size.height}, ${label}: after the last key the stack never moves away from, or past, its destination`, backwards === 0 && passed === 0, `${backwards} frames moving away, ${passed} past the destination`);
     const m = await measure(page, stackSelector);
     const ok = m !== null && (m.clamped || Math.abs(m.off) <= 2);
     check(`${name} ${size.width}x${size.height}, ${label}: focused rail centred (off ${m ? m.off.toFixed(1) : "?"} px, rail ${m?.track}${m?.clamped ? ", clamped" : ""})`, ok, JSON.stringify(m));
     check(`${name} ${size.width}x${size.height}, ${label}: no page errors`, errors.length === 0, errors.join(";"));
     await context.close();
   }
+}
+
+/**
+ * Owner report (10 Oct 2026): "after navigating to a new track, when I navigate between items (LEFT/RIGHT along that
+ * rail), it readjusts the track vertically." Down to a new rail, then Right x5 and Left x3: the stack's scroll offset and
+ * transform are identical (within 0.5 px) on every frame from the moment the rail has been centred.
+ */
+async function hold(name, path, stackSelector, size, theme) {
+  const { context, page, errors } = await open(path, { ...size, theme });
+  await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+  await page.waitForSelector(`${stackSelector} .tv-media-track`);
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(700);
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(1000);
+  await page.evaluate((selector) => {
+    const stack = document.querySelector(selector);
+    const rec = (window.__hold = { frames: [] });
+    const tick = () => {
+      rec.frames.push([stack.scrollTop, getComputedStyle(stack).transform, stack.getBoundingClientRect().top]);
+      rec.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }, stackSelector);
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowLeft", "ArrowLeft", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(450);
+  }
+  await page.waitForTimeout(600);
+  const rec = await page.evaluate(() => { cancelAnimationFrame(window.__hold.raf); return window.__hold; });
+  const tops = rec.frames.map((f) => f[0]);
+  const spread = Math.max(...tops) - Math.min(...tops);
+  const transforms = new Set(rec.frames.map((f) => f[1]));
+  const rects = rec.frames.map((f) => f[2]);
+  const rectSpread = Math.max(...rects) - Math.min(...rects);
+  check(`${name} ${size.width}x${size.height} ${theme}: Right x5 and Left x3 never move the stack vertically (scroll spread ${spread.toFixed(2)} px over ${tops.length} frames)`, spread <= 0.5 && transforms.size === 1 && rectSpread <= 0.5, `scroll ${spread}, transforms ${[...transforms].join("|")}, rect ${rectSpread}`);
+  check(`${name} ${size.width}x${size.height} ${theme}: no page errors`, errors.length === 0, errors.join(";"));
+  await context.close();
 }
 
 const probe = await open("/");
@@ -72,5 +134,9 @@ for (const size of [
   await run("Home", "/", ".tv-home-rails", size);
   await run("Playlist", "/playlists?playlist=00000000-0000-4000-8000-000000000100", ".tv-rail-surface.is-vertical-tracks", size);
   await run("Series", `/series/${seriesId}`, ".tv-series-browser", size);
+  for (const theme of ["dark", "light"]) {
+    await hold("Home", "/", ".tv-home-rails", size, theme);
+    await hold("Series", `/series/${seriesId}`, ".tv-series-browser", size, theme);
+  }
 }
 await finish();

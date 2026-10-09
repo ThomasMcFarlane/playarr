@@ -155,7 +155,7 @@ for (const [route, label] of starts) {
 {
   const { context, page } = await open("/calendar");
   await settle(page, 1500);
-  await page.locator(".period-picker-trigger").focus();
+  await page.locator("[data-range-button]").focus();
   await page.keyboard.press("Enter");
   await settle(page, 400);
   let held = true;
@@ -168,7 +168,7 @@ for (const [route, label] of starts) {
   await page.keyboard.press("Escape");
   await settle(page, 300);
   const info = await focusInfo(page);
-  check("Calendar period picker: BACK closes it and returns to the trigger", /period-picker-trigger/.test(info?.cls ?? ""), JSON.stringify(info));
+  check("Calendar period picker: BACK closes it and returns to the range button", /action-pill/.test(info?.cls ?? ""), JSON.stringify(info));
   await context.close();
 }
 

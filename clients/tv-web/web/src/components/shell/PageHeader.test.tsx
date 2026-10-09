@@ -24,7 +24,7 @@ describe("PageHeader filters slot", () => {
   it("renders the identical Filters button for Movies-style and Calendar-style headers", () => {
     const movies = render(<PageHeader title="Movies" back={back} actions={[filters("Filters")]} />);
     const calendar = render(
-      <PageHeader title="Release Calendar" back={back} actions={[subscription, filters("Filters")]} />
+      <PageHeader title="Calendar" back={back} actions={[subscription, filters("Filters")]} />
     );
     expect(filterButton(calendar)).toBe(filterButton(movies));
     expect(movies).toContain("btn btn-secondary ui-btn ui-btn--secondary ui-btn--md action-pill");
@@ -32,7 +32,7 @@ describe("PageHeader filters slot", () => {
 
   it("puts panel buttons in the same style directly before Filters (Playlists pattern)", () => {
     const markup = render(
-      <PageHeader title="Release Calendar" back={back} actions={[subscription, filters("Filters")]} />
+      <PageHeader title="Calendar" back={back} actions={[subscription, filters("Filters")]} />
     );
     const panel = markup.indexOf("data-panel-button");
     const filter = markup.indexOf("data-filters-button");

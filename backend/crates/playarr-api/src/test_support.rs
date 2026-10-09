@@ -105,6 +105,8 @@ pub struct TestState {
     /// `playarr-db::repo::user`'s own doc comment), the same rationale
     /// `embedding_repo`/`rendition_repo` above already document.
     pub pool: DbPool,
+    /// Connections taken from `pool` so far: one per statement run on it.
+    pub pool_acquisitions: Arc<std::sync::atomic::AtomicUsize>,
     pub push_notifications: Arc<RecordingPushNotifier>,
     /// The clock `app.household` reads; move it to cross schedule, budget
     /// and approval-expiry boundaries.
@@ -437,14 +439,22 @@ apiVersion = "1"
 /// databases are connection-private, so a multi-connection pool (or two
 /// tests sharing one name) risks silently reading an empty, unmigrated
 /// database.
-async fn test_pool() -> DbPool {
+async fn test_pool() -> (DbPool, Arc<std::sync::atomic::AtomicUsize>) {
     static SEQ: AtomicU64 = AtomicU64::new(0);
+    let acquisitions = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = acquisitions.clone();
     let n = SEQ.fetch_add(1, Ordering::Relaxed);
     let url = format!("sqlite://playarr_api_test_{n}?mode=memory&cache=shared");
 
     sqlx::any::install_default_drivers();
     let pool: DbPool = sqlx::any::AnyPoolOptions::new()
         .max_connections(1)
+        // Every statement run on the pool takes a connection, so this counts
+        // statements (a transaction counts once) for query-count tests.
+        .before_acquire(move |_, _| {
+            counter.fetch_add(1, Ordering::Relaxed);
+            Box::pin(async { Ok(true) })
+        })
         // The default 30 s acquire timeout is shorter than a test thread can
         // be starved for when the whole suite runs on saturated cores.
         .acquire_timeout(std::time::Duration::from_secs(300))
@@ -454,7 +464,7 @@ async fn test_pool() -> DbPool {
     playarr_db::run_migrations(&pool)
         .await
         .expect("run real embedded sqlite migrations");
-    pool
+    (pool, acquisitions)
 }
 
 pub async fn test_state() -> (Router, TestState) {
@@ -465,7 +475,7 @@ pub async fn test_state() -> (Router, TestState) {
 /// node-local transcode admission slot count, so a test can hold a slot open
 /// with a long-running process.
 pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Router, TestState) {
-    let pool = test_pool().await;
+    let (pool, pool_acquisitions) = test_pool().await;
 
     let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
     let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
@@ -483,8 +493,14 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let request_sync = Arc::new(crate::request_sync::RequestSync::new(
-        Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
-        Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+        Arc::new(playarr_db::EventingMediaRequestRepo::new(
+            Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
+        Arc::new(playarr_db::EventingRequestIntegrationRepo::new(
+            Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+            live_events.clone(),
+        )),
         user_repo.clone(),
         work_repo.clone(),
     ));
@@ -588,7 +604,13 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
         .with_embedding_repo(embedding_repo.clone())
         .with_media_language_repo(Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(
             pool.clone(),
-        ))),
+        )))
+        .with_peer_leaf_availability(
+            Arc::new(playarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(
+                pool.clone(),
+            )),
+            peer_node_repo.clone(),
+        ),
     );
 
     let source_instances = Arc::new(SourceInstanceRegistry::new());
@@ -802,6 +824,7 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
             user_repo,
             policy_repo,
             pool,
+            pool_acquisitions,
             push_notifications,
             clock: household_clock,
             default_user_id,

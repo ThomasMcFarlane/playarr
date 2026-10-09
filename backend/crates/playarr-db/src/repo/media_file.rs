@@ -43,6 +43,19 @@ pub trait MediaFileRepo: Send + Sync {
     /// series/artist/author).
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError>;
 
+    /// [`Self::list_by_work_id`] for many works at once, ordered by file id
+    /// (so "the file of a leaf" is the lowest id, as `find_by_leaf` picks).
+    /// The default asks one work at a time; the SQL repo answers in a few
+    /// queries.
+    async fn list_by_work_ids(&self, work_ids: &[Uuid]) -> Result<Vec<MediaFile>, DbError> {
+        let mut out = Vec::new();
+        for id in work_ids {
+            out.extend(self.list_by_work_id(*id).await?);
+        }
+        out.sort_by_key(|f| f.id);
+        Ok(out)
+    }
+
     /// Every physical file imported by every normal source instance.
     async fn list_all(&self) -> Result<Vec<MediaFile>, DbError>;
 
@@ -248,6 +261,27 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             .fetch_all(&self.pool)
             .await?;
         rows.iter().map(Self::from_row).collect()
+    }
+
+    async fn list_by_work_ids(&self, work_ids: &[Uuid]) -> Result<Vec<MediaFile>, DbError> {
+        let mut out = Vec::new();
+        for chunk in work_ids.chunks(400) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+                 source_instance_id, source_file_id FROM media_files \
+                 WHERE work_id IN ({placeholders}) ORDER BY id"
+            );
+            let mut query = sqlx::query(&sql);
+            for id in chunk {
+                query = query.bind(id.to_string());
+            }
+            for row in query.fetch_all(&self.pool).await? {
+                out.push(Self::from_row(&row)?);
+            }
+        }
+        out.sort_by_key(|f| f.id);
+        Ok(out)
     }
 
     async fn list_all(&self) -> Result<Vec<MediaFile>, DbError> {
@@ -525,6 +559,44 @@ mod tests {
         let mut got = pairs;
         got.sort();
         assert_eq!(got, expected);
+    }
+
+    #[tokio::test]
+    async fn list_by_work_ids_returns_the_files_of_every_asked_work_by_id() {
+        let pool = test_sqlite_pool().await;
+        let (a, b, c) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        for work in [a, b, c] {
+            insert_work(&pool, work).await;
+        }
+        let repo = SqlxMediaFileRepo::new(pool);
+        let mut created = Vec::new();
+        for (work, source) in [(a, "a1"), (a, "a2"), (b, "b1"), (c, "c1")] {
+            let file = sample_media_file(
+                work,
+                LeafRef::Episode(Uuid::new_v4()),
+                Uuid::new_v4(),
+                Some(source),
+            );
+            repo.create(&file).await.unwrap();
+            created.push(file);
+        }
+        let listed = repo.list_by_work_ids(&[a, b]).await.unwrap();
+        let mut expected: Vec<Uuid> = created
+            .iter()
+            .filter(|f| f.work_id != c)
+            .map(|f| f.id)
+            .collect();
+        expected.sort();
+        assert_eq!(listed.iter().map(|f| f.id).collect::<Vec<_>>(), expected);
+        assert!(repo.list_by_work_ids(&[]).await.unwrap().is_empty());
+        // The same rows as one call per work.
+        let mut singly = repo.list_by_work_id(a).await.unwrap();
+        singly.extend(repo.list_by_work_id(b).await.unwrap());
+        singly.sort_by_key(|f| f.id);
+        assert_eq!(
+            singly.iter().map(|f| f.id).collect::<Vec<_>>(),
+            listed.iter().map(|f| f.id).collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]

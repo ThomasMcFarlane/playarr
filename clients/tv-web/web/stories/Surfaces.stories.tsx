@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DateRangeField, MasterDetail, PeriodPicker } from "../src/components/shell";
 import { ProfileAvatar } from "../src/components/ProfileAvatar";
@@ -12,6 +12,8 @@ const progress = (state: "part_watched" | "unseen", position: number): WatchProg
 
 function Surfaces() {
   const [period, setPeriod] = useState("2026-10-01");
+  const [jumpOpen, setJumpOpen] = useState(true);
+  const jumpTrigger = useRef<HTMLButtonElement>(null);
   const [range, setRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
   return (
     <div className="sb-pad sb-col" style={{ maxWidth: 900 }}>
@@ -40,7 +42,10 @@ function Surfaces() {
       </div>
       <div>
         <Caption>Period picker</Caption>
-        <PeriodPicker value={period} label="October 2026" locale="en-GB" dialogLabel="Choose a period" monthLabel="Month" yearLabel="Year" onChange={setPeriod} />
+        <button type="button" ref={jumpTrigger} className="ui-btn btn btn-secondary" aria-expanded={jumpOpen} aria-controls="story-period-jump" onClick={() => setJumpOpen((v) => !v)}>
+          Oct 2026
+        </button>
+        <PeriodPicker id="story-period-jump" open={jumpOpen} onOpenChange={setJumpOpen} triggerRef={jumpTrigger} value={period} label="October 2026" locale="en-GB" dialogLabel="Choose a period" monthLabel="Month" yearLabel="Year" onChange={setPeriod} />
       </div>
       <div>
         <Caption>Date range field</Caption>
