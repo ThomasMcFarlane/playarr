@@ -52,7 +52,9 @@ import {
   resumeButtonLabelKey,
   resumeButtonTitleKey,
   nextUpSelection,
+  resumePlanKey,
   resumePlayerState,
+  RESUME_PLAN_TAGS,
 } from "../lib/resumePlan";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
@@ -1044,8 +1046,6 @@ function DetailPending({ work, fallbackKind, label }: { work: Work | undefined; 
   );
 }
 
-const resumePlanKey = (seriesId: string) => `resume-plan:${seriesId}`;
-
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
   const { t } = useLanguage();
@@ -1165,7 +1165,7 @@ export function WorkDetailPage() {
       setResumePlanSettledFor(resumeSeriesId);
     }
     client.queries
-      .fetch(resumePlanKey(resumeSeriesId), () => client.getResumePlan(resumeSeriesId), { tags: ["progress", "catalog"] })
+      .fetch(resumePlanKey(resumeSeriesId), () => client.getResumePlan(resumeSeriesId), { tags: RESUME_PLAN_TAGS })
       .then((plan) => {
         if (cancelled) return;
         setResumePlan(plan);

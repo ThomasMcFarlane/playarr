@@ -328,11 +328,17 @@ export function HomePage() {
 
   useLayoutEffect(() => {
     if (navigationLayer.hasSnapshot) return;
-    const firstSection = railsRef.current?.querySelector<HTMLElement>(".tv-media-track");
-    if (!firstSection) return;
-    centreTrackInStack(firstSection, { animate: false });
-    focusedRailRef.current =
-      (firstSection.dataset.tvTrackId as HomeRailId | undefined) ?? null;
+    // The rail set changed (first paint, or a rail appearing or going a few seconds later). The stack opens on the
+    // first rail, but when the viewer has already moved on it stays on the rail they are on: re-centring the first
+    // one would snap the page back to the top with no key press.
+    const marker = document.querySelector<HTMLElement>("[data-remote-active]") ?? document.activeElement;
+    const current = marker instanceof HTMLElement && railsRef.current?.contains(marker)
+      ? marker.closest<HTMLElement>(".tv-media-track")
+      : null;
+    const section = current ?? railsRef.current?.querySelector<HTMLElement>(".tv-media-track");
+    if (!section) return;
+    centreTrackInStack(section, { animate: false });
+    focusedRailRef.current = (section.dataset.tvTrackId as HomeRailId | undefined) ?? null;
   }, [navigationLayer.hasSnapshot, railsKey]);
 
   // A late On Deck result swaps the primary rail's cards. If the viewer was

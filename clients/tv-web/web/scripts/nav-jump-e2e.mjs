@@ -49,7 +49,10 @@ const RECORD = () => {
       cards: document.querySelectorAll(".tv-title-card").length,
       libIndex: act?.closest?.("[data-library-index]")?.getAttribute("data-library-index") ?? act?.getAttribute?.("data-library-index") ?? null,
       gridTop: grid ? grid.scrollTop : null,
-      downloadX: dl ? Math.round(dl.getBoundingClientRect().x) : null,
+      gridH: grid ? grid.scrollHeight : null,
+      // Relative to the copy column: the whole page slides in on a route change, so only motion of the button inside its
+      // column is a jump (a page-wide slide moves the column and the button together and cancels out here).
+      downloadX: dl ? Math.round((dl.getBoundingClientRect().x - (document.querySelector(".tv-detail-copy")?.getBoundingClientRect().x ?? 0)) * 100) / 100 : null,
       primary: first ? (first.closest("section")?.querySelector("h2,h3")?.textContent ?? "") : null,
       homeCards: first ? first.querySelectorAll(".tv-home-card").length : 0,
     });
@@ -76,6 +79,13 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
         await page.keyboard.press("ArrowDown");
         await page.waitForTimeout(70);
       }
+      // A slow machine drops key presses: keep going until the focus is past the first 200-title page.
+      for (let extra = 0; extra < 60; extra += 1) {
+        const at = await page.evaluate(() => Number(document.activeElement?.closest?.("[data-library-index]")?.getAttribute("data-library-index") ?? -1));
+        if (at >= 210) break;
+        await page.keyboard.press("ArrowDown");
+        await page.waitForTimeout(70);
+      }
       await page.waitForTimeout(1500);
       const before = await page.evaluate(() => {
         const a = document.activeElement;
@@ -94,7 +104,11 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
       const back = rec.frames.slice(mid).filter((f) => f.cards > 0 || f.skeleton);
       const after = rec.frames.at(-1);
       check(`library deep ${size}: Back lands on the same title`, Number(after.libIndex) === before.index, `${before.index} -> ${after.libIndex}`);
-      check(`library deep ${size}: Back keeps the scroll position`, after.gridTop !== null && Math.abs(after.gridTop - before.top) <= 4, `${before.top} -> ${after.gridTop}`);
+      const trail = [...new Set(back.map((f) => `${f.gridTop}/${f.gridH}`))].slice(0, 12).join(" ");
+      // The restore is instant: never a frame of the grid at the top (or anywhere else) that glides to the saved offset.
+      const away = back.filter((f) => f.gridTop !== null && Math.abs(f.gridTop - before.top) > 4).length;
+      check(`library deep ${size}: no frame of the grid away from the saved scroll position on Back`, away === 0, `${away} frames; trail ${[...new Set(back.map((f) => f.gridTop))].slice(0, 8).join(" ")}`);
+      check(`library deep ${size}: Back keeps the scroll position`, after.gridTop !== null && Math.abs(after.gridTop - before.top) <= 4, `${before.top} -> ${after.gridTop}; top/height trail ${trail}`);
       const fewer = back.filter((f) => !f.skeleton && f.cards < Math.min(before.cards, 100)).length;
       check(`library deep ${size}: no frame of the grid with fewer cards than before the visit`, fewer === 0, `${fewer} frames, before ${before.cards} cards`);
       check(`library deep ${size}: no skeleton frame on Back`, back.every((f) => !f.skeleton), "skeleton shown");

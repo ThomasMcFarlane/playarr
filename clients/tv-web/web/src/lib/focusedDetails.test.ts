@@ -14,6 +14,7 @@ function fakeClient() {
   const queries = new QueryCache();
   queries.setScope("profile-a");
   const calls: Call[] = [];
+  const planCalls: string[] = [];
   const inflight = new Set<string>();
   let peak = 0;
   const client = {
@@ -32,12 +33,16 @@ function fakeClient() {
           signal: options.signal,
           resolve: () => {
             inflight.delete(id);
-            resolve({ id } as unknown as WorkDetail);
+            resolve({ id, work: { id, kind: id.startsWith("s") ? "series" : "movie" } } as unknown as WorkDetail);
           },
         });
       }),
+    getResumePlan: (id: string) => {
+      planCalls.push(id);
+      return Promise.resolve({ series_work_id: id });
+    },
   } as unknown as ApiClient;
-  return { client, queries, calls, inflight, peak: () => peak };
+  return { client, queries, calls, planCalls, inflight, peak: () => peak };
 }
 
 const flush = async () => {
@@ -69,8 +74,38 @@ describe("FocusedDetails", () => {
     expect(calls.map((call) => [call.id, call.priority])).toEqual([["a", "high"]]);
     calls[0]!.resolve();
     await flush();
-    expect(details.peek("a")?.data).toEqual({ id: "a" });
+    expect(details.peek("a")?.data).toMatchObject({ id: "a" });
     expect(seen).toHaveBeenCalled();
+  });
+
+  it("warms a series' resume plan with its detail, so opening it paints the Resume button at once", async () => {
+    const { client, queries, calls, planCalls } = fakeClient();
+    const details = new FocusedDetails(client);
+    details.focus("s1");
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    calls[0]!.resolve();
+    await flush();
+    expect(planCalls).toEqual(["s1"]);
+    expect(queries.peek("resume-plan:s1")?.data).toEqual({ series_work_id: "s1" });
+  });
+
+  it("does not request a resume plan for a movie", async () => {
+    const { client, calls, planCalls } = fakeClient();
+    const details = new FocusedDetails(client);
+    details.focus("m1");
+    vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
+    calls[0]!.resolve();
+    await flush();
+    expect(planCalls).toEqual([]);
+  });
+
+  it("warms the plan of a series whose detail is already stored when focus rests on it", async () => {
+    const { client, queries, planCalls } = fakeClient();
+    queries.set("work:s2", { id: "s2", work: { id: "s2", kind: "series" } }, ["catalog"]);
+    const details = new FocusedDetails(client);
+    details.focus("s2");
+    await flush();
+    expect(planCalls).toEqual(["s2"]);
   });
 
   it("makes no request for cards a held key passes over", () => {
@@ -273,6 +308,6 @@ describe("FocusedDetails persistence", () => {
     vi.advanceTimersByTime(CURRENT_START_DELAY_MS);
     calls[0]!.resolve();
     await flush();
-    expect(details.peek("a")?.data).toEqual({ id: "a" });
+    expect(details.peek("a")?.data).toMatchObject({ id: "a" });
   });
 });
