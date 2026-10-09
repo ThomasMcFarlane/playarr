@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: Down on the profile chip at the end of the nav rail stays on the chip instead of entering the page.
+- Web TV: keys queued just before a route change no longer move focus on the next page.
+- Web TV: the focusable-control cache refreshes after panel, drawer and chrome class toggles and transitions, and ignores inert subtrees.
+- Web TV: removed dead navigation code and replaced the Library grid's DOM expando with a typed registry.
 - Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
 - Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web calendar: Play on a group of episodes released together starts the episode with progress (Resume), otherwise the earliest playable one, and the button names the episode (for example "Play S01E02"); it no longer always starts the first.

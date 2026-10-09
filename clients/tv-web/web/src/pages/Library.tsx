@@ -1,3 +1,4 @@
+import { ensureLibraryIndex, registerEnsureLibraryIndex } from "../lib/libraryIndexRegistry";
 import { smoothScrollIntoView, smoothScrollTo } from "../lib/smoothScroll";
 import {
   memo,
@@ -543,18 +544,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         setMountedEnd(nextEnd);
       });
     };
-    (
-      grid as HTMLElement & {
-        __tvEnsureLibraryIndex?: (index: number) => void;
-      }
-    ).__tvEnsureLibraryIndex = ensure;
-    return () => {
-      delete (
-        grid as HTMLElement & {
-          __tvEnsureLibraryIndex?: (index: number) => void;
-        }
-      ).__tvEnsureLibraryIndex;
-    };
+    return registerEnsureLibraryIndex(grid, ensure);
   }, [view, kind, itemCount]);
 
   // Cards near the viewport get artwork; everything else (pre-mounted rows,
@@ -874,11 +864,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       if (index < 0) index = itemsRef.current.length - 1;
       if (index < 0) return;
 
-      const grid = gridRef.current as
-        | (HTMLDivElement & { __tvEnsureLibraryIndex?: (index: number) => void })
-        | null;
+      const grid = gridRef.current;
       // Rows are mounted on demand; make sure the destination exists first.
-      grid?.__tvEnsureLibraryIndex?.(index);
+      ensureLibraryIndex(grid, index);
       await afterTwoFrames();
       const destination = grid?.querySelector<HTMLElement>(
         `[data-library-index="${index}"]`
