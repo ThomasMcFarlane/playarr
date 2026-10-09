@@ -80,15 +80,28 @@ function EpisodeCard({ index, mode }: { index: number; mode: Mode }) {
   );
 }
 
-function PersonCard({ index, mode }: { index: number; mode: Mode }) {
+function PersonCard({ index, mode, name = `Sample Person ${index + 1}`, role = "Role", photo = false }: { index: number; mode: Mode; name?: string; role?: string; photo?: boolean }) {
+  if (mode === "loading") {
+    return (
+      <div className="tv-episode-card tv-person-card" aria-hidden="true">
+        <span className="tv-episode-art tv-person-art">
+          <SkeletonBlock width="100%" height="100%" />
+        </span>
+        <span className="tv-episode-copy tv-person-copy">
+          <SkeletonBlock width="70%" height="1em" />
+        </span>
+      </div>
+    );
+  }
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("") || "?";
   return (
-    <article className={`tv-episode-card tv-person-card${mode === "selected" ? " is-selected" : ""}`} tabIndex={0} aria-label={`Sample Person ${index + 1}, Role`}>
+    <article className={`media-card tv-episode-card tv-person-card${mode === "selected" ? " is-selected" : ""}`} tabIndex={0} aria-label={`${name}, ${role}`}>
       <span className="tv-episode-art tv-person-art">
-        <span className="tv-person-placeholder">SP</span>
+        {photo ? <Art index={index} /> : <span className="tv-person-placeholder">{initials}</span>}
       </span>
       <span className="tv-episode-copy tv-person-copy">
-        <strong>Sample Person {index + 1}</strong>
-        <small>Role</small>
+        <strong>{name}</strong>
+        <small>{role}</small>
       </span>
     </article>
   );
@@ -125,7 +138,7 @@ function Cards({ mode }: { mode: Mode }) {
               <EpisodeCard index={i} mode={mode} />
             </div>
           ))}
-          <div style={{ width: "10rem" }}>
+          <div style={{ width: "7rem" }}>
             <PersonCard index={0} mode={mode} />
           </div>
         </div>
@@ -140,3 +153,31 @@ type Story = StoryObj<typeof meta>;
 
 /** Owner rule: media cards show a soft shadow plus a lift on focus, never a ring or fill (use the Pseudo states toolbar). */
 export const Playground: Story = {};
+
+function CastRail({ mode, name, role, photo, count }: { mode: Mode; name: string; role: string; photo: boolean; count: number }) {
+  return (
+    <div className="sb-pad">
+      <Caption>Cast rail item: circular headshot, name and role centred below (two lines at most)</Caption>
+      <div className="sb-row" style={{ alignItems: "flex-start" }}>
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} style={{ width: "7rem" }}>
+            <PersonCard index={i} mode={mode} name={i === 0 ? name : `Sample Person ${i + 1}`} role={i === 0 ? role : "Role"} photo={photo} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Cast and crew item (owner request 2026-10-09): 1:1 circle, shadow follows the circle on focus; no photo shows initials. */
+export const CastItem: StoryObj<typeof CastRail> = {
+  render: (args) => <CastRail {...args} />,
+  args: { mode: "default", name: "Sample Person With A Very Long Name", role: "A character with a long role description", photo: false, count: 4 },
+  argTypes: {
+    mode: { control: "inline-radio", options: ["default", "selected", "loading"] },
+    name: { control: "text" },
+    role: { control: "text" },
+    photo: { control: "boolean" },
+    count: { control: { type: "range", min: 1, max: 8, step: 1 } },
+  },
+};

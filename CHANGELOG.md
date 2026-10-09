@@ -13,6 +13,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: preset profile avatars now use exactly the web client's artwork, gradient and highlight.
+- tvOS: the shell chip and the profile row show the account's custom photo avatar, instead of a preset picked from the profile id.
+- Roku: the identity chip and the profile row show the account's own avatar (preset or custom photo) instead of a hard-coded or id-hash preset, and all six presets now have their artwork.
+- Fire TV: the shell chip and profile row show the account's own avatar (preset or custom photo) from the server, and the preset artwork now matches the web client exactly.
+- Shared profile avatar plates draw the highlight under the artwork, matching the web client.
 - Fire TV (Vega): the app now ships the Playarr brand icon (512x512, 8-bit RGBA PNG, the same artwork as the Android clients) and the 16:9 brand banner instead of the 16-bit placeholder letter tiles, and the pre-build gate rejects a package icon that is not exactly 512x512, larger than 1 MB or not 8-bit.
 - Android (TV and phone): the profile chip now opens the profile switcher with the account's profiles even when the session never learnt its user id at sign-in, instead of an empty "Who's watching?" that looked like a sign-out.
 - `GET /api/v1/media/{id}/thumbnail` answers 204 No Content instead of 500 for a file with no video frame or cover art (audio without embedded art); the web client treats it as an expected miss, keeps its fallback, and no longer retries or logs a console error.
@@ -172,6 +177,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.
 - A music album whose tracks have no cover art shows a basic initials placeholder (neutral tile, theme tokens) instead of an empty gap.
 - Storybook: a composition story for every page and settings section, and a test that fails when a component or page has no story.
 - Storybook: one interactive story with Controls for every shared component, using a fixture API client; the Request latency table scrolls with the keyboard.
@@ -319,6 +325,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Request failures returned by the API no longer name the request service or its product (details stay in the server log).
+- The web client and admin no longer name source providers in user-visible text; a new audit test (with an allowlist for admin integration setup screens) fails on new occurrences.
+- Web: cast and crew rail items are smaller circular headshots with the name and role centred below, cropped to keep faces inside the circle.
 - A peer's availability snapshot is replaced in one transaction, and the events one change raises are stored in one transaction, so each does one commit sync instead of one per row (500 rows: 25 s as separate commits, 0.13 s as one, on a busy local disk). Synchronous stays FULL.
 - CI: the web behaviour gate runs as three parallel shards balanced by measured script time (about 15 min down to about 7).
 - Merge train: the batch CI run on train/batch dispatches the train itself when it finishes, so a green batch lands within a minute instead of waiting for a dropped completion trigger; a manual train dispatch is a real run by default.

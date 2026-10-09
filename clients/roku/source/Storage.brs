@@ -14,6 +14,7 @@ function LoadSession() as Object
         refreshToken: section.Read("refresh_token")
         deviceId: section.Read("device_id")
         profileName: section.Read("profile_name")
+        profileId: section.Read("profile_id")
         directPairing: section.Read("direct_pairing") = "1"
     }
 end function
@@ -92,6 +93,13 @@ sub SaveProfileName(profileName as String)
     section.Flush()
 end sub
 
+' The signed-in profile's id: the fallback avatar preset is picked from a hash of it.
+sub SaveProfileId(profileId as String)
+    section = SessionRegistry()
+    section.Write("profile_id", profileId)
+    section.Flush()
+end sub
+
 sub ClearSession(keepServer = true as Boolean)
     section = SessionRegistry()
     serverUrl = section.Read("server_url")
@@ -100,6 +108,7 @@ sub ClearSession(keepServer = true as Boolean)
     section.Delete("refresh_token")
     section.Delete("device_id")
     section.Delete("profile_name")
+    section.Delete("profile_id")
     if not keepServer
         section.Delete("server_url")
         section.Delete("server_urls")

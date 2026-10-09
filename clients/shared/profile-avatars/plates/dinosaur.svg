@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+<defs>
+<clipPath id="plate"><circle cx="50" cy="50" r="50"/></clipPath>
+<linearGradient id="fill" gradientUnits="userSpaceOnUse" x1="10.058" y1="-7.043" x2="89.942" y2="107.043"><stop offset="0" stop-color="#55a46e"/><stop offset="1" stop-color="#237265"/></linearGradient>
+<radialGradient id="sheen" gradientUnits="userSpaceOnUse" cx="34" cy="26" r="26.77"><stop offset="0" stop-color="#fff" stop-opacity="0.28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+</defs>
+<g clip-path="url(#plate)">
+<rect width="100" height="100" fill="url(#fill)"/>
+<rect width="100" height="100" fill="url(#sheen)"/>
+<g transform="translate(7.000000000000001 7.000000000000001) scale(0.86)">
+<path d="m28 29-9-14 17 4 5-12 10 13 12-9 2 17c14 5 23 16 23 29 0 18-16 31-38 31S12 75 12 57c0-12 6-22 16-28Z" fill="#bde78b"/>
+<circle cx="38" cy="49" r="5" fill="#254b45"/>
+<circle cx="65" cy="49" r="5" fill="#254b45"/>
+<circle cx="39" cy="47" r="1.5" fill="#fff"/>
+<circle cx="66" cy="47" r="1.5" fill="#fff"/>
+<path d="M38 66c8 7 17 7 25 0" fill="none" stroke="#254b45" stroke-width="4" stroke-linecap="round"/>
+<path d="m45 67 3 7 4-6 4 6 3-7" fill="#fff"/>
+</g>
+</g>
+</svg>

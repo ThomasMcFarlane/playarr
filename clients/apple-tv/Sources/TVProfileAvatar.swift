@@ -1,13 +1,18 @@
+import PlayarrKit
 import SwiftUI
+import UIKit
 
 /// The six preset profile avatars of the web client (`ProfileAvatar.tsx`), drawn natively.
 /// The preset follows the web's `defaultProfileAvatarPreset(userId)` hash, so a user shows the
-/// same face on every client.
+/// same face on every client. A custom photo (the account's resized JPEG, saved from another device)
+/// replaces the artwork, clipped to the circle.
 struct TVProfileAvatar: View {
     var userID: String
     var size: CGFloat
     /// The server-backed preset id, which wins over the hash of the user id.
     var presetName: String? = nil
+    /// The account's decoded custom photo; when set it is drawn instead of a preset.
+    var customImage: UIImage? = nil
 
     private enum Element {
         case path(String, fill: Color?, stroke: Color?, width: CGFloat, round: Bool)
@@ -21,7 +26,7 @@ struct TVProfileAvatar: View {
         var elements: [Element]
     }
 
-    private static let order = ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"]
+    static let order = ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"]
 
     static func presetIndex(for userID: String) -> Int {
         var hash: UInt32 = 0
@@ -104,6 +109,19 @@ struct TVProfileAvatar: View {
     }
 
     var body: some View {
+        if let customImage {
+            Image(uiImage: customImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            presetBody
+        }
+    }
+
+    @ViewBuilder
+    private var presetBody: some View {
         let index = presetName.flatMap { Self.order.firstIndex(of: $0) } ?? Self.presetIndex(for: userID)
         let preset = Self.preset(index)
         let art = size * 0.84
@@ -155,6 +173,35 @@ struct TVProfileAvatar: View {
 }
 
 /// A small SVG path parser (M, L, H, V, C, S, Z in absolute and relative form) for the avatar artwork.
+/// What a profile's avatar shows, by the web client's rules: the account's server preference when it is
+/// usable (a known preset id, or a JPEG data URL), otherwise the preset picked from a hash of the user id.
+enum TVProfileAvatarSource: Equatable {
+    case preset(index: Int)
+    case custom(dataURL: String)
+
+    private static let jpegPrefix = "data:image/jpeg;base64,"
+
+    static func resolve(preference: ProfileAvatarPreference?, userID: String) -> TVProfileAvatarSource {
+        if let preference {
+            switch preference.kind {
+            case .preset:
+                if let index = TVProfileAvatar.order.firstIndex(of: preference.value) { return .preset(index: index) }
+            case .custom:
+                if preference.value.prefix(jpegPrefix.count).lowercased() == jpegPrefix { return .custom(dataURL: preference.value) }
+            }
+        }
+        return .preset(index: TVProfileAvatar.presetIndex(for: userID))
+    }
+
+    /// Decodes a custom photo's JPEG data URL; `nil` when it is not a decodable JPEG.
+    static func image(fromDataURL dataURL: String) -> UIImage? {
+        guard dataURL.prefix(jpegPrefix.count).lowercased() == jpegPrefix,
+              let data = Data(base64Encoded: String(dataURL.dropFirst(jpegPrefix.count)), options: .ignoreUnknownCharacters)
+        else { return nil }
+        return UIImage(data: data)
+    }
+}
+
 enum TVSVGPath {
     static func parse(_ d: String) -> Path {
         var path = Path()

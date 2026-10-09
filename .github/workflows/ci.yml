@@ -150,6 +150,9 @@ jobs:
       - name: Release notes script tests
         run: node --test scripts/release-notes.test.mjs scripts/fold-fragments.test.mjs
 
+      - name: Profile avatar presets match the web reference
+        run: node clients/shared/profile-avatars/render.mjs --check
+
       # Nightly and post-merge dispatches on main validate everything.
       - name: Full run?
         id: all

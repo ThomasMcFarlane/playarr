@@ -1065,7 +1065,7 @@ export const en = {
   "pages.clients.serverPage.title":
     "Playarr Server.",
   "pages.clients.serverPage.description":
-    "Playarr Server catalogues your library from the Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr instances you already run, generates thumbnails, probes audio and subtitle tracks and transcodes on demand. Every Playarr client on this page connects to it. Your media stays on your own hardware.",
+    "Playarr Server catalogues your library from the library sources you already run, generates thumbnails, probes audio and subtitle tracks and transcodes on demand. Every Playarr client on this page connects to it. Your media stays on your own hardware.",
   "pages.clients.serverPage.packageNote":
     "Prebuilt Linux tarballs (x86-64 and ARM64) and a public container image are published with every release. Each tarball holds the server, the Admin UI, the licence and example systemd units. Pick the build for your CPU.",
   "pages.clients.serverPage.downloadAmd64":
@@ -1093,7 +1093,7 @@ export const en = {
   "pages.clients.serverPage.req3Title":
     "Your media apps",
   "pages.clients.serverPage.req3Description":
-    "Playarr Server reads from Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr instances that you already run. Register each one through the server's admin API after it starts.",
+    "Playarr Server reads from the library sources that you already run. Register each one through the server's admin API after it starts.",
   "pages.clients.serverPage.req4Title":
     "Network port 8484",
   "pages.clients.serverPage.req4Description":

@@ -1,9 +1,41 @@
+import PlayarrKit
 import XCTest
 @testable import PlayarrTV
 
 /// Locks the pieces of the web parity work that are pure functions.
 final class TVWebParityTests: XCTestCase {
     /// Same values as the web's `defaultProfileAvatarPreset` (hash of the user id modulo six presets).
+    /// Every client renders the account's server preference; the id hash is only the fallback when none is set.
+    func testAvatarSourceFollowsTheServerPreference() throws {
+        let user = "aefbc393-ee42-4de9-81d5-6177f8738cff"
+        let hashed = TVProfileAvatar.presetIndex(for: user)
+
+        XCTAssertEqual(TVProfileAvatarSource.resolve(preference: nil, userID: user), .preset(index: hashed))
+        XCTAssertEqual(
+            TVProfileAvatarSource.resolve(preference: ProfileAvatarPreference(kind: .preset, value: "alien"), userID: user),
+            .preset(index: TVProfileAvatar.order.firstIndex(of: "alien")!)
+        )
+        // An id the web does not know falls back to the hash instead of drawing nothing.
+        XCTAssertEqual(
+            TVProfileAvatarSource.resolve(preference: ProfileAvatarPreference(kind: .preset, value: "unicorn"), userID: user),
+            .preset(index: hashed)
+        )
+        let jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+        XCTAssertEqual(
+            TVProfileAvatarSource.resolve(preference: ProfileAvatarPreference(kind: .custom, value: jpeg), userID: user),
+            .custom(dataURL: jpeg)
+        )
+        XCTAssertEqual(
+            TVProfileAvatarSource.resolve(preference: ProfileAvatarPreference(kind: .custom, value: "https://example.com/a.jpg"), userID: user),
+            .preset(index: hashed)
+        )
+    }
+
+    func testCustomAvatarDecodesAJPEGDataURL() throws {
+        XCTAssertNil(TVProfileAvatarSource.image(fromDataURL: "data:image/png;base64,AAAA"))
+        XCTAssertNil(TVProfileAvatarSource.image(fromDataURL: "data:image/jpeg;base64,not-an-image"))
+    }
+
     func testAvatarPresetFollowsTheWebHash() {
         XCTAssertEqual(TVProfileAvatar.presetIndex(for: "user-1"), 1)
         XCTAssertEqual(TVProfileAvatar.presetIndex(for: "user-2"), 2)
@@ -35,7 +67,7 @@ final class TVWebParityTests: XCTestCase {
     func testTitleWrapBreaksAtWordBoundaries() {
         let lines = TVTextWrap.lines(
             "Sample Series 1",
-            fontName: "AvenirNext-DemiBold",
+            weight: 600,
             size: 69.12,
             kern: -4.98,
             width: 379.5

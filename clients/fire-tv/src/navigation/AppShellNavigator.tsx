@@ -86,7 +86,8 @@ import {
   type RouteProp,
 } from '@amazon-devices/react-navigation__native';
 import type {WorkKind} from '@playarr-tv/api-client';
-import {useApiClient, useAuthFailed} from '../api/ApiClientProvider';
+import {useApiBaseUrl, useApiClient, useAuthFailed} from '../api/ApiClientProvider';
+import {syncAvatar} from '../lib/profileAvatarPref';
 import {APP_CONFIG} from '../config/appConfig';
 import {findCurrentProfile, listViewerProfiles, type ViewerProfile} from '../auth/profiles';
 import {ShellChrome, type RailTarget} from '../shell/ShellChrome';
@@ -272,6 +273,7 @@ export function AppShellNavigator(): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const ownRoute = useRoute<RouteProp<ParamListBase>>();
   const client = useApiClient();
+  const [apiBaseUrl] = useApiBaseUrl();
   const {authFailed, clearAuthFailed} = useAuthFailed();
 
   // `null` while unresolved -- `<NavRail>`'s own `visibleNavGroups` call
@@ -357,13 +359,17 @@ export function AppShellNavigator(): React.ReactElement {
     let cancelled = false;
     listViewerProfiles(client)
       .then((profiles) => {
-        if (!cancelled) setProfile(findCurrentProfile(profiles) ?? profiles[0]);
+        if (cancelled) return;
+        const current = findCurrentProfile(profiles) ?? profiles[0];
+        setProfile(current);
+        // Show the account's own avatar (preset or custom photo) in the chip, whatever this device cached before.
+        if (current) void syncAvatar(client, apiBaseUrl, current.id).catch(() => undefined);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, apiBaseUrl]);
 
   const household = useHouseholdStatus(client, activeRoute);
   const householdBlock = householdBlockFromStatus(household.status);

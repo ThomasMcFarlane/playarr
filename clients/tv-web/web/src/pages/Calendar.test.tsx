@@ -11,8 +11,8 @@ const t = (key: keyof typeof en, params?: Record<string, string | number>) =>
   en[key].replace(/\{\{(\w+)\}\}/g, (m, k: string) => (params && k in params ? String(params[k]) : m));
 
 const sources: CalendarSourceStatus[] = [
-  { source_instance_id: "1", name: "Main Sonarr", kind: "sonarr", status: "ok", entry_count: 4 },
-  { source_instance_id: "2", name: "4K Radarr", kind: "radarr", status: "unreachable", error: "timed out", entry_count: 0 },
+  { source_instance_id: "1", name: "Main source", kind: "sonarr", status: "ok", entry_count: 4 },
+  { source_instance_id: "2", name: "4K source", kind: "radarr", status: "unreachable", error: "timed out", entry_count: 0 },
   { source_instance_id: "3", name: "Music", kind: "lidarr", status: "rejected", entry_count: 0 },
 ];
 

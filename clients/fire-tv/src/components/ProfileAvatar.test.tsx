@@ -27,6 +27,7 @@ jest.mock('@amazon-devices/react-native-svg', () => ({
   default: 'Svg',
   Circle: 'Circle',
   Path: 'Path',
+  Rect: 'Rect',
   Defs: 'Defs',
   Stop: 'Stop',
   RadialGradient: 'RadialGradient',
@@ -37,7 +38,10 @@ jest.mock('@amazon-devices/react-linear-gradient', () => ({
 }));
 
 import React from 'react';
+import {Image} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
+import {DEFAULT_API_BASE_URL} from '@playarr-tv/domain';
+import {syncAvatar} from '../lib/profileAvatarPref';
 import {ApiClientProvider} from '../api/ApiClientProvider';
 import {ProfileAvatar} from './ProfileAvatar';
 import {pickProfileAvatarPreset} from './profileAvatarPresets';
@@ -78,5 +82,19 @@ describe('<ProfileAvatar>', () => {
     expect(glyph.props.height).toBeCloseTo(64 * 0.86);
     expect(sheen.props.width).toBe(64);
     expect(sheen.props.height).toBe(64);
+  });
+
+  it('draws the account\'s custom photo from the cached data URL instead of a preset', async () => {
+    const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    await syncAvatar({getProfileAvatar: async () => ({preference: {kind: 'custom', value: jpeg}})} as never, DEFAULT_API_BASE_URL, 'custom-profile');
+
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(<ApiClientProvider><ProfileAvatar profileId="custom-profile" size={64} /></ApiClientProvider>);
+    });
+
+    expect(tree.root.findByType(Image).props.source).toEqual({uri: jpeg});
+    expect(tree.root.findAllByType('LinearGradient' as never)).toHaveLength(0);
+    await syncAvatar({getProfileAvatar: async () => ({preference: null})} as never, DEFAULT_API_BASE_URL, 'custom-profile');
   });
 });

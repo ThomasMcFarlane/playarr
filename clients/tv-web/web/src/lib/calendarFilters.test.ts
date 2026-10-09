@@ -24,7 +24,7 @@ function entry(over: Partial<CalendarEntry>): CalendarEntry {
     monitored: true,
     has_file: false,
     work_id: "w1",
-    sources: [{ source_instance_id: "s1", source_name: "Sonarr", source_kind: "sonarr", arr_id: 1 }],
+    sources: [{ source_instance_id: "s1", source_name: "Source A", source_kind: "sonarr", arr_id: 1 }],
     ...over,
   };
 }
@@ -61,7 +61,7 @@ describe("applyCalendarFilters", () => {
     entry({ id: "past-missing", date: "2026-10-01", release_at: null }),
     entry({ id: "past-file", date: "2026-10-02", release_at: null, has_file: true }),
     entry({ id: "future", date: "2026-10-09", release_at: null, monitored: false }),
-    entry({ id: "movie", media_kind: "movie", season_number: null, episode_number: null, date: "2026-10-09", release_at: null, sources: [{ source_instance_id: "s2", source_name: "Radarr", source_kind: "radarr", arr_id: 2 }] }),
+    entry({ id: "movie", media_kind: "movie", season_number: null, episode_number: null, date: "2026-10-09", release_at: null, sources: [{ source_instance_id: "s2", source_name: "Source B", source_kind: "radarr", arr_id: 2 }] }),
   ];
   const ids = (filters: string) => applyCalendarFilters(entries, parseCalendarFilters(new URLSearchParams(filters)), today).map((e) => e.id);
 

@@ -1,0 +1,5 @@
+# Files allowed to name an integration in user-visible text (owner rule, 9 Oct 2026: the web client never mentions
+# source providers). One path per line, relative to clients/tv-web, followed by " # reason". Keep this list minimal:
+# only admin integration SETUP screens that must name the integration so an operator can configure it.
+admin/src/pages/SourceInstances.tsx # operator setup of library source connections and the transcode-queue connection
+admin/src/pages/RequestIntegrations.tsx # operator setup of request-service integrations

@@ -8,6 +8,7 @@ Nav icons are drawn from the web's NavIcons.tsx paths (24 box, stroke 1.8, round
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -91,7 +92,26 @@ def group(n: int) -> None:
     rounded(78, h, 22, 143).save(IMAGES / f"nav-group-{n}.png")
 
 
+SHARED_AVATARS = Path(__file__).resolve().parents[2] / "shared" / "profile-avatars"
+AVATAR_PRESETS = ("astronaut", "cat", "dinosaur", "robot", "pirate", "alien")
+
+
+def avatars() -> None:
+    """The six preset avatars are the shared plates (clients/shared/profile-avatars, rendered from the web client's art), and
+    avatar-mask.png is the circle a custom photo is clipped to (a MaskGroup mask: only its alpha counts)."""
+    for preset in AVATAR_PRESETS:
+        shutil.copyfile(SHARED_AVATARS / "plates" / f"{preset}.png", IMAGES / f"avatar-{preset}.png")
+    size = 240
+    big = Image.new("L", (size * SS, size * SS), 0)
+    ImageDraw.Draw(big).ellipse((0, 0, size * SS - 1, size * SS - 1), fill=255)
+    alpha = big.resize((size, size), Image.LANCZOS)
+    mask = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    mask.putalpha(alpha)
+    mask.save(IMAGES / "avatar-mask.png")
+
+
 def main() -> None:
+    avatars()
     for name in ICONS:
         icon(name, 40 if name == "icon-empty" else 20)
     for r in (6, 12, 25):
