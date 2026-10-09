@@ -7,22 +7,22 @@ import { localeTagFor } from "../lib/i18n/languages";
 
 type TFunction = ReturnType<typeof useLanguage>["t"];
 
-/** The lines shown for a lag statistic; separated from the fetch so they can be tested. */
+/**
+ * The lines shown for a lag statistic; separated from the fetch so they can be tested. Returns `null` when
+ * there is no average yet: that only means no release-to-import samples exist, which says nothing about whether
+ * the work is playable, so no "no data" text is ever shown.
+ */
 export function availabilityLagLines(
   lag: AvailabilityLag,
   t: TFunction,
   locale: string
-): { primary: string; secondary: string | null } {
-  const primary =
-    lag.average_seconds === null
-      ? t("pages.workDetail.availabilityLagNoData")
-      : t("pages.workDetail.availabilityLag", {
-          duration: formatHumanDuration(lag.average_seconds, locale),
-        });
+): { primary: string; secondary: string | null } | null {
+  if (lag.average_seconds === null || lag.average_seconds === undefined) return null;
+  const primary = t("pages.workDetail.availabilityLag", {
+    duration: formatHumanDuration(lag.average_seconds, locale),
+  });
   const parts: string[] = [];
-  if (lag.average_seconds !== null) {
-    parts.push(t("pages.workDetail.availabilityLagSamples", { count: lag.sample_count }));
-  }
+  parts.push(t("pages.workDetail.availabilityLagSamples", { count: lag.sample_count }));
   if (lag.backfill_count > 0) {
     parts.push(
       t("pages.workDetail.availabilityLagBackfill", {
@@ -37,13 +37,14 @@ export function availabilityLagLines(
   return { primary, secondary: parts.length > 0 ? parts.join(" · ") : null };
 }
 
-/** "Usually available about X after release" for a series; renders nothing on error or while loading. */
+/** "Usually available about X after release" for a series; renders nothing on error, while loading, or with no samples. */
 export function AvailabilityLagNote({ workId }: { workId: string }) {
   const client = useApiClient();
   const { t, language } = useLanguage();
   const state = useAsyncData(() => client.getAvailabilityLag(workId), [client, workId]);
   if (state.status !== "ready") return null;
   const lines = availabilityLagLines(state.data, t, localeTagFor(language));
+  if (lines === null) return null;
   return (
     <p className="availability-lag" data-testid="availability-lag">
       <span className="availability-lag-primary">{lines.primary}</span>

@@ -1434,7 +1434,6 @@ export const en = {
   "pages.calendar.subscription.copyFailed": "The link could not be copied automatically. Select it and copy it manually.",
   "pages.calendar.subscription.actionError": "The change could not be made: {{reason}}",
   "pages.workDetail.availabilityLag": "Usually available about {{duration}} after release",
-  "pages.workDetail.availabilityLagNoData": "No availability data yet",
   "pages.workDetail.availabilityLagSamples": "Based on {{count}} episodes",
   "pages.workDetail.availabilityLagBackfill": "{{count}} excluded as backfilled more than {{days}} days after release",
   "pages.workDetail.availabilityLagUnknown": "{{count}} excluded for missing dates",

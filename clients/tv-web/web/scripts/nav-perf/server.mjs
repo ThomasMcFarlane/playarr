@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, lagAverageSeconds = null }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -122,6 +122,14 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       };
       if (detailDelay > 0) return void setTimeout(() => json(res, body), detailDelay);
       return json(res, body);
+    }
+    // The per-work availability-lag statistic: no samples by default (a library series nothing has been imported
+    // for yet), or a mean of `lagAverageSeconds`.
+    if (/^\/api\/v1\/catalog\/[^/]+\/availability-lag$/.test(p)) {
+      return json(res, {
+        average_seconds: lagAverageSeconds, average_grab_seconds: null, sample_count: lagAverageSeconds === null ? 0 : 6,
+        backfill_count: 0, unknown_count: 0, backfill_threshold_days: 30, samples: [],
+      });
     }
     // Optional: a series resume plan (a "Resume" button on the detail page), delivered after `resumePlanDelayMs`.
     const planMatch = resumePlanDelayMs >= 0 ? p.match(/^\/api\/v1\/catalog\/([^/]+)\/resume-plan$/) : null;

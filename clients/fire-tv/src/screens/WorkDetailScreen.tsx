@@ -452,10 +452,10 @@ function CopyColumn(props: {
           </View>
         ))}
       </View>
-      {props.availability ? (
+      {props.availability && props.availability.average_seconds != null ? (
         <View style={{marginTop: u(6.5), width: u(455)}}>
           <T size={19.2} weight={640} lh={28.8} color={colour.ink}>
-            {props.availability.average_seconds == null ? t('pages.workDetail.availabilityLagNoData') : t('pages.workDetail.availabilityLag', {duration: formatAverage(props.availability.average_seconds)})}
+            {t('pages.workDetail.availabilityLag', {duration: formatAverage(props.availability.average_seconds)})}
           </T>
         </View>
       ) : null}

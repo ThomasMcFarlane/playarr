@@ -35,17 +35,17 @@ describe("availabilityLagLines", () => {
   };
 
   it("shows the human duration and mentions exclusions in a secondary line", () => {
-    const lines = availabilityLagLines(base, t, "en-GB");
+    const lines = availabilityLagLines(base, t, "en-GB")!;
     expect(lines.primary).toBe("Usually available about 3 hours after release");
     expect(lines.secondary).toContain("Based on 12 episodes");
     expect(lines.secondary).toContain("2 excluded as backfilled more than 30 days after release");
     expect(lines.secondary).toContain("1 excluded for missing dates");
   });
 
-  it("is honest when there is no data", () => {
-    const lines = availabilityLagLines({ ...base, average_seconds: null, sample_count: 0, backfill_count: 0, unknown_count: 0 }, t, "en-GB");
-    expect(lines.primary).toBe("No availability data yet");
-    expect(lines.secondary).toBeNull();
+  it("shows nothing at all when there is no data, never a no-availability message", () => {
+    const empty = { ...base, average_seconds: null, sample_count: 0, backfill_count: 0, unknown_count: 0 };
+    expect(availabilityLagLines(empty, t, "en-GB")).toBeNull();
+    expect(availabilityLagLines({ ...empty, backfill_count: 3, unknown_count: 2 }, t, "en-GB")).toBeNull();
   });
 });
 
