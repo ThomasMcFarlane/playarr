@@ -18,11 +18,13 @@
 //                                      table (the section is created at the top if missing).
 //                                      A line `remove: <row-number>` deletes that row from the board
 //                                      (a fragment may hold only remove lines; a missing row is an error).
+//                                      Each task fold also rewrites the `ETA: <latest open-row ETA> (n open)` line
+//                                      under every "## " heading that has open rows (ICT, UK time alongside).
 //
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
-import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems } from './lib/board.mjs';
+import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, withEpicEtas } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -163,7 +165,8 @@ if (tkFrags.length) {
     if (last < 0) lines.splice(h + 1, 0, '', HEADER_LINE, SEPARATOR_LINE, row);
     else lines.splice(last + 1, 0, row);
   }
-  fs.writeFileSync(p, lines.join('\n'));
+  // Every task fold recomputes the epic ETA lines under the `## ` headings (never hand-edited).
+  fs.writeFileSync(p, withEpicEtas(lines).join('\n'));
 }
 
 for (const f of clFiles) fs.unlinkSync(path.join(root, 'changelog.d', f));
