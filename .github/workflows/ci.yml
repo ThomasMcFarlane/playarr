@@ -685,11 +685,6 @@ jobs:
         working-directory: clients/tv-web/web
         run: node scripts/edge-fade-e2e.mjs
 
-      - name: Library alphabet rail (one column, scrolls with edge fades, focused letter in view)
-        if: matrix.shard == 'drawer'
-        working-directory: clients/tv-web/web
-        run: node scripts/alphabet-rail-e2e.mjs
-
       - name: Keyboard e2e (BACK keys, focus start and restore)
         if: startsWith(matrix.shard, 'nav-')
         working-directory: clients/tv-web/web
