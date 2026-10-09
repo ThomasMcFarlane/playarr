@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
-import { CastButton } from "./CastButton";
+import { CastButton, castPendingAttributes } from "./CastButton";
 
 function renderButton(props: Partial<ComponentProps<typeof CastButton>> = {}): string {
   return renderToStaticMarkup(
@@ -51,5 +51,13 @@ describe("CastButton", () => {
     const onToggleCast = vi.fn(() => Promise.resolve());
     renderButton({ onToggleCast });
     expect(onToggleCast).not.toHaveBeenCalled();
+  });
+});
+
+describe("castPendingAttributes (audit P15)", () => {
+  it("keeps the button focusable while pending", () => {
+    expect(castPendingAttributes(true)).toEqual({ "aria-disabled": true, "aria-busy": true });
+    expect(castPendingAttributes(true)).not.toHaveProperty("disabled");
+    expect(castPendingAttributes(false)).toEqual({});
   });
 });

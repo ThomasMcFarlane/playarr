@@ -1633,6 +1633,52 @@ export function useTvDirectionalNavigation(disabled = false): void {
 }
 
 /**
+ * Where focus lived when it was last placed: the element plus the neighbours that can take over if it unmounts.
+ * Read at focus time without layout (siblings only), so a held remote key pays nothing.
+ */
+interface FocusAnchor {
+  element: HTMLElement;
+  holder: HTMLElement;
+  next: Element | null;
+  previous: Element | null;
+  parent: HTMLElement | null;
+  /** Dialogs, drawers and menus restore focus to their opener themselves. */
+  inLayer: boolean;
+}
+
+function focusAnchorFor(element: HTMLElement): FocusAnchor {
+  const holder =
+    element.closest<HTMLElement>('li, tr, [role="listitem"], [role="row"], .media-card') ?? element;
+  return {
+    element,
+    holder,
+    next: holder.nextElementSibling,
+    previous: holder.previousElementSibling,
+    parent: holder.parentElement,
+    inLayer: element.closest('[role="dialog"], [aria-modal="true"], [role="menu"]') !== null,
+  };
+}
+
+/**
+ * The control that should take focus after the focused one unmounted (a removed list row, a dismissed item):
+ * the next sibling row, else the previous one, else anything left in the same list (audit A9, B15).
+ */
+function recoverLostFocusTarget(anchor: FocusAnchor): HTMLElement | null {
+  const within = (container: Element | null): HTMLElement | null => {
+    if (!container || !container.isConnected) return null;
+    const preferred = container.querySelector<HTMLElement>("[data-tv-focus-default]");
+    if (preferred) return preferred;
+    if (container.matches(FOCUSABLE_SELECTOR)) return container as HTMLElement;
+    return container.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+  };
+  return (
+    within(anchor.next) ??
+    within(anchor.previous) ??
+    (anchor.parent?.isConnected ? within(anchor.parent) : null)
+  );
+}
+
+/**
  * Browser/remote bridge for the Playarr TV-style web surface. Arrow keys
  * move focus geometrically, while Escape and common TV back-key codes
  * behave like a remote's Back button.
@@ -1722,6 +1768,43 @@ export function useTvNavigation(
       }
     };
 
+    // A9: a focused control that unmounts (a removed row, a refreshed list) drops focus to the body, and the
+    // default-focus pass is spent after the first placement. Hand focus to the neighbouring control instead.
+    let focusAnchor: FocusAnchor | null = null;
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target !== document.body) focusAnchor = focusAnchorFor(target);
+    };
+    let recoverFrame = 0;
+    const recoverLostFocus = () => {
+      recoverFrame = 0;
+      const anchor = focusAnchor;
+      // Before the first key press the default-focus pass owns placement.
+      if (!userInteracted || !anchor || anchor.inLayer || anchor.element.isConnected) return;
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      invalidateFocusableSnapshot();
+      const target = recoverLostFocusTarget(anchor);
+      if (target) {
+        target.focus({ preventScroll: true });
+        smoothScrollIntoView(target);
+        return;
+      }
+      // Nothing left beside it: fall back to the page default and let that pass run again.
+      focusHandled = false;
+      autoFocused = null;
+      userInteracted = false;
+      focusViewDefault();
+      userInteracted = true;
+    };
+    const lostFocusObserver = new MutationObserver(() => {
+      if (recoverFrame || !focusAnchor || focusAnchor.inLayer || focusAnchor.element.isConnected) return;
+      if (document.activeElement !== document.body) return;
+      recoverFrame = window.requestAnimationFrame(recoverLostFocus);
+    });
+    lostFocusObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("focusin", handleFocusIn);
+
     const handlePointer = () => {
       userInteracted = true;
       flushQueuedMoves();
@@ -1777,6 +1860,9 @@ export function useTvNavigation(
       window.clearTimeout(initialFocus);
       if (defaultFocusFrame) window.cancelAnimationFrame(defaultFocusFrame);
       defaultFocusObserver.disconnect();
+      lostFocusObserver.disconnect();
+      if (recoverFrame) window.cancelAnimationFrame(recoverFrame);
+      window.removeEventListener("focusin", handleFocusIn);
       releaseConfirmCommit();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);

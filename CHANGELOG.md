@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: removing the focused Watchlist row (or any focused row that unmounts after input) hands focus to the next row instead of dropping it to the page body; only the first Watchlist row is the default focus.
+- Web TV: the Resume chooser, Server choice and Play-on-device dialogs return focus to the control that opened them.
+- Web TV: the player Cast button stays focusable while a cast attempt is pending, and its error message clears itself.
 - Web TV: Down on the profile chip at the end of the nav rail stays on the chip instead of entering the page.
 - Web TV: keys queued just before a route change no longer move focus on the next page.
 - Web TV: the focusable-control cache refreshes after panel, drawer and chrome class toggles and transitions, and ignores inert subtrees.
