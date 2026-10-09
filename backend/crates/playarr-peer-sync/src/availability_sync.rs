@@ -32,11 +32,14 @@
 //! secondary, best-effort match behind the exact external-ref check, not
 //! the primary identity signal.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use playarr_db::{PeerLeafAvailabilityRepo, WorkRepo};
-use playarr_model::{Availability, ExternalProvider, LeafSelector, PeerLeafAvailability, WorkKind};
+use playarr_model::{
+    Availability, ExternalProvider, ExternalRef, LeafSelector, PeerLeafAvailability, WorkKind,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -138,6 +141,79 @@ pub async fn resolve_local_work(
     }
 }
 
+/// Fallback identity to work id for every local work of `kind`, the first in
+/// `list_by_kind` order winning a shared identity.
+async fn fallback_index(
+    work_repo: &Arc<dyn WorkRepo>,
+    kind: WorkKind,
+) -> Result<HashMap<String, Uuid>, playarr_db::DbError> {
+    const PAGE_SIZE: i64 = 200;
+    let mut index: HashMap<String, Uuid> = HashMap::new();
+    let mut offset: i64 = 0;
+    loop {
+        let page = work_repo.list_by_kind(kind, PAGE_SIZE, offset).await?;
+        let got = page.len() as i64;
+        for work in page {
+            index
+                .entry(fallback_identity(work.kind, &work.title, work.release_date))
+                .or_insert(work.id);
+        }
+        if got < PAGE_SIZE {
+            return Ok(index);
+        }
+        offset += PAGE_SIZE;
+    }
+}
+
+/// [`resolve_local_work`] for a whole snapshot, with the same answers.
+///
+/// Resolving row by row costs one lookup per row plus, for every row whose
+/// external ref is unknown here, a walk over the node's whole catalogue of
+/// that kind: rows times works. Here the external refs are looked up in a few
+/// batched queries, and the title/year fallback index of each kind is built
+/// from one pass over the catalogue, only when a row of that kind needs it.
+/// When several local works share a fallback identity, the first in
+/// `list_by_kind` order wins, as in the row-by-row walk.
+pub async fn resolve_local_works(
+    work_repo: &Arc<dyn WorkRepo>,
+    rows: &[AvailabilityRow],
+) -> Result<Vec<Option<Uuid>>, playarr_db::DbError> {
+    let mut refs: Vec<ExternalRef> = Vec::new();
+    let mut seen = HashSet::new();
+    for row in rows {
+        let key = ExternalRef {
+            provider: row.provider.clone(),
+            external_id: row.external_id.clone(),
+        };
+        if seen.insert(key.clone()) {
+            refs.push(key);
+        }
+    }
+    let exact = work_repo.find_by_external_refs(&refs).await?;
+
+    let mut fallback: HashMap<WorkKind, HashMap<String, Uuid>> = HashMap::new();
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let key = ExternalRef {
+            provider: row.provider.clone(),
+            external_id: row.external_id.clone(),
+        };
+        if let Some(work) = exact.get(&key) {
+            out.push(Some(work.id));
+            continue;
+        }
+        let index = match fallback.entry(row.kind) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(fallback_index(work_repo, row.kind).await?)
+            }
+        };
+        let target = fallback_identity(row.kind, &row.title, row.release_date);
+        out.push(index.get(&target).copied());
+    }
+    Ok(out)
+}
+
 /// Syncs `peer_leaf_availability` from `base_url`'s `GET /api/v1/peer/
 /// availability`, resuming from this `peer_node_id`'s persisted cursor
 /// (`entity = "availability"`). Returns the number of rows applied.
@@ -179,10 +255,8 @@ pub async fn apply_availability_response(
     sync_state_repo: &Arc<dyn playarr_db::PeerSyncStateRepo>,
 ) -> Result<usize, AvailabilitySyncError> {
     const ENTITY: &str = "availability";
-    let mut resolved = Vec::with_capacity(response.rows.len());
-    for row in &response.rows {
-        resolved.push((row, resolve_local_work(work_repo, row).await?));
-    }
+    let matches = resolve_local_works(work_repo, &response.rows).await?;
+    let resolved: Vec<_> = response.rows.iter().zip(matches).collect();
     // The endpoint deliberately returns a complete live inventory even when
     // a cursor is supplied, so replace the cache to remove deleted/moved files.
     let mut applied = 0usize;
@@ -462,6 +536,199 @@ mod tests {
         row.release_date = Some("1999-01-01T00:00:00Z".parse().unwrap());
         let resolved = resolve_local_work(&repo, &row).await.unwrap();
         assert_eq!(resolved, Some(work_id));
+    }
+
+    /// Counts the catalogue pages a resolution reads.
+    struct CountingWorkRepo {
+        inner: InMemoryWorkRepo,
+        list_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait]
+    impl WorkRepo for CountingWorkRepo {
+        async fn get(&self, id: Uuid) -> Result<Work, playarr_db::DbError> {
+            self.inner.get(id).await
+        }
+
+        async fn list_by_kind(
+            &self,
+            kind: WorkKind,
+            limit: i64,
+            offset: i64,
+        ) -> Result<Vec<Work>, playarr_db::DbError> {
+            self.list_calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.inner.list_by_kind(kind, limit, offset).await
+        }
+
+        async fn upsert(&self, work: &Work) -> Result<(), playarr_db::DbError> {
+            self.inner.upsert(work).await
+        }
+
+        async fn delete(&self, id: Uuid) -> Result<(), playarr_db::DbError> {
+            self.inner.delete(id).await
+        }
+
+        async fn find_by_external_ref(
+            &self,
+            provider: &ExternalProvider,
+            external_id: &str,
+        ) -> Result<Option<Work>, playarr_db::DbError> {
+            self.inner.find_by_external_ref(provider, external_id).await
+        }
+    }
+
+    #[tokio::test]
+    async fn resolve_local_works_matches_row_by_row_resolution_with_one_catalogue_pass() {
+        // 450 local movies (three pages), half of them known to the peer by an
+        // external ref, the rest only by title; plus rows with no local record.
+        let mut locals = Vec::new();
+        let mut rows = Vec::new();
+        for i in 0..450 {
+            let id = Uuid::new_v4();
+            locals.push(work(
+                id,
+                WorkKind::Movie,
+                vec![ExternalRef {
+                    provider: ExternalProvider::Imdb,
+                    external_id: format!("tt{i}"),
+                }],
+                &format!("Sample Movie {i}"),
+            ));
+            if i % 2 == 0 {
+                rows.push(availability_row(
+                    ExternalProvider::Imdb,
+                    &format!("tt{i}"),
+                    WorkKind::Movie,
+                    "Unrelated",
+                ));
+            } else {
+                rows.push(availability_row(
+                    ExternalProvider::Tmdb,
+                    &format!("{i}"),
+                    WorkKind::Movie,
+                    &format!("  sample MOVIE {i} "),
+                ));
+            }
+        }
+        for i in 0..30 {
+            rows.push(availability_row(
+                ExternalProvider::Tmdb,
+                &format!("none{i}"),
+                WorkKind::Movie,
+                &format!("Not Held {i}"),
+            ));
+        }
+        let repo = Arc::new(CountingWorkRepo {
+            inner: InMemoryWorkRepo::seeded(locals),
+            list_calls: Default::default(),
+        });
+        let dyn_repo: Arc<dyn WorkRepo> = repo.clone();
+
+        let batched = resolve_local_works(&dyn_repo, &rows).await.unwrap();
+        let pages_for_batch = repo
+            .list_calls
+            .swap(0, std::sync::atomic::Ordering::Relaxed);
+        let mut one_by_one = Vec::new();
+        for row in &rows {
+            one_by_one.push(resolve_local_work(&dyn_repo, row).await.unwrap());
+        }
+
+        assert_eq!(batched, one_by_one);
+        assert_eq!(batched.iter().filter(|m| m.is_some()).count(), 450);
+        // One walk of the catalogue (450 works = 3 pages), not one per unmatched row.
+        assert_eq!(pages_for_batch, 3);
+    }
+
+    #[tokio::test]
+    async fn resolve_local_works_skips_the_catalogue_walk_when_every_ref_is_known() {
+        let id = Uuid::new_v4();
+        let repo = Arc::new(CountingWorkRepo {
+            inner: InMemoryWorkRepo::seeded(vec![work(
+                id,
+                WorkKind::Movie,
+                vec![ExternalRef {
+                    provider: ExternalProvider::Tmdb,
+                    external_id: "603".to_string(),
+                }],
+                "The Sample Movie",
+            )]),
+            list_calls: Default::default(),
+        });
+        let dyn_repo: Arc<dyn WorkRepo> = repo.clone();
+        let rows = vec![availability_row(
+            ExternalProvider::Tmdb,
+            "603",
+            WorkKind::Movie,
+            "Whatever",
+        )];
+        assert_eq!(
+            resolve_local_works(&dyn_repo, &rows).await.unwrap(),
+            vec![Some(id)]
+        );
+        assert_eq!(
+            repo.list_calls.load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+    }
+
+    /// Timing evidence (run with `--ignored --nocapture`): a snapshot of
+    /// `BENCH_ROWS` rows, none known by external ref, resolved against a
+    /// SQL catalogue of `BENCH_WORKS` movies, row by row versus batched.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_resolve_local_works() {
+        let env = |name: &str, default: usize| {
+            std::env::var(name)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(default)
+        };
+        let (works, rows_n) = (env("BENCH_WORKS", 2_000), env("BENCH_ROWS", 300));
+        sqlx::any::install_default_drivers();
+        let pool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
+        let repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::repo::SqlxWorkRepo::new(pool));
+        for i in 0..works {
+            repo.upsert(&work(
+                Uuid::new_v4(),
+                WorkKind::Movie,
+                vec![ExternalRef {
+                    provider: ExternalProvider::Imdb,
+                    external_id: format!("tt{i}"),
+                }],
+                &format!("Sample Movie {i}"),
+            ))
+            .await
+            .unwrap();
+        }
+        let rows: Vec<_> = (0..rows_n)
+            .map(|i| {
+                availability_row(
+                    ExternalProvider::Tmdb,
+                    &format!("{i}"),
+                    WorkKind::Movie,
+                    &format!("Peer Only {i}"),
+                )
+            })
+            .collect();
+        let t = std::time::Instant::now();
+        let mut one_by_one = Vec::new();
+        for row in &rows {
+            one_by_one.push(resolve_local_work(&repo, row).await.unwrap());
+        }
+        let per_row = t.elapsed();
+        let t = std::time::Instant::now();
+        let batched = resolve_local_works(&repo, &rows).await.unwrap();
+        println!(
+            "{rows_n} unmatched rows over {works} works: row by row {per_row:?}, batched {:?}",
+            t.elapsed()
+        );
+        assert_eq!(one_by_one, batched);
     }
 
     #[tokio::test]
