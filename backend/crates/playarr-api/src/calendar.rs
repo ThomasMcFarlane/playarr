@@ -36,6 +36,7 @@ use crate::AppState;
 pub const MAX_WINDOW_DAYS: i64 = 92;
 const DEFAULT_WINDOW_DAYS: i64 = 30;
 pub use crate::calendar_cache::CalendarCache;
+use crate::calendar_cache::Lookup;
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct CalendarQuery {
@@ -230,27 +231,21 @@ async fn work_files(
     memo: &crate::discovery::ResolveMemo,
     work_id: Uuid,
 ) -> WorkFiles {
-    let detail = memo.detail(state, viewer, work_id).await;
-    match detail {
-        Some(detail) => match &detail.children {
-            playarr_catalog::WorkChildren::Movie => WorkFiles::Movie(detail.media_file_id),
-            playarr_catalog::WorkChildren::Series(seasons) => WorkFiles::Series(
-                seasons
+    match memo.view(state, viewer, work_id).await.as_deref() {
+        Some(view) => match &view.files {
+            playarr_catalog::WorkFiles::Movie(file) => WorkFiles::Movie(*file),
+            playarr_catalog::WorkFiles::Series(episodes) => WorkFiles::Series(
+                episodes
                     .iter()
-                    .flat_map(|s| {
-                        s.episodes.iter().filter_map(|e| {
-                            Some((
-                                (
-                                    i64::from(s.season.season_number),
-                                    i64::from(e.episode.episode_number),
-                                ),
-                                e.media_file_id?,
-                            ))
-                        })
+                    .map(|e| {
+                        (
+                            (i64::from(e.season_number), i64::from(e.episode_number)),
+                            e.media_file_id,
+                        )
                     })
                     .collect(),
             ),
-            _ => WorkFiles::Other,
+            playarr_catalog::WorkFiles::Other => WorkFiles::Other,
         },
         None => WorkFiles::Other,
     }
@@ -324,6 +319,7 @@ async fn attach_actions(
     state: &AppState,
     viewer: &CatalogViewer,
     candidates: &mut [CalendarCandidate],
+    known_works: Option<&HashMap<ExternalRef, playarr_model::Work>>,
 ) {
     let mut distinct: HashMap<String, TitleSnapshot> = HashMap::new();
     let mut keys: Vec<Option<String>> = Vec::with_capacity(candidates.len());
@@ -340,7 +336,17 @@ async fn attach_actions(
     let phase = std::time::Instant::now();
     let memo = crate::discovery::ResolveMemo::default();
     let memo = &memo;
-    memo.prime(state, distinct.values()).await;
+    if let Some(works) = known_works {
+        // The caller already looked these refs up (a ref it did not find has no work).
+        memo.seed_works(
+            distinct
+                .values()
+                .flat_map(|s| s.external_refs.iter())
+                .map(|r| (r.clone(), works.get(r).cloned())),
+        )
+        .await;
+    }
+    memo.prime(state, viewer, distinct.values()).await;
     let resolved: HashMap<String, ResolvedTitle> = futures::stream::iter(distinct)
         .map(|(key, snapshot)| async move {
             match crate::discovery::resolve_snapshot_with(state, viewer, &snapshot, memo).await {
@@ -466,41 +472,84 @@ pub(crate) async fn build_calendar(
 
     let timer = std::time::Instant::now();
     let mut merged = merge_candidates(candidates);
-    let mut resolved: HashMap<(String, String), Option<Uuid>> = HashMap::new();
-    let mut lags: HashMap<(String, String), Option<i64>> = HashMap::new();
+    // Works and availability lag for every distinct title, in a few queries
+    // however many titles the window holds.
+    let phase = std::time::Instant::now();
+    let refs: Vec<ExternalRef> = {
+        let mut seen = HashSet::new();
+        merged
+            .iter()
+            .filter_map(|c| c.work_ref.clone())
+            .map(|(provider, external_id)| ExternalRef {
+                provider,
+                external_id,
+            })
+            .filter(|r| seen.insert(r.clone()))
+            .collect()
+    };
+    // `None` when the lookup failed: title resolution then looks refs up itself.
+    let works = match state.work_repo.find_by_external_refs(&refs).await {
+        Ok(found) => Some(found),
+        Err(error) => {
+            tracing::warn!(?error, "calendar: work lookup failed");
+            None
+        }
+    };
+    let lookup_us = phase.elapsed().as_micros();
+    let phase = std::time::Instant::now();
+    let lag_keys: Vec<(String, String)> = {
+        let mut seen = HashSet::new();
+        merged
+            .iter()
+            .filter(|c| c.entry.media_kind == CalendarMediaKind::Episode)
+            .filter_map(|c| c.work_ref.as_ref())
+            .map(|(provider, external_id)| {
+                (
+                    playarr_arr_sync::availability::provider_name(provider),
+                    external_id.clone(),
+                )
+            })
+            .filter(|k| seen.insert(k.clone()))
+            .collect()
+    };
+    let event_generation = playarr_db::availability_event_generation();
+    let (mut lags, missing) = cache.cached_lags(&lag_keys, event_generation);
+    if !missing.is_empty() {
+        match state.availability_event_repo.list_for_many(&missing).await {
+            Ok(mut events) => {
+                let computed: Vec<_> = missing
+                    .into_iter()
+                    .map(|key| {
+                        let lag = events
+                            .remove(&key)
+                            .and_then(|e| playarr_model::compute_lag(&e).average_seconds);
+                        (key, lag)
+                    })
+                    .collect();
+                cache.store_lags(event_generation, computed.iter().cloned());
+                lags.extend(computed);
+            }
+            Err(error) => {
+                tracing::warn!(?error, "calendar: availability lag lookup failed");
+            }
+        }
+    }
+    let lag_us = phase.elapsed().as_micros();
     for candidate in &mut merged {
         let Some((provider, external_id)) = candidate.work_ref.clone() else {
             continue;
         };
-        let cache_key = (format!("{provider:?}"), external_id.clone());
-        let work_id = match resolved.get(&cache_key) {
-            Some(found) => *found,
-            None => {
-                let found = state
-                    .work_repo
-                    .find_by_external_ref(&provider, &external_id)
-                    .await
-                    .ok()
-                    .flatten()
-                    .map(|w| w.id);
-                resolved.insert(cache_key, found);
-                found
-            }
+        let work_ref = ExternalRef {
+            provider,
+            external_id,
         };
-        candidate.entry.work_id = work_id;
+        candidate.entry.work_id = works.as_ref().and_then(|w| w.get(&work_ref)).map(|w| w.id);
         if candidate.entry.media_kind == CalendarMediaKind::Episode {
             let lag_key = (
-                playarr_arr_sync::availability::provider_name(&provider),
-                external_id,
+                playarr_arr_sync::availability::provider_name(&work_ref.provider),
+                work_ref.external_id,
             );
-            if !lags.contains_key(&lag_key) {
-                let lag = lag_for_refs(state, std::slice::from_ref(&lag_key))
-                    .await
-                    .ok()
-                    .and_then(|l| l.average_seconds);
-                lags.insert(lag_key.clone(), lag);
-            }
-            candidate.entry.average_lag_seconds = lags[&lag_key];
+            candidate.entry.average_lag_seconds = lags.get(&lag_key).copied().flatten();
         }
     }
 
@@ -520,11 +569,13 @@ pub(crate) async fn build_calendar(
         }
     }
     if let Some(viewer) = options.viewer {
-        attach_actions(state, viewer, &mut merged).await;
+        attach_actions(state, viewer, &mut merged, works.as_ref()).await;
     }
     tracing::info!(
         entries = merged.len(),
         enrich_ms,
+        lookup_ms = lookup_us / 1000,
+        lag_ms = lag_us / 1000,
         total_ms = timer.elapsed().as_millis(),
         "calendar built"
     );
@@ -553,7 +604,13 @@ pub async fn calendar_handler(
     State(state): State<AppState>,
     viewer: CatalogViewer,
     Query(params): Query<CalendarQuery>,
-) -> Result<Json<CalendarResponse>, ApiError> {
+) -> Result<
+    (
+        [(header::HeaderName, &'static str); 1],
+        Json<CalendarResponse>,
+    ),
+    ApiError,
+> {
     let (start, end) = resolve_window(params.start, params.end)?;
     let kinds = parse_kinds(params.kind.as_deref())?;
     let group_series_day = parse_group(params.group.as_deref())?;
@@ -564,31 +621,101 @@ pub async fn calendar_handler(
     let mut kind_names: Vec<String> = kinds.iter().flatten().map(|k| format!("{k:?}")).collect();
     kind_names.sort();
     let key = format!(
-        "{}|{:?}|{start}|{end}|{kind_names:?}|{group_series_day}|{:?}",
-        viewer.user_id, allowed, params.source_instance_id
+        "{}|{:?}|{start}|{end}|{kind_names:?}|{group_series_day}|{:?}|{:x}",
+        viewer.user_id,
+        allowed,
+        params.source_instance_id,
+        instances_fingerprint(&state)
     );
     let cache = &state.calendar_cache;
-    if let Some(hit) = cache.cached_response(&key, viewer.user_id) {
-        return Ok(Json((*hit).clone()));
+    let cached = match cache.lookup(&key, viewer.user_id) {
+        Lookup::Hit(hit) => Some(hit),
+        Lookup::Check {
+            response,
+            candidates,
+            deps,
+            tick,
+        } => {
+            let fresh = unaffected_by_new_works(&state, &candidates, &deps).await;
+            cache.confirm(&key, tick, fresh).then_some(response)
+        }
+        Lookup::Miss(_) => None,
+    };
+    if let Some(hit) = cached {
+        return Ok(([(CACHE_HEADER, "hit")], Json((*hit).clone())));
     }
-    let source_generation = cache.source_generation();
-    let change_generation = playarr_db::live_change_generation(viewer.user_id);
-    let response = build_calendar(
-        &state,
-        allowed.as_deref(),
-        start,
-        end,
-        kinds.as_ref(),
-        params.source_instance_id,
-        CalendarOptions {
-            group_series_day,
-            viewer: Some(&viewer),
-        },
-    )
-    .await;
-    let response = std::sync::Arc::new(response);
-    cache.store_response(key, source_generation, change_generation, response.clone());
-    Ok(Json((*response).clone()))
+    let (response, shared) = cache
+        .build_once(&key, |source_generation, tick| {
+            let (state, viewer, key) = (&state, &viewer, key.clone());
+            async move {
+                let response = build_calendar(
+                    state,
+                    allowed.as_deref(),
+                    start,
+                    end,
+                    kinds.as_ref(),
+                    params.source_instance_id,
+                    CalendarOptions {
+                        group_series_day,
+                        viewer: Some(viewer),
+                    },
+                )
+                .await;
+                let response = std::sync::Arc::new(response);
+                state
+                    .calendar_cache
+                    .store_response(key, source_generation, tick, response.clone());
+                response
+            }
+        })
+        .await;
+    let outcome = if shared { "shared" } else { "miss" };
+    Ok(([(CACHE_HEADER, outcome)], Json((*response).clone())))
+}
+
+/// Changes whenever an instance is added, removed or edited in a way the
+/// calendar shows: names and priority (labels), kind, and the defaults that
+/// decide whether a title can be requested.
+fn instances_fingerprint(state: &AppState) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut instances = state.source_instances.all();
+    instances.sort_by_key(|i| i.id);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for i in &instances {
+        (
+            i.id,
+            i.kind,
+            &i.name,
+            i.priority,
+            &i.default_root_folder_id,
+            i.default_quality_profile_id,
+        )
+            .hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// Header telling a client (and a measurement) how the calendar was answered.
+const CACHE_HEADER: header::HeaderName = header::HeaderName::from_static("x-calendar-cache");
+
+/// `true` when none of `candidates` (works that changed since a cached
+/// calendar was built) now carries an external id the calendar had no work
+/// for. Anything unreadable or large counts as affected.
+async fn unaffected_by_new_works(
+    state: &AppState,
+    candidates: &[Uuid],
+    deps: &crate::calendar_cache::ResponseDeps,
+) -> bool {
+    if candidates.len() > 64 {
+        return false;
+    }
+    match state.work_repo.get_many(candidates).await {
+        Ok(works) => !works
+            .values()
+            .flat_map(|w| w.external_refs.iter())
+            .any(|r| deps.unmatched().contains(r)),
+        Err(_) => false,
+    }
 }
 
 /// Lag statistic for one work, merged across every external id it carries.

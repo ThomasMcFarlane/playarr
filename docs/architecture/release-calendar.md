@@ -83,10 +83,22 @@ the logical OR. Entries lacking a provider id fall back to
   (`Policy::library_allow` plus resolved group libraries; admins see all).
   A restricted caller never receives another library's entries or even its
   source status.
-- Each instance is queried concurrently with a 10 s timeout. Results are
-  cached in memory for 60 s per `(instance, start, end)`; the cache is
-  shared across users because the raw source answer is user-independent and
-  filtering happens after.
+- A request never waits on an instance. A background refresher keeps each
+  instance's entries per month in memory and in the database
+  (`calendar_source_chunks`); the response is built from that.
+- Building a response costs a fixed number of queries however many titles the
+  window holds: one batch for the works behind the entries, one for their
+  availability events, and one batch each for the library files, episode
+  numbers, watch progress, watchlist and requests that decide the actions.
+  `calendar_perf_tests` pins the statement count.
+- Built responses are cached per viewer (user, libraries, window, filters) for
+  120 s and rebuilt only when something they depend on changed: a source
+  refresh that stored different entries, a live event for a work in the
+  response, for the viewer's own watch state, watchlist, household or account,
+  or a new library work carrying an external id the response had no work for.
+  Other users' progress, unrelated works, playlists and admin events leave it
+  alone. Identical concurrent builds are shared. `X-Calendar-Cache` reports
+  `hit`, `miss` or `shared`.
 
 ## 4. External subscription (TASKS 76)
 
