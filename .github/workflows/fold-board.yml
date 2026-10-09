@@ -11,9 +11,10 @@ on:
     paths: ['tasks.d/**', 'changelog.d/**']
   workflow_dispatch:
 
-# Shares the train's group so a fold never races a landing.
+# Own group: sharing the train's would cancel its queued runs (one pending run per group). A fold that races
+# a landing just re-fetches and retries (scripts/fold-main.sh).
 concurrency:
-  group: merge-train
+  group: fold-board
   cancel-in-progress: false
 
 permissions:
