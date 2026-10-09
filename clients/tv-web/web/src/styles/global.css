@@ -746,7 +746,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .btn-sm {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.55rem 0.85rem;
   font-size: 0.72rem;
 }
@@ -758,7 +758,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   padding: 0 1rem;
   border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: transparent;
+  background: var(--surface);
   color: var(--ink);
   transition:
     border-color 180ms ease,
@@ -1087,7 +1087,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 .settings-option-number {
   align-self: start;
   padding-top: 0.22rem;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: 0.62rem;
   font-weight: 760;
 }
@@ -1109,7 +1109,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 .settings-option-copy small {
   overflow: hidden;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: clamp(0.68rem, calc(0.78 * var(--vw)), 0.84rem);
   line-height: 1.45;
   text-overflow: ellipsis;
@@ -5965,7 +5965,8 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   color: color-mix(in srgb, var(--brand) 82%, var(--ink));
 }
 
-.not-found-code {
+.not-found-art::before {
+  content: "404";
   position: absolute;
   inset: 50% auto auto 50%;
   color: color-mix(in srgb, var(--ink) 6%, transparent);
@@ -8208,7 +8209,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 }
 
 .legal-navigation-link {
-  min-height: 42px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   padding: 0.55rem 0.9rem;
@@ -10835,6 +10836,7 @@ body[data-input-mode="remote"] :is(
 }
 
 .ui-btn--sm {
+  min-width: 44px;
   min-height: 44px;
   padding: 0.45rem 0.9rem;
   font-size: 0.72rem;
@@ -11148,3 +11150,45 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
+/* WCAG 2.5.5: checkboxes keep their small drawn box but get a 44px hit area (the input itself is the target). */
+.form-label > input[type="checkbox"],
+.remote-toggle > input[type="checkbox"] {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0 0.25rem 0 -11px;
+  vertical-align: middle;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.form-label > input[type="checkbox"]::before,
+.remote-toggle > input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border: 2px solid var(--ink-soft);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.form-label > input[type="checkbox"]:checked::before,
+.remote-toggle > input[type="checkbox"]:checked::before {
+  background: var(--ink-soft);
+}
+
+.form-label > input[type="checkbox"]:checked::after,
+.remote-toggle > input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}

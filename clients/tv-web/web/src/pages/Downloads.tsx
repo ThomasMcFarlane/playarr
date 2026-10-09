@@ -445,6 +445,10 @@ export function DownloadsPage() {
                 aria-valuenow={storagePercent}
                 aria-valuemin={0}
                 aria-valuemax={100}
+                aria-label={t("pages.downloads.storageUsed", {
+                  used: formatBytes(storageUsage.usageBytes),
+                  quota: formatBytes(storageUsage.quotaBytes),
+                })}
               >
                 <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
               </div>

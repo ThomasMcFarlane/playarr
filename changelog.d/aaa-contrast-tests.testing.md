@@ -1,0 +1,1 @@
+- Web: `tokenContrast.test.ts` computes the contrast of every text token against every surface it is used on (7:1, both themes); `scripts/a11y-aaa.mjs` and `scripts/a11y-aaa-pages.mjs` run axe-core with the WCAG 2.2 AAA rules over the Storybook stories and the pages.

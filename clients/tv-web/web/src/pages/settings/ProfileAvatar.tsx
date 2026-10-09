@@ -246,6 +246,7 @@ export function SettingsProfileAvatarPage() {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               tabIndex={-1}
+              hidden
               onChange={(event) => void handleUpload(event)}
             />
             <Button
