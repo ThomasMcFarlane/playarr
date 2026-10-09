@@ -977,7 +977,7 @@ export const th: Translations = {
   "pages.clients.serverPage.title":
     "Playarr Server",
   "pages.clients.serverPage.description":
-    "Playarr Server จัดทำแคตตาล็อกคลังของคุณจากอินสแตนซ์ Sonarr, Radarr, Lidarr, Bazarr, Prowlarr และ Readarr ที่คุณใช้อยู่ สร้างภาพขนาดย่อ ตรวจสอบแทร็กเสียงและคำบรรยาย และแปลงรหัสตามต้องการ ไคลเอนต์ Playarr ทุกตัวในหน้านี้เชื่อมต่อกับเซิร์ฟเวอร์นี้ สื่อของคุณอยู่บนฮาร์ดแวร์ของคุณเอง",
+    "Playarr Server จัดทำแคตตาล็อกคลังของคุณจากแหล่งคลังสื่อที่คุณใช้อยู่ สร้างภาพขนาดย่อ ตรวจสอบแทร็กเสียงและคำบรรยาย และแปลงรหัสตามต้องการ ไคลเอนต์ Playarr ทุกตัวในหน้านี้เชื่อมต่อกับเซิร์ฟเวอร์นี้ สื่อของคุณอยู่บนฮาร์ดแวร์ของคุณเอง",
   "pages.clients.serverPage.packageNote":
     "ทุกรุ่นเผยแพร่ไฟล์ tarball สำหรับ Linux (x86-64 และ ARM64) ที่สร้างไว้แล้วพร้อมอิมเมจคอนเทนเนอร์สาธารณะ แต่ละ tarball มีเซิร์ฟเวอร์ UI ผู้ดูแล ใบอนุญาต และตัวอย่างยูนิต systemd เลือกบิลด์ให้ตรงกับ CPU ของคุณ",
   "pages.clients.serverPage.downloadAmd64":
@@ -1005,7 +1005,7 @@ export const th: Translations = {
   "pages.clients.serverPage.req3Title":
     "メディアアプリ",
   "pages.clients.serverPage.req3Description":
-    "Playarr Server อ่านข้อมูลจากอินสแตนซ์ Sonarr, Radarr, Lidarr, Bazarr, Prowlarr และ Readarr ที่คุณใช้อยู่ ลงทะเบียนแต่ละตัวผ่าน admin API ของเซิร์ฟเวอร์หลังเริ่มทำงาน",
+    "Playarr Server อ่านข้อมูลจากแหล่งคลังสื่อที่คุณใช้อยู่ ลงทะเบียนแต่ละตัวผ่าน admin API ของเซิร์ฟเวอร์หลังเริ่มทำงาน",
   "pages.clients.serverPage.req4Title":
     "พอร์ตเครือข่าย 8484",
   "pages.clients.serverPage.req4Description":

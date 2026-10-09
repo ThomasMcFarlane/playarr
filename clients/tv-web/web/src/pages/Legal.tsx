@@ -298,9 +298,9 @@ export function LicencesPage() {
       <section>
         <h2>Third-party marks</h2>
         <p>
-          Playarr is independent and is not affiliated with or endorsed by Sonarr, Radarr, Lidarr,
-          Bazarr, Prowlarr, Readarr, Tdarr, Plex, Jellyfin, Emby, Apple, Google, LG, Samsung,
-          Hisense, Roku or TMDB. Their trademarks belong to their respective owners.
+          Playarr is independent and is not affiliated with or endorsed by Plex, Jellyfin, Emby,
+          Apple, Google, LG, Samsung, Hisense, Roku or TMDB. Their trademarks belong to their
+          respective owners.
         </p>
       </section>
     </LegalPage>
