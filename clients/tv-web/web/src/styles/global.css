@@ -2837,8 +2837,8 @@ code {
 }
 
 .update-toast-dismiss {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
@@ -3073,7 +3073,7 @@ code {
   padding: 0 1rem;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
-  background: rgba(12, 10, 11, 0.58);
+  background: rgba(12, 10, 11, 0.82);
   color: #ffffff;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(18px) saturate(120%);
@@ -3333,7 +3333,7 @@ code {
 .player-music-copy span,
 .player-music-copy small {
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.8);
   font-size: clamp(0.55rem, calc(0.66 * var(--vw)), 0.76rem);
   font-weight: 680;
   letter-spacing: 0.08em;
@@ -3606,7 +3606,7 @@ body[data-input-mode="remote"]
 }
 
 .mini-player-time {
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(255, 255, 255, 0.8);
   font-size: clamp(0.46rem, calc(0.5 * var(--vw)), 0.58rem);
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -3809,8 +3809,10 @@ body[data-input-mode="remote"]
 .player-seek-track {
   position: relative;
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.2);
+  /* A 44px tall hit area (WCAG 2.5.5) around the 6px bar; the margin keeps the controls layout where it was. */
+  height: 44px;
+  margin-block: -16px;
+  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)) center / 100% 6px no-repeat;
   cursor: pointer;
   touch-action: none;
 }
@@ -3825,14 +3827,23 @@ body[data-input-mode="remote"] .player-seek-track:focus,
 /* Clear focus indicator: the white ring, with an enlarged highlighted thumb. */
 .player-seek-track:focus-visible,
 body[data-input-mode="remote"] .player-seek-track:focus {
+  box-shadow: none;
+}
+
+.player-seek-track:focus-visible::after,
+body[data-input-mode="remote"] .player-seek-track:focus::after {
+  content: "";
+  position: absolute;
+  inset: calc(50% - 3px) 0;
   box-shadow: 0 0 0 3px #ffffff;
+  pointer-events: none;
 }
 
 .player-seek-buffered,
 .player-seek-progress {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: calc(50% - 3px);
+  height: 6px;
 }
 
 .player-seek-buffered {
@@ -3971,7 +3982,11 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .player-volume-range {
   width: clamp(70px, calc(7 * var(--vw)), 130px);
-  height: 5px;
+  /* 44px hit area (WCAG 2.5.5); the 5px bar is drawn in the middle. */
+  height: 44px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 5px;
   border-radius: 0;
   appearance: none;
   cursor: pointer;
@@ -4005,7 +4020,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .player-quality-button {
   min-width: 118px;
-  height: clamp(42px, calc(3.3 * var(--vw)), 56px);
+  height: clamp(44px, calc(3.3 * var(--vw)), 56px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4078,7 +4093,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .player-quality-heading {
   padding: 0.55rem 0.7rem 0.45rem;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.54rem;
   font-weight: 760;
   letter-spacing: 0.15em;
@@ -4136,7 +4151,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-quality-option small {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.52rem;
 }
 
@@ -4295,7 +4310,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .quality-matrix.is-player .quality-matrix-column-heading,
 .quality-matrix.is-player .quality-matrix-row-heading small,
 .quality-matrix.is-player .quality-matrix-choice small {
-  color: rgba(255, 255, 255, 0.54);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .quality-matrix.is-player .quality-matrix-row-heading {
@@ -4376,7 +4391,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .player-playlist-panel > header span {
   display: block;
   margin-top: 0.18rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.58rem;
 }
 
@@ -4428,7 +4443,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     rgba(8, 6, 7, 0.98) 62%,
     rgba(8, 6, 7, 0)
   );
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.55rem;
   font-weight: 780;
   letter-spacing: 0.14em;
@@ -4509,7 +4524,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-playlist-copy > span {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.5rem;
 }
 
@@ -5870,8 +5885,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .tv-filter-drawer > header > button {
-  width: clamp(36px, calc(2.7 * var(--vw)), 48px);
-  height: clamp(36px, calc(2.7 * var(--vw)), 48px);
+  width: clamp(44px, calc(2.7 * var(--vw)), 48px);
+  height: clamp(44px, calc(2.7 * var(--vw)), 48px);
   display: grid;
   place-items: center;
   padding: 0;
@@ -5907,7 +5922,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .tv-filter-choice-grid button {
-  min-height: clamp(42px, calc(3.6 * var(--vw)), 56px);
+  min-height: clamp(44px, calc(3.6 * var(--vw)), 56px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10612,9 +10627,9 @@ html.is-native-scroll-root .profile-auth-scroll {
 
   .player-btn,
   .player-quality-button {
-    width: 42px;
-    min-width: 42px;
-    height: 42px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
     padding: 0;
   }
 
@@ -11847,7 +11862,7 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 }
 
 .ui-btn--sm {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.45rem 0.9rem;
   font-size: 0.72rem;
 }
@@ -11858,9 +11873,11 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 }
 
 .ui-btn--icon {
-  width: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  min-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  height: clamp(38px, calc(2.8 * var(--vw)), 50px);
+  flex: 0 0 auto;
+  min-width: 44px;
+  width: clamp(44px, calc(2.8 * var(--vw)), 50px);
+  min-height: clamp(44px, calc(2.8 * var(--vw)), 50px);
+  height: clamp(44px, calc(2.8 * var(--vw)), 50px);
   padding: 0;
   border-radius: 50%;
 }

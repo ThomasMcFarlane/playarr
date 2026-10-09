@@ -419,8 +419,8 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
 }
 
 /** Rows of vertical space one month-cell chip needs, used to decide how many fit before "+N more". */
-const CHIP_ROW_PX = 26;
-const CELL_CHROME_PX = 52;
+const CHIP_ROW_PX = 46; // a 44px chip (WCAG 2.5.5) plus the 2px gap
+const CELL_CHROME_PX = 46;
 
 function MonthGrid({
   anchor,
