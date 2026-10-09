@@ -27,7 +27,7 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
 | Roku | ❌ | ❌ | ❌ | ✅ [6] |
 | Samsung Tizen | ❌ | ✅ [7] | ✅ [7] | ✅ [7] |
 | LG webOS | ❌ | ⚠️ [8] | ✅ [8] | ✅ [8] |
-| Hisense VIDAA | ❌ [9] | ❌ | ❌ | ⚠️ [9] |
+| Hisense VIDAA | ❌ [9] | ❓ [9] | ❓ [9] | ✅ [9] |
 | Xbox | ✅ [10] | ❌ | ❌ | ✅ [10] |
 | HarmonyOS | ❌ | ✅ [11] | ⚠️ Previewer [11] | ✅ [11] |
 
@@ -71,8 +71,9 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
    behaviour ([simulator](https://webostv.developer.lge.com/develop/tools/simulator-introduction)). Real TV: Developer
    Mode app from the LG Content Store. Input and debugging: the `ares-*` CLI
    ([CLI introduction](https://webostv.developer.lge.com/develop/tools/webos-tv-cli-introduction)).
-9. **VIDAA.** No official emulator or simulator found. The developer portal is gated behind registration, so official
-   debugging steps are ❓ unverified; VIDAA's web app guide covers remote debugging but is marked confidential
+9. **VIDAA.** A real Hisense VIDAA TV works: Playarr is installed and signed in on one. VIDAA's official emulator or
+   simulator (if any) and its developer documentation sit behind the gated developer portal, so both are ❓ unverified;
+   VIDAA's web app guide covers remote debugging but is marked confidential
    ([WebApp development guide](https://www.vidaa.com/wp-content/uploads/2020/12/WebApp_Development_Guide_for_VIDAA.pdf)).
    Third-party guides describe sideloading a URL through the TV's browser; unofficial. A desktop browser is not a vendor
    method.
