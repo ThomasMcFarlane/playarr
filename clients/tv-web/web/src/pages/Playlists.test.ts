@@ -41,9 +41,9 @@ describe("Playlists create form", () => {
 
   it("shows separate edit and delete actions beneath the playlist description", () => {
     expect(source).not.toContain("tv-playlist-heading-menu");
-    expect(source).toContain('className="tv-playlist-feature-actions"');
+    expect(source).toContain("actions={");
     expect(source).toContain("playlistContext.openEdit(editablePlaylist");
     expect(source).toContain("playlistContext.openDelete(");
-    expect(css).toContain(".tv-playlist-feature-actions button");
+    expect(source).toContain('variant="danger"');
   });
 });

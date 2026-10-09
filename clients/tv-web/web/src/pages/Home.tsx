@@ -1,3 +1,4 @@
+import { DetailsPanel } from "../components/DetailsPanel";
 import {
   memo,
   useCallback,
@@ -32,7 +33,8 @@ import { createPreviewStore, type PreviewStore } from "../lib/previewStore";
 import { useRemoteMarkerFollow } from "../lib/remoteMarkerFollow";
 import { useDwellPrefetch } from "../lib/prefetch";
 import { railNeighbours, railsByDistance } from "../lib/detailNeighbours";
-import { useFocusedDetailsController } from "../lib/useFocusedDetails";
+import { useFocusedDetail, useFocusedDetailsController } from "../lib/useFocusedDetails";
+import { runtimeLabel } from "../lib/detailMeta";
 import {
   isNavigationLayerRestoring,
   useNavigationLayer,
@@ -590,10 +592,12 @@ function HomeFeature({
       ? t("pages.home.episodeLabel", { number: episode.detail.episode.episode_number })
       : work.title);
   const overview = episode?.detail.episode.overview ?? work.overview ?? t("pages.home.noSynopsis");
+  const runtime = runtimeLabel(useFocusedDetail(work.id), t);
   return (
-    <aside className="tv-home-feature">
-      <p className="tv-provider">
-        {episode
+    <DetailsPanel
+      className="tv-home-feature"
+      eyebrow={
+        episode
           ? t("pages.home.episodeProvider", {
               title: work.title,
               season: String(episode.seasonNumber).padStart(2, "0"),
@@ -602,11 +606,12 @@ function HomeFeature({
           : t("pages.home.kindGenre", {
               kind: workKindLabel(work, t),
               genre: work.genres[0] ?? t("pages.home.defaultGenre"),
-            })}
-      </p>
-      <h2>{title}</h2>
-      <p>{overview}</p>
-    </aside>
+            })
+      }
+      title={title}
+      meta={runtime !== null ? <span data-detail-field="runtime">{runtime}</span> : undefined}
+      overview={overview}
+    />
   );
 }
 

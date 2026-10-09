@@ -77,8 +77,9 @@ const BASELINE: Record<Rule, Record<string, number>> = {
     "components/player/EndScreen.tsx": 1,
     "components/player/PlaybackHealthPanel.tsx": 1,
     "components/player/PlayerSurface.tsx": 1,
+    "components/tv/ListPanel.tsx": 1,
     "components/tv/TvStage.tsx": 2,
-    "pages/Calendar.tsx": 5,
+    "pages/Calendar.tsx": 4,
     "pages/Clients.tsx": 2,
     "pages/Library.tsx": 1,
     "pages/NavPerfHarness.tsx": 1,
@@ -88,6 +89,7 @@ const BASELINE: Record<Rule, Record<string, number>> = {
   },
   /** Pages and surfaces that still build their own scroll body or fade window (W2 to W6); each migration lowers a count. */
   legacyScrollBody: {
+    "components/tv/ListPanel.tsx": 1,
     "components/tv/TvStage.tsx": 1,
     "pages/Downloads.tsx": 1,
     "pages/Household.tsx": 1,

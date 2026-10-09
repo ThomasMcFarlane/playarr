@@ -6180,43 +6180,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   color: var(--bg);
 }
 
-.tv-playlist-feature-actions {
-  display: flex;
-  align-items: center;
-  gap: clamp(8px, calc(0.8 * var(--vw)), 14px);
-  margin-top: clamp(18px, calc(2.4 * var(--viewport-unit)), 32px);
-}
-
-.tv-playlist-feature-actions button {
-  min-height: clamp(40px, calc(3 * var(--vw)), 50px);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0 clamp(14px, calc(1.2 * var(--vw)), 20px);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
-  color: var(--ink);
-  font: inherit;
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
-  cursor: pointer;
-}
-
-.tv-playlist-feature-actions button span {
-  color: var(--brand-ink);
-  font-size: 1rem;
-}
-
-.tv-playlist-feature-actions button.is-delete span {
-  color: #ff668a;
-}
-
-.tv-playlist-feature-actions button:hover {
-  background: var(--ink);
-  color: var(--bg);
-  transform: scale(1.05);
-}
-
 .tv-playlist-media-type-switch button:disabled {
   cursor: default;
   opacity: 0.7;
@@ -7369,40 +7332,10 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   animation: tv-copy-in 480ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-.tv-search-preview > p:first-child {
-  color: var(--brand-ink);
-  font-size: clamp(0.46rem, calc(0.52 * var(--vw)), 0.64rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.tv-search-preview h2 {
+.tv-search-preview .details-panel-title {
   max-width: 13ch;
   margin-top: 0.55rem;
   font-size: clamp(1.55rem, calc(2.5 * var(--vw)), 3.6rem);
-  font-weight: 560;
-  letter-spacing: -0.06em;
-  line-height: 0.98;
-}
-
-.tv-search-preview > div {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 0.9rem;
-  color: var(--ink-muted);
-  font-size: clamp(0.48rem, calc(0.54 * var(--vw)), 0.66rem);
-}
-
-.tv-search-preview > p:last-child {
-  display: -webkit-box;
-  margin-top: 1.1rem;
-  overflow: hidden;
-  color: var(--ink-muted);
-  font-size: clamp(0.56rem, calc(0.64 * var(--vw)), 0.8rem);
-  line-height: 1.55;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
 }
 
 .tv-search-prompt {
@@ -10731,7 +10664,13 @@ body[data-input-mode="remote"] :is(
   overflow: hidden;
 }
 
+.page-shell > .tv-key-art,
+.page-shell > .tv-stage-wash {
+  pointer-events: none;
+}
+
 .page-shell-body {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -11060,3 +10999,118 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   font-style: normal;
   user-select: none;
 }
+
+/* Shared details panel (DetailsPanel) and its status pills. Stage placement keeps the Home/Library column
+   positioning from the .tv-home-feature / .tv-library-preview rules it is combined with.
+   Legibility (WCAG AAA, 7:1 normal text, 4.5:1 large) against the real pixels behind the text: a scrim of the page
+   surface sits behind the column (the art and edge fade stay visible past its soft edge), and the text colours are
+   panel-local mixes of the theme tokens measured against the worst case (black or white art). The tokens themselves
+   are not changed here. scripts/details-contrast-e2e.mjs samples the rendered pixels. */
+.details-panel {
+  --dp-scrim: color-mix(in srgb, var(--surface) 94%, transparent);
+  --dp-text: var(--ink);
+  --dp-soft: color-mix(in srgb, var(--ink) 88%, var(--surface));
+  --dp-eyebrow: var(--brand-ink);
+  isolation: isolate;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.details-panel::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -14% -22% -14% -40%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, var(--dp-scrim) 22%, var(--dp-scrim) 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+
+.details-panel h2,
+.details-panel .tv-preview-meta,
+.details-panel .tv-preview-overview {
+  color: var(--dp-text);
+}
+
+.details-panel .tv-provider {
+  color: var(--dp-eyebrow);
+  font-weight: 860;
+}
+
+.details-panel .tv-preview-meta,
+.details-panel .tv-preview-meta span + span,
+.details-panel .tv-preview-overview,
+.details-panel > p:not(.tv-provider) {
+  color: var(--dp-soft);
+  font-weight: 600;
+}
+
+.details-panel .tv-preview-overview {
+  font-size: clamp(0.64rem, calc(0.72 * var(--vw)), 0.92rem);
+}
+
+.details-panel .tv-preview-meta {
+  font-size: clamp(0.62rem, calc(0.68 * var(--vw)), 0.86rem);
+}
+
+.details-panel .hint {
+  color: var(--dp-soft);
+}
+
+.details-panel.is-flow {
+  position: relative;
+  width: 100%;
+  max-width: 34rem;
+}
+
+.details-panel.is-flow .details-panel-title {
+  max-width: 14ch;
+  font-size: clamp(1.8rem, calc(2.6 * var(--vw)), 3.4rem);
+  font-weight: 560;
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+.details-panel-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: clamp(12px, calc(1.6 * var(--viewport-unit)), 22px);
+}
+
+.details-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: clamp(16px, calc(2.2 * var(--viewport-unit)), 30px);
+}
+
+/* Pill: the tone only tints the fill and the border; the text is the theme ink on that fill (AAA in both themes). */
+.status-pill {
+  --pill-tone: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--pill-tone) 60%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pill-tone) 14%, var(--surface));
+  color: var(--ink);
+  font-size: clamp(0.64rem, calc(0.7 * var(--vw)), 0.84rem);
+  font-weight: 750;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.status-pill.is-available { --pill-tone: var(--success); }
+.status-pill.is-downloading { --pill-tone: var(--accent); }
+.status-pill.is-upcoming { --pill-tone: var(--brand); }
+.status-pill.is-missing { --pill-tone: var(--danger); }
+.status-pill.is-requested { --pill-tone: var(--ink-muted); }
+
+.details-panel .btn,
+.details-panel button {
+  text-shadow: none;
+}
+

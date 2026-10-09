@@ -1,0 +1,1 @@
+- Web: the focus-style end-to-end check covers calendar agenda, week and month cards in both themes at 1920 and 1280; Storybook stories for the details panel and status pill.
