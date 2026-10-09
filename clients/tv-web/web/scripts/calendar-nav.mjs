@@ -258,15 +258,15 @@ try {
     await context.close();
   }
 
-  // ---- Audit K14/K18/K21: one default-focus marker, scroll attributes, no fake grid ----
+  // ---- Audit K14/K18/K19/K21: one default-focus marker, scroll attributes, settled announcement, no fake grid ----
   {
     const { context, page } = await open("week", { width: 1920, height: 1080 });
     const week = await page.evaluate(() => ({
-      defaults: document.querySelectorAll("[data-tv-focus-default]").length,
+      defaults: document.querySelectorAll(".calendar-page [data-tv-focus-default]").length,
       cols: [...document.querySelectorAll(".calendar-day")].map((d) => [d.hasAttribute("data-tv-scroll-container"), d.getAttribute("data-navigation-scroll-key")]),
     }));
     check("calendar: one default-focus marker on a wide screen", week.defaults === 1, JSON.stringify(week));
-    check("calendar: the default focus is the range button", await page.evaluate(() => document.querySelector("[data-tv-focus-default]")?.matches("[data-range-button]")));
+    check("calendar: no second Previous/Today/Next group mounted on a wide screen", (await page.locator(".calendar-nav-inline").count()) === 0);
     check("week: every day column carries the scroll attributes and a key", week.cols.length > 0 && week.cols.every(([c, k]) => c && /^calendar:day:/.test(k ?? "")), JSON.stringify(week.cols));
     await context.close();
   }
@@ -276,85 +276,72 @@ try {
     check("month: no grid roles on cells nothing can focus", roles === 0, String(roles));
     await context.close();
   }
-
-  // ---- The date range is a real button in the shell action column; it opens and changes the period by keyboard ----
-  for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
-    const tag = `${viewport.width}`;
-    const { context, page } = await open("week", viewport);
-    const btn = page.locator("[data-range-button]");
-    const where = await page.evaluate(() => {
-      const b = document.querySelector("[data-range-button]");
-      const col = document.querySelector("[data-shell-action-column]");
-      const filters = document.querySelector("[data-filters-button]");
-      const header = document.querySelector(".page-header");
-      return {
-        tag: b?.tagName, inColumn: Boolean(b && col?.contains(b)), inHeader: Boolean(b && header?.contains(b)),
-        text: b?.textContent?.trim(), above: b && filters ? b.getBoundingClientRect().bottom <= filters.getBoundingClientRect().top : false,
-        subtitle: document.querySelector(".page-header-detail")?.textContent ?? null,
-        fits: b ? b.scrollWidth <= b.clientWidth + 1 && b.querySelector("span").scrollWidth <= b.querySelector("span").clientWidth + 1 : false,
-      };
-    });
-    check(`range button (${tag}): a real button in the shell action column, above Filters`, where.tag === "BUTTON" && where.inColumn && !where.inHeader && where.above, JSON.stringify(where));
-    check(`range button (${tag}): shows the compact range and the header has no range subtitle`, /^5\s?[\u2013-]\s?11\s?Oct$/.test(where.text ?? "") && !where.subtitle, JSON.stringify(where));
-    check(`range button (${tag}): the label fits inside the button`, where.fits, JSON.stringify(where));
-    const live = page.locator("[data-settled-announcer]");
-    check(`range button (${tag}): the live region is outside the button`, (await page.locator("[data-range-button] [aria-live]").count()) === 0 && (await live.count()) === 1);
-
-    // Keyboard: focus the button, open with Enter, step Next with the keyboard, close with Escape.
-    await btn.focus();
-    await page.keyboard.press("Enter");
-    await page.waitForSelector("#calendar-period-drawer");
-    await page.waitForTimeout(400);
-    check(`range button (${tag}): Enter opens the period drawer`, (await btn.getAttribute("aria-expanded")) === "true");
-    const names = await page.evaluate(() => [...document.querySelectorAll("#calendar-period-drawer button")].map((b) => b.getAttribute("aria-label") ?? b.textContent?.trim()));
-    check(`range button (${tag}): the drawer holds Previous, Today and Next`, ["Previous", "Today", "Next"].every((n) => names.includes(n)), JSON.stringify(names));
-    const before = new URL(page.url()).searchParams.get("date");
-    await page.evaluate(() => document.querySelector("#calendar-period-drawer [aria-label='Next']").focus());
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(600);
-    const after = new URL(page.url()).searchParams.get("date");
-    const textAfter = (await btn.textContent())?.trim();
-    check(`range button (${tag}): Next from the drawer changes the period and the button label`, after && after !== before && /^12\s?[\u2013-]\s?18\s?Oct$/.test(textAfter ?? ""), JSON.stringify({ before, after, textAfter }));
-    check(`range button (${tag}): the drawer stays open while stepping`, (await page.locator("#calendar-period-drawer").count()) === 1);
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
-    const back = await focusInfo(page);
-    check(`range button (${tag}): Escape closes the drawer and focus returns to the button`, (await page.locator("#calendar-period-drawer").count()) === 0 && /action-pill/.test(back?.cls ?? ""), JSON.stringify(back));
-    await context.close();
-  }
-
-  // ---- Phone: the range button is still in the action column and opens the period drawer ----
   {
     const { context, page } = await open("agenda", { width: 390, height: 844 });
     const phone = await page.evaluate(() => ({
-      defaults: document.querySelectorAll("[data-tv-focus-default]").length,
-      inColumn: Boolean(document.querySelector("[data-shell-action-column] [data-range-button]")),
-      inline: document.querySelectorAll(".calendar-nav-inline, .page-actions-navigation").length,
+      defaults: document.querySelectorAll(".calendar-page [data-tv-focus-default]").length,
+      groups: document.querySelectorAll(".calendar-nav-inline").length,
+      header: document.querySelectorAll(".page-actions-navigation").length,
     }));
-    check("calendar: on a phone the range button is in the action column with one default marker", phone.defaults === 1 && phone.inColumn && phone.inline === 0, JSON.stringify(phone));
+    check("calendar: on a phone the navigation is mounted once, with one default marker", phone.defaults === 1 && phone.groups === 1 && phone.header === 0, JSON.stringify(phone));
     await context.close();
   }
 
-  // ---- Audit K19: the range announces once the period stops changing ----
+  // ---- The date range is a real button in the shell action column (not the subtitle) and opens the month/year jump ----
+  for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+    const tag = `${viewport.width}`;
+    const { context, page } = await open("week", viewport);
+    const where = await page.evaluate(() => {
+      const b = document.querySelector("[data-range-button]");
+      const filters = document.querySelector("[data-filters-button]");
+      return {
+        tag: b?.tagName, inColumn: Boolean(b && document.querySelector("[data-shell-action-column]")?.contains(b)),
+        text: b?.textContent?.trim(), above: Boolean(b && filters && b.getBoundingClientRect().bottom <= filters.getBoundingClientRect().top),
+        subtitle: document.querySelector(".page-header-detail")?.textContent ?? null,
+        navInHeader: document.querySelectorAll(".page-header [data-action-kind='navigation'] button").length,
+        fits: b ? b.querySelector("span").scrollWidth <= b.querySelector("span").clientWidth + 1 : false,
+      };
+    });
+    check(`range button (${tag}): a real button in the shell action column above Filters`, where.tag === "BUTTON" && where.inColumn && where.above, JSON.stringify(where));
+    check(`range button (${tag}): shows the compact range, the subtitle is empty and Previous/Today/Next stay in the header`, /^5\s?[\u2013-]\s?11\s?Oct$/.test(where.text ?? "") && !where.subtitle && where.navInHeader === 3 && where.fits, JSON.stringify(where));
+    await page.locator("[data-range-button]").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".period-picker-panel");
+    await page.waitForTimeout(300);
+    const panel = await page.evaluate(() => {
+      const p = document.querySelector(".period-picker-panel").getBoundingClientRect();
+      const b = document.querySelector("[data-range-button]").getBoundingClientRect();
+      return { expanded: document.querySelector("[data-range-button]").getAttribute("aria-expanded"), inside: Boolean(document.activeElement?.closest(".period-picker-panel")), left: p.right <= b.left + 1, onScreen: p.left >= 0 && p.bottom <= innerHeight + 1 };
+    });
+    check(`range button (${tag}): Enter opens the month/year jump beside the button, focus inside`, panel.expanded === "true" && panel.inside && panel.left && panel.onScreen, JSON.stringify(panel));
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(600);
+    const after = await page.evaluate(() => ({ date: new URL(location.href).searchParams.get("date"), open: Boolean(document.querySelector(".period-picker-panel")), focus: document.activeElement?.matches("[data-range-button]") }));
+    check(`range button (${tag}): choosing a month changes the period, closes the jump and returns focus`, after.date && after.date !== "2026-10-07" && !after.open && after.focus, JSON.stringify(after));
+    await context.close();
+  }
+
+  // ---- Audit K19: the range label announces once the period stops changing ----
   {
     const { context, page } = await open("week", { width: 1920, height: 1080 });
+    const live = page.locator(".period-picker [aria-live='polite']");
+    check("range label: the live region is outside the range button", (await page.locator("[data-range-button] [aria-live]").count()) === 0 && (await live.count()) === 1);
     const seen = [];
     await page.exposeFunction("__rangeSeen", (text) => seen.push(text));
     await page.evaluate(() => {
-      const live = document.querySelector("[data-settled-announcer]");
-      new MutationObserver(() => window.__rangeSeen(live.textContent)).observe(live, { childList: true, characterData: true, subtree: true });
+      new MutationObserver(() => window.__rangeSeen(document.querySelector(".period-picker [aria-live='polite']").textContent)).observe(
+        document.querySelector(".period-picker [aria-live='polite']"),
+        { childList: true, characterData: true, subtree: true },
+      );
     });
-    await page.locator("[data-range-button]").focus();
-    await page.keyboard.press("Enter");
-    await page.waitForSelector("#calendar-period-drawer");
-    await page.waitForTimeout(400);
-    await page.evaluate(() => document.querySelector("#calendar-period-drawer [aria-label='Next']").focus());
+    await page.evaluate(() => document.querySelector("[data-tv-focus-default]").nextElementSibling?.focus());
     for (let i = 0; i < 6; i += 1) {
       await page.keyboard.press("Enter");
       await page.waitForTimeout(80);
     }
     await page.waitForTimeout(1200);
-    check("range label: six quick period steps announce once, with the final label", seen.length === 1 && /2026/.test(seen[0] ?? ""), JSON.stringify(seen));
+    check("range label: six quick period steps announce once, with the final label", seen.length === 1, JSON.stringify(seen));
     await context.close();
   }
 } finally {

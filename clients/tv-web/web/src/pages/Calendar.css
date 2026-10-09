@@ -3,6 +3,12 @@
  * the viewports inside it do: the month and week tracks (horizontal), each week day column and the
  * agenda list (vertical). Each carries data-tv-scroll-container and a scroll key.
  */
+.calendar-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 .calendar-nav,
 .calendar-actions {
   display: flex;
@@ -422,6 +428,90 @@
   padding-top: 0;
   border-top: 0;
   max-width: none;
+}
+
+/* Navigation lives in the header's right cluster; phones show it inline under the title instead. */
+.calendar-header {
+  flex-direction: row;
+  align-items: center;
+}
+
+.calendar-nav-inline {
+  display: none;
+  margin-left: auto;
+}
+
+.period-picker {
+  position: relative;
+}
+
+.period-picker-panel {
+  /* Opens beside the range button in the shell action column. */
+  position: fixed;
+  z-index: var(--z-popover);
+  top: var(--shell-action-column-top);
+  right: calc(var(--directory-controls-edge) + var(--directory-controls-width) + 12px);
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-focus);
+}
+
+.period-picker-list {
+  width: clamp(130px, calc(11 * var(--vw)), 190px);
+  max-height: min(calc(48 * var(--viewport-unit)), 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  list-style: none;
+  scroll-snap-type: y proximity;
+}
+
+.period-picker-option {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 640;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: center;
+}
+
+.period-picker-option[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.period-picker-option:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* Inside a clipping list the ring sits inside the option. */
+.period-picker-option:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: -3px;
+}
+
+@media (max-width: 760px) {
+  .calendar-nav-inline {
+    display: flex;
+  }
+
+  .period-picker-panel {
+    top: calc(var(--mobile-top-inset, 14px) + 56px);
+    right: 12px;
+  }
 }
 
 .calendar-link {

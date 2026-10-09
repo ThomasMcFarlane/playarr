@@ -11,5 +11,5 @@ export { MasterDetail } from "./MasterDetail";
 export { SkeletonBlock, SkeletonLines } from "./Skeleton";
 export { ViewToggle, type ViewOption } from "./ViewToggle";
 export { ChoiceGroup, DateRangeField, FilterSection, FiltersDrawer, MultiSelect } from "./FiltersDrawer";
-export { SettledAnnouncer } from "./SettledAnnouncer";
+export { PeriodPicker } from "./PeriodPicker";
 export { ShellActionColumnProvider, ShellActionColumnSlot } from "./ShellActionColumn";

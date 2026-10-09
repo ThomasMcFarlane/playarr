@@ -147,9 +147,9 @@ export function applyCalendarFilters(
   });
 }
 
-/** Side panels that can be open; encoded as `?panel=filters|link|period`. */
-export type CalendarPanel = "filters" | "link" | "period";
-export const CALENDAR_PANELS: readonly CalendarPanel[] = ["filters", "link", "period"];
+/** Side panels that can be open; encoded as `?panel=filters|link`. */
+export type CalendarPanel = "filters" | "link";
+export const CALENDAR_PANELS: readonly CalendarPanel[] = ["filters", "link"];
 
 /** Everything the calendar keeps in the URL besides the filters themselves. */
 export interface CalendarUrlState {

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { DateRangeField, MasterDetail, SettledAnnouncer } from "../src/components/shell";
+import { DateRangeField, MasterDetail, PeriodPicker } from "../src/components/shell";
 import { ProfileAvatar } from "../src/components/ProfileAvatar";
 import { LanguageDropdown } from "../src/components/LanguageDropdown";
 import { WatchStateOverlay } from "../src/components/WatchStateOverlay";
@@ -11,6 +11,9 @@ const progress = (state: "part_watched" | "unseen", position: number): WatchProg
   ({ state, position_ms: position, duration_ms: 100, work_id: "w", media_file_id: "m" }) as unknown as WatchProgress;
 
 function Surfaces() {
+  const [period, setPeriod] = useState("2026-10-01");
+  const [jumpOpen, setJumpOpen] = useState(true);
+  const jumpTrigger = useRef<HTMLButtonElement>(null);
   const [range, setRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
   return (
     <div className="sb-pad sb-col" style={{ maxWidth: 900 }}>
@@ -38,8 +41,11 @@ function Surfaces() {
         </div>
       </div>
       <div>
-        <Caption>Settled announcer (visually hidden live region, speaks 700 ms after the text settles)</Caption>
-        <SettledAnnouncer text="5 Oct – 11 Oct 2026" />
+        <Caption>Period picker</Caption>
+        <button type="button" ref={jumpTrigger} className="ui-btn btn btn-secondary" aria-expanded={jumpOpen} aria-controls="story-period-jump" onClick={() => setJumpOpen((v) => !v)}>
+          Oct 2026
+        </button>
+        <PeriodPicker id="story-period-jump" open={jumpOpen} onOpenChange={setJumpOpen} triggerRef={jumpTrigger} value={period} label="October 2026" locale="en-GB" dialogLabel="Choose a period" monthLabel="Month" yearLabel="Year" onChange={setPeriod} />
       </div>
       <div>
         <Caption>Date range field</Caption>

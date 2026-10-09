@@ -6,12 +6,12 @@ const css = read("./Calendar.css");
 const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("calendar stylesheet", () => {
-  const sources = ["./Calendar.tsx", "../components/CalendarLink.tsx"]
+  const sources = ["./Calendar.tsx", "../components/CalendarLink.tsx", "../components/shell/PeriodPicker.tsx"]
     .map(read)
     .join("\n");
 
   it("styles only classes some component renders", () => {
-    const classes = new Set([...code.matchAll(/\.(calendar-[a-z-]+)/g)].map((m) => m[1]!));
+    const classes = new Set([...code.matchAll(/\.((?:calendar|period-picker)-[a-z-]+)/g)].map((m) => m[1]!));
     const unused = [...classes].filter((name) => {
       if (sources.includes(name)) return false;
       // Variant classes built from a state: `calendar-badge-${state}`, `calendar-availability-${...}`.
