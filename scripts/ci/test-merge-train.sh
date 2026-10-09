@@ -320,6 +320,19 @@ if [ "$(ogit "$be" rev-list --count "$m0..train/batch" 2>/dev/null)" = 1 ] && [ 
 grep -q 'blocked 5' "$be/gh.log" 2>/dev/null && bad "batch: PNG-conflict PR was blocked" || ok "batch: PNG-conflict PR not blocked"
 rm -rf "$be"
 
+# Runner pressure: heavy browser shards run on a PR only once it is `ready`; other labels run nothing and cancel nothing.
+python3 - "$root/.github/workflows/ci.yml" <<'PY' && ok "ci.yml: heavy shards wait for ready; non-ready labels are inert" || bad "ci.yml runner-pressure rules missing"
+import sys, yaml
+ci = yaml.safe_load(open(sys.argv[1])); on = ci.get(True, ci.get('on'))
+assert 'labeled' in on['pull_request']['types']
+for job in ('web-layout-parity', 'web-behaviour', 'web-storybook'):
+    cond = ci['jobs'][job]['if']
+    assert "contains(github.event.pull_request.labels.*.name, 'ready')" in cond and "github.event_name != 'pull_request'" in cond, job
+assert "label.name == 'ready'" in ci['jobs']['changes']['if']
+assert "-label" in ci['concurrency']['group']
+assert "label.name == 'ready'" in ci['jobs']['ci-required']['if'] and 'always()' in ci['jobs']['ci-required']['if']
+PY
+
 # Red batch: halved down to the culprit, which alone is blocked.
 be=$(mktemp -d); batch_env "$be"; m0=$(ogit "$be" rev-parse main)
 run_batch "$be" pending "1 2 4"

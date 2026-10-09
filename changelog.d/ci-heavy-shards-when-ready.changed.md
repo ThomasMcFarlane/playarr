@@ -1,0 +1,1 @@
+- CI: a pull request runs the heavy browser shards (layout parity, web behaviour, storybook) only once it is labelled ready; the label re-runs its CI. Other labels no longer cancel or start a run. This frees runner capacity for the merge train batch.

@@ -30,6 +30,8 @@ name: CI
 
 on:
   pull_request:
+    # `labeled` re-runs a PR's CI the moment it gets `ready`, which is when its heavy browser shards start (below).
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches:
       - main
@@ -46,7 +48,9 @@ concurrency:
   # push to main gets its own group (keyed by SHA): with a shared per-ref group
   # GitHub cancels the older *pending* run even when cancel-in-progress is
   # false, which left main commits without a completed CI run (and no deploy).
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  # Any label other than `ready` (blocked, ...) runs in a throw-away group and does nothing, so it never cancels a
+  # real run.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}${{ github.event.action == 'labeled' && github.event.label.name != 'ready' && '-label' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -64,6 +68,8 @@ jobs:
   # ---------------------------------------------------------------------
   changes:
     name: Detect changed platforms
+    # A label other than `ready` on a PR needs no CI run at all.
+    if: github.event.action != 'labeled' || github.event.label.name == 'ready'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -613,7 +619,9 @@ jobs:
     # a separate runner; ci-required reads the combined result of the matrix under this job id.
     name: web layout parity (${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.tv-web == 'true'
+    # Heavy browser shard: pull requests run it only once labelled `ready` (runner capacity is shared by every open
+    # PR; the batch CI on train/batch runs it for every stack anyway).
+    if: needs.changes.outputs.tv-web == 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ready'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -781,7 +789,9 @@ jobs:
     # Three shards balanced by measured script time (web-behaviour.config.json "seconds"): 15 min as one job.
     name: web behaviour (${{ matrix.shard }}/3)
     needs: changes
-    if: needs.changes.outputs.tv-web == 'true'
+    # Heavy browser shard: pull requests run it only once labelled `ready` (runner capacity is shared by every open
+    # PR; the batch CI on train/batch runs it for every stack anyway).
+    if: needs.changes.outputs.tv-web == 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ready'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -830,7 +840,9 @@ jobs:
   web-storybook:
     name: web storybook
     needs: changes
-    if: needs.changes.outputs.tv-web == 'true'
+    # Heavy browser shard: pull requests run it only once labelled `ready` (runner capacity is shared by every open
+    # PR; the batch CI on train/batch runs it for every stack anyway).
+    if: needs.changes.outputs.tv-web == 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ready'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -892,7 +904,7 @@ jobs:
       - web-storybook
       - web-behaviour
       - openapi-contract-check
-    if: always()
+    if: always() && (github.event.action != 'labeled' || github.event.label.name == 'ready')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
