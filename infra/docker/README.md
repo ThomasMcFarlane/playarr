@@ -36,6 +36,8 @@ selection is entirely via the `PLAYARR_ROLE` *environment variable*
 are valid) -- the container would have refused to boot as shipped (fixed to
 `all`).
 
+- **Clients try 443, then 8484.** A client given the server's bare public address
+  tries port 443 and falls back to the published 8484, so publishing only 8484 works.
 - **App HTTP port: `8484`, metrics port: `9090`.** Confirmed as the real
   defaults in `playarr-config::Config::from_env` (`PLAYARR_HTTP_BIND_ADDR`
   defaults to `0.0.0.0:8484`, `PLAYARR_METRICS_BIND_ADDR` to `0.0.0.0:9090`).

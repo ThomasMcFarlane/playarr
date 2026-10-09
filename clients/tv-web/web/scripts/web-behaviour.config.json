@@ -20,7 +20,8 @@
     "nav-library-drawer-e2e",
     "drawer-spacing-e2e",
     "nav-library-preview-e2e",
-    "nav-focus-e2e"
+    "nav-focus-e2e",
+    "relay-port-e2e"
   ],
   "args": {
     "tablet-layout": [
@@ -62,6 +63,7 @@
     "nav-library-drawer-e2e": 66,
     "drawer-spacing-e2e": 30,
     "nav-library-preview-e2e": 13,
-    "nav-focus-e2e": 47
+    "nav-focus-e2e": 47,
+    "relay-port-e2e": 15
   }
 }

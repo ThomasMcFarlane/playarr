@@ -29,6 +29,7 @@
     "smoke:tablet-layout": "node scripts/tablet-layout.mjs",
     "smoke:tv-viewport": "node scripts/tv-viewport.mjs",
     "smoke:edge-fade": "node scripts/edge-fade-e2e.mjs",
+    "smoke:relay-port": "node scripts/relay-port-e2e.mjs",
     "smoke:drawer-close": "node scripts/drawer-close.mjs",
     "storybook": "storybook dev -p 6006",
     "build:storybook": "storybook build -o dist-storybook --disable-telemetry",

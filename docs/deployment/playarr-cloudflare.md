@@ -116,8 +116,10 @@ mixed-content blocking. Browser support is still evolving; a browser without
 Local Network Access cannot connect from the HTTPS hosted app to a private
 plain-HTTP server.
 
-For a public IPv4 address, Playarr converts the address to the deterministic
-`https://v4-A-B-C-D.relay.playarr.app:8484` hostname. The records below
+For a public IPv4 address typed without a port, Playarr converts the address to the
+deterministic `https://v4-A-B-C-D.relay.playarr.app` hostname, tries port 443 and then
+falls back to port 8484 (the server's default listener), remembering whichever
+worked. A port you type is always used as typed. The records below
 `relay.playarr.app` are DNS-only and are published by this Worker after the
 server proves control of the address; see [Playarr relay](playarr-relay.md).
 Playarr Server terminates HTTPS itself. Enable the matching

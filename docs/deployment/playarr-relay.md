@@ -1,6 +1,6 @@
 # Playarr relay: DNS-only phone-home
 
-`v4-A-B-C-D.relay.playarr.app:8484` is how the hosted web client and the TV
+`v4-A-B-C-D.relay.playarr.app` is how the hosted web client and the TV
 clients reach a Playarr Server on a public IPv4 address with a browser-trusted
 certificate. This page describes how those names are published, the trust
 model and its limits, and the cut-over from the old in-process DNS server.
@@ -11,7 +11,22 @@ Design rules, set by the owner:
   DNS (DNS-only records, never proxied).
 - No public DNS server runs on the cluster or in Playarr Server.
 - Low cost: no Durable Objects, no KV. DNS itself is the state.
-- The clients' `v4-A-B-C-D.relay.playarr.app:8484` mapping is unchanged.
+- A client given a bare public address with no port tries
+  `https://v4-A-B-C-D.relay.playarr.app` (443) first, then falls back to
+  `https://v4-A-B-C-D.relay.playarr.app:8484` when 443 does not connect, fails
+  TLS or does not answer within about 3 seconds. It remembers whichever worked.
+  A port typed by the user is always used exactly as typed.
+
+## Ports
+
+Playarr Server listens on `PLAYARR_HTTP_BIND_ADDR`, `0.0.0.0:8484` by default,
+and the systemd and Docker setups publish only 8484. A default self-hosted
+server therefore answers on 8484 only, and a client given its bare address
+reaches it through the 443 then 8484 fallback above (the 443 attempt fails
+quickly, so the first connection is a few seconds slower; later launches go
+straight to 8484). To skip the fallback, either type the address with
+`:8484`, or publish 443 to the server's listener (for example a port mapping
+or `PLAYARR_HTTP_BIND_ADDR=0.0.0.0:443` with the privilege to bind it).
 
 ## How it works
 
