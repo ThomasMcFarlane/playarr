@@ -317,6 +317,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: the web behaviour gate runs as three parallel shards balanced by measured script time (about 15 min down to about 7).
 - Merge train: the batch CI run on train/batch dispatches the train itself when it finishes, so a green batch lands within a minute instead of waiting for a dropped completion trigger; a manual train dispatch is a real run by default.
 - Resolving a calendar's titles looks their external ids, the viewer's watchlist and the request list up once per request in a few set-based queries, instead of several small queries per title.
 - The calendar keeps each period in the query cache (dropped by calendar, catalogue, progress and watchlist events) and loads the previous and next period after the current one paints, so stepping and revisiting render at once.

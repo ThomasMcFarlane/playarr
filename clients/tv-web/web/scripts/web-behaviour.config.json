@@ -40,5 +40,25 @@
     "tablet-layout": "the width sweep fails on current main (row 9623)",
     "focus-style-e2e": "dark 1280x720 calendar entry casts the light-theme shadow colour (row 9623)",
     "edge-fade-e2e": "not yet verified green in CI (row 9623)"
+  },
+  "seconds": {
+    "nav-smoke": 83,
+    "rail-geometry-e2e": 57,
+    "calendar-nav": 23,
+    "calendar-layout": 24,
+    "tv-viewport": 85,
+    "header-parity": 5,
+    "profile-chip-settle": 39,
+    "tablet-layout": 226,
+    "motion-e2e": 29,
+    "nav-back-e2e": 50,
+    "focus-style-e2e": 52,
+    "nav-player-e2e": 49,
+    "nav-rail-e2e": 11,
+    "edge-fade-e2e": 17,
+    "nav-search-e2e": 7,
+    "nav-library-drawer-e2e": 66,
+    "nav-library-preview-e2e": 13,
+    "nav-focus-e2e": 47
   }
 }

@@ -42,6 +42,16 @@ describe("web behaviour gate", () => {
     expect(BEHAVIOUR_SCRIPTS.filter((name) => !existsSync(join(scripts, `${name}.mjs`)))).toEqual([]);
   });
 
+  it("splits into balanced CI shards that together run every script exactly once", async () => {
+    const path = join(scripts, "web-behaviour.mjs");
+    const { shardOf } = (await import(/* @vite-ignore */ path)) as {
+      shardOf: (all: string[], weights: Record<string, number>, i: number, n: number) => string[];
+    };
+    const shards = [1, 2, 3].map((i) => shardOf(BEHAVIOUR_SCRIPTS, (config as { seconds?: Record<string, number> }).seconds ?? {}, i, 3));
+    expect(shards.flat().sort()).toEqual([...BEHAVIOUR_SCRIPTS].sort());
+    for (const shard of shards) expect(shard.length).toBeGreaterThan(0);
+  });
+
   it("covers the rail geometry, calendar, TV viewport and nav smoke checks", () => {
     for (const name of ["rail-geometry-e2e", "calendar-nav", "tv-viewport", "nav-smoke"]) {
       expect(BEHAVIOUR_SCRIPTS).toContain(name);

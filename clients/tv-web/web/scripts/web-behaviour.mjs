@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Runs every web Playwright smoke and behaviour script that needs only the built bundle and the deterministic mock API
 // (scripts/nav-perf/server.mjs), against one shared build. This is the PR gate for the web styles and behaviour
-// (CI job `web behaviour`); the full native-parity regression is separate and manual (workflow_dispatch).
+// (CI job `web behaviour`, three shards); the full native-parity regression is separate and manual (workflow_dispatch).
 //
-//   node scripts/web-behaviour.mjs [--dist dir] [--only name] [--list]
+//   node scripts/web-behaviour.mjs [--dist dir] [--only name] [--shard i/n] [--list]
+//
+// --shard i/n runs the i-th of n balanced subsets (1-based). Scripts are spread by their measured run time (the
+// "seconds" map in the config; 30 for an unlisted one) so the CI shards finish together; the union of all shards is the full list.
 //
 // Add a new script to web-behaviour.config.json when it is added to scripts/. `src/lib/behaviourScripts.test.ts` fails
 // when a script that uses the mock API is neither listed nor excluded with a reason.
@@ -21,6 +24,19 @@ const BEHAVIOUR_ARGS = config.args;
 // The list may only shrink; src/lib/behaviourScripts.test.ts keeps every entry a listed script with a row.
 const TRACKED = config.tracked ?? {};
 
+// shardOf(scripts, i, n): the scripts of shard i (1-based) of n, longest-first onto the lightest shard.
+export function shardOf(scripts, weights, i, n) {
+  const load = Array.from({ length: n }, () => 0);
+  const picked = Array.from({ length: n }, () => []);
+  const order = [...scripts].sort((a, b) => (weights[b] ?? 30) - (weights[a] ?? 30) || scripts.indexOf(a) - scripts.indexOf(b));
+  for (const name of order) {
+    const lightest = load.indexOf(Math.min(...load));
+    load[lightest] += weights[name] ?? 30;
+    picked[lightest].push(name);
+  }
+  return scripts.filter((name) => picked[i - 1].includes(name));
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function main() {
@@ -35,9 +51,17 @@ function main() {
   }
   const dist = opt("dist", join(root, "dist"));
   const only = opt("only", "");
+  const shard = opt("shard", "");
+  let selected = BEHAVIOUR_SCRIPTS;
+  if (shard) {
+    const [i, n] = shard.split("/").map(Number);
+    if (!(i >= 1 && i <= n)) throw new Error(`--shard must be i/n with 1 <= i <= n, got ${shard}`);
+    selected = shardOf(BEHAVIOUR_SCRIPTS, config.seconds ?? {}, i, n);
+    console.log(`shard ${shard}: ${selected.join(", ")}`);
+  }
   const failed = [];
   const trackedFailures = [];
-  for (const name of BEHAVIOUR_SCRIPTS.filter((script) => !only || script === only)) {
+  for (const name of selected.filter((script) => !only || script === only)) {
     console.log(`\n=== ${name}`);
     const started = Date.now();
     const result = spawnSync(process.execPath, [join(root, "scripts", `${name}.mjs`), "--dist", dist, ...(BEHAVIOUR_ARGS[name] ?? [])], {
@@ -62,4 +86,4 @@ function main() {
   console.log("\nAll blocking web behaviour scripts passed");
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();
