@@ -1,6 +1,7 @@
 import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import { periodPickerMove } from "../../lib/periodPickerNav";
 import { isBackKey } from "../../lib/backKey";
+import { createSettled } from "../../lib/settled";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../ui";
 
@@ -20,6 +21,9 @@ interface Props {
   yearSpan?: number;
 }
 
+/** The label is announced once it has stopped changing, so holding Next does not read out every period. */
+export const RANGE_ANNOUNCE_DELAY_MS = 700;
+
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -37,6 +41,15 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogId = useId();
+  // Starts as the current label so the first render is not announced.
+  const [announced, setAnnounced] = useState(label);
+  const settledRef = useRef<ReturnType<typeof createSettled<string>> | null>(null);
+  settledRef.current ??= createSettled<string>(RANGE_ANNOUNCE_DELAY_MS, setAnnounced);
+  useEffect(() => {
+    const settled = settledRef.current!;
+    settled.push(label);
+    return settled.cancel;
+  }, [label]);
 
   const months = useMemo(
     () =>
@@ -105,11 +118,12 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
         aria-controls={dialogId}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="calendar-range" aria-live="polite">
-          {label}
-        </span>
+        <span className="calendar-range">{label}</span>
         <span aria-hidden="true">▾</span>
       </Button>
+      <span className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {announced}
+      </span>
       {open ? (
         <div id={dialogId} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel}>
           <ul role="listbox" aria-label={monthLabel} className="period-picker-list">

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { describeApiError, type RequestView } from "@playarr-tv/api-client";
+import { useAsyncData } from "@playarr-tv/api-client/react";
 import { EmptyState, ErrorState, PageLayout, ScrollArea, SkeletonState } from "../components/shell";
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
@@ -11,31 +13,42 @@ type State =
   | { status: "ready"; items: RequestView[] }
   | { status: "error"; message: string };
 
+/** Stored first paint for Back and revisits; a catalogue or request change drops it (`catalog` tag). */
+export const REQUESTS_CACHE_KEY = "requests:list";
+export const REQUESTS_QUERY_TAGS = ["catalog"] as const;
+
 /**
  * The signed-in user's requests (administrators see everyone's) with their
  * status, whichever system took them.
+ * The list paints from the query cache at once and refreshes in place when a
+ * live library change arrives or the fallback poll fires.
  */
 export function RequestsPage() {
   const { t } = useLanguage();
   useDocumentTitle(t("pages.requests.title"));
   const client = useApiClient();
-  const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    void client
-      .listRequests()
-      .then((items) => {
-        if (!cancelled) setState({ status: "ready", items });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setState({ status: "error", message: describeApiError(error) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, attempt]);
+  const liveRequests = useLiveSubscription({ areas: ["catalog", "account"] });
+  const asyncState = useAsyncData<RequestView[]>(
+    () =>
+      client.listRequests().catch((error: unknown) => {
+        throw new Error(describeApiError(error));
+      }),
+    [client],
+    {
+      subscribe: liveRequests,
+      retryKey: attempt,
+      cache: { store: client.queries, key: REQUESTS_CACHE_KEY, tags: REQUESTS_QUERY_TAGS },
+    }
+  );
+  const state: State =
+    asyncState.status === "ready"
+      ? { status: "ready", items: asyncState.data }
+      : asyncState.status === "error"
+        ? { status: "error", message: asyncState.message }
+        : asyncState.status === "empty"
+          ? { status: "ready", items: [] }
+          : { status: "loading" };
 
   return (
     <PageLayout
@@ -62,10 +75,7 @@ export function RequestsPage() {
               graphic="details"
               title={t("pages.requests.errorTitle")}
               description={state.message}
-              onRetry={() => {
-                setState({ status: "loading" });
-                setAttempt((value) => value + 1);
-              }}
+              onRetry={() => setAttempt((value) => value + 1)}
               retryLabel={t("components.states.retry")}
             />
           ) : state.items.length === 0 ? (
@@ -102,7 +112,12 @@ export function requestStatusKey(status: RequestView["status"]) {
 export function RequestRow({ request }: { request: RequestView }) {
   const { t } = useLanguage();
   return (
-    <li className="media-card media-card-row tv-download-row tv-watchlist-row" data-navigation-focus-key={`requests:${request.id}`}>
+    // Focusable so the D-pad can step down a long list (the row has no action of its own).
+    <li
+      className="media-card media-card-row tv-download-row tv-watchlist-row"
+      tabIndex={0}
+      data-navigation-focus-key={`requests:${request.id}`}
+    >
       <div className="tv-download-row-copy">
         <strong>{request.title}</strong>
         <span className="tv-download-row-meta">

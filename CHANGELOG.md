@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: `/downloads` shows the storage usage line once; Requests rows are focusable so the remote can step down a long list, and the list paints from the query cache and refreshes in place when a library change arrives.
+- Web: removed the unused `.poster-card` and `.poster-*` styles (no component uses them).
+- Web calendar: Previous/Today/Next are mounted once (header, or under the range label on a phone) with a single default-focus marker; week day columns carry the shared scroll attributes; the month grid no longer claims grid roles for cells nothing can focus, and its chips name their date; the availability note formats with the same locale as the calendar.
+- Web calendar: load errors and empty days use the shared error and empty states; the chip-fit count follows the root font size.
 - Web TV: with a minimised player active, Back now closes an open drawer, dialog or menu first and the mini player on the next press.
 - Web TV: Back and Escape work on the signed-out pages (Login, Sign up, Link, legal pages), matching the on-screen Back.
 - Web TV: the Playlists drawers close on Back even after focus has moved out of them.
@@ -351,6 +355,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web calendar: the in-library and monitored badge tints, the entry sheet scrim and shadow, and the period popover and sheet layers now use theme tokens and a layer scale (`--scrim`, `--z-popover`, `--z-modal`) instead of literals; the range label is announced once the period stops changing instead of on every key repeat.
+- Web calendar: dead styles (toolbar, view buttons, filter chips, subscription block, the load state block) are removed and the body frame has a single rule.
 - Web TV: the library Cover Flow now glides calmly. One step takes 380 ms on an ease-out curve with no overshoot (320 ms when a press lands mid-glide, 240 ms on a held key); presses retarget from the current position and speed instead of restarting, and each cover's rotation, scale and depth follow the live scroll position frame by frame (transform only) instead of snapping per selection. The settled look is unchanged. `scripts/motion-e2e.mjs` gains Cover Flow cases.
 - Merge train: while the batch CI is still waiting for a runner, the train cancels the queued CI runs of pull requests that are not ready; they re-run when the PR is labelled ready.
 - Web: text colour tokens now meet WCAG 2.2 AAA contrast (7:1) on every surface in both themes: `--ink-soft`, `--ink-muted`, `--accent`, `--danger` and `--success` change lightness (hues kept); new `--brand-ink` (brand-hued text) and `--brand-strong` (fill under white text); always-dark surfaces (player, end screen, playback health, media-context drawer, PIN dialog) take the dark tokens in both themes; native `select` is themed. Owner request 2026-10-09.
@@ -829,6 +835,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Removed the unused single-use approval mechanism, per the owner decision of 9 Oct 2026 (follow-up to the removal of purchase and install approvals): the `POST /api/v1/household/approvals/{id}/consume` endpoint, its repository method and response type, and the `max_uses` and `uses` fields and columns (migration 0082 rebuilds `household_approvals` without them). Approvals are only content and time grants bounded by their expiry; older peers that still send `max_uses` or `uses` are tolerated because unknown fields are ignored.
