@@ -100,10 +100,13 @@ await startSampling();
 await page.waitForSelector(".profile-choice:not(.profile-skeleton):not(.profile-add) >> nth=1", { timeout: 15000 });
 await page.waitForTimeout(600);
 frames = await stopSampling();
-const skeletonFrame = frames.find((f) => f.some((t) => t.skeleton));
+const skeletonFrame = [...frames].reverse().find((f) => f.some((t) => t.skeleton));
 check("two accounts: a skeleton stands in for the second tile", Boolean(skeletonFrame) && skeletonFrame.length === 3, JSON.stringify(skeletonFrame));
+// The first tile and the add tile can still be in their entrance motion in that frame; the skeleton is not, so it
+// is the one box to compare: its real tile must sit exactly where the skeleton stood.
 const settledFrame = frames[frames.length - 1];
-check("two accounts: the real tiles take the skeleton's place", Boolean(skeletonFrame) && settledFrame.length === 3 && settledFrame.every((t, i) => Math.abs(t.x - skeletonFrame[i].x) <= 1 && Math.abs(t.y - skeletonFrame[i].y) <= 1 && t.w === skeletonFrame[i].w), JSON.stringify([skeletonFrame, settledFrame]));
+const at = skeletonFrame ? skeletonFrame.findIndex((t) => t.skeleton) : -1;
+check("two accounts: the real tile takes the skeleton's place", at >= 0 && settledFrame.length === 3 && Math.abs(settledFrame[at].x - skeletonFrame[at].x) <= 1 && Math.abs(settledFrame[at].y - skeletonFrame[at].y) <= 1 && settledFrame[at].w === skeletonFrame[at].w, JSON.stringify([skeletonFrame, settledFrame]));
 check("two accounts: no other name renders", [...names(frames)].every((n) => n.includes("Ann") || n.includes("Stale")), [...names(frames)].join("|"));
 staleStillKnown = false;
 await page.evaluate(() => localStorage.removeItem("playarr.profileDirectory.v1"));
