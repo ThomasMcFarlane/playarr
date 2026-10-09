@@ -34,6 +34,30 @@ batch_members() {
   done
 }
 
+# flaky_rerun <tip>: when CI on <tip> failed only in the known flaky class, re-run the failed jobs once instead of
+# halving the batch (each halving round costs a full CI run). The class: every failed job is `web layout parity`,
+# and every failure line in its log is a pixel pin with at most FLAKY_MAX_PIXELS mismatched pixels. A second
+# attempt (run_attempt > 1) is never re-run, so a real failure still halves. Succeeds when it re-ran something.
+FLAKY_MAX_PIXELS="${FLAKY_MAX_PIXELS:-100}"
+flaky_rerun() {
+  local tip="$1" run id attempt jobs bad log fails tiny
+  run=$(gh api "repos/$REPO/actions/runs?head_sha=$tip&per_page=50" \
+    --jq '[.workflow_runs[]|select(.path==".github/workflows/ci.yml" and .event=="workflow_dispatch" and .status=="completed")]|sort_by(.created_at)|last|select(.!=null)|"\(.id) \(.run_attempt)"' 2>/dev/null) || return 1
+  [ -n "$run" ] || return 1
+  id=${run% *}; attempt=${run#* }
+  [ "$attempt" = 1 ] || return 1
+  jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" --jq '.jobs[]|select(.conclusion=="failure" and .name!="ci-required")|.name' 2>/dev/null) || return 1
+  [ -n "$jobs" ] || return 1
+  bad=$(grep -Ev '^web layout parity' <<<"$jobs" || true)
+  [ -z "$bad" ] || return 1
+  log=$(gh run view "$id" --repo "$REPO" --log-failed 2>/dev/null) || return 1
+  fails=$(grep -cE '(^|[[:space:]])FAIL[[:space:]]' <<<"$log" || true)
+  tiny=$(sed -nE 's/.*FAIL[[:space:]].*: ([0-9]+) mismatched pixels against.*/\1/p' <<<"$log" | awk -v m="$FLAKY_MAX_PIXELS" '$1>0 && $1<=m' | wc -l)
+  [ "$fails" -gt 0 ] && [ "$fails" = "$tiny" ] || return 1
+  log "batch CI failed only on $tiny tiny parity pin(s) (<= $FLAKY_MAX_PIXELS px): re-running the failed jobs once instead of halving"
+  gh run rerun "$id" --repo "$REPO" --failed >/dev/null 2>&1
+}
+
 # batch_drop: delete the remote scratch branch.
 batch_drop() { [ "$DRY" = true ] || git push -q origin --delete "$BATCH_BR" >/dev/null 2>&1 || true; }
 
@@ -278,6 +302,7 @@ batch_step() {
           if ! git ls-remote --exit-code origin "refs/heads/$BATCH_BR" >/dev/null 2>&1; then batch_build "$BATCH_MAX"; fi
           return 0 ;;
         failure)
+          if [ "$DRY" != true ] && flaky_rerun "$tip"; then STOP=true; return 0; fi
           if [ "$n" -le 1 ]; then
             local pr; pr=$(awk 'NR==1{print $1}' <<<"$members")
             batch_drop
