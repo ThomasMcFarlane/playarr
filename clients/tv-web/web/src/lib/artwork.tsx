@@ -100,12 +100,32 @@ function artworkKey(workId: string, kind: ImageKind, width: number): string {
   return `${workId}:${kind}:${width}`;
 }
 
+/** Background artwork prefetches in flight at once; the focused card's own loads are never held back. */
+const PREFETCH_ARTWORK_CONCURRENCY = 3;
+let prefetchRunning = 0;
+const prefetchWaiting: Array<() => void> = [];
+
+function gatePrefetch<T>(start: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      prefetchRunning += 1;
+      start().then(resolve, reject).finally(() => {
+        prefetchRunning -= 1;
+        prefetchWaiting.shift()?.();
+      });
+    };
+    if (prefetchRunning < PREFETCH_ARTWORK_CONCURRENCY) run();
+    else prefetchWaiting.push(run);
+  });
+}
+
 function loadArtwork(
   client: ApiClient,
   workId: string,
   kind: ImageKind,
   width: number,
-  version: string | undefined
+  version: string | undefined,
+  background = false
 ): ArtworkRecord {
   const cache = artworkCache(client);
   const key = artworkKey(workId, kind, width);
@@ -117,7 +137,10 @@ function loadArtwork(
 
   const record: ArtworkRecord = {
     refs: 0,
-    promise: client.getWorkArtwork(workId, kind, { width, version }).then(
+    promise: (background
+      ? gatePrefetch(() => client.getWorkArtwork(workId, kind, { width, version, priority: "low" }))
+      : client.getWorkArtwork(workId, kind, { width, version })
+    ).then(
       (blob) =>
         new Promise<string>((resolve) => {
           // createObjectURL is synchronous main-thread work: never during a hold.
@@ -152,7 +175,7 @@ export function prefetchWorkArtwork(
   const kind = preferredArtworkKind(work, kinds);
   if (!kind) return;
   const image = work.images.find((candidate) => candidate.kind === kind);
-  void loadArtwork(client, work.id, kind, width ?? defaultArtworkWidth(kind), image ? artworkVersion(image.url) : undefined)
+  void loadArtwork(client, work.id, kind, width ?? defaultArtworkWidth(kind), image ? artworkVersion(image.url) : undefined, true)
     .promise.catch(() => undefined);
 }
 

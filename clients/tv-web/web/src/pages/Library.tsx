@@ -55,6 +55,8 @@ import {
 import { TvRailSurface } from "../components/tv/TvStage";
 import { useDwellPrefetch } from "../lib/prefetch";
 import { createPreviewStore } from "../lib/previewStore";
+import { gridNeighbours } from "../lib/detailNeighbours";
+import { useFocusedDetailsController } from "../lib/useFocusedDetails";
 import { CrossfadeArt, LibraryPreview } from "../components/LibraryPreview";
 import {
   applyLibraryView,
@@ -71,6 +73,7 @@ import {
   type LibraryView,
   type SortOrder,
 } from "../lib/libraryView";
+import { useCoverflowMotion } from "../lib/libraryCoverflow";
 import { usePanelParam } from "../lib/usePanelParam";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
@@ -245,6 +248,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     gridRef,
     view === "cover-flow" ? "horizontal" : "vertical",
     `${kind}:${view}:${artworkSize}:${items?.length ?? 0}`
+  );
+  const coverflowProfile = useCoverflowMotion(
+    gridRef,
+    view === "cover-flow",
+    `${kind}:${artworkSize}:${items?.length ?? 0}:${items !== null && items.length > 0}`
   );
 
   useEffect(() => {
@@ -888,9 +896,38 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
    * The remote (or a pointer) is now on `work`. The preview text follows at once from the list data; only the
    * heavier selection (backdrop art, prefetch, card chrome) waits for a short idle so holds stay lag-free.
    */
+  const details = useFocusedDetailsController();
+  const focusIndexRef = useRef(0);
+  useEffect(() => {
+    // Neighbours and the idle warm-up are resolved off the key path (after the focus dwell / on idle time).
+    const grid = () => gridRef.current;
+    details.setNear(() => {
+      const list = focusStateRef.current.items ?? [];
+      const container = grid();
+      const first = container?.querySelector<HTMLElement>("[data-library-index]");
+      const columns = first
+        ? [...container!.querySelectorAll<HTMLElement>("[data-library-index]")].filter(
+            (card) => card.offsetTop === first.offsetTop
+          ).length
+        : 1;
+      return gridNeighbours(list, focusIndexRef.current, view === "cover-flow" ? list.length : columns);
+    });
+    details.setWarm(() => {
+      const list = focusStateRef.current.items ?? [];
+      const mounted = grid()?.querySelectorAll<HTMLElement>("[data-library-index]") ?? [];
+      return [...mounted]
+        .map((card) => Number.parseInt(card.dataset.libraryIndex ?? "", 10))
+        .filter((index) => Number.isFinite(index) && list[index] !== undefined)
+        .sort((a, b) => Math.abs(a - focusIndexRef.current) - Math.abs(b - focusIndexRef.current))
+        .map((index) => list[index]!.id);
+    });
+    return () => details.release();
+  }, [details, view]);
   const focusWork = useCallback(
     (work: Work, remote: boolean) => {
       previewStore.set(work);
+      focusIndexRef.current = Math.max(0, focusStateRef.current.items?.findIndex((item) => item.id === work.id) ?? 0);
+      details.focus(work.id);
       pendingSelectIdRef.current = work.id;
       window.clearTimeout(selectTimerRef.current);
       selectTimerRef.current = window.setTimeout(() => {
@@ -901,7 +938,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         });
       }, remote ? SELECT_SETTLE_MS : 0);
     },
-    [previewStore]
+    [details, previewStore]
   );
   const handleGridFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
     const card = (event.target as Element | null)?.closest<HTMLElement>(
@@ -918,13 +955,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       if (grid) {
         const targetLeft =
           card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
-        smoothScrollTo(grid, { left: Math.max(0, targetLeft) });
+        smoothScrollTo(grid, { left: Math.max(0, targetLeft) }, coverflowProfile);
       }
     }
     if (state.items && index >= state.items.length - 12 && state.hasMore) {
       void state.appendNextPage().catch(() => undefined);
     }
-  }, [focusWork]);
+  }, [focusWork, coverflowProfile]);
 
   // In remote mode real DOM focus trails the virtual focus marker by its settle time, so the preview follows the
   // marker itself: the card carrying `data-remote-active` is the one the user is looking at.

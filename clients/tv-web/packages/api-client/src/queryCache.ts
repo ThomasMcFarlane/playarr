@@ -38,13 +38,41 @@ export interface FetchQueryOptions {
   tags?: readonly QueryTag[];
   /** A stored value younger than this is returned without any request. */
   ttlMs?: number;
+  /**
+   * Lets this caller walk away. Aborting rejects only this caller's promise with an `AbortError`; the shared
+   * request itself is aborted only once every caller has left, and never while a caller without a signal
+   * (a screen that needs the result) is waiting on it.
+   */
+  signal?: AbortSignal;
+}
+
+/** What made stored copies go: a write or live event (`tags`; `undefined` for everything) or a new scope. */
+export interface QueryInvalidation {
+  tags: readonly QueryTag[] | undefined;
+  scopeChange: boolean;
+}
+
+interface Flight {
+  promise: Promise<unknown>;
+  controller: AbortController;
+  /** Callers that passed a signal and are still waiting. */
+  waiting: number;
+  /** A caller without a signal needs this request to finish. */
+  pinned: boolean;
+}
+
+function abortError(): Error {
+  return typeof DOMException === "function"
+    ? new DOMException("The query was aborted", "AbortError")
+    : Object.assign(new Error("The query was aborted"), { name: "AbortError" });
 }
 
 export class QueryCache {
   private readonly maxEntries: number;
   private readonly now: () => number;
   private readonly entries = new Map<string, Entry>();
-  private readonly inflight = new Map<string, Promise<unknown>>();
+  private readonly inflight = new Map<string, Flight>();
+  private readonly invalidationListeners = new Set<(event: QueryInvalidation) => void>();
   private scope: string | undefined;
   /** Bumped by every invalidation and scope change: older in-flight results are not stored. */
   private epoch = 0;
@@ -59,6 +87,30 @@ export class QueryCache {
     if (scope === this.scope) return;
     this.scope = scope;
     this.clear();
+    this.notify({ tags: undefined, scopeChange: true });
+  }
+
+  /** The scope the cache is filled under (`undefined` while it is off). */
+  get currentScope(): string | undefined {
+    return this.scope;
+  }
+
+  /** Called after stored copies are dropped (`invalidate`, scope change), so a persistent mirror can follow. */
+  onInvalidate(listener: (event: QueryInvalidation) => void): () => void {
+    this.invalidationListeners.add(listener);
+    return () => {
+      this.invalidationListeners.delete(listener);
+    };
+  }
+
+  private notify(event: QueryInvalidation): void {
+    for (const listener of [...this.invalidationListeners]) {
+      try {
+        listener(event);
+      } catch {
+        // A mirror failing must never break the cache.
+      }
+    }
   }
 
   get enabled(): boolean {
@@ -100,29 +152,67 @@ export class QueryCache {
    * value younger than `ttlMs` is stored. A successful result is stored unless the scope changed
    * or something was invalidated while it was loading.
    */
-  fetch<T>(key: string, loader: () => Promise<T>, options: FetchQueryOptions = {}): Promise<T> {
-    if (!this.enabled) return loader();
+  fetch<T>(key: string, loader: (signal: AbortSignal) => Promise<T>, options: FetchQueryOptions = {}): Promise<T> {
+    const { signal } = options;
+    if (signal?.aborted) return Promise.reject(abortError());
+    if (!this.enabled) return loader(signal ?? new AbortController().signal);
     const id = this.scoped(key);
     if (options.ttlMs !== undefined) {
       const hit = this.entries.get(id);
       if (hit && this.now() - hit.at < options.ttlMs) return Promise.resolve(hit.data as T);
     }
     const running = this.inflight.get(id);
-    if (running) return running as Promise<T>;
+    // A request every caller walked away from is as good as gone: a new caller starts a fresh one.
+    if (running && !running.controller.signal.aborted) return this.join(running, signal) as Promise<T>;
     const startedEpoch = this.epoch;
-    const promise = loader().then(
+    const controller = new AbortController();
+    const flight: Flight = { promise: undefined as unknown as Promise<unknown>, controller, waiting: 0, pinned: false };
+    flight.promise = loader(controller.signal).then(
       (data) => {
-        if (this.inflight.get(id) === promise) this.inflight.delete(id);
+        if (this.inflight.get(id) === flight) this.inflight.delete(id);
         if (this.epoch === startedEpoch) this.store(key, data, options.tags ?? []);
         return data;
       },
       (error: unknown) => {
-        if (this.inflight.get(id) === promise) this.inflight.delete(id);
+        if (this.inflight.get(id) === flight) this.inflight.delete(id);
         throw error;
       }
     );
-    this.inflight.set(id, promise);
-    return promise;
+    this.inflight.set(id, flight);
+    return this.join(flight, signal) as Promise<T>;
+  }
+
+  private join(flight: Flight, signal: AbortSignal | undefined): Promise<unknown> {
+    if (!signal) {
+      flight.pinned = true;
+      return flight.promise;
+    }
+    flight.waiting += 1;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        flight.waiting -= 1;
+        if (!flight.pinned && flight.waiting <= 0) flight.controller.abort();
+        reject(abortError());
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      flight.promise.then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        }
+      );
+    });
   }
 
   /** Stores a value directly (for example one a list response already carries). */
@@ -136,12 +226,14 @@ export class QueryCache {
     if (!tags || tags.length === 0) {
       this.entries.clear();
       this.inflight.clear();
+      this.notify({ tags: undefined, scopeChange: false });
       return;
     }
     for (const [id, entry] of this.entries) {
       if (entry.tags.some((tag) => tags.includes(tag))) this.entries.delete(id);
     }
     this.inflight.clear();
+    this.notify({ tags, scopeChange: false });
   }
 
   clear(): void {

@@ -478,7 +478,7 @@
 }
 
 .vidaa-section-heading p {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 0.68rem;
   font-weight: 780;
   letter-spacing: 0.14em;
@@ -556,7 +556,7 @@
 }
 
 .vidaa-safety .page-kicker {
-  color: var(--brand);
+  color: var(--brand-ink);
 }
 
 .vidaa-safety > p:last-child {

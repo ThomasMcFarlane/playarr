@@ -34,6 +34,25 @@ batch_members() {
   done
 }
 
+# prioritise_batch: GitHub's runner pool (about 20 Linux jobs for a public repository) is shared by every open PR, so
+# a batch's CI can queue behind them for 30 minutes. While the batch CI is still waiting for a runner, cancel the
+# QUEUED (not running) pull_request CI runs of PRs that are not `ready`; they re-run when the PR is labelled `ready`
+# (the labeled trigger) or pushed again. Ready PRs' runs are kept: they are what qualifies a PR for a batch.
+prioritise_batch() {
+  [ "$DRY" = true ] && return 0
+  local waiting ready_branches id br n=0
+  waiting=$(gh run list --repo "$REPO" --workflow ci.yml --branch "$BATCH_BR" --status queued --json databaseId --jq 'length' 2>/dev/null || echo 0)
+  [ "${waiting:-0}" -gt 0 ] || return 0
+  ready_branches=$(gh pr list --repo "$REPO" --label ready --state open --json headRefName --jq '.[].headRefName' 2>/dev/null)
+  while read -r id br; do
+    [ -n "$id" ] || continue
+    grep -qxF "$br" <<<"$ready_branches" && continue
+    gh run cancel "$id" --repo "$REPO" >/dev/null 2>&1 && n=$((n + 1))
+  done < <(gh run list --repo "$REPO" --workflow ci.yml --status queued --limit 100 --json databaseId,headBranch,event \
+    --jq '.[]|select(.event=="pull_request")|"\(.databaseId) \(.headBranch)"' 2>/dev/null)
+  [ "$n" -eq 0 ] || log "batch CI is waiting for a runner: cancelled $n queued CI run(s) of PRs that are not ready"
+}
+
 # flaky_rerun <tip>: when CI on <tip> failed only in the known flaky class, re-run the failed jobs once instead of
 # halving the batch (each halving round costs a full CI run). The class: every failed job is `web layout parity`,
 # and every failure line in its log is a pixel pin with at most FLAKY_MAX_PIXELS mismatched pixels. A second
@@ -291,7 +310,7 @@ batch_step() {
       members=$(batch_members "$main" "$tip"); n=$(grep -c . <<<"$members")
       st=$(ci_state "$tip")
       case "$st" in
-        pending) log "batch of $n: ci-required running on $tip; the next trigger resumes"; STOP=true; return 0 ;;
+        pending) log "batch of $n: ci-required running on $tip; the next trigger resumes"; prioritise_batch; STOP=true; return 0 ;;
         none)
           if [ $(( $(date +%s) - $(git log -1 --format=%ct "$tip") )) -lt 600 ]; then log "batch of $n: no CI run registered yet for $tip, waiting"
           else log "batch of $n: no CI run for $tip, dispatching"; gh workflow run ci.yml --repo "$REPO" --ref "$BATCH_BR" >/dev/null 2>&1; fi

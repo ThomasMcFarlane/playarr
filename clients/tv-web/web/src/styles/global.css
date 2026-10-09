@@ -15,16 +15,19 @@
   --surface-strong: #ffffff;
   --surface-soft: #dfdcdd;
   --ink: #382621;
-  --ink-soft: #675961;
-  --ink-muted: #a5969e;
+  --ink-soft: #443a40;
+  --ink-muted: #4d4248;
   --line: rgba(56, 38, 33, 0.14);
   --line-strong: rgba(56, 38, 33, 0.28);
-  --accent: #675961;
+  --accent: #4d4248;
   --accent-soft: #c5b8bd;
   --on-accent: #ffffff;
-  --danger: #a8464c;
+  /* WCAG AAA (1.4.6): --brand stays the decorative red; text in the brand hue and white text on a brand fill use these. */
+  --brand-ink: #821e36;
+  --brand-strong: #a52745;
+  --danger: #722f34;
   --danger-soft: #f2dfe1;
-  --success: #347559;
+  --success: #224c3a;
   --shadow-soft: 0 22px 65px rgba(56, 38, 33, 0.09);
   --shadow-focus: 0 24px 70px rgba(56, 38, 33, 0.2);
   --font: "Nunito Sans", "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -48,7 +51,7 @@
   --player-ink: #ffffff;
   --player-ink-soft: #c5b8bd;
   --player-ink-muted: #a5969e;
-  --player-ink-faint: #776b71;
+  --player-ink-faint: #a5969e;
   --player-spinner: #dfdcdd;
   --player-danger: #ee9297;
   --player-danger-soft: #f2b2ba;
@@ -331,22 +334,30 @@
   }
 }
 
-:root[data-theme="dark"] {
+/* Surfaces that stay dark in both themes (the player, end screen, playback health panel, media context drawer and PIN dialog)
+   take the dark tokens, so their text meets the same AAA contrast in the light theme. */
+:root[data-theme="dark"],
+.player-page,
+.end-screen,
+.playback-health-panel,
+.media-context-drawer,
+.profile-pin-dialog {
   --bg: #151315;
   --surface: #1b181b;
   --surface-strong: #211d21;
   --surface-soft: #312a30;
   --ink: #f4f0f1;
-  --ink-soft: #c5b8bd;
-  --ink-muted: #887a82;
+  --ink-soft: #cdc1c6;
+  --ink-muted: #c2b5bb;
   --line: rgba(223, 220, 221, 0.11);
   --line-strong: rgba(223, 220, 221, 0.23);
   --accent: #dfdcdd;
   --accent-soft: #675961;
   --on-accent: #211d21;
-  --danger: #ee9297;
+  --brand-ink: #eaa6b6;
+  --danger: #f1a4a8;
   --danger-soft: #392326;
-  --success: #7fc09d;
+  --success: #8ac5a5;
   --shadow-soft: 0 24px 72px rgba(0, 0, 0, 0.3);
   --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
 }
@@ -406,6 +417,13 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+/* A native select otherwise paints the UA's light field behind the themed text (unreadable in the dark theme). */
+select,
+select option {
+  background-color: var(--surface-strong);
+  color: var(--ink);
 }
 
 button {
@@ -1615,7 +1633,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .player-language-button.is-active small {
-  color: var(--brand);
+  color: var(--brand-ink);
 }
 
 .player-preference-status {
@@ -3311,6 +3329,7 @@ body[data-input-mode="remote"]
 .player-controls {
   position: absolute;
   z-index: var(--z-chrome);
+  color: var(--player-ink);
   right: 0;
   bottom: 0;
   left: 0;
@@ -4440,7 +4459,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .tv-provider,
 .tv-detail-kicker {
   margin-bottom: clamp(18px, calc(2.4 * var(--viewport-unit)), 34px);
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: clamp(0.58rem, calc(0.64 * var(--vw)), 0.78rem);
   font-weight: 820;
   letter-spacing: 0.08em;
@@ -5596,9 +5615,14 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   filter: brightness(0.78) saturate(0.82);
   transform: perspective(1000px) rotateY(58deg) translateX(18%) scale(0.79);
   transform-origin: 100% 50%;
-  transition:
-    filter 360ms ease,
-    transform 440ms cubic-bezier(0.16, 1, 0.3, 1);
+  /*
+   * No transform transition: `useCoverflowMotion` (lib/libraryCoverflow.ts) writes each cover's transform, origin
+   * and depth inline from the live scroll position, so rotation and scale glide with the one velocity-preserving
+   * scroll curve (380 ms ease-out from rest, 320 ms retargeted, 240 ms on a held key). These class poses are the
+   * settled / far-cover state and what the inline poses equal at rest. Dimming stays a filter transition. The
+   * !important beats the remote-mode card transition rule, which would otherwise lag the inline poses by 260 ms.
+   */
+  transition: filter 360ms ease !important;
   will-change: transform;
 }
 
@@ -6499,7 +6523,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-detail-play:hover {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
   transform: scale(1.06);
 }
@@ -6542,7 +6566,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-detail-playback-settings > span {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 1.15em;
 }
 
@@ -6582,14 +6606,14 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .tv-playback-settings-options button small {
   margin-top: 0.12rem;
   color: currentColor;
-  opacity: 0.62;
+  opacity: 1;
   font-size: 0.82em;
 }
 
 .tv-playback-settings-options button > i {
   width: 1.25rem;
   flex: 0 0 auto;
-  color: var(--brand);
+  color: var(--brand-ink);
   font-style: normal;
   text-align: center;
 }
@@ -6635,7 +6659,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .tv-playback-settings-actions button.is-primary {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
 }
 
@@ -7606,7 +7630,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 }
 
 .profiles-heading p {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: clamp(0.46rem, calc(0.54 * var(--vw)), 0.68rem);
   font-weight: 820;
   letter-spacing: 0.13em;
@@ -8055,7 +8079,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .profile-pin-dialog form button {
   margin-top: 0.4rem;
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
 }
 
@@ -8285,7 +8309,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 
 .legal-effective-date {
   margin-bottom: 2rem;
-  color: var(--brand) !important;
+  color: var(--brand-ink) !important;
   font-size: 0.64rem !important;
   font-weight: 780;
   letter-spacing: 0.1em;
@@ -9875,7 +9899,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-detail-download > span:first-child {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 1.15em;
 }
 
@@ -9912,7 +9936,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .download-quality-drawer-hint {
   color: var(--ink-muted);
   font-size: 0.85em;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 /* Downloads page */
@@ -10031,7 +10055,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-download-row-error {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 0.82em;
 }
 
@@ -10059,7 +10083,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-download-row-actions .tv-download-row-remove:hover {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
 }
 
@@ -10290,7 +10314,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 .playback-health-panel h2 { margin: 0; font-size: 1.35em; }
 .playback-health-panel h3 { margin: 0; font-size: 1em; color: rgba(246, 241, 243, 0.72); }
-.playback-health-panel header p { margin: 0 0 0.2rem; opacity: 0.7; font-size: 0.85em; }
+.playback-health-panel header p { margin: 0 0 0.2rem; opacity: 0.9; font-size: 0.85em; }
 .playback-health-panel .drawer-body {
   display: grid;
   align-content: start;
@@ -10336,9 +10360,9 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .playback-health-facts > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.2rem 1rem; }
 .playback-health-facts dt { color: rgba(246, 241, 243, 0.72); }
 .playback-health-facts dd { margin: 0; display: grid; justify-items: end; text-align: right; overflow-wrap: anywhere; }
-.playback-health-facts small { opacity: 0.65; font-size: 0.8em; }
-.playback-health-facts [data-provenance="unknown"] dd { opacity: 0.6; }
-.playback-health-note { margin: 0.4rem 0 0; opacity: 0.75; font-size: 0.9em; }
+.playback-health-facts small { opacity: 0.9; font-size: 0.8em; }
+.playback-health-facts [data-provenance="unknown"] dd { opacity: 0.9; }
+.playback-health-note { margin: 0.4rem 0 0; opacity: 0.9; font-size: 0.9em; }
 .playback-health-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem; }
 .playback-health-export {
   max-height: 14rem;
@@ -10501,7 +10525,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 
 .tv-watchlist-error {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 0.82em;
 }
 
@@ -10632,7 +10656,7 @@ body[data-input-mode="remote"] :is(
   font-size: 1.1rem;
 }
 .household-page-hint {
-  opacity: 0.7;
+  opacity: 0.9;
   font-size: 0.9rem;
 }
 
@@ -11021,13 +11045,9 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   --dp-scrim: color-mix(in srgb, var(--surface) 94%, transparent);
   --dp-text: var(--ink);
   --dp-soft: color-mix(in srgb, var(--ink) 88%, var(--surface));
-  --dp-eyebrow: color-mix(in srgb, var(--ink) 58%, var(--brand));
+  --dp-eyebrow: var(--brand-ink);
   isolation: isolate;
   text-shadow: 0 0 14px color-mix(in srgb, var(--surface) 90%, transparent);
-}
-
-:root[data-theme="dark"] .details-panel {
-  --dp-eyebrow: color-mix(in srgb, var(--ink) 72%, var(--brand));
 }
 
 .details-panel::before {
@@ -11129,16 +11149,3 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   text-shadow: none;
 }
 
-/* AAA for the panel's buttons without touching the shared tokens: the light theme's --accent (primary fill) is 6.6:1
-   against white and the secondary label (--ink-soft) 6.3:1 against the scrim. Scoped here until the token audit moves them. */
-:root:not([data-theme="dark"]) .details-panel {
-  --accent: #5a4c54;
-}
-
-.details-panel .btn-secondary {
-  color: var(--ink);
-}
-
-.details-panel .btn-danger {
-  color: color-mix(in srgb, var(--ink) 62%, var(--danger));
-}

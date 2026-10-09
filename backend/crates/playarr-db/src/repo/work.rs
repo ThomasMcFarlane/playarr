@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use playarr_model::{folder_work_provider, ExternalProvider, ExternalRef, Work, WorkKind};
 use sqlx::any::AnyRow;
@@ -11,6 +13,7 @@ use crate::codec::{
 };
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write, WriteQueue};
 
 /// CRUD + lookup surface over the `Work` aggregate root (movies, series,
 /// artists, authors — see `playarr_model::Work`). Season/episode/album/
@@ -67,13 +70,65 @@ pub trait WorkRepo: Send + Sync {
     }
 }
 
+/// Owned bind values for a work upsert, so a queued write can run again.
+struct WorkBinds {
+    id: String,
+    kind: &'static str,
+    title: String,
+    sort_title: String,
+    overview: Option<String>,
+    images: String,
+    genres: String,
+    tags: String,
+    added_at: String,
+    release_date: Option<String>,
+    end_date: Option<String>,
+    monitored: i64,
+    availability: &'static str,
+    refs: Vec<(String, String)>,
+}
+
+impl WorkBinds {
+    fn new(work: &Work) -> Result<Self, DbError> {
+        Ok(Self {
+            id: work.id.to_string(),
+            kind: work_kind_to_str(work.kind),
+            title: work.title.clone(),
+            sort_title: work.sort_title.clone(),
+            overview: work.overview.clone(),
+            images: serde_json::to_string(&work.images)?,
+            genres: serde_json::to_string(&work.genres)?,
+            tags: serde_json::to_string(&work.tags)?,
+            added_at: format_datetime(work.added_at),
+            release_date: work.release_date.map(format_datetime),
+            end_date: work.end_date.map(format_datetime),
+            monitored: bool_to_i64(work.monitored),
+            availability: availability_to_str(work.availability),
+            refs: work
+                .external_refs
+                .iter()
+                .map(|r| (provider_to_str(&r.provider), r.external_id.clone()))
+                .collect(),
+        })
+    }
+}
+
 pub struct SqlxWorkRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxWorkRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
+    }
+
+    /// Sends `upsert` through the shared write queue. The work row and its
+    /// external refs still change together, in the queue's savepoint for the
+    /// call, and the call returns after the commit.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
     }
 
     /// Loads a work's `work_external_refs` rows. Split out of `hydrate` so
@@ -227,56 +282,53 @@ impl WorkRepo for SqlxWorkRepo {
     }
 
     async fn upsert(&self, work: &Work) -> Result<(), DbError> {
-        let images = serde_json::to_string(&work.images)?;
-        let genres = serde_json::to_string(&work.genres)?;
-        let tags = serde_json::to_string(&work.tags)?;
+        let row = Arc::new(WorkBinds::new(work)?);
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let row = row.clone();
+            Box::pin(async move {
+                let upsert_sql = "INSERT INTO works \
+                     (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, end_date, monitored, availability) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (id) DO UPDATE SET \
+                     kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
+                     overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
+                     tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, end_date = excluded.end_date, \
+                     monitored = excluded.monitored, availability = excluded.availability";
+                sqlx::query(upsert_sql)
+                    .bind(row.id.clone())
+                    .bind(row.kind)
+                    .bind(row.title.clone())
+                    .bind(row.sort_title.clone())
+                    .bind(row.overview.clone())
+                    .bind(row.images.clone())
+                    .bind(row.genres.clone())
+                    .bind(row.tags.clone())
+                    .bind(row.added_at.clone())
+                    .bind(row.release_date.clone())
+                    .bind(row.end_date.clone())
+                    .bind(row.monitored)
+                    .bind(row.availability)
+                    .execute(&mut *conn)
+                    .await?;
 
-        let mut tx = self.pool.begin().await?;
+                sqlx::query("DELETE FROM work_external_refs WHERE work_id = ?")
+                    .bind(row.id.clone())
+                    .execute(&mut *conn)
+                    .await?;
 
-        let upsert_sql = "INSERT INTO works \
-                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, end_date, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
-                 overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
-                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, end_date = excluded.end_date, \
-                 monitored = excluded.monitored, availability = excluded.availability";
-        sqlx::query(upsert_sql)
-            .bind(work.id.to_string())
-            .bind(work_kind_to_str(work.kind))
-            .bind(work.title.as_str())
-            .bind(work.sort_title.as_str())
-            .bind(work.overview.as_deref())
-            .bind(images)
-            .bind(genres)
-            .bind(tags)
-            .bind(format_datetime(work.added_at))
-            .bind(work.release_date.map(format_datetime))
-            .bind(work.end_date.map(format_datetime))
-            .bind(bool_to_i64(work.monitored))
-            .bind(availability_to_str(work.availability))
-            .execute(&mut *tx)
-            .await?;
-
-        let delete_refs_sql = "DELETE FROM work_external_refs WHERE work_id = ?";
-        sqlx::query(delete_refs_sql)
-            .bind(work.id.to_string())
-            .execute(&mut *tx)
-            .await?;
-
-        let insert_ref_sql =
-            "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, ?, ?)";
-        for external_ref in &work.external_refs {
-            sqlx::query(insert_ref_sql)
-                .bind(work.id.to_string())
-                .bind(provider_to_str(&external_ref.provider))
-                .bind(external_ref.external_id.as_str())
-                .execute(&mut *tx)
-                .await?;
-        }
-
-        tx.commit().await?;
-        Ok(())
+                let insert_ref_sql = "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, ?, ?)";
+                for (provider, external_id) in &row.refs {
+                    sqlx::query(insert_ref_sql)
+                        .bind(row.id.clone())
+                        .bind(provider.clone())
+                        .bind(external_id.clone())
+                        .execute(&mut *conn)
+                        .await?;
+                }
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
@@ -591,5 +643,37 @@ mod tests {
         let repo = SqlxWorkRepo::new(pool);
         let err = repo.delete(Uuid::new_v4()).await.unwrap_err();
         assert!(matches!(err, DbError::NotFound));
+    }
+
+    /// Through the write queue the work row and its external refs are still
+    /// replaced together, and the call returns once they are committed.
+    #[tokio::test]
+    async fn upsert_through_the_write_queue_replaces_refs() {
+        let pool = test_sqlite_pool().await;
+        let queue = WriteQueue::spawn(pool.clone(), crate::WriteQueueConfig::default());
+        let repo = SqlxWorkRepo::new(pool.clone()).with_write_queue(queue.clone());
+        let mut work = sample_work(WorkKind::Movie, "Queued");
+        repo.upsert(&work).await.unwrap();
+        work.title = "Queued again".to_string();
+        work.external_refs = vec![ExternalRef {
+            provider: ExternalProvider::Imdb,
+            external_id: "tt0000001".to_string(),
+        }];
+        repo.upsert(&work).await.unwrap();
+
+        let plain = SqlxWorkRepo::new(pool);
+        let stored = plain
+            .find_by_external_ref(&ExternalProvider::Imdb, "tt0000001")
+            .await
+            .unwrap()
+            .expect("found by its new ref");
+        assert_eq!(stored.id, work.id);
+        assert_eq!(stored.title, "Queued again");
+        assert!(plain
+            .find_by_external_ref(&ExternalProvider::Tmdb, "123")
+            .await
+            .unwrap()
+            .is_none());
+        queue.shutdown().await;
     }
 }

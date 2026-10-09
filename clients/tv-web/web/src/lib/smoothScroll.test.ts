@@ -9,6 +9,7 @@ import {
   easeOutCubic,
   holdScroll,
   isSmoothScrolling,
+  ownHorizontalScroll,
   retargetDuration,
   revealDelta,
   setScrollInstant,
@@ -196,5 +197,94 @@ describe("revealDelta", () => {
     expect(revealDelta(-40, 20, 0, 500, "nearest")).toBe(-40);
     expect(revealDelta(450, 600, 0, 500, "nearest")).toBe(100);
     expect(revealDelta(400, 500, 0, 500, "center")).toBe(200);
+  });
+});
+
+describe("scroll profile (velocity-preserving glide)", () => {
+  const profile = {
+    freshMs: 380,
+    retargetMs: 320,
+    repeatMs: 240,
+    repeatWindowMs: 160,
+    restSlope: 2,
+  };
+
+  function horizontal(): FakeScroller & { left: number } {
+    let left = 0;
+    const el = fakeScroller() as FakeScroller & { left: number };
+    Object.defineProperty(el, "scrollLeft", {
+      get: () => left,
+      set: (v: number) => {
+        left = v;
+      },
+    });
+    Object.defineProperty(el, "left", { get: () => left });
+    return el;
+  }
+
+  it("glides one step monotonically, without overshoot, in the fresh duration", () => {
+    const el = horizontal();
+    smoothScrollTo(el, { left: 200 }, profile);
+    const seen: number[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      advance(10);
+      seen.push(el.left);
+    }
+    expect(seen.every((v, i) => i === 0 || v >= seen[i - 1]! - 1e-9)).toBe(true);
+    expect(Math.max(...seen)).toBeLessThanOrEqual(200);
+    expect(seen[Math.round(380 / 10) - 2]!).toBeLessThan(200);
+    expect(seen[Math.round(380 / 10)]!).toBe(200);
+  });
+
+  it("retargets from the current position and keeps its speed", () => {
+    const el = horizontal();
+    smoothScrollTo(el, { left: 200 }, profile);
+    for (let i = 0; i < 10; i += 1) advance(10);
+    const p1 = el.left;
+    advance(10);
+    const v1 = el.left - p1;
+    smoothScrollTo(el, { left: 400 }, profile);
+    const atPress = el.left;
+    expect(atPress).toBe(p1 + v1);
+    advance(10);
+    const v2 = el.left - atPress;
+    // Same position at the press (no reset to the start) and about the same speed straight after it.
+    expect(el.left).toBeGreaterThan(atPress);
+    expect(v2 / v1).toBeGreaterThan(0.7);
+    expect(v2 / v1).toBeLessThan(2);
+    for (let i = 0; i < 60; i += 1) advance(10);
+    expect(el.left).toBe(400);
+  });
+
+  it("ignores stock calls on an owned axis but still honours instant jumps", () => {
+    const el = horizontal();
+    const release = ownHorizontalScroll(el);
+    smoothScrollTo(el, { left: 300 });
+    expect(isSmoothScrolling(el)).toBe(false);
+    setScrollInstant(el, { left: 50 });
+    expect(el.left).toBe(50);
+    release();
+    smoothScrollTo(el, { left: 300 });
+    expect(isSmoothScrolling(el)).toBe(true);
+  });
+
+  it("calls onFrame with every written value", () => {
+    const el = horizontal();
+    const values: number[] = [];
+    smoothScrollTo(el, { left: 100 }, { ...profile, onFrame: (v) => values.push(v) });
+    for (let i = 0; i < 40; i += 1) advance(10);
+    expect(values.at(-1)).toBe(100);
+    expect(values.length).toBeGreaterThan(10);
+  });
+});
+
+describe("scroll profile frame timing", () => {
+  it("never moves backwards when a frame timestamp predates the glide start", () => {
+    let left = 0;
+    const el = fakeScroller();
+    Object.defineProperty(el, "scrollLeft", { get: () => left, set: (v: number) => { left = v; } });
+    smoothScrollTo(el, { left: 200 }, { freshMs: 380, retargetMs: 320, repeatMs: 240, repeatWindowMs: 160, restSlope: 2 });
+    advance(-20);
+    expect(left).toBeGreaterThanOrEqual(0);
   });
 });

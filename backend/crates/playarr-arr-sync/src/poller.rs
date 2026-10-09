@@ -125,6 +125,10 @@ pub struct ReconciliationPoller {
     /// keeps the synced row count permanently below it; a rise since the last
     /// pass is the import signal, not the difference.
     seen_file_counts: std::sync::Mutex<HashMap<i64, u32>>,
+    /// How many works a pass writes at once. `1` (the default) keeps the pass
+    /// strictly sequential; [`Self::with_write_queue`] raises it so the
+    /// concurrent writes land in the same queue batch.
+    write_concurrency: usize,
 }
 
 impl ReconciliationPoller {
@@ -154,7 +158,19 @@ impl ReconciliationPoller {
             embedding_sync: None,
             live_events: None,
             seen_file_counts: std::sync::Mutex::new(HashMap::new()),
+            write_concurrency: 1,
         }
+    }
+
+    /// Sends this poller's own writes (`MediaSync`'s season, episode, album,
+    /// track and book rows) through the shared write queue and lets a pass
+    /// write up to [`WRITE_CONCURRENCY`] works at once. One work at a time
+    /// would wait out a full commit per write; concurrent works share one.
+    /// The work and media file repositories are given the queue by the caller.
+    pub fn with_write_queue(mut self, queue: playarr_db::WriteQueue) -> Self {
+        self.media_sync = self.media_sync.with_write_queue(queue);
+        self.write_concurrency = WRITE_CONCURRENCY;
+        self
     }
 
     /// Whether the source's file count for `arr_source_id` says files were
@@ -538,16 +554,37 @@ impl ReconciliationPoller {
         Ok(all)
     }
 
+    /// Applies the ops in order. Runs of consecutive upserts write up to
+    /// `write_concurrency` works at once (works are independent, and the
+    /// concurrent writes share a queue commit); a delete is a barrier, so a
+    /// delete and the upserts around it keep their relative order.
     async fn apply_ops(&self, ops: &[SyncOp]) -> Result<(), PollError> {
-        for op in ops {
-            match op {
-                SyncOp::Insert(work) | SyncOp::Update(work) => {
-                    self.work_repo.upsert(work).await?;
-                }
-                SyncOp::Delete(id) => {
-                    self.work_repo.delete(*id).await?;
+        use futures::stream::{self, StreamExt, TryStreamExt};
+
+        let mut index = 0;
+        while index < ops.len() {
+            if let SyncOp::Delete(id) = &ops[index] {
+                self.work_repo.delete(*id).await?;
+                index += 1;
+                continue;
+            }
+            let end = ops[index..]
+                .iter()
+                .position(|op| matches!(op, SyncOp::Delete(_)))
+                .map_or(ops.len(), |offset| index + offset);
+            // Built in a plain loop and boxed: a closure returning an async block
+            // that borrows `self` makes the future "not general enough" to be Send.
+            let mut writes: Vec<playarr_db::WriteFuture<'_, ()>> = Vec::new();
+            for op in &ops[index..end] {
+                if let SyncOp::Insert(work) | SyncOp::Update(work) = op {
+                    writes.push(Box::pin(self.work_repo.upsert(work)));
                 }
             }
+            stream::iter(writes)
+                .buffer_unordered(self.write_concurrency)
+                .try_collect::<Vec<()>>()
+                .await?;
+            index = end;
         }
         Ok(())
     }
@@ -565,24 +602,32 @@ impl ReconciliationPoller {
         provider: &ExternalProvider,
         source_ids: &HashMap<String, i64>,
     ) {
-        for op in ops {
-            let work = match op {
-                SyncOp::Insert(work) | SyncOp::Update(work) => work,
-                SyncOp::Delete(_) => continue,
-            };
-            let Some(external_id) = work
-                .external_refs
-                .iter()
-                .find(|r| &r.provider == provider)
-                .map(|r| r.external_id.as_str())
-            else {
-                continue;
-            };
-            let Some(&arr_source_id) = source_ids.get(external_id) else {
-                continue;
-            };
-            self.sync_media_file(work.id, arr_source_id).await;
-        }
+        use futures::stream::{self, StreamExt};
+
+        let targets: Vec<(Uuid, i64)> = ops
+            .iter()
+            .filter_map(|op| match op {
+                SyncOp::Insert(work) | SyncOp::Update(work) => Some(work),
+                SyncOp::Delete(_) => None,
+            })
+            .filter_map(|work| {
+                let external_id = work
+                    .external_refs
+                    .iter()
+                    .find(|r| &r.provider == provider)
+                    .map(|r| r.external_id.as_str())?;
+                let arr_source_id = *source_ids.get(external_id)?;
+                Some((work.id, arr_source_id))
+            })
+            .collect();
+        let syncs: Vec<_> = targets
+            .into_iter()
+            .map(|(work_id, arr_source_id)| self.sync_media_file(work_id, arr_source_id))
+            .collect();
+        stream::iter(syncs)
+            .buffer_unordered(self.write_concurrency)
+            .collect::<Vec<()>>()
+            .await;
     }
 
     /// Runs [`MediaSync::sync_work`] for one work, logging (rather than
@@ -844,6 +889,10 @@ impl ReconciliationPoller {
 /// overwhelming it -- 8 is a reasonable middle ground between "meaningfully
 /// faster than serial" and "still polite."
 const BACKFILL_CONCURRENCY: usize = 8;
+
+/// Works written at once by a pass that has a write queue; a queue batch holds
+/// 64 writes, and each work contributes a few.
+const WRITE_CONCURRENCY: usize = 16;
 
 /// Builds a brand-new `Work` for a remote entity with no existing local
 /// match. Identity/monitoring/(when derivable) availability, plus
@@ -2243,6 +2292,49 @@ mod tests {
             "new episode file was not synced for an unchanged series"
         );
         assert_eq!(import_frames(&events).await, (2, 2));
+    }
+
+    /// With the shared write queue, a full pass writes the same rows: works
+    /// and files are stored (concurrently, in one batch) before the pass
+    /// returns, and the second pass picks up the newly imported episode.
+    #[tokio::test]
+    async fn reconcile_all_through_the_write_queue_stores_the_same_rows() {
+        let server = MockServer::start().await;
+        mount_series_gaining_an_episode(&server).await;
+        let pool = test_pool().await;
+        let queue =
+            playarr_db::WriteQueue::spawn(pool.clone(), playarr_db::WriteQueueConfig::default());
+        let files: Arc<dyn MediaFileRepo> =
+            Arc::new(SqlxMediaFileRepo::new(pool.clone()).with_write_queue(queue.clone()));
+        let works: Arc<dyn WorkRepo> = Arc::new(
+            playarr_db::repo::SqlxWorkRepo::new(pool.clone()).with_write_queue(queue.clone()),
+        );
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let poller = ReconciliationPoller::new(
+            Uuid::new_v4(),
+            SourceKind::Sonarr,
+            ArrClient::Sonarr(SonarrClient::new(server.uri(), "test-api-key")),
+            Duration::from_secs(3600),
+            works,
+            files.clone(),
+            pool,
+            Arc::new(SingleNodeCoordinator::new()) as Arc<dyn ClusterCoordinator>,
+            rx,
+        )
+        .with_write_queue(queue.clone());
+
+        poller.reconcile_all().await.unwrap();
+        let work = poller
+            .work_repo
+            .find_by_external_ref(&ExternalProvider::Tvdb, "111")
+            .await
+            .unwrap()
+            .expect("series synced through the queue");
+        assert_eq!(files.list_by_work_id(work.id).await.unwrap().len(), 1);
+        poller.reconcile_all().await.unwrap();
+        assert_eq!(files.list_by_work_id(work.id).await.unwrap().len(), 2);
+        assert!(queue.stats().batches > 0, "writes went through the queue");
+        queue.shutdown().await;
     }
 
     /// Same, for the webhook-triggered targeted refetch (Sonarr `Download`).

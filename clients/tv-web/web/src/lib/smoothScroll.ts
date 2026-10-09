@@ -30,7 +30,31 @@ const INTERFERENCE_PX = 3;
 
 type Axis = "left" | "top";
 
+/**
+ * Opt-in motion for a scroller whose content is a function of its live scroll
+ * position (the library cover flow). A profile swaps the engine's ease for a
+ * velocity-preserving one: a retarget continues from the current position AND
+ * the current speed (a cubic Hermite segment that ends at rest), so rapid or
+ * held presses never restart or jump. `onFrame` runs right after each write so
+ * dependants (cover poses) move in the same frame as the scroll itself.
+ */
+export interface ScrollProfile {
+  /** Duration of a glide that starts from rest. */
+  freshMs: number;
+  /** Duration of a retarget mid-glide. */
+  retargetMs: number;
+  /** Duration when presses repeat inside `repeatWindowMs` (a held key). */
+  repeatMs: number;
+  repeatWindowMs: number;
+  /** Start speed, as a multiple of travel/duration, for a glide from rest (2 = ease-out). */
+  restSlope: number;
+  onFrame?: (value: number) => void;
+}
+
 interface Animation {
+  profile?: ScrollProfile;
+  /** Start speed in px/ms (profile glides only). */
+  v0: number;
   from: number;
   to: number;
   start: number;
@@ -41,6 +65,21 @@ interface Animation {
 }
 
 const active = new WeakMap<HTMLElement, Partial<Record<Axis, Animation>>>();
+/** Scrollers whose horizontal glide belongs to one component (see `ownHorizontalScroll`). */
+const owned = new WeakSet<HTMLElement>();
+
+/**
+ * Claim `el`'s horizontal eased scroll for a component that drives it with its own `ScrollProfile` (the library
+ * cover flow). Generic focus reveals (`smoothScrollIntoView`, the rail reveal) then leave that axis alone: they judge
+ * the target from a card's transformed bounding box, which would pull a glide off the owner's target and restart it
+ * on the stock ease. Instant jumps still apply. Returns the release function.
+ */
+export function ownHorizontalScroll(el: HTMLElement): () => void {
+  owned.add(el);
+  return () => {
+    owned.delete(el);
+  };
+}
 
 export function prefersReducedMotion(): boolean {
   return (
@@ -96,10 +135,11 @@ function step(el: HTMLElement, axis: Axis, now: number): void {
     cancelAxis(el, axis);
     return;
   }
-  const t = (now - animation.start) / animation.duration;
-  const value =
-    t >= 1 ? animation.to : animation.from + (animation.to - animation.from) * easeOutCubic(t);
+  // A frame timestamp can predate the call that started the glide (input handled just before the frame): never negative.
+  const t = Math.max(0, (now - animation.start) / animation.duration);
+  const value = t >= 1 ? animation.to : glideValue(animation, t);
   write(el, axis, value);
+  animation.profile?.onFrame?.(value);
   // No read-back here: it would force a layout straight after the write. The
   // next frame's read (layout clean at rAF start) checks for interference.
   animation.lastWritten = value;
@@ -110,7 +150,37 @@ function step(el: HTMLElement, axis: Axis, now: number): void {
   animation.raf = window.requestAnimationFrame((time) => step(el, axis, time));
 }
 
-function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
+/** Normalised start slope of a Hermite glide, clamped so it never overshoots (<= 3 is monotonic). */
+function hermiteSlope(v0: number, duration: number, travel: number): number {
+  return Math.max(-1.5, Math.min(3, (v0 * duration) / travel));
+}
+
+function glideValue(a: Animation, t: number): number {
+  if (!a.profile) return a.from + (a.to - a.from) * easeOutCubic(t);
+  const travel = a.to - a.from;
+  const slope = hermiteSlope(a.v0, a.duration, travel);
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return a.from + travel * ((-2 * t3 + 3 * t2) + slope * (t3 - 2 * t2 + t));
+}
+
+/** Current speed in px/ms of a profile glide (0 for the stock engine, which restarts from rest). */
+function glideVelocity(a: Animation, now: number): number {
+  if (!a.profile) return 0;
+  const t = Math.min(1, Math.max(0, (now - a.start) / a.duration));
+  const travel = a.to - a.from;
+  const slope = hermiteSlope(a.v0, a.duration, travel);
+  const d = -6 * t * t + 6 * t + slope * (3 * t * t - 4 * t + 1);
+  return (travel * d) / a.duration;
+}
+
+function animateAxis(
+  el: HTMLElement,
+  axis: Axis,
+  target: number,
+  profile?: ScrollProfile
+): void {
+  if (!profile && axis === "left" && owned.has(el)) return;
   const current = read(el, axis);
   const running = active.get(el)?.[axis];
   // Same destination as the glide already under way: leave it be.
@@ -124,21 +194,43 @@ function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
   if (prefersReducedMotion()) {
     cancelAxis(el, axis);
     write(el, axis, target);
+    profile?.onFrame?.(target);
     return;
   }
   const now = performance.now();
+  const velocity = running ? glideVelocity(running, now) : 0;
   if (running) window.cancelAnimationFrame(running.raf);
   const state = active.get(el) ?? {};
   active.set(el, state);
   // Programmatic writes must not be re-animated by `scroll-behavior: smooth`.
   el.style.setProperty("scroll-behavior", "auto");
+  const sinceLast = running ? now - running.retargetedAt : Infinity;
+  const duration = profile
+    ? !running
+      ? profile.freshMs
+      : sinceLast < profile.repeatWindowMs
+        ? profile.repeatMs
+        : profile.retargetMs
+    : running
+      ? retargetDuration(sinceLast)
+      : durationForDistance(target - current);
+  const travel = target - current;
+  // From rest the glide opens at `restSlope`; mid-glide it keeps the speed it had, so a retarget never jolts. A
+  // same-direction retarget never opens slower than linear, so a held key is not left trailing the focus.
+  const v0 = !profile
+    ? 0
+    : running && Math.abs(velocity) > 1e-6
+      ? velocity * travel >= 0
+        ? Math.max(velocity, ((travel > 0 ? 1 : -1) * Math.abs(travel)) / duration)
+        : velocity
+      : (profile.restSlope * travel) / duration;
   const animation: Animation = {
+    profile,
+    v0,
     from: current,
     to: target,
     start: now,
-    duration: running
-      ? retargetDuration(now - running.retargetedAt)
-      : durationForDistance(target - current),
+    duration,
     lastWritten: current,
     retargetedAt: now,
     raf: 0,
@@ -150,10 +242,11 @@ function animateAxis(el: HTMLElement, axis: Axis, target: number): void {
 /** Ease `el` to the given scroll offsets; omitted axes are left alone. */
 export function smoothScrollTo(
   el: HTMLElement,
-  target: { left?: number; top?: number }
+  target: { left?: number; top?: number },
+  profile?: ScrollProfile
 ): void {
-  if (target.left !== undefined) animateAxis(el, "left", target.left);
-  if (target.top !== undefined) animateAxis(el, "top", target.top);
+  if (target.left !== undefined) animateAxis(el, "left", target.left, profile);
+  if (target.top !== undefined) animateAxis(el, "top", target.top, profile);
 }
 
 /**
