@@ -31,14 +31,30 @@ impl From<SyncError> for ApiError {
             SyncError::AlreadyRequested(_) => {
                 ApiError::conflict("this title has already been requested")
             }
-            SyncError::Unmapped(m) => unprocessable("request_user_not_mapped", m),
-            SyncError::NoIntegration(k) => unprocessable(
-                "no_request_provider",
-                format!("no enabled {k} integration is configured"),
-            ),
+            SyncError::Unmapped(m) => {
+                // The text can carry an integration name; the client gets neutral wording.
+                tracing::info!(reason = %m, "requests: user not mapped");
+                unprocessable(
+                    "request_user_not_mapped",
+                    "your account is not linked to a user in the request service; ask an administrator to map it"
+                        .to_string(),
+                )
+            }
+            SyncError::NoIntegration(k) => {
+                tracing::info!(kind = k, "requests: no enabled integration");
+                unprocessable(
+                    "no_request_provider",
+                    "no enabled request integration of that kind is configured".to_string(),
+                )
+            }
             SyncError::Remote(m) => {
+                // The detail names the remote system; it stays in the log only.
                 tracing::warn!(error = %m, "requests: remote failure");
-                ApiError::new(StatusCode::BAD_GATEWAY, "request_provider_failed", m)
+                ApiError::new(
+                    StatusCode::BAD_GATEWAY,
+                    "request_provider_failed",
+                    "the request service could not complete the request",
+                )
             }
             SyncError::Db(e) => e.into(),
             SyncError::NotFound => ApiError::not_found("request not found"),

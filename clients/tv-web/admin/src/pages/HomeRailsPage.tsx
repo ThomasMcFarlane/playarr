@@ -452,7 +452,7 @@ export function HomeRailsPage() {
                 onChange={(e) => setEdit({ ...edit, minCollection: e.target.value })}
               />
               <p className="muted hint">
-                Radarr collections with at least this many titles in the library count as franchises.
+                Collections with at least this many titles in the library count as franchises.
               </p>
             </div>
           )}

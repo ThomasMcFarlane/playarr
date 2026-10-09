@@ -641,7 +641,7 @@ function ItemDetails({
               {[...new Map(entries.flatMap((e) => e.sources).map((s) => [s.source_instance_id, s])).values()].map(
                 (source) => (
                   <li key={source.source_instance_id}>
-                    {source.source_name} <span className="muted">({source.source_kind})</span>
+                    {source.source_name}
                   </li>
                 )
               )}

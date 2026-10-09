@@ -13,7 +13,7 @@ type State =
 
 /**
  * The signed-in user's requests (administrators see everyone's) with their
- * status, whichever system took them: Radarr/Sonarr direct, Ombi or Seerr.
+ * status, whichever system took them.
  */
 export function RequestsPage() {
   const { t } = useLanguage();
