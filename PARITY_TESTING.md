@@ -10,7 +10,7 @@ Legend: ✅ available and working. ❌ not available. ⚠️ partial (see the no
 or from the owner; do not rely on it).
 
 Where things run: **CI** is GitHub-hosted runners only (the repository is public, so no self-hosted runners).
-**hq0** is the owner's Arch Linux workstation. **MacBook** is the owner's MacBook, reached with `ssh macbook-builder`.
+**Workstation** is the owner's Arch Linux machine. **MacBook** is the owner's MacBook, reached over SSH.
 
 ## Matrix
 
@@ -18,7 +18,7 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Web client (TV and mobile layouts) | ✅ vitest | ✅ Playwright, Storybook, axe [1] | ✅ [2] | ❌ n/a | ❌ n/a | ❌ n/a | ❌ | ✅ is the reference [3] |
 | Admin web app (`clients/tv-web/admin`) | ⚠️ [4] | ❌ | ✅ | ❌ n/a | ❌ n/a | ❌ n/a | ❌ | ❌ |
-| Android TV | ✅ [5] | ❌ | ❌ | ✅ hq0 [6] | ❌ n/a | ✅ [7] | ✅ [6] | ⚠️ manual script [8] |
+| Android TV | ✅ [5] | ❌ | ❌ | ✅ workstation [6] | ❌ n/a | ✅ [7] | ✅ [6] | ⚠️ manual script [8] |
 | Android phone | ✅ [5] | ❌ | ❌ | ⚠️ local only [9] | ❌ n/a | ❓ unverified | ❌ | ⚠️ manual script [8] |
 | Fire TV (Vega OS) | ✅ jest, typecheck | ❌ | ❌ | ❌ [10] | ❌ | ✅ [10] | ❌ | ⚠️ manual script [10] |
 | iOS | ✅ [11] | ❌ | ❌ | ❌ n/a | ✅ CI [11] | ❓ unverified [12] | ❌ | ⚠️ manual CI [13] |
@@ -46,16 +46,16 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
    modules on pull requests, a full build otherwise). `android-apk` builds a signed APK on main (artifact
    `playarr-android-main-*`). Android TV and phone share one codebase (`clients/android`). Whether every Gradle task
    runs instrumented tests: ❓ unverified (JVM unit tests only, as far as the workflow shows).
-6. An Android TV emulator runs on hq0: `emulator-5560`, Android TV 1080p, API 36, systemd user unit
+6. An Android TV emulator runs on the workstation: `emulator-5560`, Android TV 1080p, API 36, systemd user unit
    `playarr-android-tv-vnc`, display Xvnc `:98`. It is VNC-streamed to the owner's PC screen 2. Local only; there is no
    emulator in CI. Emulator is software-rendered, so timings are not real-device figures
    (`docs/validation/remote-emulator-run-2026-10-07.md`).
-7. A real Android TV is at 192.168.1.198. It has not been used for recent runs.
+7. A real Android TV exists. It has not been used for recent runs.
 8. `scripts/parity/android-tv/capture.sh` and `scripts/parity/android-mobile/capture.sh` capture over `adb` from a running
    device (sideload debug build, fixture server from `scripts/fixtures/up.sh --fresh`). Manual, not in CI.
 9. A phone emulator (API 35) was used for the 2026-10-07 remote-control run, headless and local. No standing setup or CI.
 10. Fire TV runs Vega OS, which is not Android, so no Android emulator applies. The real device is a Fire TV Stick 4K Select
-    at 192.168.1.117:5555. It is driven with the Vega CLI plus helper scripts that live in a scratch directory and are
+   . It is driven with the Vega CLI plus helper scripts that live in a scratch directory and are
     **not in the repo**. In the repo: `scripts/parity/fire-tv/capture.sh` (remote-only driver, needs `FIRETV_VEGA` and
     `FIRETV_DEVICE`) and `capture-web-live.mjs`. Jest and typecheck run in CI job `firetv-check`.
 11. `ios-tests.yml` (pull requests) and `simulator-tests.yml` (manual) run Xcode tests on iPhone and Apple TV simulators on
@@ -67,7 +67,7 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 14. tvOS simulator on the owner's MacBook over SSH: `~/playarr-sim`, launchd agent `app.playarr.sim-live`, app "Playarr Live
     ATV", VNC-streamed to the owner's screen 3 (`scripts/sim-vnc`). A GitHub-hosted variant exists, `tvos-live-sim.yml`
     (`macos-latest`), but it is unreliable: runners have dropped after 1 to 2 hours (memory pressure, from memory).
-15. Real device: Roku Streaming Stick 4K at 192.168.1.228. Deploy with `make deploy` in `clients/roku`; capture with
+15. Real device: Roku Streaming Stick 4K. Deploy with `make deploy` in `clients/roku`; capture with
     `ROKU_DEV_TARGET=<ip> ROKU_DEV_PASSWORD=<pw> node scripts/parity/roku/capture.mjs <out-dir>` (ECP on port 8060, dev
     installer screenshots; the clock is masked in the diff). `scripts/parity/roku/verify-playback.mjs` checks playback.
     `clients/roku/scripts/validate.py` is a static check; whether it runs in CI: ❓ unverified. There is no Roku emulator.
@@ -80,7 +80,7 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 19. webOS has an app shell at `clients/tv-web/apps/tv-webos`; CI only covers the shared packages. LG's SDK includes an
     emulator, but it is **not set up**.
 20. Tizen has an app shell at `clients/tv-web/apps/tv-tizen`. Samsung's Tizen Studio TV emulator (TV Extension 9.0 or 10.0,
-    needs KVM) and the TV Simulator are **not set up**. hq0 runs Arch, so the emulator would need an Ubuntu container.
+    needs KVM) and the TV Simulator are **not set up**. The workstation runs Arch, so the emulator would need an Ubuntu container.
     There is no Samsung TV device.
 
 ## How to run each
@@ -95,7 +95,7 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 | Diff native against web | `node scripts/parity/diff.mjs --ref docs/parity/web --cand <dir> --layout tv --theme dark` | local |
 | Fixture server | `scripts/fixtures/up.sh --fresh` (`down.sh` to stop) | local |
 | Android build and tests | `./gradlew build` in `clients/android` | CI, local |
-| Android TV parity | `scripts/parity/android-tv/capture.sh <out> <light\|dark>` | hq0 emulator or real TV |
+| Android TV parity | `scripts/parity/android-tv/capture.sh <out> <light\|dark>` | workstation emulator or real TV |
 | Android phone parity | `scripts/parity/android-mobile/capture.sh` | local emulator |
 | Fire TV | `npm test -- --ci` in `clients/fire-tv`; `scripts/parity/fire-tv/capture.sh` | CI; real device |
 | iOS and tvOS tests | Actions > Apple Simulator tests; iOS tests on pull requests | `macos-latest` |
@@ -108,14 +108,14 @@ Where things run: **CI** is GitHub-hosted runners only (the repository is public
 
 ## Gaps
 
-- No Tizen emulator or simulator is set up, and there is no Samsung TV. Needs an Ubuntu container on hq0 with KVM.
+- No Tizen emulator or simulator is set up, and there is no Samsung TV. Needs an Ubuntu container on the workstation with KVM.
 - No webOS emulator is set up, and no LG TV is recorded.
 - No Roku emulator exists. Roku testing is the real device only and there is no CI for it.
 - Fire TV has no CI beyond jest and typecheck. Its device driver scripts live outside the repo.
 - VIDAA has no scripts of its own and the real TV is paused.
 - HarmonyOS has no device, emulator or previewer, so only offline checks run.
 - Xbox CI covers the core library only; there is no shell build, device or emulator.
-- Android has no emulator in CI; the Android TV emulator on hq0 is local and the real TV is untouched recently.
+- Android has no emulator in CI; the Android TV emulator on the workstation is local and the real TV is untouched recently.
 - No real iOS device or Apple TV is recorded.
 - Native screenshot parity is manual everywhere (and on hold); none of it is a pull-request check.
 - The hosted tvOS live simulator is unreliable (runner drops after 1 to 2 hours).
