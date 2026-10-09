@@ -520,7 +520,7 @@ export function RootChooser({
               <span className="folders-card-text">
                 <strong className="folders-name">{root.name}</strong>
                 <span className="folders-meta">
-                  {root.source_name} ·{" "}
+                  {root.display_label} ·{" "}
                   {root.available
                     ? t("pages.folders.rootItems", { count: root.item_count })
                     : root.scan_status === "scanning"

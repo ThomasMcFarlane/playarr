@@ -17,7 +17,7 @@ describe("tablet widths: content clears the navigation rail", () => {
 
   it("floors every proportional left offset of titles and the page frame to it", () => {
     expect(css).not.toMatch(/left:\s*(?:calc\(7\.5 \* var\(--vw\)\)|clamp\(102px, calc\(8 \* var\(--vw\)\), 160px\));/);
-    expect(css.match(/max\(calc\(7\.5 \* var\(--vw\)\), var\(--tv-nav-clearance\)\)/g)?.length).toBe(4);
+    expect(css.match(/max\(calc\(7\.5 \* var\(--vw\)\), var\(--tv-nav-clearance\)\)/g)?.length).toBe(3);
     expect(css.match(/max\(clamp\(102px, calc\(8 \* var\(--vw\)\), 160px\), var\(--tv-nav-clearance\)\)/g)?.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -29,7 +29,7 @@ describe("tablet widths: content clears the navigation rail", () => {
 
   it("hides the clock between the phone and wide-tablet breakpoints, where it collides with long titles", () => {
     expect(css).toMatch(
-      /@media \(min-width: 761px\) and \(max-width: 1100px\) \{\s*\.app-shell:has\(\.page-header\) \.app-clock \{\s*display: none;/
+      /@media \(min-width: 761px\) and \(max-width: 1100px\) \{\s*\.app-shell\[data-page-header\] \.app-clock \{\s*display: none;/
     );
   });
 

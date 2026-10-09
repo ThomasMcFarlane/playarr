@@ -830,6 +830,27 @@ export function PlaylistsPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [drawer]);
 
+  // The drawer's own onKeyDown only sees Back while focus is inside it. Spatial navigation can move focus out
+  // into the page, where Back would leave the page with the drawer still open, so the window listener closes
+  // it wherever focus is (audit A24). Runs in capture, ahead of the app-level Back handlers.
+  const openDrawerRef = useRef<PlaylistDrawer>(null);
+  openDrawerRef.current = drawer;
+  const closeDrawerRef = useRef(closeDrawer);
+  closeDrawerRef.current = closeDrawer;
+  useEffect(() => {
+    if (!drawer) return undefined;
+    const closeOnBack = (event: globalThis.KeyboardEvent) => {
+      if (!isBackKey(event) || event.defaultPrevented) return;
+      const open = openDrawerRef.current;
+      if (!open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeDrawerRef.current(open);
+    };
+    window.addEventListener("keydown", closeOnBack, true);
+    return () => window.removeEventListener("keydown", closeOnBack, true);
+  }, [drawer !== null]);
+
   function handleDrawerKeyDown(event: KeyboardEvent<HTMLElement>) {
     const isBack =
       isBackKey(event);

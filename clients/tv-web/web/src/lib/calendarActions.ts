@@ -1,5 +1,5 @@
 import type { CalendarAction, CalendarEntry, TitleSnapshot } from "@playarr-tv/api-client";
-import { workRouteForEntry } from "./calendar";
+import { workRouteForEntry, type CalendarItem } from "./calendar";
 
 /** What the details panel offers for one calendar item. */
 export interface CalendarActionPlan {
@@ -58,6 +58,22 @@ export function planCalendarActions(entry: CalendarEntry): CalendarActionPlan {
     snapshot: entry.snapshot ?? null,
     legacy: false,
   };
+}
+
+/**
+ * The actions for a calendar item and the entry they act on. A single entry acts on itself. A group of
+ * episodes released together acts on one of them, never blindly the first: an episode with progress
+ * (`resume`) wins, otherwise the earliest episode the viewer can play, otherwise the first (nothing to
+ * play, so only open, request and watchlist show, and those are the same for every episode of the series).
+ */
+export function planItemActions(item: CalendarItem): { plan: CalendarActionPlan; target: CalendarEntry } {
+  if (item.kind === "single") return { plan: planCalendarActions(item.entry), target: item.entry };
+  const candidates = item.entries.map((entry) => ({ plan: planCalendarActions(entry), target: entry }));
+  return (
+    candidates.find((candidate) => candidate.plan.play?.resume) ??
+    candidates.find((candidate) => candidate.plan.play) ??
+    candidates[0]!
+  );
 }
 
 /** The snapshot a client built before servers computed it; only for servers without `actions`. */

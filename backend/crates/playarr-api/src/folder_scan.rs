@@ -636,7 +636,7 @@ pub async fn discover_roots(state: &AppState) -> Result<Vec<Uuid>, ApiError> {
             .map(|root| DiscoveredRoot {
                 id: stable_id(source.id, &format!("root:{}", root.id)),
                 source_root_id: root.id.to_string(),
-                display_name: root_display_name(&root.path, &source.name),
+                display_name: root_display_name(&root.path, source.kind.neutral_label()),
                 reported_path: root.path,
                 work_kind: kind,
                 accessible: root.accessible,

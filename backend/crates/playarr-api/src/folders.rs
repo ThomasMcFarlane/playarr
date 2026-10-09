@@ -44,7 +44,11 @@ pub struct FolderRootsQuery {
 pub struct FolderRootResponse {
     pub id: Uuid,
     pub source_instance_id: Uuid,
+    /// Neutral label of the source (equals `display_label`); never the admin-chosen
+    /// instance name, which only the admin routes return.
     pub source_name: String,
+    /// Neutral label (for example "Movies"); safe to show to any user.
+    pub display_label: String,
     pub library_kind: WorkKind,
     pub name: String,
     /// False while the root has never scanned successfully or its last scan failed.
@@ -186,12 +190,22 @@ fn blocked_by_policy(viewer: &CatalogViewer, path: &FsPath) -> bool {
 async fn root_response(
     state: &AppState,
     root: &SourceRootFolder,
-    source_name: String,
+    allowed: Option<&[Uuid]>,
 ) -> Result<FolderRootResponse, ApiError> {
+    let visible: Vec<_> = state
+        .source_instances
+        .all()
+        .into_iter()
+        .filter(|i| allowed.is_none_or(|ids| ids.contains(&i.id)))
+        .collect();
+    let label = playarr_model::neutral_source_labels(&visible)
+        .remove(&root.source_instance_id)
+        .unwrap_or_default();
     Ok(FolderRootResponse {
         id: root.id,
         source_instance_id: root.source_instance_id,
-        source_name,
+        source_name: label.clone(),
+        display_label: label,
         library_kind: root.work_kind,
         name: root.display_name.clone(),
         available: root.scan_status == FolderScanStatus::Ready
@@ -242,7 +256,7 @@ pub async fn list_folder_roots_handler(
         ) {
             continue;
         }
-        roots.push(root_response(&state, &root, source.name.clone()).await?);
+        roots.push(root_response(&state, &root, allowed.as_deref()).await?);
     }
     roots.sort_by(|a, b| {
         a.source_name
@@ -524,7 +538,7 @@ pub async fn browse_folder_handler(
     let page = rows.into_iter().skip(offset).take(limit).collect();
 
     Ok(Json(FolderBrowseResponse {
-        root: root_response(&state, &root, source.name.clone()).await?,
+        root: root_response(&state, &root, viewer.allowed_libraries().as_deref()).await?,
         breadcrumbs: breadcrumbs(&root.display_name, &path),
         path,
         entries: page,

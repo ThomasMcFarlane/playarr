@@ -433,6 +433,16 @@ pub(crate) async fn build_calendar(
 
     // Answered from the background-refreshed cache: a request never waits on
     // (or reports the health of) a source. Admins see source health in Settings.
+    // Users only ever see neutral labels; the admin-chosen instance name is data that
+    // may be a provider's name. Numbered among the instances the viewer may see, so a
+    // label never depends on a filter and never hints at hidden sources.
+    let visible: Vec<SourceInstance> = state
+        .source_instances
+        .all()
+        .into_iter()
+        .filter(|i| allowed.is_none_or(|ids| ids.contains(&i.id)))
+        .collect();
+    let labels = playarr_model::neutral_source_labels(&visible);
     let cache = &state.calendar_cache;
     let mut statuses = Vec::new();
     let mut candidates = Vec::new();
@@ -444,7 +454,8 @@ pub(crate) async fn build_calendar(
             .collect();
         statuses.push(CalendarSourceStatus {
             source_instance_id: instance.id,
-            name: instance.name.clone(),
+            name: labels[&instance.id].clone(),
+            display_label: labels[&instance.id].clone(),
             kind: instance.kind,
             status: CalendarSourceState::Ok,
             error: None,
@@ -496,6 +507,17 @@ pub(crate) async fn build_calendar(
     let enrich_ms = timer.elapsed().as_millis();
     if options.group_series_day {
         merged = group_series_day(merged);
+    }
+    for candidate in &mut merged {
+        for source in &mut candidate.entry.sources {
+            if let Some(label) = labels.get(&source.source_instance_id) {
+                source.source_name.clone_from(label);
+                source.display_label.clone_from(label);
+            } else {
+                source.source_name = source.source_kind.neutral_label().to_string();
+                source.display_label.clone_from(&source.source_name);
+            }
+        }
     }
     if let Some(viewer) = options.viewer {
         attach_actions(state, viewer, &mut merged).await;
@@ -1030,7 +1052,59 @@ mod tests {
         let entries = body["entries"].as_array().unwrap();
         assert_eq!(entries[0]["sources"].as_array().unwrap().len(), 1);
         assert_eq!(body["sources"].as_array().unwrap().len(), 1);
-        assert_eq!(body["sources"][0]["name"], "TV HD");
+        assert_eq!(body["sources"][0]["name"], "Series");
+        assert_eq!(body["sources"][0]["display_label"], "Series");
+    }
+
+    #[tokio::test]
+    async fn user_calendar_never_shows_provider_named_instances() {
+        let (router, state) = test_state().await;
+        let a = fake_sonarr("Show").await;
+        let b = fake_sonarr("Show").await;
+        let mut first = instance(SourceKind::Sonarr, "Sonarr", a.uri());
+        first.priority = 0;
+        let mut second = instance(SourceKind::Sonarr, "Sonarr 4K", b.uri());
+        second.priority = 1;
+        let movies = instance(SourceKind::Radarr, "Radarr 4K", "http://127.0.0.1:1".into());
+        for i in [&first, &second, &movies] {
+            state.source_instances.upsert(i.clone());
+        }
+        prime(&state).await;
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![first.id, second.id, movies.id])
+            .await;
+        let token = mint_access_token(&state, user);
+        let (status, body) = get(
+            router,
+            &token,
+            "/api/v1/calendar?start=2026-10-01&end=2026-10-31",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        // `kind` / `source_kind` are machine values for clients; every displayable
+        // string must be free of provider names.
+        let mut shown = Vec::new();
+        for s in body["sources"].as_array().unwrap() {
+            shown.push(s["name"].clone());
+            shown.push(s["display_label"].clone());
+        }
+        for e in body["entries"].as_array().unwrap() {
+            for s in e["sources"].as_array().unwrap() {
+                shown.push(s["source_name"].clone());
+                shown.push(s["display_label"].clone());
+            }
+        }
+        let text = serde_json::Value::Array(shown).to_string().to_lowercase();
+        for name in ["sonarr", "radarr"] {
+            assert!(!text.contains(name), "{name} leaked: {text}");
+        }
+        let labels: Vec<&str> = body["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["display_label"].as_str().unwrap())
+            .collect();
+        assert_eq!(labels, ["Movies", "Series", "Series 2"]);
     }
 
     #[tokio::test]
@@ -1833,7 +1907,8 @@ mod tests {
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let (_, _, body) = send(router, "GET", &feed_path(&created), None).await;
         let ics = String::from_utf8(body).unwrap();
-        assert!(ics.contains("Source: TV HD"), "{ics}");
+        assert!(ics.contains("Source: Series"), "{ics}");
+        assert!(!ics.contains("TV HD"), "instance names stay admin-only");
         assert!(
             !ics.contains("TV 4K"),
             "restricted user must not see the other library"

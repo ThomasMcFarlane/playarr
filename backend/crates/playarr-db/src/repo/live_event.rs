@@ -26,6 +26,7 @@ use uuid::Uuid;
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
 use crate::pool::DbPool;
+use crate::write_queue::{write, WriteQueue};
 
 /// Event kinds (the `type` field of a stream frame).
 pub mod kind {
@@ -138,12 +139,64 @@ pub trait LiveEventRepo: Send + Sync {
 
 pub struct SqlxLiveEventRepo {
     pool: DbPool,
+    queue: Option<WriteQueue>,
 }
 
 impl SqlxLiveEventRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self { pool, queue: None }
     }
+
+    /// Stores events through the shared write queue so they share a commit
+    /// with other small writes.
+    pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
+        self.queue = Some(queue);
+        self
+    }
+}
+
+const INSERT_SQL: &str = "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
+     source_instance_id, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+/// Owned bind values for one event, so the write can run again.
+struct EventRow {
+    user_id: Option<String>,
+    kind: &'static str,
+    entity: &'static str,
+    entity_id: Option<String>,
+    changed: String,
+    source_instance_id: Option<String>,
+}
+
+impl EventRow {
+    fn new(e: &NewLiveEvent) -> Result<Self, DbError> {
+        Ok(Self {
+            user_id: e.user_id.map(|u| u.to_string()),
+            kind: e.kind,
+            entity: e.entity,
+            entity_id: e.entity_id.clone(),
+            changed: serde_json::to_string(&e.changed)?,
+            source_instance_id: e.source_instance_id.map(|u| u.to_string()),
+        })
+    }
+}
+
+async fn insert_row(
+    conn: &mut sqlx::AnyConnection,
+    row: &EventRow,
+    now_ms: i64,
+) -> Result<(), DbError> {
+    sqlx::query(INSERT_SQL)
+        .bind(row.user_id.clone())
+        .bind(row.kind)
+        .bind(row.entity)
+        .bind(row.entity_id.clone())
+        .bind(row.changed.clone())
+        .bind(row.source_instance_id.clone())
+        .bind(now_ms)
+        .execute(conn)
+        .await?;
+    Ok(())
 }
 
 fn from_row(row: &AnyRow) -> Result<LiveEvent, DbError> {
@@ -164,46 +217,34 @@ fn from_row(row: &AnyRow) -> Result<LiveEvent, DbError> {
 #[async_trait]
 impl LiveEventRepo for SqlxLiveEventRepo {
     async fn insert(&self, e: &NewLiveEvent, now_ms: i64) -> Result<(), DbError> {
-        sqlx::query(
-            "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
-             source_instance_id, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(e.user_id.map(|u| u.to_string()))
-        .bind(e.kind)
-        .bind(e.entity)
-        .bind(e.entity_id.clone())
-        .bind(serde_json::to_string(&e.changed)?)
-        .bind(e.source_instance_id.map(|u| u.to_string()))
-        .bind(now_ms)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        let row = Arc::new(EventRow::new(e)?);
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let row = row.clone();
+            Box::pin(async move { insert_row(conn, &row, now_ms).await })
+        })
+        .await
     }
 
     async fn insert_many(&self, events: &[NewLiveEvent], now_ms: i64) -> Result<(), DbError> {
-        match events {
-            [] => return Ok(()),
-            [one] => return self.insert(one, now_ms).await,
-            _ => {}
+        if events.is_empty() {
+            return Ok(());
         }
-        let mut tx = self.pool.begin().await?;
-        for e in events {
-            sqlx::query(
-                "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
-                 source_instance_id, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            )
-            .bind(e.user_id.map(|u| u.to_string()))
-            .bind(e.kind)
-            .bind(e.entity)
-            .bind(e.entity_id.clone())
-            .bind(serde_json::to_string(&e.changed)?)
-            .bind(e.source_instance_id.map(|u| u.to_string()))
-            .bind(now_ms)
-            .execute(&mut *tx)
-            .await?;
-        }
-        tx.commit().await?;
-        Ok(())
+        let rows = Arc::new(
+            events
+                .iter()
+                .map(EventRow::new)
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let rows = rows.clone();
+            Box::pin(async move {
+                for row in rows.iter() {
+                    insert_row(conn, row, now_ms).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn list_after(&self, after: i64, limit: i64) -> Result<Vec<LiveEvent>, DbError> {
@@ -318,6 +359,13 @@ impl LiveEventPublisher {
 
     pub fn from_pool(pool: DbPool) -> Self {
         Self::new(Arc::new(SqlxLiveEventRepo::new(pool)))
+    }
+
+    /// Like [`from_pool`](Self::from_pool), storing events through `queue`.
+    pub fn from_pool_queued(pool: DbPool, queue: WriteQueue) -> Self {
+        Self::new(Arc::new(
+            SqlxLiveEventRepo::new(pool).with_write_queue(queue),
+        ))
     }
 
     pub fn repo(&self) -> Arc<dyn LiveEventRepo> {

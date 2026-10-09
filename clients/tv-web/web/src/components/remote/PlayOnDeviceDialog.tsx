@@ -6,6 +6,7 @@ import { HandoffFailure, handOffPlayback, type HandoffProgress } from "../../lib
 import { getRemotePlayer } from "../../lib/remote/playerBridge";
 import { Button } from "../ui";
 import { isBackKey } from "../../lib/backKey";
+import { useRestoreFocusOnClose } from "../../lib/useRestoreFocus";
 
 type Phase =
   | { kind: "choose" }
@@ -22,6 +23,7 @@ export function PlayOnDeviceDialog({ onClose }: { onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: "choose" });
   const firstRef = useRef<HTMLButtonElement>(null);
 
+  useRestoreFocusOnClose();
   useEffect(() => {
     let cancelled = false;
     void (async () => {
