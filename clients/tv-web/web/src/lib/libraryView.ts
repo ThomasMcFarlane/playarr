@@ -144,6 +144,21 @@ export function libraryFirstPageKey(params: ReturnType<typeof libraryFirstPagePa
   return `catalog:library:${JSON.stringify(params)}`;
 }
 
+/** What the grid holds once more than the first page is loaded (the whole scrolled-through list). */
+export interface LibraryLoadedList<T> {
+  items: T[];
+  total: number;
+}
+
+/**
+ * The query-cache key of the whole loaded list of one library view. The first page alone is not enough for
+ * Back: returning from a title opened deep in the list needs that title's row in the first render, otherwise
+ * the grid paints its head, grows page by page and the restored focus and scroll have nothing to land on.
+ */
+export function libraryLoadedKey(params: ReturnType<typeof libraryFirstPageParams>): string {
+  return `${libraryFirstPageKey(params)}:loaded`;
+}
+
 const COVER_IMAGE_KINDS = ["poster", "backdrop"] as const;
 const SCREEN_IMAGE_KINDS = ["backdrop", "poster"] as const;
 

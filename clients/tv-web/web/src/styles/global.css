@@ -6512,6 +6512,23 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   margin-top: 0;
 }
 
+/* The other buttons wait for the resume plan with the Resume button's place held, so none of them shifts when it lands. */
+.tv-detail-actions[data-plan-pending="true"] > :not(.tv-detail-play-pending) {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Holds the Resume button's place until the resume plan arrives. */
+.tv-detail-play-pending {
+  display: inline-block;
+  flex: none;
+  /* The Resume button's own minimum width and height (.tv-detail-play). */
+  width: clamp(112px, calc(8.5 * var(--vw)), 156px);
+  height: clamp(44px, calc(4.2 * var(--vw)), 64px);
+  border-radius: 999px;
+}
+
 .tv-detail-playback-settings {
   min-width: clamp(104px, calc(7.6 * var(--vw)), 142px);
   height: clamp(44px, calc(4.2 * var(--vw)), 64px);

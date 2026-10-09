@@ -94,16 +94,31 @@ describe("QueryCache reads", () => {
 });
 
 describe("QueryCache invalidation", () => {
-  it("drops only the tagged entries, or everything without tags", () => {
+  it("marks only the tagged entries stale, or everything without tags, and keeps their data", () => {
     const cache = new QueryCache();
     cache.setScope("s");
     cache.set("home", 1, ["progress", "catalog"]);
     cache.set("lists", 2, ["playlists"]);
+    expect(cache.peek("home")?.stale).toBe(false);
     cache.invalidate(["progress"]);
-    expect(cache.peek("home")).toBeUndefined();
-    expect(cache.peek("lists")).toBeDefined();
+    // The copy still paints a page that mounts next (no skeleton); it is only no longer fresh.
+    expect(cache.peek("home")).toMatchObject({ data: 1, stale: true });
+    expect(cache.peek("lists")).toMatchObject({ data: 2, stale: false });
     cache.invalidate();
-    expect(cache.peek("lists")).toBeUndefined();
+    expect(cache.peek("lists")).toMatchObject({ data: 2, stale: true });
+  });
+
+  it("never serves a stale entry as fresh, and a revalidation replaces it in place", async () => {
+    const cache = new QueryCache();
+    cache.setScope("s");
+    const loader = vi.fn(async () => "new");
+    cache.set("home", "old", ["progress"]);
+    expect(await cache.fetch("home", loader, { ttlMs: 60_000, tags: ["progress"] })).toBe("old");
+    expect(loader).not.toHaveBeenCalled();
+    cache.invalidate(["progress"]);
+    expect(await cache.fetch("home", loader, { ttlMs: 60_000, tags: ["progress"] })).toBe("new");
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(cache.peek("home")).toMatchObject({ data: "new", stale: false });
   });
 
   it("does not store a result that was invalidated while it loaded", async () => {

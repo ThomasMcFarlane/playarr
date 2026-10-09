@@ -1044,6 +1044,8 @@ function DetailPending({ work, fallbackKind, label }: { work: Work | undefined; 
   );
 }
 
+const resumePlanKey = (seriesId: string) => `resume-plan:${seriesId}`;
+
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
   const { t } = useLanguage();
@@ -1081,10 +1083,13 @@ export function WorkDetailPage() {
     useState(false);
   const [movieDownloadOpen, setMovieDownloadOpen] = useState(false);
   const [movieDownloadBusy, setMovieDownloadBusy] = useState(false);
-  const [resumePlan, setResumePlan] = useState<ResumePlan | null>(null);
+  // A stored plan (Back, a revisit) is read in the first render, so the Resume button and the next-up episode
+  // are in the first frame instead of arriving after the request and pushing the other buttons along.
+  const [resumeSeed] = useState(() => (workId ? client.queries.peek<ResumePlan>(resumePlanKey(workId))?.data ?? null : null));
+  const [resumePlan, setResumePlan] = useState<ResumePlan | null>(resumeSeed);
   // Series id whose resume plan request has settled (answered or failed): the next-up
   // episode is only known from then on, so initial focus waits for it.
-  const [resumePlanSettledFor, setResumePlanSettledFor] = useState<string | null>(null);
+  const [resumePlanSettledFor, setResumePlanSettledFor] = useState<string | null>(resumeSeed ? workId ?? null : null);
   const [resumeChooserOpen, setResumeChooserOpen] = useState(false);
   // The episode the viewer moved to on this page; later plan refreshes must not undo it.
   const userSelectionRef = useRef<{ workId: string; episodeId: string } | null>(null);
@@ -1152,9 +1157,15 @@ export function WorkDetailPage() {
   useEffect(() => {
     if (!resumeSeriesId) return;
     let cancelled = false;
-    // The plan depends on watch history, so it is re-read when progress changes.
-    client
-      .getResumePlan(resumeSeriesId)
+    // The plan depends on watch history, so it is re-read when progress changes. A stored copy paints
+    // first and is replaced in place.
+    const stored = client.queries.peek<ResumePlan>(resumePlanKey(resumeSeriesId));
+    if (stored) {
+      setResumePlan(stored.data);
+      setResumePlanSettledFor(resumeSeriesId);
+    }
+    client.queries
+      .fetch(resumePlanKey(resumeSeriesId), () => client.getResumePlan(resumeSeriesId), { tags: ["progress", "catalog"] })
       .then((plan) => {
         if (cancelled) return;
         setResumePlan(plan);
@@ -2049,7 +2060,15 @@ export function WorkDetailPage() {
             {t("pages.workDetail.unavailable")}
           </span>
         ) : null}
-        <div className="tv-detail-actions tv-detail-watchlist">
+        <div
+          className="tv-detail-actions tv-detail-watchlist"
+          data-plan-pending={work.kind === "series" && resumePlanSettledFor !== work.id ? "true" : undefined}
+        >
+          {work.kind === "series" && resumePlanSettledFor !== work.id ? (
+            // The Resume button (and "ask again") arrive with the resume plan: its space is held and the other buttons
+            // wait for it (CSS), so nothing visible shifts when it lands.
+            <SkeletonBlock className="tv-detail-play-pending" />
+          ) : null}
           {activeResumePlan?.target ? (
             <button
               ref={resumeButtonRef}
