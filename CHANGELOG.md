@@ -2586,6 +2586,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- App Store review notes and iOS release docs no longer ask for a demo server or review account: Playarr is bring-your-own-server and provides no servers.
 - Roku parity: light-theme measurements for every screen against the live web, with the known causes of the high figures.
 - Page layout spec: owner decisions recorded. The reference action pill is web's library Filters button as of 30 September 2026 (pinned to a commit), the header row grows to the tile height with items centred, Back and the period arrows stay round, focus is a ring with no fill (white in dark theme, ink in light theme), the drawer-open state keeps its ink fill, Customise Home moves into the header row, and the header and Back always show while loading or on error.
 - README, project site and Play listing screenshots show the open-movie demo library on the current UI again (retaken, with the README attribution tables and CC BY credits restored). They are produced by the new `scripts/showcase` setup, which is separate from the parity fixture, and a CI check rejects public screenshots that were not made with it.
