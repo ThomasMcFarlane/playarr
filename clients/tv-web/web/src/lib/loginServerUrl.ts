@@ -3,6 +3,36 @@ import { getStoredApiBaseUrl, readKnownServers } from "@playarr-tv/domain";
 const HOSTED_PLAYARR_HOSTNAME = "playarr.app";
 const PUBLIC_IPV4_RELAY_HOSTNAME = "relay.playarr.app";
 const LEGACY_RELAY_PORT = "8484";
+const RELAY_PORT_MEMORY_KEY = "playarr:relayPort.v1";
+const RELAY_PROBE_TIMEOUT_MS = 3000;
+
+type RelayPortMemory = Record<string, "443" | "8484">;
+
+function readRelayPortMemory(): RelayPortMemory {
+  try {
+    const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(RELAY_PORT_MEMORY_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? (parsed as RelayPortMemory) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Remember which port answered for a port-less relay name, so later launches go straight there. */
+function rememberRelayPort(hostname: string, port: "443" | "8484"): void {
+  try {
+    globalThis.localStorage?.setItem(
+      RELAY_PORT_MEMORY_KEY,
+      JSON.stringify({ ...readRelayPortMemory(), [hostname.toLowerCase()]: port })
+    );
+  } catch {
+    // Storage may be unavailable; the next launch simply probes again.
+  }
+}
+
+/** The port the user typed, read from the raw text because `URL` hides the default one (443). */
+function typedPort(candidate: string): string | undefined {
+  return candidate.match(/^[a-z][a-z\d+.-]*:\/\/(?:[^/?#@]*@)?[^/?#:]*:(\d+)(?:[/?#]|$)/i)?.[1];
+}
 
 function publicIpv4Octets(hostname: string): [number, number, number, number] | undefined {
   const rawOctets = hostname.split(".");
@@ -79,11 +109,84 @@ export function publicIpv4RelayUrl(
 
     const hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
     const path = url.pathname === "/" ? "" : url.pathname;
-    const port = url.port === LEGACY_RELAY_PORT ? `:${LEGACY_RELAY_PORT}` : "";
+    // An explicit port is respected exactly. Without one the name is a candidate for the 443 then 8484
+    // fallback (`resolveRelayAddress`); if a previous launch found that only 8484 answers, use it.
+    const explicitPort = url.port || typedPort(candidate);
+    const rememberedPort = explicitPort ? undefined : readRelayPortMemory()[hostname];
+    const port = explicitPort
+      ? `:${explicitPort}`
+      : rememberedPort === "8484"
+        ? `:${LEGACY_RELAY_PORT}`
+        : "";
     return `https://${hostname}${port}${path}${url.search}${url.hash}`;
   } catch {
     return value;
   }
+}
+
+/** True for a normalised relay URL with no port, which means 443 and may fall back to 8484. */
+function isPortlessRelayUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.port === "" && encodedPublicIpv4Octets(url.hostname) !== undefined
+      && !typedPort(value);
+  } catch {
+    return false;
+  }
+}
+
+/** A real `GET /api/system/version`, short timeout; true only for an OK answer. */
+export async function probeRelayCandidate(
+  baseUrl: string,
+  fetchImpl: (input: Request) => Promise<Response> = (input) => fetch(input),
+  timeoutMs: number = RELAY_PROBE_TIMEOUT_MS
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(
+      new Request(`${baseUrl.replace(/\/+$/, "")}/api/system/version`, { signal: controller.signal })
+    );
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * `publicIpv4RelayUrl` plus the connection fallback. A bare public address (no port typed) has two
+ * candidates: the relay name on 443, then on 8484 (the default `PLAYARR_HTTP_BIND_ADDR`) when 443 does
+ * not connect, fails TLS or times out. The port that worked is remembered. An explicit port, a
+ * remembered port, a private address and a plain-http page are returned without any probe.
+ */
+export async function resolveRelayAddress(
+  value: string,
+  options: {
+    probe?: (baseUrl: string) => Promise<boolean>;
+    pageProtocol?: string;
+  } = {}
+): Promise<string> {
+  const primary = publicIpv4RelayUrl(value, options.pageProtocol);
+  if (!isPortlessRelayUrl(primary)) return primary;
+  const hostname = new URL(primary).hostname;
+  if (readRelayPortMemory()[hostname.toLowerCase()] === "443") return primary;
+
+  const probe = options.probe ?? ((url: string) => probeRelayCandidate(url));
+  const split = primary.match(/^(https:\/\/[^/?#]+)(.*)$/);
+  if (!split) return primary;
+  const [, origin, rest] = split;
+  if (await probe(primary)) {
+    rememberRelayPort(hostname, "443");
+    return primary;
+  }
+  const fallback = `${origin}:${LEGACY_RELAY_PORT}${rest}`;
+  if (await probe(fallback)) {
+    rememberRelayPort(hostname, "8484");
+    return fallback;
+  }
+  return primary;
 }
 
 /**
