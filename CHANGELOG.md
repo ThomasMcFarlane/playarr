@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: preset profile avatars now use exactly the web client's artwork, gradient and highlight.
 - tvOS: the shell chip and the profile row show the account's custom photo avatar, instead of a preset picked from the profile id.
 - Roku: the identity chip and the profile row show the account's own avatar (preset or custom photo) instead of a hard-coded or id-hash preset, and all six presets now have their artwork.
 - Fire TV: the shell chip and profile row show the account's own avatar (preset or custom photo) from the server, and the preset artwork now matches the web client exactly.
