@@ -3,16 +3,16 @@
 //
 //   board-sync.mjs --pr <n> --date <YYYY-MM-DD> [--open <n,n,...>] [--merged <n,n,...>] [repo-root]
 //
-// A row is flipped when its status is a "PR is on its way" status ("PR open", "in review",
-// "in progress: PR ...", "in progress: folded into #n", "in progress: #n open") and names the merged PR, or
-// says only "PR open" / "in review" while the row text (task or notes) names it. Rows are read from the
-// pending fragment when one exists (it is newer than TASKS.md), otherwise from TASKS.md.
-//   - every PR the status names is merged (or this one)  -> "done (PR #n merged <date>)"
-//   - another PR the status names is still open           -> "in progress: #n merged; #a, #b open"
+// A row is flipped when its Status is `in_review`, or `in_progress` with Notes saying the work waits on a PR
+// ("PR open", "folded into #n", "#n open"), and its Notes (or Task) name the merged PR. Rows are read from
+// the pending fragment when one exists (it is newer than TASKS.md), otherwise from TASKS.md.
+//   - every PR the Notes name is merged (or this one)  -> Status `done`, Notes end "PR #n merged <date>."
+//   - another PR the Notes name is still open          -> Status `in_progress`, Notes end "PR #n merged; #a, #b open."
 // The result is a fragment, never an edit of TASKS.md: the merge train folds it like any other. Prints the
 // row numbers it wrote, one per line, and writes nothing when no row matches.
 import fs from 'node:fs';
 import path from 'node:path';
+import { canonicalCells, formatRow } from './lib/board.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (name) => { const i = argv.indexOf(`--${name}`); return i < 0 ? undefined : argv[i + 1]; };
@@ -29,8 +29,7 @@ open.delete(pr);
 
 const refs = (s) => [...s.matchAll(/(?:#|\bPRs?\s+)(\d+)((?:\s*(?:,|and|to)\s*#?\d+)*)/gi)].flatMap((m) => [m[1], ...[...m[2].matchAll(/\d+/g)].map((x) => x[0])]);
 const names = (text) => refs(text).includes(pr);
-const waiting = (status) => /\bPR open\b|^in review\b|^in progress:\s*(PR\b|fix PR\b|PR open|folded into #|.*\bopen\b)/i.test(status);
-const generic = (status) => !refs(status).length;
+const waiting = (status, notes) => status === 'in_review' || (status === 'in_progress' && /\bPR open\b|\bfolded into #|#\d+ open\b|\bPRs? \d+[^.;]*\bopen\b/i.test(notes));
 
 const frags = new Map();
 const tdir = path.join(root, 'tasks.d');
@@ -52,7 +51,7 @@ if (fs.existsSync(boardFile)) {
   for (const l of fs.readFileSync(boardFile, 'utf8').split('\n')) {
     if (l.startsWith('## ')) sec = l.slice(3).trim();
     const n = /^\|\s*(\d+)\s*\|/.exec(l)?.[1];
-    if (n && sec !== 'Completed work') boardRows.set(n, l);
+    if (n && !sec.startsWith('Completed work')) boardRows.set(n, l);
   }
 }
 
@@ -60,19 +59,19 @@ const out = [];
 for (const n of new Set([...boardRows.keys(), ...frags.keys()])) {
   const fr = frags.get(n);
   const row = fr ? fr.row : boardRows.get(n);
-  const c = row.split(' | ');
-  if (c.length < 5) continue;
-  const status = c[2];
-  if (/^done\b|^dropped\b/i.test(status) || !waiting(status)) continue;
-  if (!(refs(status).includes(pr) || (generic(status) && names(`${c[1]} ${c.slice(4).join(' | ')}`)))) continue;
-  const others = [...new Set(refs(status))].filter((x) => x !== pr && !merged.has(x));
+  const c = canonicalCells(row);
+  if (!c) continue;
+  const [, task, status, , , , , notes] = c;
+  if (!waiting(status, notes)) continue;
+  if (!(refs(notes).includes(pr) || (!refs(notes).length && names(task)))) continue;
+  const others = [...new Set(refs(notes))].filter((x) => x !== pr && !merged.has(x));
   const stillOpen = others.filter((x) => open.has(x));
-  c[2] = stillOpen.length
-    ? `in progress: #${pr} merged; ${stillOpen.map((x) => `#${x}`).join(', ')} open`
-    : `done (PR #${pr} merged ${date})`;
+  const add = stillOpen.length ? `PR #${pr} merged; ${stillOpen.map((x) => `#${x}`).join(', ')} open.` : `PR #${pr} merged ${date}.`;
+  c[2] = stillOpen.length ? 'in_progress' : 'done';
+  c[7] = `${notes}${notes ? ' ' : ''}${add}`;
   fs.mkdirSync(tdir, { recursive: true });
-  if (fr) fs.writeFileSync(fr.file, fs.readFileSync(fr.file, 'utf8').replace(fr.row, () => c.join(' | ')));
-  else fs.writeFileSync(path.join(tdir, `${n}.md`), `${c.join(' | ')}\n`);
+  if (fr) fs.writeFileSync(fr.file, fs.readFileSync(fr.file, 'utf8').replace(fr.row, () => formatRow(c)));
+  else fs.writeFileSync(path.join(tdir, `${n}.md`), `${formatRow(c)}\n`);
   out.push(n);
 }
 if (out.length) console.log(out.join('\n'));

@@ -11,7 +11,9 @@
 //                                      security deprecated documentation performance testing.
 //   tasks.d/<row-number>.md            optional first line `section: <heading text of a "## " section>`
 //                                      (required when the row is new), then one or more table rows
-//                                      `| 330 | ... |`. A row whose number already exists replaces it
+//                                      `| 330 | Task | todo | owner | branch | depends | ETA | Notes |` (the eight
+//                                      canonical columns; the former five-column row is still accepted and
+//                                      converted). A row whose number already exists replaces it
 //                                      in place; a new row is appended to the end of that section's
 //                                      table (the section is created at the top if missing).
 //                                      A line `remove: <row-number>` deletes that row from the board
@@ -20,6 +22,7 @@
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
+import { HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -47,6 +50,31 @@ for (const f of clFiles) {
   clFrags.push({ f, cat: m[2], body });
 }
 
+// Problems with a board in text form: every table has the canonical header, every row eight cells, a valid
+// status and ETA, unique IDs, and no padding (two or more spaces next to a pipe).
+function checkBoard(text) {
+  const out = [];
+  const ids = new Set();
+  let inTable = false;
+  text.split('\n').forEach((l, i) => {
+    const at = `line ${i + 1}`;
+    if (!l.startsWith('|')) { inTable = false; return; }
+    if (/ {2,}\||\| {2,}/.test(l)) out.push(`${at}: padded cell (two or more spaces next to a pipe)`);
+    if (!inTable) {
+      inTable = true;
+      if (l !== HEADER_LINE) out.push(`${at}: table header must be exactly ${HEADER_LINE}`);
+      return;
+    }
+    if (isSeparator(l)) { if (l !== SEPARATOR_LINE) out.push(`${at}: separator row must be ${SEPARATOR_LINE}`); return; }
+    const c = parseCells(l);
+    if (!c || c.length !== 8) { out.push(`${at}: row must have eight columns`); return; }
+    for (const pr of rowProblems(c)) out.push(`${at}: row ${c[0]}: ${pr}`);
+    if (ids.has(c[0])) out.push(`${at}: duplicate ID ${c[0]}`);
+    ids.add(c[0]);
+  });
+  return out;
+}
+
 // ---- tasks -----------------------------------------------------------------------------------
 const tkFiles = listFragments('tasks.d');
 const tkFrags = [];
@@ -60,24 +88,31 @@ for (const f of tkFiles) {
   for (const r of removes) tkFrags.push({ f, n: r.replace(/\D/g, ''), remove: true });
   for (const r of rows) {
     const n = /^\|\s*(\d+)\s*\|/.exec(r)?.[1];
+    let cells = null;
+    try { cells = canonicalCells(r); } catch (e) { err(`tasks.d/${f}: ${e.message}`); continue; }
     if (!n) err(`tasks.d/${f}: row must start with "| <number> |": ${r.slice(0, 40)}`);
-    else tkFrags.push({ f, n, section, row: r });
+    else if (!cells) err(`tasks.d/${f}: row ${n} must have the eight columns ${HEADER_LINE}`);
+    else {
+      for (const pr of rowProblems(cells)) err(`tasks.d/${f}: row ${n}: ${pr}`);
+      tkFrags.push({ f, n, section, row: formatRow(cells), cells });
+    }
   }
 }
 
 // Board hygiene, enforced when validating (not when the train folds):
-//  - a fragment whose status says "PR open" must name its PR number (`#123` or `PR 123`), or the board
-//    cannot flip the row when that PR lands (scripts/board-sync.mjs);
+//  - a fragment whose status is `in_review` must name its PR number (`#123` or `PR 123`) in Notes, or the
+//    board cannot flip the row when that PR lands (scripts/board-sync.mjs);
+//  - TASKS.md itself must be in the canonical format (header, statuses, ETA, unpadded cells);
 //  - a row that is not on the board yet needs a "section:" line.
 if (check) {
   const boardFile = path.join(root, 'TASKS.md');
   const onBoard = new Set(fs.existsSync(boardFile) ? [...fs.readFileSync(boardFile, 'utf8').matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) => m[1]) : []);
   for (const fr of tkFrags) {
     if (fr.remove) continue;
-    const status = fr.row.split(' | ')[2] ?? '';
-    if (/\bPR open\b/i.test(status) && !/(#|PR\s+)\d+/.test(status)) err(`tasks.d/${fr.f}: status says "PR open" but names no PR number (write "PR open: #123")`);
+    if (fr.cells[2] === 'in_review' && !/(#|PR\s+)\d+/.test(fr.cells[7])) err(`tasks.d/${fr.f}: status is in_review but Notes name no PR number (write "PR open: #123")`);
     if (!fr.section && !onBoard.has(fr.n)) err(`tasks.d/${fr.f}: row ${fr.n} is not on the board, so the fragment needs a "section:" line`);
   }
+  if (fs.existsSync(boardFile)) for (const m of checkBoard(fs.readFileSync(boardFile, 'utf8'))) err(`TASKS.md: ${m}`);
 }
 
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
@@ -118,14 +153,14 @@ if (tkFrags.length) {
     const h = lines.findIndex((l) => l.replace(/^##\s+/, '') === section && l.startsWith('## '));
     if (h < 0) {
       const first = lines.findIndex((l) => l.startsWith('## '));
-      lines.splice(first, 0, `## ${section}`, '', '| # | Task | Status | Picked up by | Notes |', '|---|------|--------|--------------|-------|', row, '');
+      lines.splice(first, 0, `## ${section}`, '', HEADER_LINE, SEPARATOR_LINE, row, '');
       continue;
     }
     let end = lines.findIndex((l, i) => i > h && l.startsWith('## '));
     if (end < 0) end = lines.length;
     let last = -1;
     for (let i = h + 1; i < end; i++) if (lines[i].startsWith('|')) last = i;
-    if (last < 0) lines.splice(h + 1, 0, '', '| # | Task | Status | Picked up by | Notes |', '|---|------|--------|--------------|-------|', row);
+    if (last < 0) lines.splice(h + 1, 0, '', HEADER_LINE, SEPARATOR_LINE, row);
     else lines.splice(last + 1, 0, row);
   }
   fs.writeFileSync(p, lines.join('\n'));

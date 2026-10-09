@@ -153,15 +153,19 @@ on a personal account do not get.
 
 ## Task tracking
 
-- `TASKS.md` stays the live board, but **do not edit it directly in a PR** (CI rejects that). Add or
-  update rows with fragment files `tasks.d/<row-number>.md` (a `section:` line plus the complete
-  row; an existing row number replaces that row in place). The merge train folds them into
-  `TASKS.md` when the PR lands. See `tasks.d/README.md`. Validate with
+- `TASKS.md` stays the live board, in the canonical "epic table" format: one `## ` heading per epic and
+  one table per epic with the header `| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |`.
+  Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `done`. **Do not
+  edit it directly in a PR** (CI rejects that). Add or update rows with fragment files
+  `tasks.d/<row-number>.md` (a `section:` line plus the complete eight-column row; an existing row
+  number replaces that row in place). The merge train folds them into `TASKS.md` when the PR lands.
+  See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
 - When a PR merges, the `Board sync` workflow (`scripts/board-sync.mjs`) opens a `board-sync/pr-<n>` PR
-  with fragments that flip rows naming it from "PR open" or "in review" to "done (PR #n merged <date>)",
-  or to "in progress" while other listed PRs are open. A fragment that says "PR open" must name its PR
-  number (`PR open: #123`); `fold-fragments.mjs --check` enforces it.
+  with fragments that flip rows naming it from `in_review` (or `in_progress` with "PR open" in Notes)
+  to `done` with "PR #n merged <date>" appended to Notes, or to `in_progress` while other listed PRs
+  are open. A fragment with status `in_review` must name its PR number in Notes (`PR open: #123`);
+  `fold-fragments.mjs --check` enforces it.
 - Work in other repositories (for example Dubarr) is not tracked on this board; remove such rows
   with a `remove: <row-number>` fragment.
 - Add every newly discovered unit of work as a task row (fragment) immediately, using the numbered

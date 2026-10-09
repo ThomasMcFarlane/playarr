@@ -7,20 +7,20 @@ import test from 'node:test';
 
 const script = path.join(path.dirname(new URL(import.meta.url).pathname), 'board-sync.mjs');
 const fold = path.join(path.dirname(new URL(import.meta.url).pathname), 'fold-fragments.mjs');
+const H = '| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |\n|---|---|---|---|---|---|---|---|';
 const board = `# Tasks
 
 ## Active
 
-| # | Task | Status | Picked up by | Notes |
-|---|------|--------|--------------|-------|
-| 1 | One | in progress: PR open | a | Lands in #50. |
-| 2 | Two | in review | a | Uses PR 50 and #51. |
-| 3 | Three | in progress: #50 and #51 open | a | b |
-| 4 | Four | in progress: #60 open | a | b |
-| 5 | Five | done (PR #40 merged 2026-10-01) | a | mentions #50 |
-| 6 | Six | in progress: folded into #50 | a | b |
-| 7 | Seven | in progress: web done | a | names #50 in passing |
-| 8 | Eight | in progress: PR open | a | Names nothing relevant (#99). |
+${H}
+| 1 | One | in_review | a | | | | Lands in #50. |
+| 2 | Two | in_review | a | | | | Uses PR 50 and #51. |
+| 3 | Three | in_progress | a | | | | PR open: #50 and #51 open. |
+| 4 | Four | in_progress | a | | | | PR open: #60. |
+| 5 | Five | done | a | | | | PR #40 merged 2026-10-01; mentions #50 |
+| 6 | Six | in_progress | a | | | | Folded into #50. |
+| 7 | Seven | in_progress | a | | | | Web done; names #50 in passing. |
+| 8 | Eight | in_review | a | | | | Names nothing relevant (#99). |
 `;
 
 const sync = (args, fragments = {}) => {
@@ -33,33 +33,46 @@ const sync = (args, fragments = {}) => {
   return { r, rows: r.stdout.split('\n').filter(Boolean), folded, board: fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8'), root };
 };
 const status = (b, n) => new RegExp(`^\\| ${n} \\| [^|]* \\| ([^|]*) \\|`, 'm').exec(b)?.[1];
+const notes = (b, n) => new RegExp(`^\\| ${n} \\|.*\\| ([^|]*) \\|$`, 'm').exec(b)?.[1];
 
 test('flips rows that name the merged PR and leaves the rest', () => {
   const { r, rows, folded, board: b } = sync(['--open', '51,60']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(folded.status, 0, folded.stderr);
   assert.deepEqual(rows.sort(), ['1', '2', '3', '6']);
-  assert.equal(status(b, 1), 'done (PR #50 merged 2026-10-09)');
-  assert.equal(status(b, 2), 'done (PR #50 merged 2026-10-09)');
-  assert.equal(status(b, 3), 'in progress: #50 merged; #51 open');
-  assert.equal(status(b, 4), 'in progress: #60 open');
-  assert.equal(status(b, 5), 'done (PR #40 merged 2026-10-01)');
-  assert.equal(status(b, 6), 'done (PR #50 merged 2026-10-09)');
-  assert.equal(status(b, 7), 'in progress: web done');
-  assert.equal(status(b, 8), 'in progress: PR open');
+  assert.equal(status(b, 1), 'done');
+  assert.match(notes(b, 1), /PR #50 merged 2026-10-09\.$/);
+  assert.equal(status(b, 2), 'in_progress');
+  assert.match(notes(b, 2), /PR #50 merged; #51 open\.$/);
+  assert.equal(status(b, 3), 'in_progress');
+  assert.match(notes(b, 3), /PR #50 merged; #51 open\.$/);
+  assert.equal(status(b, 4), 'in_progress');
+  assert.equal(notes(b, 4), 'PR open: #60.');
+  assert.equal(status(b, 5), 'done');
+  assert.equal(status(b, 6), 'done');
+  assert.equal(status(b, 7), 'in_progress');
+  assert.equal(status(b, 8), 'in_review');
 });
 
 test('a PR named as merged does not keep the row in progress', () => {
   const { board: out } = sync(['--open', '', '--merged', '51']);
-  assert.equal(status(out, 3), 'done (PR #50 merged 2026-10-09)');
+  assert.equal(status(out, 3), 'done');
 });
 
 test('the pending fragment wins over the board row and keeps its section line', () => {
+  const frag = 'section: Active\n| 9 | Nine | in_review | a | | | | PR open: #50 |\n';
+  const { rows, folded, board: b } = sync([], { '9.md': frag });
+  assert.ok(rows.includes('9'));
+  assert.equal(folded.status, 0, folded.stderr);
+  assert.equal(status(b, 9), 'done');
+});
+
+test('a pending five-column fragment is converted by the fold', () => {
   const frag = 'section: Active\n| 9 | Nine | in progress: PR open: #50 | a | n |\n';
   const { rows, folded, board: b } = sync([], { '9.md': frag });
   assert.ok(rows.includes('9'));
   assert.equal(folded.status, 0, folded.stderr);
-  assert.equal(status(b, 9), 'done (PR #50 merged 2026-10-09)');
+  assert.equal(status(b, 9), 'done');
 });
 
 test('writes nothing and exits 0 when no row matches', () => {
@@ -75,7 +88,7 @@ test('rejects a missing PR number or date', () => {
   assert.equal(spawnSync('node', [script, '--pr', '1'], { encoding: 'utf8' }).status, 2);
 });
 
-test('--check rejects a "PR open" fragment that names no PR, and a new row without a section', () => {
+test('--check rejects an in_review fragment that names no PR, a new row without a section, and bad cells', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bsync-'));
   fs.mkdirSync(path.join(root, 'tasks.d'));
   fs.writeFileSync(path.join(root, 'TASKS.md'), board);
@@ -85,8 +98,11 @@ test('--check rejects a "PR open" fragment that names no PR, and a new row witho
     fs.rmSync(path.join(root, 'tasks.d', name));
     return r;
   };
-  assert.notEqual(check('1.md', '| 1 | One | in progress: PR open | a | n |\n').status, 0);
-  assert.equal(check('1.md', '| 1 | One | in progress: PR open: #50 | a | n |\n').status, 0);
-  assert.notEqual(check('20.md', '| 20 | New | pending | a | n |\n').status, 0);
-  assert.equal(check('20.md', 'section: Active\n| 20 | New | pending | a | n |\n').status, 0);
+  assert.notEqual(check('1.md', '| 1 | One | in_review | a | | | | n |\n').status, 0);
+  assert.equal(check('1.md', '| 1 | One | in_review | a | | | | PR open: #50 |\n').status, 0);
+  assert.notEqual(check('1.md', '| 1 | One | doing | a | | | | n |\n').status, 0);
+  assert.notEqual(check('1.md', '| 1 | One | todo | a | | | tomorrow | n |\n').status, 0);
+  assert.equal(check('1.md', '| 1 | One | todo | a | | | 2026-10-10 14:00 ICT | n |\n').status, 0);
+  assert.notEqual(check('20.md', '| 20 | New | todo | a | | | | n |\n').status, 0);
+  assert.equal(check('20.md', 'section: Active\n| 20 | New | todo | a | | | | n |\n').status, 0);
 });

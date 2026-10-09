@@ -412,6 +412,7 @@ rm -rf "$bl"
 git checkout -q -b origin-main "$base"; git update-ref refs/remotes/origin/main HEAD
 git checkout -q -b t1 "$base"; printf 'e\n' >TASKS.md; git add -A; git commit -qm "edit"
 git checkout -q -b t2 "$base"; printf 'e\n' >TASKS.md; git add -A; git commit -qm "edit" -m "Merge-Train: yes"
+git checkout -q -b t3 "$base"; printf 'e\n' >TASKS.md; git add -A; git commit -qm "chore(board-format): canonical board"
 mkdir -p scripts/ci; cp "$root/scripts/ci/check-fragments.sh" scripts/ci/
 # Fragment syntax validation is not under test here: stub it out.
 printf 'process.exit(0)\n' >scripts/fold-fragments.mjs
@@ -419,6 +420,7 @@ printf 'process.exit(0)\n' >scripts/fold-fragments.mjs
 cf() { git checkout -q -b "m-$1" "$base"; git merge -q --no-ff "$1" -m merge; git update-ref refs/remotes/origin/main "$base"; ( set +e; sed 's#git fetch -q --no-tags origin "\$base"#true#' scripts/ci/check-fragments.sh >scripts/ci/cf.sh; bash scripts/ci/cf.sh >/dev/null 2>&1; echo $? ); rm -f scripts/ci/cf.sh; }
 [ "$(cf t1)" = 1 ] && echo "ok   untrailered TASKS.md edit rejected" || { echo "FAIL untrailered edit accepted"; fail=1; }
 [ "$(cf t2)" = 0 ] && echo "ok   Merge-Train trailer exempt" || { echo "FAIL trailer not exempt"; fail=1; }
+[ "$(cf t3)" = 0 ] && echo "ok   board-format migration commit exempt" || { echo "FAIL board-format commit not exempt"; fail=1; }
 
 # Co-authored-by: the train strips trailers from the title/body it writes, and CI rejects them in PR commits.
 msg=$(printf 'feat: x\n\nCo-authored-by: Claude <noreply@anthropic.com>\nbody line\n  co-AUTHORED-by : Y <y@example.invalid>\nMerge-Train: yes\n' | strip_coauthor)
