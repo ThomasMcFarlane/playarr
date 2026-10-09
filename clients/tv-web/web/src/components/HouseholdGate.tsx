@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { describeApiError, type ApiClient, type HouseholdStatus } from "@playarr-tv/api-client";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -24,22 +24,31 @@ export function useHouseholdStatus(
   refreshKey: string
 ): { status: HouseholdStatus | null; refresh: () => void } {
   const [status, setStatus] = useState<HouseholdStatus | null>(null);
+  // Newest request wins: a slow older reply must not overwrite a newer status.
+  const sequence = useRef(0);
 
   const refresh = useCallback(() => {
     if (!enabled) return;
+    const mine = ++sequence.current;
     client
       .getHouseholdStatus()
-      .then(setStatus)
+      .then((next) => {
+        if (mine === sequence.current) setStatus(next);
+      })
       .catch(() => undefined);
   }, [client, enabled]);
 
   useEffect(() => {
     if (!enabled) {
+      sequence.current += 1;
       setStatus(null);
       return;
     }
-    refresh();
-    const interval = window.setInterval(refresh, POLL_MS);
+    // No refresh here: the effect below runs on mount and on every route change, so this one only
+    // keeps the timer and the visibility hook-up (a hidden tab does not poll).
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") refresh();
+    }, POLL_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
@@ -50,9 +59,11 @@ export function useHouseholdStatus(
     };
   }, [enabled, refresh]);
 
-  // Route changes re-check promptly so a spent budget is noticed on the
-  // next navigation rather than up to 30 s later.
-  useEffect(refresh, [refresh, refreshKey]);
+  // Mount and route changes re-check promptly so a spent budget is noticed on the next navigation
+  // rather than up to 30 s later. This is the only mount-time fetch.
+  useEffect(() => {
+    refresh();
+  }, [refresh, refreshKey]);
 
   // Household and account events refresh the gate straight away (schedule, budget, approval).
   const liveHousehold = useLiveSubscription({ areas: ["household", "account"] });

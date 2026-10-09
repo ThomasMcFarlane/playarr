@@ -724,7 +724,9 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       })
       .finally(() => {
         if (generation === generationRef.current) setLoadingMore(false);
-        requestRef.current = null;
+        // Only the request that is still current clears the marker: a stale one finishing late must not
+        // drop the in-flight marker of the newer generation (it would allow a duplicate page fetch).
+        if (requestRef.current === request) requestRef.current = null;
       });
 
     requestRef.current = request;
@@ -842,7 +844,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         index < 0 &&
         (totalRef.current === null || itemsRef.current.length < totalRef.current)
       ) {
-        const added = await appendNextPage();
+        let added: Work[];
+        try {
+          added = await appendNextPage();
+        } catch {
+          // The failed page is already reported through `loadMoreError`; jump to what is loaded.
+          break;
+        }
         if (added.length === 0) break;
         index = findIndex();
       }
