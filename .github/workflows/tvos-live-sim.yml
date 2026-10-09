@@ -111,7 +111,8 @@ jobs:
           xcrun simctl install "$udid" "$app"
           echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
           # The idb companion talks to the booted simulator; the idb client reaches it over localhost.
-          nohup idb_companion --udid "$udid" --grpc-port 10880 > "$RUNNER_TEMP/idb-companion.log" 2>&1 &
+          nohup nice -n 5 idb_companion --udid "$udid" --grpc-port 10880 > "$RUNNER_TEMP/idb-companion.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/idb-companion.pid"
           sleep 5
           "$IDB" connect localhost 10880
 
@@ -147,7 +148,7 @@ jobs:
           [[ -n "$PLAYARR_VNC_PASSWORD" ]] || { echo "::error::PLAYARR_VNC_TVOS_PASSWORD is not set"; exit 1; }
           ip=$(tailscale ip -4 | head -1)
           echo "TS_IP=$ip" >> "$GITHUB_ENV"
-          nohup python3 scripts/sim-vnc/sim_vnc.py --udid "$SIM_UDID" --bind "$ip" --port "$VNC_PORT" --idb "$IDB" \
+          nohup nice -n 5 python3 scripts/sim-vnc/sim_vnc.py --udid "$SIM_UDID" --bind "$ip" --port "$VNC_PORT" --idb "$IDB" --fps 24 \
             --ready-file "$RUNNER_TEMP/vnc.ready" > "$RUNNER_TEMP/sim-vnc.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/sim-vnc.pid"
           for _ in $(seq 1 90); do [[ -s "$RUNNER_TEMP/vnc.ready" ]] && break; kill -0 "$(cat "$RUNNER_TEMP/sim-vnc.pid")" || { cat "$RUNNER_TEMP/sim-vnc.log"; exit 1; }; sleep 1; done
@@ -162,20 +163,18 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stay alive
+        env:
+          PLAYARR_VNC_PASSWORD: ${{ secrets.PLAYARR_VNC_TVOS_PASSWORD }}
         run: |
           set -euo pipefail
-          deadline=$(( JOB_START + ${{ inputs.hours }} * 3600 ))
-          [[ ${{ inputs.hours }} -lt 6 ]] || deadline=$(( JOB_START + 358 * 60 ))
-          pid=$(cat "$RUNNER_TEMP/sim-vnc.pid")
-          while (( $(date +%s) < deadline )); do
-            kill -0 "$pid" 2>/dev/null || { echo "::error::the VNC server stopped"; tail -n 40 "$RUNNER_TEMP/sim-vnc.log"; exit 1; }
-            sleep 30
-          done
-          echo "Time is up."
+          export DEADLINE=$(( JOB_START + ${{ inputs.hours }} * 3600 ))
+          [[ ${{ inputs.hours }} -lt 6 ]] || export DEADLINE=$(( JOB_START + 355 * 60 ))
+          bash scripts/sim-vnc/keepalive.sh
 
       - name: Stop the VNC server and delete the simulator
         if: always()
         run: |
+          [[ ! -f "$RUNNER_TEMP/idb-companion.pid" ]] || kill "$(cat "$RUNNER_TEMP/idb-companion.pid")" 2>/dev/null || true
           [[ ! -f "$RUNNER_TEMP/sim-vnc.pid" ]] || kill "$(cat "$RUNNER_TEMP/sim-vnc.pid")" 2>/dev/null || true
           [[ -z "${SIM_UDID:-}" ]] || xcrun simctl delete "$SIM_UDID" || true
           [[ ! -f "$RUNNER_TEMP/sim-vnc.log" ]] || tail -n 30 "$RUNNER_TEMP/sim-vnc.log"
