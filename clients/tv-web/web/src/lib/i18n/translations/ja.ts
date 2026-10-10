@@ -1404,7 +1404,6 @@ export const ja: Translations = {
   "pages.calendar.sourceUnreachable": "接続できません",
   "pages.calendar.sourceRejected": "要求が拒否されました",
   "pages.calendar.sourceError": "エラーが返されました",
-  "pages.calendar.sheetNotInCatalogue": "このタイトルはまだカタログにありません。",
   "pages.calendar.sheetClose": "閉じる",
   "pages.calendar.subscription.title": "カレンダーリンク",
   "pages.calendar.subscription.description": "このプライベートリンクで公開予定を Google・Apple・Outlook カレンダーに追加できます。リンクを知っている人は予定を閲覧できるため、非公開にしてください。",

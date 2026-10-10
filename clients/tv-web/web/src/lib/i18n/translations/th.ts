@@ -1408,7 +1408,6 @@ export const th: Translations = {
   "pages.calendar.sourceUnreachable": "เชื่อมต่อไม่ได้",
   "pages.calendar.sourceRejected": "ปฏิเสธคำขอ",
   "pages.calendar.sourceError": "ส่งข้อผิดพลาดกลับมา",
-  "pages.calendar.sheetNotInCatalogue": "ชื่อเรื่องนี้ยังไม่อยู่ในแคตตาล็อกของคุณ",
   "pages.calendar.sheetClose": "ปิด",
   "pages.calendar.subscription.title": "ลิงก์ปฏิทิน",
   "pages.calendar.subscription.description": "เพิ่มกำหนดการเผยแพร่ลงใน Google, Apple หรือ Outlook Calendar ด้วยลิงก์ส่วนตัวนี้ ใครมีลิงก์จะเห็นรายการของคุณ จึงควรเก็บเป็นความลับ",

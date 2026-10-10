@@ -1417,7 +1417,6 @@ export const en = {
   "pages.calendar.sourceUnreachable": "unreachable",
   "pages.calendar.sourceRejected": "rejected the request",
   "pages.calendar.sourceError": "returned an error",
-  "pages.calendar.sheetNotInCatalogue": "This title is not in your catalogue yet.",
   "pages.calendar.sheetClose": "Close",
   "pages.calendar.subscription.title": "Calendar link",
   "pages.calendar.subscription.description": "Add your releases to Google, Apple or Outlook Calendar with this private link. Anyone with the link can see your releases, so keep it secret.",
