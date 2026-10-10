@@ -166,7 +166,7 @@ struct TVRootView: View {
             .frame(maxHeight: .infinity, alignment: .center)
             .zIndex(50)
 
-            TVShellHeader(frozenClock: true, clockLeading: TVParityLaunch.isLive ? (tab == .home ? 492.4 : 568.8) : nil)
+            TVShellHeader(frozenClock: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .allowsHitTesting(false)
                 .zIndex(80)

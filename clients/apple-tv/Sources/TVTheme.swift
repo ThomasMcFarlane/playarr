@@ -683,62 +683,28 @@ struct TVParityFocusChrome: ViewModifier {
 struct TVShellHeader: View {
     /// Frozen clock for parity suite (matches Android mask strategy).
     var frozenClock: Bool = false
-    /// Web places the clock after the page header: x 492.4 on Home, 568.8 elsewhere.
-    var clockLeading: CGFloat? = nil
+    /// Web `.app-clock`: x 476.1 on every TV page (live web, 2026-10-11).
+    var clockLeading: CGFloat = 476.1
 
     var body: some View {
-        if let clockLeading {
-            ZStack(alignment: .topLeading) {
-                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
-                    .placed(x: 60.6, y: 60.2)
-                HStack(spacing: 11.2) {
-                    Text(Self.timeString(frozen: frozenClock))
-                        .font(TVTheme.font(size: 17.28, weight: .bold))
-                        .tracking(-0.52)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text(Self.dateString(frozen: frozenClock))
-                        .font(TVTheme.font(size: 11.14, weight: .semibold))
-                        .tracking(0.45)
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                }
-                .placed(x: clockLeading, y: 68.2, h: 25.9)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(false)
-        } else {
-            legacyBody
-        }
-    }
-
-    private var legacyBody: some View {
-        ZStack {
-            // Clock is centred on the live SPA header.
-            HStack(spacing: 11) {
-                // Frozen time matches the Playwright reference frames used by
-                // the honest suite (`run-4` / `run-honest-*` capture 05:59).
+        ZStack(alignment: .topLeading) {
+            PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
+                .placed(x: 60.6, y: 60.2)
+            TimelineView(.everyMinute) { _ in
+            HStack(spacing: 11.3) {
                 Text(Self.timeString(frozen: frozenClock))
-                    .font(TVTheme.font(size: 17, weight: .bold))
-                    .tracking(-0.5)
+                    .font(TVTheme.font(size: 17.28, css: 760))
+                    .tracking(-0.52)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text(Self.dateString(frozen: frozenClock))
-                    .font(TVTheme.font(size: 11, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .font(TVTheme.font(size: 11.136, css: 640))
+                    .tracking(0.45)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
             }
-            HStack {
-                // Logo sits on the nav centre-x on web
-                // (`--tv-nav-centre-x` − logo/2).
-                let navCentreX = DesignTokens.Shell.navEdge
-                    + DesignTokens.Shell.navPaddingInline
-                    + DesignTokens.Shell.navItemSize / 2
-                    + 1
-                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
-                    .padding(.leading, max(0, navCentreX - DesignTokens.Shell.logoSize / 2))
-                Spacer()
             }
+            .placed(x: clockLeading, y: 68.2, h: 25.9)
         }
-        .padding(.top, DesignTokens.Shell.headerTop)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
     }
 
