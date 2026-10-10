@@ -21,7 +21,7 @@ const resyncing = await startServer({ ...base, resyncAfterMs: 4500 });
 
 // What each section shows once it has real content (a skeleton, or the calendar's placeholder entries, do not count).
 const SECTIONS = [
-  { name: "calendar", href: "/calendar", content: ".calendar-chip, .calendar-entry:not(.calendar-entry-skeleton)" },
+  { name: "calendar", href: "/calendar", content: ".calendar-line, .calendar-chip, .calendar-entry:not(.calendar-entry-skeleton)" },
   { name: "playlists", href: "/playlists", content: ".tv-media-track, .tv-title-card, [data-tv-track-id]" },
   { name: "watchlist", href: "/watchlist", content: ".tv-watchlist-list" },
   { name: "series", href: "/series", content: ".tv-title-card" },
