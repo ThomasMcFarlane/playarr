@@ -4807,6 +4807,24 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
  */
 .app-nav-group-profile {
   align-items: center;
+  margin-top: auto;
+}
+
+.app-nav-group {
+  flex: 0 0 auto;
+}
+
+.app-nav-group-profile + .app-user-version {
+  margin-top: 0.35rem;
+}
+
+.app-nav > .app-nav-group.app-nav-group-profile {
+  margin-top: auto;
+}
+
+/* Keeps the usual section gap when the rail is full and there is no free space to push the profile group down. */
+.app-nav > .app-nav-group:has(+ .app-nav-group-profile) {
+  margin-bottom: clamp(0.25rem, calc(1.26 * var(--viewport-unit)), 0.85rem);
 }
 
 .app-user-avatar {
@@ -4867,14 +4885,25 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .app-nav {
-  top: 50%;
+  /* The rail runs from just below the Playarr logo to the bottom padding; the profile group and the version sit at its foot. */
+  top: calc(
+    clamp(34px, calc(5.2 * var(--viewport-unit)), 66px) + var(--page-control-height, 44px) +
+      clamp(0.4rem, calc(1.2 * var(--viewport-unit)), 0.9rem)
+  );
   right: auto;
-  bottom: auto;
+  bottom: clamp(22px, calc(3.2 * var(--viewport-unit)), 46px);
   left: var(--tv-nav-edge);
   flex-direction: column;
-  transform: translateY(-50%);
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  transform: none;
   gap: 0;
-  padding: 0;
+  /* Room inside the scroll box so the group shadows are not clipped to a visible edge; the margin cancels it. */
+  padding: 14px 30px;
+  margin: -14px -30px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -4912,6 +4941,17 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .app-nav-group + .app-nav-group {
   margin-top: clamp(0.25rem, calc(1.26 * var(--viewport-unit)), 0.85rem);
   margin-left: 0;
+}
+
+@media (max-height: 800px) {
+  /* Compact the rail so all entries, the profile group and the version still fit below the logo. */
+  .app-nav-group {
+    padding-block: 0.28rem;
+  }
+
+  .app-nav-group-profile + .app-user-version {
+    margin-top: 0.15rem;
+  }
 }
 
 .app-nav-link {
@@ -8462,6 +8502,19 @@ html.is-native-scroll-root .profile-auth-scroll {
   .app-nav-group + .app-nav-group {
     margin-top: 0;
     margin-left: 0.7rem;
+  }
+
+  .app-nav > .app-nav-group:has(+ .app-nav-group-profile),
+  .app-nav > .app-nav-group.app-nav-group-profile {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .app-nav {
+    top: auto;
+    overflow: visible;
+    margin: 0;
+    padding: 0;
   }
 
   .app-nav-link.is-active,
