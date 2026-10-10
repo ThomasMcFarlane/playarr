@@ -6,7 +6,8 @@
  * Owner rules: week view moves LEFT and RIGHT between days and UP and DOWN between entries; the agenda's details follow
  * focus; the entry's left border shows availability; every scrolling area fades at the edges where content continues.
  */
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {focusNode} from '../platform';
 import {Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
 import {useAsyncData} from '@playarr-tv/api-client/react';
@@ -127,7 +128,7 @@ export function CalendarScreen(): React.ReactElement {
       </Box>
 
       <RoundNav x={1629.3} glyph={'←'} label={t('pages.calendar.previous')} onPress={() => setAnchor(shiftAnchor(view, anchor, -1))} />
-      <TodayPill label={t('pages.calendar.today')} onPress={() => setAnchor(anchorForView(view, today))} />
+      <TodayPill label={t('pages.calendar.today')} settled={state.status === 'ready'} onPress={() => setAnchor(anchorForView(view, today))} />
       <RoundNav x={1793.2} glyph={'→'} label={t('pages.calendar.next')} onPress={() => setAnchor(shiftAnchor(view, anchor, 1))} />
 
       <PeriodPicker label={rangeLabel} anchor={anchor} locale={locale} onChange={setAnchor} />
@@ -200,11 +201,21 @@ function RoundNav({x, glyph, label, onPress}: {x: number; glyph: string; label: 
   );
 }
 
-function TodayPill({label, onPress}: {label: string; onPress: () => void}): React.ReactElement {
+function TodayPill({label, onPress, settled}: {label: string; onPress: () => void; settled: boolean}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
+  // Web opens the calendar on Today (data-tv-focus-default). The entries mount after it and Vega would leave focus on
+  // whatever it last resolved, so Today takes focus again once the first load settles.
+  const ref = useRef<View>(null);
+  const settledOnce = useRef(false);
+  useEffect(() => {
+    if (settledOnce.current) return; // later reloads (a view or filter change) must not pull focus out of a drawer
+    if (settled) settledOnce.current = true;
+    focusNode(ref);
+  }, [settled]);
   return (
     <Pressable
+      ref={ref}
       accessibilityRole="button"
       accessibilityLabel={label}
       hasTVPreferredFocus
