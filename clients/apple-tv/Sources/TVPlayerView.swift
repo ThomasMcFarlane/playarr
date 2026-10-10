@@ -42,13 +42,13 @@ struct TVPlayerView: View {
 
     var body: some View {
         // The player is full screen like the web's player page: the shell hides its nav and clock.
-        playerBody
+        screen
             .onAppear { setShellChromeHidden(true) }
             .onDisappear { setShellChromeHidden(false) }
     }
 
     @ViewBuilder
-    private var playerBody: some View {
+    private var screen: some View {
         if let parity {
             // Parity route: the fixture clips are Matroska and the runner cannot transcode, so the video
             // layer is the server's frame of the clip at the paused position, scaled to the stage.
