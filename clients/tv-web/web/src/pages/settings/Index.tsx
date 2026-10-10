@@ -255,7 +255,7 @@ export function SettingsIndexPage() {
                       id={isActive ? "settings-active-option" : undefined}
                       to={section.to}
                       replace
-                      className={`settings-option${isActive ? " is-active" : ""}`}
+                      className={`media-card media-card-solid settings-option${isActive ? " is-active" : ""}`}
                       state={{
                         backTo: "/settings",
                         navigationOrigin: detailOrigin ?? navigationLayer.origin,

@@ -964,6 +964,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   scrollbar-width: none;
 }
 
+/* A focused option lifts with the shared card shadow and glow (up to 72px below, 48px to the left): the scroller keeps
+   that room as padding on the list, and a focused option settles clear of the fades. */
+.settings-options-scroll {
+  scroll-padding-block: var(--page-edge-fade-size);
+}
+
 .settings-options-scroll::-webkit-scrollbar,
 .settings-detail-scroll::-webkit-scrollbar {
   width: 0;

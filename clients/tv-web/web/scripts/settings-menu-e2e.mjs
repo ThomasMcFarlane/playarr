@@ -50,18 +50,23 @@ const MENUS = [
   ...["appearance", "profile-avatar", "language", "player", "server", "profile-lock", "invite", "request-latency", "remote", "your-data", "home"].map((x) => [`/settings/${x}`, ".settings-detail-scroll :is(button, a[href], input, select, [role=radio], [role=option]):not([disabled])"]),
 ];
 
-const measure = (itemSel) => {
-  const items = [...document.querySelectorAll(itemSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+const measure = ([itemSel, active]) => {
+  const items = active ? [document.activeElement] : [...document.querySelectorAll(itemSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
   if (!items.length) return { count: 0 };
   const scrollerOf = (el) => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight + 1) return p; } for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o !== "visible") return p; } return document.documentElement; };
   const pick = [0, Math.floor(items.length / 2), items.length - 1];
   const out = [];
   for (const idx of [...new Set(pick)]) {
     const el = items[idx];
-    el.scrollIntoView({ block: "center" });
-    el.focus({ preventScroll: true });
+    if (!active) { el.scrollIntoView({ block: "center" }); el.focus({ preventScroll: true }); }
     const sc = scrollerOf(el);
     const clip = sc.getBoundingClientRect();
+    // The fixed nav rail paints over the left edge of the page: the visible clip starts at its right edge.
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;left:0;top:0;width:var(--tv-nav-clearance, 0px);height:0";
+    document.body.appendChild(probe);
+    const railRight = probe.getBoundingClientRect().width;
+    probe.remove();
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();
     // The full glow extent: every box-shadow's blur + spread + offset on each side, plus the outline.
@@ -69,7 +74,7 @@ const measure = (itemSel) => {
     const shadows = (cs.boxShadow === "none" ? "" : cs.boxShadow).split(/,(?![^(]*\))/).map((x) => x.trim()).filter(Boolean);
     for (const sh of shadows) {
       if (/inset/.test(sh)) continue;
-      const nums = (sh.replace(/rgba?\([^)]*\)|color\([^)]*\)|oklab\([^)]*\)|oklch\([^)]*\)|color-mix\([^)]*\)/g, "").match(/-?[\d.]+px/g) ?? []).map(parseFloat);
+      const nums = (sh.replace(/(rgba?|color|oklab|oklch|color-mix)\((?:[^()]|\([^)]*\))*\)/g, "").match(/(?<![\w.])-?\d*\.?\d+(?:px)?/g) ?? []).map(parseFloat);
       const [ox = 0, , blur = 0, spread = 0] = nums;
       L = Math.max(L, blur + spread - ox);
     }
@@ -82,7 +87,7 @@ const measure = (itemSel) => {
     const panel = el.closest(".tv-downloads-panel");
     let gutter = null;
     if (panel) { const pr = panel.getBoundingClientRect(); const room = parseFloat(getComputedStyle(panel).getPropertyValue("--list-glow-room")) || 0; gutter = pr.left + room + parseFloat(getComputedStyle(panel).paddingRight); }
-    out.push({ idx, tag: el.className, itemLeft: r.left, textLeft, clipLeft: clip.left, clipTop: clip.top, clipBottom: clip.bottom, glowLeft: r.left - L, glow: L, gutter, scrollerClass: sc.className });
+    out.push({ idx, tag: el.className, itemLeft: r.left, textLeft, clipLeft: Math.max(clip.left, railRight), clipTop: clip.top, clipBottom: clip.bottom, glowLeft: r.left - L, glow: L, lift: new DOMMatrix(cs.transform === "none" ? undefined : cs.transform).m42, gutter, scrollerClass: sc.className });
   }
   return { count: items.length, out };
 };
@@ -108,11 +113,28 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`${base}${route}`, { waitUntil: "load" });
       await page.waitForTimeout(1500);
       await page.keyboard.press("Shift");
-      const m = await page.evaluate(measure, sel);
+      let m = await page.evaluate(measure, [sel, false]);
+      if (route === "/settings" && m.count) {
+        // Real keyboard focus (:focus-visible from the arrow keys), first, middle and last option.
+        const out = [];
+        await page.evaluate((q) => { const e = document.querySelector(q); e.scrollIntoView({ block: "start" }); e.focus({ preventScroll: true }); }, sel);
+        await page.keyboard.press("Shift");
+        let at = 0;
+        for (const idx of [...new Set([0, Math.floor(m.count / 2), m.count - 1])]) {
+          while (at < idx) { await page.keyboard.press("ArrowDown"); at++; await page.waitForTimeout(120); }
+          await page.waitForTimeout(500);
+          const k = await page.evaluate(measure, [sel, true]);
+          const fv = await page.evaluate(() => document.activeElement?.matches(":focus-visible") ?? false);
+          if (!fv) { check(`${label} item ${idx}: real keyboard focus is :focus-visible`, false, "not focus-visible"); continue; }
+          if (k.out?.[0]) out.push({ ...k.out[0], idx });
+        }
+        m = { count: m.count, out };
+      }
       if (!m.count) { console.log(`note  ${label}: no items for ${sel}`); continue; }
       for (const o of m.out) {
         const tag = `${label} item ${o.idx}/${m.count}`;
         check(`${tag}: full glow (${o.glow.toFixed(0)}px) inside the clip rect`, o.glowLeft >= o.clipLeft - 0.5, `glowLeft=${o.glowLeft} clipLeft=${o.clipLeft} scroller=${o.scrollerClass}`);
+        if (route === "/settings") check(`${tag}: focus uses the shared card treatment (glow ${o.glow.toFixed(0)}px, lift ${o.lift}px)`, o.glow >= 40 && o.lift < 0, "plain outline, no card glow or lift");
         check(`${tag}: text not clipped on the left`, o.textLeft >= o.clipLeft, `textLeft=${o.textLeft} clipLeft=${o.clipLeft}`);
         if (o.gutter !== null) check(`${tag}: left edge on the page content gutter`, Math.abs(o.itemLeft - o.gutter) <= 1, `itemLeft=${o.itemLeft} gutter=${o.gutter}`);
       }
