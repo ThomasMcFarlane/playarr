@@ -38,6 +38,7 @@ Steps only the repository owner can perform.
 | 9967 | Web: Watchlist with one item stretches the row to full panel height | in_progress | final-live worker | watchlist-single-row | | 2026-10-10 22:30 ICT | Seen on live with one item at 1920; fixing the row track, e2e at 1, 2 and 10 items; Downloads and Requests checked too |
 | 9971 | Web: download view uses a quality select and asks episode vs whole season | in_progress | download worker | download-flow | | 2026-10-10 23:30 ICT | Shared Select for quality; scope choice (episode, season, series) via shared SegmentedControl; e2e download-flow |
 | 9968 | Web: no download button on each episode row of TV shows | in_progress | download worker | download-flow | | 2026-10-10 23:30 ICT | Season track download button removed; download stays in the episode actions panel (long-press Enter) |
+| 9969 | Web: every right-side panel (incl. long-press actions and download view) uses the one shared Drawer and close button | in_progress | drawer worker | drawer-everywhere | | 2026-10-10 23:30 ICT | Owner request 2026-10-10; auditing all panels, migrating to shared Drawer, guard e2e drawer-consistency-e2e.mjs |
 
 ## 2. Server performance and security (2026-10-03)
 
