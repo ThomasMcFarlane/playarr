@@ -168,7 +168,7 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
         limit: Int?,
         offset: Int?
     ) async throws -> CatalogPage
-    /// The same browse with an explicit order (`asc` or `desc`, web `?order=`).
+    /// The library browse with an explicit order (`asc` or `desc`, web `?order=`), playable titles only.
     func browseCatalog(
         kind: WorkKind?,
         sort: String?,
@@ -413,6 +413,8 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
         if let kind { query.append(URLQueryItem(name: "kind", value: kind.rawValue)) }
         if let sort { query.append(URLQueryItem(name: "sort", value: sort)) }
         if let order { query.append(URLQueryItem(name: "order", value: order)) }
+        // The library lists what can be played, as the web does (`available_only`).
+        query.append(URLQueryItem(name: "available_only", value: "true"))
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
         if let offset { query.append(URLQueryItem(name: "offset", value: String(offset))) }
         return try await get("/api/v1/catalog", query: query)
