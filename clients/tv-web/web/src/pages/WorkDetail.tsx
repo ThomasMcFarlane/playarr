@@ -69,6 +69,7 @@ import {
 } from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvMediaTrack, TvRailSurface, type TvTrackSpacing } from "../components/tv/TvStage";
+import { Select } from "../components/ui";
 import { RailStack, centreTrackInStack } from "../components/tv/RailStack";
 
 interface MoviePlaybackDraft {
@@ -270,110 +271,52 @@ function MoviePlaybackSettingsDrawer({
         <>
           <section>
             <h3>{t("pages.workDetail.qualityHeading")}</h3>
-            <div className="tv-filter-choice-grid tv-playback-settings-options">
-              {options.quality_options.map((quality) => {
-                const selected = quality.id === draft.quality_id;
-                return (
-                  <button
-                    key={quality.id}
-                    type="button"
-                    className={selected ? "is-active" : ""}
-                    aria-pressed={selected}
-                    onClick={() => onChange({ ...draft, quality_id: quality.id })}
-                  >
-                    <span>
-                      <strong>{quality.label}</strong>
-                      <small>
-                        {quality.video_bitrate_bps
-                          ? t("pages.workDetail.bitrateMbps", {
-                              value: Math.round(quality.video_bitrate_bps / 1_000_000),
-                            })
-                          : t("pages.workDetail.sourceQuality")}
-                      </small>
-                    </span>
-                    <i aria-hidden="true">{selected ? "✓" : ""}</i>
-                  </button>
-                );
-              })}
-            </div>
+            <Select
+              ariaLabel={t("pages.workDetail.qualityHeading")}
+              value={draft.quality_id}
+              options={options.quality_options.map((quality) => ({
+                value: quality.id,
+                label: quality.label,
+                hint: quality.video_bitrate_bps
+                  ? t("pages.workDetail.bitrateMbps", { value: Math.round(quality.video_bitrate_bps / 1_000_000) })
+                  : t("pages.workDetail.sourceQuality"),
+              }))}
+              onChange={(id) => onChange({ ...draft, quality_id: id })}
+            />
           </section>
 
           <section>
             <h3>{t("pages.workDetail.audioHeading")}</h3>
-            <div className="tv-filter-choice-grid tv-playback-settings-options">
-              <button
-                type="button"
-                className={draft.audio_track_id === null ? "is-active" : ""}
-                aria-pressed={draft.audio_track_id === null}
-                onClick={() => onChange({ ...draft, audio_track_id: null })}
-              >
-                <span>
-                  <strong>{t("pages.workDetail.automatic")}</strong>
-                  <small>{t("pages.workDetail.useYourPreferredLanguage")}</small>
-                </span>
-                <i aria-hidden="true">
-                  {draft.audio_track_id === null ? "✓" : ""}
-                </i>
-              </button>
-              {options.audio_tracks.map((track) => {
-                const selected = track.id === draft.audio_track_id;
-                return (
-                  <button
-                    key={track.id}
-                    type="button"
-                    className={selected ? "is-active" : ""}
-                    aria-pressed={selected}
-                    onClick={() => onChange({ ...draft, audio_track_id: track.id })}
-                  >
-                    <span>
-                      <strong>{track.label}</strong>
-                      <small>
-                        {track.language ?? track.codec ?? t("pages.workDetail.originalAudio")}
-                      </small>
-                    </span>
-                    <i aria-hidden="true">{selected ? "✓" : ""}</i>
-                  </button>
-                );
-              })}
-            </div>
+            <Select
+              ariaLabel={t("pages.workDetail.audioHeading")}
+              value={draft.audio_track_id ?? ""}
+              options={[
+                { value: "", label: t("pages.workDetail.automatic"), hint: t("pages.workDetail.useYourPreferredLanguage") },
+                ...options.audio_tracks.map((track) => ({
+                  value: track.id,
+                  label: track.label,
+                  hint: track.language ?? track.codec ?? t("pages.workDetail.originalAudio"),
+                })),
+              ]}
+              onChange={(id) => onChange({ ...draft, audio_track_id: id === "" ? null : id })}
+            />
           </section>
 
           <section>
             <h3>{t("pages.workDetail.subtitlesHeading")}</h3>
-            <div className="tv-filter-choice-grid tv-playback-settings-options">
-              <button
-                type="button"
-                className={draft.subtitle_track_id === null ? "is-active" : ""}
-                aria-pressed={draft.subtitle_track_id === null}
-                onClick={() => onChange({ ...draft, subtitle_track_id: null })}
-              >
-                <span>
-                  <strong>{t("pages.workDetail.subtitlesOff")}</strong>
-                  <small>{t("pages.workDetail.noSubtitles")}</small>
-                </span>
-                <i aria-hidden="true">
-                  {draft.subtitle_track_id === null ? "✓" : ""}
-                </i>
-              </button>
-              {options.subtitle_tracks.map((track) => {
-                const selected = track.id === draft.subtitle_track_id;
-                return (
-                  <button
-                    key={track.id}
-                    type="button"
-                    className={selected ? "is-active" : ""}
-                    aria-pressed={selected}
-                    onClick={() => onChange({ ...draft, subtitle_track_id: track.id })}
-                  >
-                    <span>
-                      <strong>{track.label}</strong>
-                      <small>{track.language ?? track.codec}</small>
-                    </span>
-                    <i aria-hidden="true">{selected ? "✓" : ""}</i>
-                  </button>
-                );
-              })}
-            </div>
+            <Select
+              ariaLabel={t("pages.workDetail.subtitlesHeading")}
+              value={draft.subtitle_track_id ?? ""}
+              options={[
+                { value: "", label: t("pages.workDetail.subtitlesOff"), hint: t("pages.workDetail.noSubtitles") },
+                ...options.subtitle_tracks.map((track) => ({
+                  value: track.id,
+                  label: track.label,
+                  hint: track.language ?? track.codec ?? undefined,
+                })),
+              ]}
+              onChange={(id) => onChange({ ...draft, subtitle_track_id: id === "" ? null : id })}
+            />
           </section>
 
           <div className="tv-playback-settings-actions">
