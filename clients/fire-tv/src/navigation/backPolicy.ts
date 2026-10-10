@@ -154,7 +154,8 @@ const backLayers: Array<() => void> = [];
  * closed must treat the same press as handled rather than walk the screen back.
  */
 let lastLayerClosedAt = 0;
-const LAYER_PRESS_WINDOW_MS = 250;
+// The second delivery of one press arrives up to ~0.5 s later on a loaded device (seen on the Vega Virtual Device).
+const LAYER_PRESS_WINDOW_MS = 700;
 
 /**
  * An open drawer, menu or dialog owns Back while it is `active` (web's layered Back): the press closes the topmost layer
