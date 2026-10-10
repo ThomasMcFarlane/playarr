@@ -515,17 +515,6 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # Test builds only: a publisher in Windows' unsigned namespace lets a desktop install this package with
-      # `Add-AppxPackage -AllowUnsigned`, with no certificate and no admin rights. Release builds keep CN=Playarr.
-      - name: Use the unsigned-namespace publisher
-        shell: pwsh
-        run: |
-          $manifest = 'clients/xbox/src/Playarr.Xbox/Package.appxmanifest'
-          $text = Get-Content $manifest -Raw
-          $updated = $text -replace 'Publisher="CN=Playarr"', 'Publisher="CN=Playarr, OID.2.25.311729368913984317654407730594956997722=1"'
-          if ($updated -eq $text) { throw 'Package.appxmanifest Publisher not found' }
-          Set-Content -Path $manifest -Value $updated -NoNewline
-
       - name: Build the unsigned x64 package
         shell: pwsh
         run: |
