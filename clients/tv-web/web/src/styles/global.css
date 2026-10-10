@@ -4578,7 +4578,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   padding: 8px 6px;
-  scroll-padding-block: 22px;
+  /* A focused letter settles clear of the edge fade, never inside it. */
+  scroll-padding-block: var(--page-edge-fade-size);
   transform: translateY(-50%);
 }
 
@@ -5747,8 +5748,14 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 .tv-directory .tv-alphabet {
   right: var(--directory-controls-edge);
   top: clamp(214px, calc(25 * var(--viewport-unit)), 286px);
+  /* Down to the bottom edge of the stage like the library grid, so the fade runs out at the screen edge (a clip edge
+     above it would be a hard line). The bottom padding keeps the last letter clear of the screen edge at the scroll end. */
+  bottom: 0;
   width: auto;
-  height: min(calc(64 * var(--viewport-unit)), 690px);
+  height: auto;
+  padding-bottom: var(--library-rail-bottom, clamp(48px, calc(6 * var(--viewport-unit)), 78px));
+  /* The shared fade; the top fades to nothing so no letter is cut at the rail's top edge (no line). */
+  --edge-fade-start-floor: 0;
   transform: none;
 }
 

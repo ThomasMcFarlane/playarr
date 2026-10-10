@@ -7,7 +7,10 @@
 //! either, unlike Radarr's; Lidarr/Readarr have no equivalent concept), so
 //! in practice a `Person`/`Credit` only ever exists for a movie `Work`
 //! today -- not a structural restriction, just what the current data
-//! sources provide.
+//! sources provide. Series cast (no crew) is the exception: Sonarr exposes
+//! none, so it comes from the public series metadata service Sonarr itself
+//! uses (see `playarr_arr_client::SeriesCastClient`); those people have no
+//! `tmdb_id` and dedupe by name plus headshot.
 //!
 //! `Person` is deduped across every movie it appears in by
 //! [`Person::tmdb_id`] (TMDb's own person id, the one stable

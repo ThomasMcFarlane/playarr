@@ -1933,6 +1933,13 @@ async fn boot_api(
     // API answers from the cache and never waits on an *arr instance.
     tokio::spawn(playarr_api::calendar_cache::run_refresher(state.clone()));
 
+    // Read the catalogue into memory now, so the first Home or Library request
+    // after a start does not pay for the scan.
+    {
+        let catalog = state.catalog.clone();
+        tokio::spawn(async move { catalog.warm_snapshot().await });
+    }
+
     let (router, _openapi) = playarr_api::build_router_with_tv(
         state,
         version_gate,
@@ -2592,6 +2599,15 @@ fn spawn_poller_for(
     // it through unconditionally here is simpler than a kind-gated branch
     // and costs nothing extra for non-Radarr instances.
     .with_credit_repo(credit_repo)
+    // Series cast: Sonarr exposes none, so Sonarr sources also read it from
+    // the metadata service Sonarr itself uses (override the base URL with
+    // `PLAYARR_SERIES_CAST_URL`, e.g. a mirror). A no-op for other kinds.
+    .with_series_cast(
+        std::env::var("PLAYARR_SERIES_CAST_URL")
+            .ok()
+            .filter(|url| !url.trim().is_empty())
+            .as_deref(),
+    )
     .with_language_repo(language_repo)
     .with_live_events(live_events)
     .with_write_queue(write_queue);

@@ -48,7 +48,7 @@ async function open(view, viewport, theme = "light") {
   }, { base, userId: USER_ID, theme });
   const page = await context.newPage();
   await page.goto(`${base}/calendar?view=${view}&date=2026-10-07&platform=tv-webos`);
-  await page.waitForSelector(view === "month" ? ".calendar-chip" : ".calendar-entry", { timeout: 15000 });
+  await page.waitForSelector(view === "month" ? ".calendar-line" : ".calendar-entry", { timeout: 15000 });
   await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton, .tv-library-grid-panel .skeleton"));
   await page.waitForTimeout(500);
   return { context, page };
@@ -142,7 +142,7 @@ try {
   // ---- Month: LEFT/RIGHT between cells, UP/DOWN between weeks ----
   {
     const { context, page } = await open("month", { width: 1920, height: 1080 });
-    await page.evaluate(() => document.querySelectorAll(".calendar-month-row")[1].querySelectorAll(".calendar-month-cell")[2].querySelector(".calendar-chip").focus());
+    await page.evaluate(() => document.querySelectorAll(".calendar-month-row")[1].querySelectorAll(".calendar-month-cell")[2].querySelector(".calendar-line").focus());
     await page.waitForTimeout(150);
     const a = await focusInfo(page);
     await key(page, "ArrowRight");
@@ -287,23 +287,41 @@ try {
     await context.close();
   }
 
-  // ---- The date range is a real button in the shell action column (not the subtitle) and opens the month/year jump ----
+  // ---- The date switcher is a real button in the SAME group as Previous / Today / Next at the top right, not in the shell action column ----
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
     const tag = `${viewport.width}`;
     const { context, page } = await open("week", viewport);
     const where = await page.evaluate(() => {
       const b = document.querySelector("[data-range-button]");
+      const group = b?.closest("[data-action-kind='navigation']");
+      const column = document.querySelector("[data-shell-action-column]");
+      const rect = (el) => el.getBoundingClientRect();
       const filters = document.querySelector("[data-filters-button]");
+      const buttons = group ? [...group.querySelectorAll("button")] : [];
       return {
-        tag: b?.tagName, inColumn: Boolean(b && document.querySelector("[data-shell-action-column]")?.contains(b)),
-        text: b?.textContent?.trim(), above: Boolean(b && filters && b.getBoundingClientRect().bottom <= filters.getBoundingClientRect().top),
+        tag: b?.tagName, inGroup: Boolean(group), inColumn: Boolean(b && column?.contains(b)),
+        groupSize: buttons.length, groupInColumn: Boolean(group && column?.contains(group)),
+        text: b?.textContent?.trim(),
+        columnButtons: column ? column.querySelectorAll("button, a").length : -1,
+        columnHasRange: Boolean(column?.querySelector("[data-range-button]")),
+        sameRow: buttons.length > 0 && buttons.every((x) => Math.abs(rect(x).top + rect(x).height / 2 - (rect(b).top + rect(b).height / 2)) < 4),
+        topRight: Boolean(b) && rect(b).right > innerWidth * 0.5 && rect(b).top < innerHeight * 0.25,
+        leftOfColumn: Boolean(b && filters && rect(b).right <= rect(filters).left),
         subtitle: document.querySelector(".page-header-detail")?.textContent ?? null,
-        navInHeader: document.querySelectorAll(".page-header [data-action-kind='navigation'] button").length,
-        fits: b ? b.querySelector("span").scrollWidth <= b.querySelector("span").clientWidth + 1 : false,
+        defaults: document.querySelectorAll(".calendar-page [data-tv-focus-default]").length,
+        fits: b ? b.scrollWidth <= b.clientWidth + 1 : false,
       };
     });
-    check(`range button (${tag}): a real button in the shell action column above Filters`, where.tag === "BUTTON" && where.inColumn && where.above, JSON.stringify(where));
-    check(`range button (${tag}): shows the compact range, the subtitle is empty and Previous/Today/Next stay in the header`, /^5\s?[\u2013-]\s?11\s?Oct$/.test(where.text ?? "") && !where.subtitle && where.navInHeader === 3 && where.fits, JSON.stringify(where));
+    check(`range button (${tag}): a real button in the Previous / Today / Next group, not in the shell action column`, where.tag === "BUTTON" && where.inGroup && !where.inColumn && !where.groupInColumn && !where.columnHasRange && where.groupSize === 4 && where.sameRow, JSON.stringify(where));
+    check(`range button (${tag}): top right, left of the action column, compact range label, one default focus, no subtitle`, where.topRight && where.leftOfColumn && /^5\s?[\u2013-]\s?11\s?Oct$/.test(where.text ?? "") && !where.subtitle && where.defaults === 1 && where.fits, JSON.stringify(where));
+    await page.screenshot({ path: join(process.env.CALENDAR_SHOTS ?? "/tmp", `calendar-switcher-${tag}.png`) });
+    await page.locator("[data-action-kind='navigation'] button").last().focus();
+    await key(page, "ArrowDown");
+    const reach = await page.evaluate(() => ({ inColumn: Boolean(document.activeElement?.closest("[data-shell-action-column]")), cls: document.activeElement?.className?.toString() }));
+    check(`range button (${tag}): DOWN from the group reaches the action column`, reach.inColumn, JSON.stringify(reach));
+    await key(page, "ArrowUp");
+    const back = await page.evaluate(() => Boolean(document.activeElement?.closest("[data-action-kind='navigation']")));
+    check(`range button (${tag}): UP from the action column returns to the group`, back);
     await page.locator("[data-range-button]").focus();
     await page.keyboard.press("Enter");
     await page.waitForSelector(".period-picker-panel");
@@ -311,9 +329,10 @@ try {
     const panel = await page.evaluate(() => {
       const p = document.querySelector(".period-picker-panel").getBoundingClientRect();
       const b = document.querySelector("[data-range-button]").getBoundingClientRect();
-      return { expanded: document.querySelector("[data-range-button]").getAttribute("aria-expanded"), inside: Boolean(document.activeElement?.closest(".period-picker-panel")), left: p.right <= b.left + 1, onScreen: p.left >= 0 && p.bottom <= innerHeight + 1 };
+      return { expanded: document.querySelector("[data-range-button]").getAttribute("aria-expanded"), inside: Boolean(document.activeElement?.closest(".period-picker-panel")), left: p.top >= b.bottom - 1 && p.right <= b.right + 1, onScreen: p.left >= 0 && p.bottom <= innerHeight + 1 };
     });
-    check(`range button (${tag}): Enter opens the month/year jump beside the button, focus inside`, panel.expanded === "true" && panel.inside && panel.left && panel.onScreen, JSON.stringify(panel));
+    check(`range button (${tag}): Enter opens the month/year jump anchored below the button, focus inside`, panel.expanded === "true" && panel.inside && panel.left && panel.onScreen, JSON.stringify(panel));
+    await page.screenshot({ path: join(process.env.CALENDAR_SHOTS ?? "/tmp", `calendar-switcher-${tag}-open.png`) });
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(600);

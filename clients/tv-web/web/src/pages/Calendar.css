@@ -143,8 +143,7 @@
   --kind: var(--ink-muted);
 }
 
-.calendar-entry,
-.calendar-chip {
+.calendar-entry {
   border-left-color: var(--kind);
 }
 
@@ -225,31 +224,89 @@
 }
 
 .calendar-month-cell ul {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin: 0 0 2px;
   padding: 0;
   list-style: none;
 }
 
-.calendar-chip,
+.calendar-month-cell li {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 44px;
+}
+
+
+.calendar-line,
 .calendar-more {
   width: 100%;
-  min-height: 44px;
   overflow: hidden;
-  padding: 0.1rem 0.35rem;
   border: 0;
-  border-left: 3px solid var(--kind, var(--line-strong));
-  border-radius: 4px;
-  background: var(--surface-soft);
   color: var(--ink);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   text-align: left;
+  cursor: pointer;
+}
+
+/* An entry is a plain text line with a status dot: no box, background or border. Its hit area is the cell's width
+ * and the line's full height. */
+.calendar-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 100%;
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: none;
+  line-height: 1.2;
+}
+
+.calendar-line-text {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
+}
+
+/* The dot takes the status pill's tone (pages.calendar pills, global .status-pill). */
+.calendar-dot {
+  --dot-tone: var(--ink-soft);
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--dot-tone);
+}
+.calendar-dot.is-available { --dot-tone: var(--success); }
+.calendar-dot.is-upcoming { --dot-tone: var(--brand); }
+.calendar-dot.is-missing { --dot-tone: var(--danger); }
+
+/* Text focus: an underline and the card glow's colour as a soft text glow; no box, fill or ring. */
+.calendar-line:is(:focus-visible, [data-remote-active]) {
+  outline: 0;
+  text-decoration: underline 3px var(--card-glow-color);
+  text-underline-offset: 4px;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--card-glow-color) 55%, transparent);
+}
+
+.calendar-line.is-selected .calendar-line-text {
+  text-decoration: underline 1px;
+  text-underline-offset: 3px;
+}
+
+.calendar-more {
+  min-height: 44px;
+  padding: 0.1rem 0.35rem;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The day number reads the same with or without the more line beside it. */
@@ -268,11 +325,6 @@
   box-sizing: border-box;
 }
 
-.calendar-more {
-  border-left-color: transparent;
-  background: transparent;
-  color: var(--ink-soft);
-}
 
 /* Entry sheet (centred dialog; bottom sheet on narrow screens) */
 .calendar-sheet-backdrop {
@@ -351,10 +403,110 @@
   display: block;
 }
 
-/* Selected cards use the shared card shadow, never a ring or a white border (page-layout.css owns the lift). */
+/*
+ * A selected card that does not hold focus (the details panel, the nav or the action column has it) shows no ring, glow or
+ * lift: the ring and the shadow belong to focus alone (:focus-visible and the remote marker, page-layout.css). Selected
+ * only marks the row with a firmer outline, like the Library's selected row.
+ */
 .calendar-entry.is-selected,
 .calendar-chip.is-selected {
-  box-shadow: var(--card-shadow-focus);
+  border-top-color: var(--line-strong);
+  border-right-color: var(--line-strong);
+  border-bottom-color: var(--line-strong);
+}
+
+/*
+ * Agenda day headings stick to the top of the list scroller while their entries scroll under them; the next heading
+ * pushes the previous one up (each heading lives in its own day section). The heading carries the page background and no
+ * box. The scroller's own top fade would dim the pinned heading, so it is off here and the fade is drawn below the heading
+ * instead (the .calendar-agenda-fade marker, shown once content has scrolled). The scroller's scroll-padding keeps the focused
+ * entry (revealed by the app's smooth scroll, which honours scroll-padding) clear of the heading.
+ */
+.tv-title-grid:has(> .calendar-agenda-content) {
+  --agenda-heading-h: 2.75rem;
+  --agenda-heading-base: var(--surface);
+  --agenda-panel-frost: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--tv-rail-frost) 68%, transparent) 12%,
+    color-mix(in srgb, var(--tv-rail-frost) 88%, transparent) 34%,
+    color-mix(in srgb, var(--tv-rail-frost) 96%, transparent) 62%,
+    var(--tv-rail-frost) 100%
+  );
+  /* Nothing shows above the pinned heading (the header area); no top ramp, so the heading itself is not faded. */
+  --edge-fade-start-size: 0px;
+  --edge-fade-start-floor: 0;
+  scroll-padding-top: calc(var(--library-rail-top) + var(--agenda-heading-h) + 12px);
+}
+
+/* Beats the header-clear inset (page-layout.css): everything above the pinned heading is fully masked. */
+.tv-title-grid[data-fade-axis="y"][data-fade-start]:has(> .calendar-agenda-content) {
+  --fade-start-inset: var(--library-rail-top);
+  --fade-start-floor: 0;
+}
+
+:root[data-theme="dark"] .tv-title-grid:has(> .calendar-agenda-content) {
+  --agenda-heading-base: var(--bg);
+  --agenda-panel-frost: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--tv-rail-frost) 72%, transparent) 12%,
+    color-mix(in srgb, var(--tv-rail-frost) 90%, transparent) 34%,
+    color-mix(in srgb, var(--tv-rail-frost) 97%, transparent) 62%,
+    var(--tv-rail-frost) 100%
+  );
+}
+
+.calendar-agenda-content .calendar-day > h3 {
+  position: sticky;
+  top: var(--library-rail-top);
+  z-index: 3;
+  box-sizing: border-box;
+  height: var(--agenda-heading-h);
+  margin: 0;
+  /* The panel's own left-to-right frost, anchored to the viewport (the panel is the right 65%), over the page background:
+     opaque enough to hide the entries scrolling under it, with no visible band edge. */
+  background-image: var(--agenda-panel-frost);
+  background-color: var(--agenda-heading-base);
+  background-attachment: fixed;
+  background-size: calc(65 * var(--vw)) calc(100 * var(--viewport-unit));
+  background-position: right top;
+  background-repeat: no-repeat;
+}
+
+.calendar-agenda-content .calendar-day > h3 + ul,
+.calendar-agenda-content .calendar-day > h3 + .calendar-day-empty {
+  margin-top: 0.4rem;
+}
+
+.calendar-agenda-fade {
+  position: sticky;
+  top: calc(var(--library-rail-top) + var(--agenda-heading-h));
+  z-index: 2;
+  height: 0;
+  /* Takes no room: cancels the day list's flex gap (.calendar-days, 2rem). */
+  margin-bottom: -2rem;
+  pointer-events: none;
+}
+
+.calendar-agenda-fade::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--page-edge-fade-size);
+  /* A plain colour ramp (the shared mask is the only mask in the app): the panel's frost over the page background. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--tv-rail-frost) 80%, var(--agenda-heading-base)),
+    color-mix(in srgb, var(--tv-rail-frost) 80%, transparent) 40%,
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.tv-title-grid[data-fade-start] .calendar-agenda-fade::after {
+  opacity: 1;
 }
 
 .calendar-entry-skeleton {
@@ -363,7 +515,7 @@
 
 .calendar-chip-skeleton {
   width: 100%;
-  height: 24px;
+  height: 14px;
 }
 
 .calendar-details {
@@ -433,7 +585,7 @@
 }
 
 
-.calendar-chip-group {
+.calendar-line-group {
   font-weight: 680;
 }
 
@@ -464,11 +616,9 @@
 }
 
 .period-picker-panel {
-  /* Opens beside the range button in the shell action column. */
+  /* Hangs below the date switcher button; PeriodPicker sets top and right from the button's rectangle. */
   position: fixed;
   z-index: var(--z-popover);
-  top: var(--shell-action-column-top);
-  right: calc(var(--directory-controls-edge) + var(--directory-controls-width) + 12px);
   display: flex;
   gap: 0.5rem;
   padding: 0.6rem;
@@ -524,11 +674,6 @@
 @media (max-width: 760px) {
   .calendar-nav-inline {
     display: flex;
-  }
-
-  .period-picker-panel {
-    top: calc(var(--mobile-top-inset, 14px) + 56px);
-    right: 12px;
   }
 }
 
@@ -610,4 +755,12 @@
 .calendar-month-scroll.calendar-edge-scroller,
 .calendar-week-scroll.calendar-edge-scroller {
   min-width: 0;
+}
+
+/* Week and month sit beside the shell action column with the same gap as every other page (the library grid's
+ * `--library-rail-right`: column edge + the wider of the column and the 56px alphabet rail + the shared gap), never against it. */
+@media (min-width: 761px) {
+  .calendar-page.page-shell {
+    padding-right: calc(var(--directory-controls-edge) + max(var(--directory-controls-width), 56px) + var(--directory-controls-gap));
+  }
 }

@@ -2,7 +2,7 @@ import { smoothScrollIntoView } from "../../lib/smoothScroll";
 import { periodPickerMove } from "../../lib/periodPickerNav";
 import { isBackKey } from "../../lib/backKey";
 import { createSettled } from "../../lib/settled";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
   onChange: (day: string) => void;
   /** Years offered either side of the current one. */
   yearSpan?: number;
-  /** The jump panel is controlled: the page opens it from its range button in the shell action column. */
+  /** The jump panel is controlled: the page opens it from its date switcher button, in the same group as Previous / Today / Next. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The range button that opens the panel (clicks on it are not "outside"; BACK returns focus to it). */
@@ -66,6 +66,19 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
     () => Array.from({ length: yearSpan * 2 + 1 }, (_, i) => year - yearSpan + i),
     [year, yearSpan]
   );
+
+  // The panel hangs below the date switcher button, right edges aligned, wherever the button sits.
+  const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setAnchorPos({ top: Math.round(rect.bottom + 8), right: Math.max(8, Math.round(window.innerWidth - rect.right)) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, triggerRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -118,7 +131,7 @@ export function PeriodPicker({ value, label, locale, dialogLabel, monthLabel, ye
         {announced}
       </span>
       {open ? (
-        <div id={id} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel}>
+        <div id={id} className="period-picker-panel" role="dialog" aria-modal="true" aria-label={dialogLabel} style={anchorPos ?? undefined}>
           <ul role="listbox" aria-label={monthLabel} className="period-picker-list">
             {months.map((name, i) => (
               <li key={name} role="presentation">

@@ -89,6 +89,8 @@ mod calendar_perf_tests;
 #[cfg(test)]
 mod folders_tests;
 #[cfg(test)]
+mod home_perf_tests;
+#[cfg(test)]
 mod household_tests;
 #[cfg(test)]
 mod peer_group_e2e_test;

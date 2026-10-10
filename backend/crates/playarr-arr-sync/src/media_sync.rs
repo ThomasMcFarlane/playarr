@@ -52,7 +52,7 @@ use std::path::{Path, PathBuf};
 
 use playarr_arr_client::{
     ArrClientError, LidarrAlbum, LidarrClient, LidarrTrack, RadarrClient, RadarrCredit,
-    ReadarrBook, ReadarrClient, SonarrClient, SonarrEpisodeFile, WhisparrClient,
+    ReadarrBook, ReadarrClient, SeriesCastClient, SonarrClient, SonarrEpisodeFile, WhisparrClient,
     WhisparrEpisodeFile,
 };
 use playarr_db::{CreditRepo, DbPool, MediaFileRepo, MediaLanguageRepo};
@@ -234,6 +234,14 @@ pub struct MediaSync {
     /// Audio/subtitle language index (task 180). `None` by default, same
     /// opt-in builder shape as `credit_repo`.
     language_repo: Option<std::sync::Arc<dyn MediaLanguageRepo>>,
+    /// Series cast source. `None` by default (same opt-in builder shape as
+    /// `credit_repo`); Sonarr exposes no cast, so series credits come from
+    /// the metadata service Sonarr itself uses. Needs `credit_repo` too.
+    series_cast: Option<SeriesCastClient>,
+    /// Series whose cast was already looked up in this process, so a series
+    /// the service has no cast for (or that failed) is not asked again on
+    /// every reconciliation pass. A restart tries each once more.
+    series_cast_tried: std::sync::Mutex<std::collections::HashSet<Uuid>>,
     /// Live-event publisher (task 278). `None` by default, same opt-in builder
     /// shape as `credit_repo`. Season and episode rows are written with raw SQL
     /// (no event-decorated repository wraps them), so this announces the
@@ -251,6 +259,8 @@ impl MediaSync {
             media_file_repo,
             credit_repo: None,
             language_repo: None,
+            series_cast: None,
+            series_cast_tried: Default::default(),
             live_events: None,
             write_queue: None,
         }
@@ -353,6 +363,96 @@ impl MediaSync {
         self
     }
 
+    /// Opts this `MediaSync` into syncing cast credits for Sonarr-sourced
+    /// series from `client`. Also needs [`Self::with_credit_repo`].
+    pub fn with_series_cast(mut self, client: SeriesCastClient) -> Self {
+        self.series_cast = Some(client);
+        self
+    }
+
+    /// Whether `work_id` is a series with no credits yet that this process
+    /// has not already looked up. Cheap: local DB reads only.
+    pub async fn needs_series_cast(&self, work_id: Uuid) -> bool {
+        let (Some(_), Some(credit_repo)) = (&self.series_cast, &self.credit_repo) else {
+            return false;
+        };
+        if self
+            .series_cast_tried
+            .lock()
+            .map(|tried| tried.contains(&work_id))
+            .unwrap_or(true)
+        {
+            return false;
+        }
+        credit_repo
+            .list_for_work(work_id)
+            .await
+            .map(|credits| credits.is_empty())
+            .unwrap_or(false)
+    }
+
+    /// Fetches the series' cast by its TVDB id and fully replaces its cast
+    /// credits, same reconciliation shape as the movie credit sync. A series
+    /// with no TVDB id is skipped. The lookup is recorded as tried whatever
+    /// the outcome (see `series_cast_tried`).
+    pub async fn sync_series_cast(&self, work_id: Uuid) -> Result<(), MediaSyncError> {
+        let (Some(client), Some(credit_repo)) = (&self.series_cast, &self.credit_repo) else {
+            return Ok(());
+        };
+        if let Ok(mut tried) = self.series_cast_tried.lock() {
+            tried.insert(work_id);
+        }
+        let row = sqlx::query(
+            "SELECT external_id FROM work_external_refs WHERE work_id = ? AND provider = 'tvdb'",
+        )
+        .bind(work_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(tvdb_id) = row
+            .and_then(|row| sqlx::Row::try_get::<String, _>(&row, "external_id").ok())
+            .and_then(|id| id.trim().parse::<i64>().ok())
+            .filter(|id| *id > 0)
+        else {
+            return Ok(());
+        };
+
+        let actors = client.list_cast(tvdb_id).await?;
+        let mut credits = Vec::with_capacity(actors.len());
+        for (order, actor) in actors.into_iter().enumerate() {
+            let name = actor.name.trim().to_string();
+            let headshot_url = actor.image.filter(|url| !url.trim().is_empty());
+            let person_id = match credit_repo
+                .find_person_without_tmdb_id(&name, headshot_url.as_deref())
+                .await?
+            {
+                Some(existing) => existing.id,
+                None => {
+                    let person = Person {
+                        id: Uuid::new_v4(),
+                        name,
+                        tmdb_id: None,
+                        headshot_url,
+                    };
+                    credit_repo.upsert_person(&person).await?;
+                    person.id
+                }
+            };
+            credits.push(Credit {
+                id: Uuid::new_v4(),
+                work_id,
+                person_id,
+                role: CreditRole::Cast {
+                    character: actor.character.unwrap_or_default().trim().to_string(),
+                },
+                order: order as i32,
+            });
+        }
+        credit_repo
+            .replace_credits_for_work(work_id, &credits)
+            .await?;
+        Ok(())
+    }
+
     /// Whether `work_id` already has at least one synced `MediaFile` row --
     /// lets a caller distinguish "genuinely nothing to sync yet" from "a
     /// file sync was attempted and never completed" without needing its
@@ -410,8 +510,14 @@ impl MediaSync {
     ) -> Result<(), MediaSyncError> {
         let result = match arr_client {
             ArrClient::Sonarr(client) => {
-                self.sync_sonarr(client, work_id, arr_source_id, source_instance_id)
-                    .await
+                let files = self
+                    .sync_sonarr(client, work_id, arr_source_id, source_instance_id)
+                    .await;
+                // Best effort: a cast lookup failure never fails the file sync.
+                if let Err(error) = self.sync_series_cast(work_id).await {
+                    tracing::warn!(%work_id, %error, "could not sync series cast; will retry after a restart");
+                }
+                files
             }
             ArrClient::Radarr(client) => {
                 self.sync_radarr(client, work_id, arr_source_id, source_instance_id)
@@ -2136,5 +2242,100 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(book_row.0, "Sample Title");
+    }
+
+    // ---- Series cast ----
+
+    async fn add_series(pool: &DbPool, tvdb_id: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO works (id, kind, title, sort_title, added_at, availability) \
+             VALUES (?, 'series', 'Sample Series 1', 'Sample Series 1', '2024-01-01T00:00:00.000Z', 'available')",
+        )
+        .bind(id.to_string())
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, 'tvdb', ?)",
+        )
+        .bind(id.to_string())
+        .bind(tvdb_id)
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    #[tokio::test]
+    async fn series_without_credits_get_cast_from_the_series_source() {
+        let first = Uuid::new_v4();
+        let pool = test_pool_with_work(first, "series").await;
+        sqlx::query(
+            "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, 'tvdb', '77')",
+        )
+        .bind(first.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let second = add_series(&pool, "78").await;
+
+        let server = MockServer::start().await;
+        let body = serde_json::json!({ "actors": [
+            {"name": "Sample Actor A", "character": "Role A", "image": "https://example.com/a.jpg"},
+            {"name": "Sample Actor B", "character": "Role B"}
+        ]});
+        for id in ["77", "78"] {
+            Mock::given(method("GET"))
+                .and(path(format!("/v1/tvdb/shows/en/{id}")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
+                .mount(&server)
+                .await;
+        }
+
+        let credit_repo: Arc<dyn CreditRepo> =
+            Arc::new(playarr_db::repo::SqlxCreditRepo::new(pool.clone()));
+        let sync = media_sync(pool.clone())
+            .with_credit_repo(credit_repo.clone())
+            .with_series_cast(SeriesCastClient::new(&server.uri()));
+
+        assert!(sync.needs_series_cast(first).await);
+        sync.sync_series_cast(first).await.unwrap();
+        let credits = credit_repo.list_for_work(first).await.unwrap();
+        assert_eq!(credits.len(), 2);
+        assert_eq!(
+            credits[0].role,
+            CreditRole::Cast {
+                character: "Role A".to_string()
+            }
+        );
+        assert_eq!(credits[1].order, 1);
+        // Looked up once per process, and no longer missing credits.
+        assert!(!sync.needs_series_cast(first).await);
+
+        // The same cast member on another series is one shared person.
+        sync.sync_series_cast(second).await.unwrap();
+        let again = credit_repo.list_for_work(second).await.unwrap();
+        assert_eq!(again[0].person_id, credits[0].person_id);
+        assert_eq!(again[1].person_id, credits[1].person_id);
+    }
+
+    #[tokio::test]
+    async fn series_cast_is_off_without_the_source_and_skips_series_without_tvdb_id() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let credit_repo: Arc<dyn CreditRepo> =
+            Arc::new(playarr_db::repo::SqlxCreditRepo::new(pool.clone()));
+
+        let off = media_sync(pool.clone()).with_credit_repo(credit_repo.clone());
+        assert!(!off.needs_series_cast(work_id).await);
+
+        let server = MockServer::start().await;
+        let on = media_sync(pool)
+            .with_credit_repo(credit_repo.clone())
+            .with_series_cast(SeriesCastClient::new(&server.uri()));
+        // No tvdb ref: nothing requested (the mock server has no routes), no credits.
+        on.sync_series_cast(work_id).await.unwrap();
+        assert!(credit_repo.list_for_work(work_id).await.unwrap().is_empty());
     }
 }

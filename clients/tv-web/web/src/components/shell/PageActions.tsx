@@ -13,6 +13,8 @@ export interface NavigationItem {
   icon?: ActionIcon;
   onSelect: () => void;
   buttonProps?: DataAttributes;
+  /** A text button that opens a popover (the calendar's date switcher): `label` is its visible text. */
+  popover?: { open: boolean; controls: string; buttonRef?: Ref<HTMLButtonElement> };
 }
 
 export type PageAction =
@@ -66,7 +68,20 @@ function renderAction(action: PageAction): ReactNode {
       return (
         <div key={action.id} className="page-actions-navigation" role="group" aria-label={action.label} data-action-kind="navigation" data-hide-on-phone={action.hideOnPhone ? "" : undefined}>
           {action.items.map((item) =>
-            item.icon ? (
+            item.popover ? (
+              <Button
+                key={item.id}
+                variant="secondary"
+                active={item.popover.open}
+                onClick={item.onSelect}
+                aria-expanded={item.popover.open}
+                aria-controls={item.popover.controls}
+                ref={item.popover.buttonRef}
+                {...item.buttonProps}
+              >
+                {item.label}
+              </Button>
+            ) : item.icon ? (
               <ActionPill key={item.id} shape="icon" icon={item.icon} label={item.label} onClick={item.onSelect} buttonProps={item.buttonProps} />
             ) : (
               <Button key={item.id} variant="secondary" onClick={item.onSelect} {...item.buttonProps}>

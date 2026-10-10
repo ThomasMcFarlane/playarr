@@ -298,16 +298,12 @@ pub async fn list_resume_plans_handler(
             break;
         }
         // Movies, hidden and deleted works fail to load as a visible series.
-        let Ok(mut inputs) = load(&state, &viewer, work_id, Some(&progress)).await else {
+        let Ok(inputs) = load(&state, &viewer, work_id, Some(&progress)).await else {
             continue;
         };
         if inputs.progress.is_empty() {
             continue;
         }
-        inputs.dismissals = state
-            .resume_dismissals
-            .list_for_series(viewer.user_id, work_id)
-            .await?;
         plans.push(inputs.plan(work_id));
     }
     Ok(Json(plans))

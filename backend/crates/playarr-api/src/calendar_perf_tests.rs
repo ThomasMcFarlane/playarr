@@ -68,6 +68,8 @@ pub(crate) struct Fixture {
     pub instance: SourceInstance,
     pub admin_token: String,
     pub viewer_token: String,
+    pub admin_id: Uuid,
+    pub viewer_id: Uuid,
 }
 
 /// Generates the library, peers, events, progress and the calendar cache.
@@ -384,6 +386,8 @@ pub(crate) async fn build_fixture(state: &TestState, scale: Scale) -> Fixture {
         instance,
         admin_token: mint_access_token(state, admin),
         viewer_token: mint_access_token(state, viewer),
+        admin_id: admin,
+        viewer_id: viewer,
     }
 }
 
@@ -422,10 +426,10 @@ impl<S: tracing::Subscriber> Layer<S> for StageLayer {
 
 /// Counts statements by text (statement events come from the sqlite worker
 /// threads, so this needs a global subscriber; the profiling test installs it).
-static STATEMENTS: std::sync::Mutex<Option<std::collections::HashMap<String, usize>>> =
+pub(crate) static STATEMENTS: std::sync::Mutex<Option<std::collections::HashMap<String, usize>>> =
     std::sync::Mutex::new(None);
 
-struct StatementLayer;
+pub(crate) struct StatementLayer;
 
 struct StatementText(String);
 impl Visit for StatementText {

@@ -34,6 +34,8 @@
   /* Shell action column: where the 30 September launcher sat (commit 54224f36). */
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
+  /* Gap between page content and the shell action column (the library grid, and the calendar's week and month). */
+  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
   --shell-action-column-top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
   /* The focus indicator is a ring, never a fill: white in dark theme, the theme ink in light theme. */
   --focus-ring-color: var(--ink);
@@ -404,26 +406,15 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   align-self: center;
 }
 
-.tv-library-heading.has-actions > .page-header-title-block > .page-header-detail {
-  align-self: center;
-  min-height: var(--page-control-height);
-  display: flex;
-  align-items: center;
-}
-
-/* Header detail that cannot fit beside the title wraps beneath it with a horizontal rule. */
-.tv-library-heading > .page-header-title-block > .page-header-detail {
-  white-space: nowrap;
-}
-
-/* Wrapped (detail under the title): Back stays level with the title line at the top of the block, never centred on the
-   taller block, so extra header content can no longer push it down. */
-.tv-library-heading.is-detail-wrapped > .tv-page-back,
-.tv-library-heading.is-detail-wrapped > .page-header-title-block > h1 {
+/* The subtitle always sits directly under the title, left-aligned with it, on every page (owner rule 2026-10-10: one
+   subtitle, one place). Back stays level with the title line at the top of the block, never centred on the taller
+   block, so the subtitle can never push it down. */
+.tv-library-heading.has-subtitle > .tv-page-back,
+.tv-library-heading.has-subtitle > .page-header-title-block > h1 {
   align-self: flex-start;
 }
 
-.tv-library-heading.is-detail-wrapped {
+.tv-library-heading.has-subtitle {
   right: var(--page-end);
   align-items: flex-start;
 }
@@ -432,8 +423,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   display: contents;
 }
 
-/* Wrapped: title over detail in a column exactly as wide as the wider of the two, so the rule matches it. */
-.tv-library-heading.is-detail-wrapped > .page-header-title-block {
+/* Title over subtitle in one column. */
+.tv-library-heading.has-subtitle > .page-header-title-block {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -442,7 +433,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back 
   gap: 0.35rem;
 }
 
-.tv-library-heading.is-detail-wrapped > .page-header-title-block > .page-header-detail {
+.tv-library-heading.has-subtitle > .page-header-title-block > .page-header-detail {
   max-width: none;
   margin: 0;
 }

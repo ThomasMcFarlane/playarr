@@ -3632,7 +3632,7 @@ paths:
       summary: |-
         A work's cast and crew, in the source's own billing/department order
         -- empty (not 404) for a work with no credits, which is the normal
-        case for every non-Radarr-sourced work (see this module's doc
+        case for a music, book or not-yet-synced work (see this module's doc
         comment).
       operationId: work_credits_handler
       parameters:
