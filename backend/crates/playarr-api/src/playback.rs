@@ -582,16 +582,18 @@ pub async fn update_watch_progress_handler(
     Ok(Json(progress))
 }
 
-/// Whether an audio switch can keep the source video untouched. True only
-/// when the quality is "original", the source video is H.264 or HEVC and the
-/// client reports that codec and a bitrate cap the file fits under.
-fn video_copy_for_audio_selection(
+/// Whether the on-demand HLS can keep the source video untouched (a remux:
+/// copy the video, encode only the audio). True only when the quality is
+/// "original", the source video is H.264 or HEVC and the client reports that
+/// codec and a bitrate cap the file fits under -- so what blocked direct play
+/// was the container, the audio codec or an audio switch, never the picture.
+fn video_copy_for_hls(
     media_file: &MediaFile,
     capabilities: &ClientCapabilities,
-    requires_audio_selection: bool,
+    original_quality: bool,
     force_transcode: bool,
 ) -> Option<playarr_transcode::VideoCopy> {
-    if !requires_audio_selection || force_transcode {
+    if !original_quality || force_transcode {
         return None;
     }
     let video = playarr_transcode::VideoCopy::for_codec(&media_file.codec)?;
@@ -1292,15 +1294,17 @@ pub(crate) async fn negotiate_playback(
     } else {
         query.start_position_ms
     };
-    // An audio switch (a Dubarr dub or another source track) leaves the
-    // picture untouched, so when the client can play the source video codec
-    // within its bitrate cap and asked for the original quality, copy the
-    // video into fragmented-MP4 HLS and only encode the audio. Re-encoding a
-    // 4K HEVC remux in real time is not feasible on a node-limited CPU.
-    let video_copy = video_copy_for_audio_selection(
+    // An audio switch (a Dubarr dub or another source track), or a container
+    // or audio codec the client cannot take, leaves the picture untouched, so
+    // when the client can play the source video codec within its bitrate cap
+    // and asked for the original quality, copy the video into fragmented-MP4
+    // HLS and only encode the audio. Re-encoding the video in real time is not
+    // feasible on a node-limited CPU: a 1080p H.264 MKV re-encoded on two
+    // threads missed the first-segment wait and played nothing (TASKS 20.260).
+    let video_copy = video_copy_for_hls(
         &media_file,
         &capabilities,
-        requires_audio_selection,
+        query.profile.as_deref().is_none_or(|p| p == "original"),
         force_transcode,
     );
     let source_audio_transcode = || async {
@@ -1393,7 +1397,7 @@ pub(crate) async fn negotiate_playback(
             transcode_session_id = %transcode_session.id,
             source_codec = %media_file.codec,
             dub = selected_dub.is_some(),
-            "audio selection served with video copy (no video transcode)"
+            "on-demand HLS served with video copy (no video transcode)"
         );
     }
 
@@ -2342,7 +2346,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn audio_switch_copies_video_only_when_the_client_can_play_it() {
+    fn hls_copies_video_only_when_the_client_can_play_it() {
         let caps = |codecs: &[&str], max: Option<u64>| ClientCapabilities {
             supported_containers: vec!["mp4".to_string()],
             supported_video_codecs: codecs.iter().map(|c| c.to_string()).collect(),
@@ -2354,43 +2358,34 @@ mod tests {
         remux.bitrate = Some(64_000_000);
 
         // A 4K HEVC remux and an HEVC-capable client: copy, whatever the container.
-        let video =
-            video_copy_for_audio_selection(&remux, &caps(&["h264", "h265"], None), true, false);
+        let video = video_copy_for_hls(&remux, &caps(&["h264", "h265"], None), true, false);
         assert_eq!(video, Some(playarr_transcode::VideoCopy { hevc: true }));
         // The client's cap is above the file's bitrate: still a copy.
-        assert!(video_copy_for_audio_selection(
-            &remux,
-            &caps(&["hevc"], Some(80_000_000)),
-            true,
-            false
-        )
-        .is_some());
+        assert!(
+            video_copy_for_hls(&remux, &caps(&["hevc"], Some(80_000_000)), true, false).is_some()
+        );
 
-        // No audio switch, or an explicit quality: no copy.
-        assert!(
-            video_copy_for_audio_selection(&remux, &caps(&["hevc"], None), false, false).is_none()
-        );
-        assert!(
-            video_copy_for_audio_selection(&remux, &caps(&["hevc"], None), true, true).is_none()
-        );
+        // A lower quality was asked for, or a transcode was forced: no copy.
+        assert!(video_copy_for_hls(&remux, &caps(&["hevc"], None), false, false).is_none());
+        assert!(video_copy_for_hls(&remux, &caps(&["hevc"], None), true, true).is_none());
         // Client cannot play HEVC, reports nothing, or the file exceeds its cap: transcode.
+        assert!(video_copy_for_hls(&remux, &caps(&["h264"], None), true, false).is_none());
+        assert!(video_copy_for_hls(&remux, &caps(&[], None), true, false).is_none());
         assert!(
-            video_copy_for_audio_selection(&remux, &caps(&["h264"], None), true, false).is_none()
+            video_copy_for_hls(&remux, &caps(&["hevc"], Some(8_000_000)), true, false).is_none()
         );
-        assert!(video_copy_for_audio_selection(&remux, &caps(&[], None), true, false).is_none());
-        assert!(video_copy_for_audio_selection(
-            &remux,
-            &caps(&["hevc"], Some(8_000_000)),
-            true,
-            false
-        )
-        .is_none());
+        // An H.264 MKV for a browser without Matroska or the source audio
+        // codec: remux, never a real-time video re-encode (TASKS 20.260).
+        let mut mkv = media_file();
+        mkv.codec = "h264".to_string();
+        assert_eq!(
+            video_copy_for_hls(&mkv, &caps(&["h264", "vp9"], None), true, false),
+            Some(playarr_transcode::VideoCopy { hevc: false })
+        );
         // A codec the fragmented-MP4 path does not carry is transcoded.
         let mut other = media_file();
         other.codec = "vc1".to_string();
-        assert!(
-            video_copy_for_audio_selection(&other, &caps(&["vc1"], None), true, false).is_none()
-        );
+        assert!(video_copy_for_hls(&other, &caps(&["vc1"], None), true, false).is_none());
     }
 
     #[test]
