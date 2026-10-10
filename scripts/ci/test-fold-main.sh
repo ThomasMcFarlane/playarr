@@ -12,7 +12,7 @@ git clone -q "$tmp/origin.git" "$tmp/seed" 2>/dev/null
 cd "$tmp/seed"; git config user.name t; git config user.email t@example.invalid
 mkdir -p scripts/lib tasks.d changelog.d
 cp "$root/scripts/fold-fragments.mjs" "$root/scripts/fold-main.sh" scripts/; cp "$root"/scripts/lib/*.mjs scripts/lib/
-printf '# Tasks\n\n## Active\n\n| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |\n|---|---|---|---|---|---|---|---|\n| 1 | One | todo | a | | | | b |\n' >TASKS.md
+printf '# Tasks\n\n## 1. Active\n\n| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |\n|---|---|---|---|---|---|---|---|\n| 1 | One | todo | a | | | | b |\n' >TASKS.md
 printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0]\n' >CHANGELOG.md
 printf 'readme\n' >tasks.d/README.md; printf 'readme\n' >changelog.d/README.md
 git add -A; git commit -qm base; git push -q origin HEAD:main

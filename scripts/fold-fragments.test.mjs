@@ -8,7 +8,7 @@ import test from 'node:test';
 const script = path.join(path.dirname(new URL(import.meta.url).pathname), 'fold-fragments.mjs');
 const board = `# Tasks
 
-## Active
+## 1. Active
 
 | ID | Task | Status | Owner | Branch | Depends | ETA | Notes |
 |---|---|---|---|---|---|---|---|
@@ -47,11 +47,11 @@ const H = '| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |';
 test('a canonical fragment replaces its row in place and a new row creates an epic table', () => {
   const { r, tasks } = run({
     '1.md': '| 1 | One | in_progress | agent | feat/one | | 2026-10-10 14:00 ICT | a |\n',
-    '3.md': 'section-new: Fresh epic\n| 3 | Three | todo | | | 1 | | c |\n',
+    '3.md': 'section-new: Fresh epic\n| 3 | Three | todo | | | 1.1 | | c |\n',
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(tasks, /^\| 1 \| One \| in_progress \| agent \| feat\/one \| \| 2026-10-10 14:00 ICT \| a \|$/m);
-  assert.match(tasks, new RegExp(`## Fresh epic\\n\\n${H.replace(/[|]/g, '\\$&')}\\n\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|\\n\\| 3 \\| Three \\| todo \\| \\| \\| 1 \\| \\| c \\|`));
+  assert.match(tasks, new RegExp(`## 2\\. Fresh epic\\n\\n${H.replace(/[|]/g, '\\$&')}\\n\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|---\\|\\n\\| 3 \\| Three \\| todo \\| \\| \\| 1\\.1 \\| \\| c \\|`));
 });
 
 test('a five-column fragment is converted, keeping the old status in Notes', () => {
@@ -77,13 +77,13 @@ test('fold does not write epic ETA lines under headings', () => {
   const { r, tasks } = run({ '1.md': '| 1 | One | in_progress | agent | | | 2026-10-10 14:00 ICT | a |\n' });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(!/^ETA: /m.test(tasks));
-  assert.match(tasks, /## Active\n\n\| ID/);
+  assert.match(tasks, /## 1\. Active\n\n\| ID/);
 });
 
 test('fold drops legacy epic ETA lines left under headings', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
   fs.mkdirSync(path.join(root, 'tasks.d'));
-  fs.writeFileSync(path.join(root, 'TASKS.md'), board.replace('## Active\n', '## Active\nETA: 2026-10-10 05:00 ICT (2026-10-09 23:00 BST) (2 open)\n'));
+  fs.writeFileSync(path.join(root, 'TASKS.md'), board.replace('## 1. Active\n', '## 1. Active\nETA: 2026-10-10 05:00 ICT (2026-10-09 23:00 BST) (2 open)\n'));
   fs.writeFileSync(path.join(root, 'tasks.d', '1.md'), '| 1 | One | todo | | | | | a |\n');
   assert.equal(spawnSync('node', [script, root], { encoding: 'utf8' }).status, 0);
   assert.ok(!/^ETA: /m.test(fs.readFileSync(path.join(root, 'TASKS.md'), 'utf8')));
@@ -139,7 +139,7 @@ test('--check judges the board as it will be after the fragments fold', () => {
 
 const section = (name, n = 3) => `section: ${name}\n| ${n} | Three | todo | | | | | c |\n`;
 const rowIn = (tasks, heading, n) => {
-  const part = tasks.split(/^## /m).find((p) => p.startsWith(`${heading}\n`));
+  const part = tasks.split(/^## /m).find((p) => p.replace(/^\d+\. /, '').startsWith(`${heading}\n`));
   return part ? new RegExp(`^\\| ${n} \\|`, 'm').test(part) : false;
 };
 
@@ -160,7 +160,7 @@ test('a new row resolves Active:/Planned: prefixes and case', () => {
   }
 });
 
-const boardWith = (headings) => `# Tasks\n\n${headings.map((h) => `## ${h}\n\n${H}\n|---|---|---|---|---|---|---|---|\n`).join('\n')}`;
+const boardWith = (headings) => `# Tasks\n\n${headings.map((h, i) => `## ${i + 1}. ${h}\n\n${H}\n|---|---|---|---|---|---|---|---|\n`).join('\n')}`;
 const runOn = (text, fragments, extra = []) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
   fs.mkdirSync(path.join(root, 'tasks.d'));
@@ -202,8 +202,8 @@ test('--check fails on an unknown section, lists headings and creates nothing; f
   const c = runOn(text, { '3.md': section('Gamma epic') }, ['--check']);
   assert.notEqual(c.r.status, 0);
   assert.match(c.r.stderr, /matches no heading/);
-  assert.match(c.r.stderr, /- Alpha epic/);
-  assert.match(c.r.stderr, /- Beta epic/);
+  assert.match(c.r.stderr, /- 1\. Alpha epic/);
+  assert.match(c.r.stderr, /- 2\. Beta epic/);
   assert.match(c.r.stderr, /section-new/);
   const f = runOn(text, { '3.md': section('Gamma epic') });
   assert.notEqual(f.r.status, 0);
@@ -217,4 +217,52 @@ test('section-new creates a heading on purpose and --check accepts it', () => {
   const { r, tasks } = runOn(text, frag);
   assert.equal(r.status, 0, r.stderr);
   assert.ok(rowIn(tasks, 'Gamma epic', 3));
+});
+
+const numbered = boardWith(['Alpha epic', 'Beta epic']);
+
+test('section: accepts the bare name or "N. Name" and lands in the numbered heading', () => {
+  for (const name of ['Beta epic', '2. Beta epic', 'beta EPIC']) {
+    const { r, tasks } = runOn(numbered, { '3.md': section(name) });
+    assert.equal(r.status, 0, `${name}: ${r.stderr}`);
+    assert.ok(rowIn(tasks, 'Beta epic', 3), name);
+    assert.ok(/^## 2\. Beta epic$/m.test(tasks));
+    assert.equal((tasks.match(/^## /gm) ?? []).length, 2);
+  }
+});
+
+test('section-new takes the highest number + 1 and reuses an existing epic of that name', () => {
+  const gap = numbered.replace('## 1. Alpha epic', '## 7. Alpha epic');
+  const { r, tasks } = runOn(gap, { '3.md': 'section-new: Gamma epic\n| 3 | Three | todo | | | | | c |\n' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(tasks, /^## 8\. Gamma epic$/m);
+  assert.ok(rowIn(tasks, 'Gamma epic', 3));
+  const again = runOn(numbered, { '3.md': 'section-new: 9. Beta epic\n| 3 | Three | todo | | | | | c |\n' });
+  assert.equal(again.r.status, 0, again.r.stderr);
+  assert.equal((again.tasks.match(/^## /gm) ?? []).length, 2);
+  assert.ok(rowIn(again.tasks, 'Beta epic', 3));
+});
+
+test('an unnumbered epic heading and a repeated epic number fail --check', () => {
+  const row = '| 1 | One | todo | | | | | a |\n';
+  const mk = (heads) => `# Tasks\n\n${heads.map((h, i) => `## ${h}\n\n${H}\n|---|---|---|---|---|---|---|---|\n${row.replace('| 1 |', `| ${i + 1} |`)}`).join('\n')}`;
+  assert.equal(runOn(mk(['1. A', '2. B']), {}, ['--check']).r.status, 0);
+  assert.notEqual(runOn(mk(['A', '2. B']), {}, ['--check']).r.status, 0);
+  assert.notEqual(runOn(mk(['1. A', '1. B']), {}, ['--check']).r.status, 0);
+});
+
+test('Depends must be <epic>.<task> references that resolve; a bare ID folds into its reference', () => {
+  const row = (d) => ({ '3.md': `section: Beta epic\n| 3 | Three | todo | | | ${d} | | c |\n` });
+  const base = numbered.replace(/(## 1\. Alpha epic[^]*?\|---\|\n)/, '$1| 1 | One | todo | | | | | a |\n');
+  assert.equal(runOn(base, row('1.1'), ['--check']).r.status, 0);
+  assert.equal(runOn(base, row('1.1, 1.1'), ['--check']).r.status, 0);
+  assert.notEqual(runOn(base, row('2.1'), ['--check']).r.status, 0);
+  assert.notEqual(runOn(base, row('1.99'), ['--check']).r.status, 0);
+  const bare = runOn(base, row('1'), ['--check']);
+  assert.equal(bare.r.status, 0, bare.r.stderr);
+  assert.match(bare.r.stderr, /warning: .*Depends "1" is a bare ID; write 1\.1/);
+  assert.notEqual(runOn(base, row('soon'), ['--check']).r.status, 0);
+  const { r, tasks } = runOn(base, row('1'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(tasks, /^\| 3 \| Three \| todo \| \| \| 1\.1 \|/m);
 });

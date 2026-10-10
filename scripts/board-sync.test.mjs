@@ -10,7 +10,7 @@ const fold = path.join(path.dirname(new URL(import.meta.url).pathname), 'fold-fr
 const H = '| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |\n|---|---|---|---|---|---|---|---|';
 const board = `# Tasks
 
-## Active
+## 1. Active
 
 ${H}
 | 1 | One | in_review | a | | | 2099-01-01 00:00 ICT | Lands in #50. |

@@ -153,15 +153,18 @@ on a personal account do not get.
 
 ## Task tracking
 
-- `TASKS.md` stays the live board, in the canonical "epic table" format: one `## ` heading per epic and
-  one table per epic with the header `| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |`.
+- `TASKS.md` stays the live board, in the canonical "epic table" format: one `## <N>. <Epic name>` heading per epic (N unique and stable: never renumbered or reused;
+  a new epic takes the highest + 1) and one table per epic with the header `| ID | Task | Status | Owner | Branch | Depends | ETA | Notes |`.
   Status is one of `todo`, `in_progress`, `in_review`, `blocked`, `blocked_on_owner`, `parked`, `done`. **Do not
   edit it directly in a PR** (CI rejects that). Add or update rows with fragment files
-  `tasks.d/<row-number>.md` (a `section:` line plus the complete eight-column row; an existing row
+  `tasks.d/<row-number>.md` (a `section:` line, the bare epic name or `N. Name`, plus the complete eight-column row; an existing row
   number replaces that row in place and keeps its epic; `section:` must name a current epic heading
-  (old names are aliased, an unknown one fails `--check`); `section-new: <name>` creates an epic on purpose). The merge train folds them into `TASKS.md` when the PR lands.
+  (old names are aliased, an unknown one fails `--check`); `section-new: <name>` creates an epic on purpose, numbered highest + 1). The merge train folds them into `TASKS.md` when the PR lands.
   See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
+- A task's reference is `<epic>.<task>` (for example `3.9926`; the ID column keeps the bare ID). Agents name
+  tasks by reference everywhere: Depends (comma-separated, each resolving to a row), Notes, commit messages,
+  PR titles and bodies, chat and reports.
 - Every `in_progress` and `in_review` row carries an ETA (`YYYY-MM-DD HH:MM ICT`; the board zone is
   ICT, Asia/Bangkok; for `in_review` it is the expected merge). `fold-fragments.mjs --check` fails on a
   missing ETA and warns on a past one: revise it as soon as it slips. Work nobody is doing is `todo`
@@ -187,7 +190,7 @@ on a personal account do not get.
   The coordinator logs requirements passed verbally (chat, calls, hand-offs) as rows straight away,
   so nothing exists only in conversation.
 - Any agent working in this repository must read and maintain the board; when delegating work,
-  include the relevant task number and require status/evidence to be returned for the board.
+  include the relevant task reference (`<epic>.<task>`) and require status/evidence to be returned for the board.
 
 ## Safety before committing or pushing
 

@@ -111,11 +111,51 @@ export const openRowEta = (c, now = Date.now()) => {
   return {};
 };
 
+// ---- numbered epics ------------------------------------------------------------------------------
+// An epic heading is `## <N>. <Epic name>`: N a positive integer, unique and stable (never renumbered or
+// reused; a new epic takes the highest + 1). A task's reference is `<epic>.<task>`, e.g. `3.9926`.
+export const EPIC_HEADING_RE = /^(\d+)\.\s+(\S.*)$/;
+export const stripEpicNumber = (s) => s.trim().replace(/^\d+\.\s+/, '');
+// { num, name } for the text after "## ", or null when the heading is not numbered.
+export const parseEpicHeading = (text) => {
+  const m = EPIC_HEADING_RE.exec(text.trim());
+  return m && Number(m[1]) > 0 ? { num: Number(m[1]), name: m[2].trim() } : null;
+};
+// The next free epic number: the highest on the board + 1.
+export const nextEpicNumber = (lines) => 1 + Math.max(0, ...lines.filter((l) => l.startsWith('## ')).map((l) => parseEpicHeading(l.slice(3))?.num ?? 0));
+// Row ID -> epic number, for every row under a numbered heading.
+export const epicByRow = (lines) => {
+  const map = new Map();
+  let epic = null;
+  for (const l of lines) {
+    if (l.startsWith('## ')) { epic = parseEpicHeading(l.slice(3))?.num ?? null; continue; }
+    const m = /^\|\s*(\d+|[A-Z]+-\d+)\s*\|/.exec(l);
+    if (m && epic !== null && !map.has(m[1])) map.set(m[1], epic);
+  }
+  return map;
+};
+const BARE_ID_RE = /^(?:\d+|[A-Z]+-\d+)$/;
+const REF_RE = /^(\d+)\.(\d+|[A-Z]+-\d+)$/;
+// Rewrites bare row IDs in a Depends cell to `<epic>.<task>` references where the row is on the board.
+export const normaliseDepends = (cell, epics) => cell.split(',').map((t) => t.trim()).filter(Boolean).map((t) => (BARE_ID_RE.test(t) && epics.has(t) ? `${epics.get(t)}.${t}` : t)).join(', ');
+// Problems with a Depends cell: every entry must be a `<epic>.<task>` reference that resolves to a row.
+export const dependsProblems = (cell, epics) => {
+  const p = [];
+  for (const t of cell.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const m = REF_RE.exec(t);
+    if (!m) p.push(BARE_ID_RE.test(t) && epics.has(t) ? `Depends "${t}" is a bare ID; write the reference ${epics.get(t)}.${t}` : `Depends "${t}" is not an <epic>.<task> reference`);
+    else if (!epics.has(m[2])) p.push(`Depends "${t}" names no row on the board`);
+    else if (epics.get(m[2]) !== Number(m[1])) p.push(`Depends "${t}" is in epic ${epics.get(m[2])}, so the reference is ${epics.get(m[2])}.${m[2]}`);
+  }
+  return p;
+};
+
 // ---- epic heading resolution -------------------------------------------------------------------
 // Fragments written before the epic headings were renamed (#465, #467, #469) still carry the old
 // `section:` text. Resolving it against the live headings (instead of creating a heading for anything
 // unknown) keeps stale epics from coming back.
-export const normaliseSection = (s) => s.replace(/^\s*(?:active|planned):\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+// A leading epic number ("3. ") is dropped too, so the bare name and `N. Name` both match.
+export const normaliseSection = (s) => stripEpicNumber(s.replace(/^\s*(?:active|planned):\s*/i, '')).replace(/\s+/g, ' ').trim().toLowerCase();
 
 // Old heading (normalised: no "Active: "/"Planned: " prefix, lower case) -> current heading text.
 // A value of null rejects the section with the message in REJECTED_SECTIONS.
