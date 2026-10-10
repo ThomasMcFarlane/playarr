@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.
+- Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
+- Web: player Up next and health drawers use the shared Drawer theme tokens and close button (1.9978)
 - Web calendar agenda: the focused entry's lift and glow are no longer cropped by the list or hidden under the pinned day heading, and the fade under the heading starts exactly at its bottom edge with no gap.
 - Arr sync: a restart no longer re-imports every series that has multi-episode files (the first check compared the source count of episodes with files against file rows). A work whose runtime, file or language backfill does not complete is retried with a growing gap (up to about a day) instead of on every five-minute pass.
 - Web: list rows (Watchlist, Requests, Downloads) keep their natural height and stack from the top; one item no longer stretches to the panel height (1.9967).

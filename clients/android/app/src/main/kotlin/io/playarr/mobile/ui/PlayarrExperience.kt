@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1650,18 +1651,24 @@ internal fun PlayarrExperience(
             // Web keeps the rail, logo, clock and profile chip around the blocked state.
             if (!isPlayer && !isProfiles) {
                 val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload, hasFolders)
+                val profileName = currentUserName ?: playarrString(PlayarrString.ProfileViewerFallback)
+                val profileDescription = playarrString(PlayarrString.ProfileControl, "name" to profileName)
                 if (visibleDestinations.isNotEmpty()) {
                     ExperienceNavigation(
                         destinations = visibleDestinations,
                         currentRoute = activeNavRoute,
                         isTelevision = isTelevision,
                         onNavigate = { navController.openExperienceTopLevel(it) },
-                        modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter)
+                        modifier = Modifier.align(if (isTelevision) Alignment.TopStart else Alignment.BottomCenter)
                             .onFocusChanged { navFocusState.value = it.hasFocus },
                         currentEntryFocus = navEntryFocus,
+                        tvProfile = TvProfileTile(currentUserId.orEmpty(), profileName, profileAvatar, profileDescription) {
+                            navController.openExperienceTopLevel("profiles")
+                        },
                     )
                 }
-                ProfileControl(
+                // Television draws the profile as the rail's last tile (above); the chip stays for phones.
+                if (!isTelevision || visibleDestinations.isEmpty()) ProfileControl(
                     isTelevision = isTelevision,
                     userId = currentUserId.orEmpty(),
                     userName = currentUserName,
@@ -1854,9 +1861,10 @@ private fun ExperienceNavigation(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
     currentEntryFocus: FocusRequester? = null,
+    tvProfile: TvProfileTile? = null,
 ) {
     if (isTelevision) {
-        TelevisionNavigation(destinations, currentRoute, onNavigate, modifier, currentEntryFocus)
+        TelevisionNavigation(destinations, currentRoute, onNavigate, modifier, currentEntryFocus, tvProfile)
         return
     }
     // Web: `bottom: max(8px, env(safe-area-inset-bottom))`, so the bar sits on the gesture inset or 8 dp up.
@@ -1923,80 +1931,148 @@ private fun TelevisionNavigation(
     onNavigate: (String) -> Unit,
     modifier: Modifier,
     currentEntryFocus: FocusRequester?,
+    profile: TvProfileTile?,
 ) {
     val groups = televisionDestinationGroups(destinations)
-    val contentEntry = LocalTvContentEntry.current
+    // Web `.app-nav`: the groups start at y 119.1 under the logo; the profile group and the version sit at its foot.
     Column(
-        modifier = modifier.padding(start = 42.2.dp),
+        modifier = modifier.fillMaxHeight().padding(start = 42.2.dp, top = 119.1.dp, bottom = 34.5.dp),
     ) {
         groups.forEachIndexed { groupIndex, group ->
             // Whole-pixel gaps that reproduce the web's 13.6 px between groups and 9.6 px between links.
             if (groupIndex > 0) Spacer(Modifier.height(if (groupIndex == 1) 13.dp else 14.dp))
-            val groupShape = RoundedCornerShape(22.dp)
-            Surface(
-                modifier = Modifier.glass(groupShape, WebGlass.NavGroup),
-                color = Color.Transparent,
-                shape = groupShape,
-            ) {
-                Column(Modifier.padding(start = 6.75.dp, end = 6.75.dp, top = 8.dp, bottom = 7.dp)) {
-                    group.forEachIndexed { destinationIndex, destination ->
-                        if (destinationIndex > 0) Spacer(Modifier.height((if (group.size == 3) listOf(9, 10) else listOf(10, 9, 10))[(destinationIndex - 1) % (if (group.size == 3) 2 else 3)].dp))
-                        val selected = currentRoute == destination.route
-                        val label = playarrString(destination.label)
-                        var focused by remember { mutableStateOf(false) }
-                        val navScale = rememberPlayarrFocusScale(
-                            focused = focused,
-                            focusedScale = FocusMotion.navFocusScale,
-                            unfocusedScale = if (selected) FocusMotion.navSelectedScale else FocusMotion.restScale,
-                            label = "tvNavFocus",
-                        )
-                        Surface(
-                            onClick = { onNavigate(destination.route) },
-                            // Focus is a ring, never a fill: only the current page keeps the soft fill.
-                            color = if (selected) WebInk.copy(alpha = 0.09f) else Color.Transparent,
-                            contentColor = if (selected || focused) WebInk else WebInkMuted,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .size(64.dp)
-                                .scale(navScale)
-                                .webFocusRing(focused, radius = 16.dp, offset = 2.dp)
-                                .then(if (selected && currentEntryFocus != null) Modifier.focusRequester(currentEntryFocus) else Modifier)
-                                .onFocusChanged { focused = it.isFocused }
-                                // RIGHT lands directly in the page's default target, as on web.
-                                .onPreviewKeyEvent { event ->
-                                    val target = contentEntry.requester
-                                    if (event.key == Key.DirectionRight && event.type == KeyEventType.KeyDown && target != null) {
-                                        runCatching { target.requestFocus() }.isSuccess
-                                    } else {
-                                        false
-                                    }
-                                },
-                        ) {
-                            // Web `.app-nav-link`: the 20 px icon 15.2 px down, the 8.832 px label 4.8 px under it.
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
-                                Spacer(Modifier.height(15.2.dp))
-                                Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Text(
-                                    label,
-                                    fontSize = 8.832.sp,
-                                    lineHeight = 8.832.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight(680),
-                                    letterSpacing = 0.309.sp,
-                                    style = androidx.compose.material3.LocalTextStyle.current.merge(
-                                        androidx.compose.ui.text.TextStyle(
-                                            lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                                                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-                                                androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
-                                            ),
-                                        ),
-                                    ),
-                                    modifier = Modifier.padding(top = 4.8.dp),
-                                )
-                            }
-                        }
-                    }
+            TvNavGroup(PaddingValues(start = 6.75.dp, end = 6.75.dp, top = 8.dp, bottom = 7.dp)) {
+                group.forEachIndexed { destinationIndex, destination ->
+                    if (destinationIndex > 0) Spacer(Modifier.height((if (group.size == 3) listOf(9, 10) else listOf(10, 9, 10))[(destinationIndex - 1) % (if (group.size == 3) 2 else 3)].dp))
+                    val selected = currentRoute == destination.route
+                    TvNavTile(
+                        selected = selected,
+                        label = playarrString(destination.label),
+                        onClick = { onNavigate(destination.route) },
+                        entryFocus = if (selected) currentEntryFocus else null,
+                    ) { Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp)) }
                 }
             }
+        }
+        if (profile != null) {
+            Spacer(Modifier.weight(1f))
+            // Web `.app-nav-group-profile`: the last tile of the rail in its own group, the avatar in the icon slot
+            // and the first name as its label (`shortProfileName`), the version 5.6 px under the group.
+            TvNavGroup(PaddingValues(horizontal = 6.75.dp, vertical = 7.7.dp)) {
+                TvNavTile(
+                    selected = currentRoute == "profiles",
+                    label = tvProfileTileLabel(profile.name),
+                    onClick = profile.onClick,
+                    entryFocus = null,
+                    description = profile.description,
+                ) {
+                    PlayarrProfileAvatar(userId = profile.userId, preference = profile.avatar, modifier = Modifier.size(20.dp), glyphSize = 10.sp)
+                }
+            }
+            Text(
+                profileVersionLabel(BuildConfig.VERSION_NAME),
+                color = WebInk,
+                fontSize = 8.sp,
+                lineHeight = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.32.sp,
+                fontFamily = webMonoFamily,
+                softWrap = false,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 5.6.dp).width(77.5.dp).wrapContentWidth(unbounded = true).clearAndSetSemantics { },
+            )
+        }
+    }
+}
+
+/** The signed-in profile shown as the rail's last tile on television. */
+internal class TvProfileTile(
+    val userId: String,
+    val name: String,
+    val avatar: ProfileAvatarPreference?,
+    val description: String,
+    val onClick: () -> Unit,
+)
+
+/** Web `shortProfileName`: the first word of the display name. */
+internal fun tvProfileTileLabel(displayName: String): String =
+    displayName.trim().split(Regex("\\s+")).first().ifEmpty { displayName }
+
+@Composable
+private fun TvNavGroup(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
+    val groupShape = RoundedCornerShape(22.dp)
+    Surface(
+        modifier = Modifier.glass(groupShape, WebGlass.NavGroup),
+        color = Color.Transparent,
+        shape = groupShape,
+    ) {
+        Column(Modifier.padding(padding), content = content)
+    }
+}
+
+@Composable
+private fun TvNavTile(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+    entryFocus: FocusRequester?,
+    description: String? = null,
+    icon: @Composable () -> Unit,
+) {
+    val contentEntry = LocalTvContentEntry.current
+    var focused by remember { mutableStateOf(false) }
+    val navScale = rememberPlayarrFocusScale(
+        focused = focused,
+        focusedScale = FocusMotion.navFocusScale,
+        unfocusedScale = if (selected) FocusMotion.navSelectedScale else FocusMotion.restScale,
+        label = "tvNavFocus",
+    )
+    Surface(
+        onClick = onClick,
+        // Focus is a ring, never a fill: only the current page keeps the soft fill.
+        color = if (selected) WebInk.copy(alpha = 0.09f) else Color.Transparent,
+        contentColor = if (selected || focused) WebInk else WebInkMuted,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .size(64.dp)
+            .scale(navScale)
+            .webFocusRing(focused, radius = 16.dp, offset = 2.dp)
+            .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
+            .onFocusChanged { focused = it.isFocused }
+            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier)
+            // RIGHT lands directly in the page's default target, as on web.
+            .onPreviewKeyEvent { event ->
+                val target = contentEntry.requester
+                if (event.key == Key.DirectionRight && event.type == KeyEventType.KeyDown && target != null) {
+                    runCatching { target.requestFocus() }.isSuccess
+                } else {
+                    false
+                }
+            },
+    ) {
+        // Web `.app-nav-link`: the 20 px icon 15.2 px down, the 8.832 px label 4.8 px under it.
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
+            Spacer(Modifier.height(15.2.dp))
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { icon() }
+            Text(
+                label,
+                fontSize = 8.832.sp,
+                lineHeight = 8.832.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight(680),
+                letterSpacing = 0.309.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = androidx.compose.material3.LocalTextStyle.current.merge(
+                    androidx.compose.ui.text.TextStyle(
+                        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                            androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                        ),
+                    ),
+                ),
+                modifier = Modifier.padding(top = 4.8.dp, start = 4.dp, end = 4.dp),
+            )
         }
     }
 }

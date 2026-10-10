@@ -33,7 +33,7 @@ struct TVCalendarView: View {
     @ViewBuilder
     private func content(_ model: CalendarViewModel) -> some View {
         // The header row centres on the 72 pt action tile (web: the row grows to fit it).
-        TVPageHeader(title: "Release Calendar")
+        TVPageHeader(title: "Calendar")
             .offset(y: 11)
 
         // Period controls: previous, Today (focused ring), next, Calendar link, Filters.
@@ -257,17 +257,7 @@ struct TVCalendarView: View {
                     .background(Capsule().fill(Color(red: 0.357, green: 0.498, blue: 0.82).opacity(0.24)))
                     .placed(x: 153.6, y: 461.3, h: 26)
             }
-            detailLabel("Reported by", y: 498.7)
-            if let source = entry.sources.first {
-                HStack(spacing: 8) {
-                    Text(source.sourceName)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text("(\(source.sourceKind))")
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                }
-                .font(TVTheme.font(size: 19.2, css: 400))
-                .placed(x: 153.6, y: 515.9, h: 28.8)
-            }
+            // No "Reported by": users never see source-provider names (owner rule 2026-10-09).
             actionButtons(entry)
         }
     }
