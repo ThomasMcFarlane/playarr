@@ -39,6 +39,7 @@ Steps only the repository owner can perform.
 | 9971 | Web: download view uses a quality select and asks episode vs whole season | in_progress | download worker | download-flow | | 2026-10-10 23:30 ICT | Shared Select for quality; scope choice (episode, season, series) via shared SegmentedControl; e2e download-flow |
 | 9968 | Web: no download button on each episode row of TV shows | in_progress | download worker | download-flow | | 2026-10-10 23:30 ICT | Season track download button removed; download stays in the episode actions panel (long-press Enter) |
 | 9969 | Web: every right-side panel (incl. long-press actions and download view) uses the one shared Drawer and close button | in_progress | drawer worker | drawer-everywhere | | 2026-10-10 23:30 ICT | Owner request 2026-10-10; auditing all panels, migrating to shared Drawer, guard e2e drawer-consistency-e2e.mjs |
+| 9965 | Web calendar agenda: focused entry's glow/lift cropped by the scroller; gap under sticky heading | in_progress | agenda worker | agenda-focus-crop | | 2026-10-10 22:30 ICT | Owner bug on live: the agenda scroller crops the focused entry's lift and glow ring; the scroller gets inline and block padding for the glow extent. |
 
 ## 2. Server performance and security (2026-10-03)
 
