@@ -113,6 +113,8 @@ import { MediaRail } from '../design/components/MediaRail';
 import type { MediaRailItem } from '../design/components/MediaRail';
 import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
+import { PlayarrLogo } from '../design/components/PlayarrLogo';
+import { Clock } from '../design/components/Clock';
 import { NavPill } from '../design/components/NavPill';
 import type { NavPillItem } from '../design/components/NavPill';
 import { PosterCard } from '../design/components/PosterCard';
@@ -944,6 +946,15 @@ export struct Home {
       this.handleNavSelect(id);
     }),
       })
+      // Web TV shell chrome: the logo above the rail and the clock row.
+      PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+        .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Row() {
+        Clock()
+      }
+      .height(tv(TvGeometry.utilityRowHeight))
+      .alignItems(VerticalAlign.Center)
+      .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
     }
     .width('100%')
     .height('100%')
