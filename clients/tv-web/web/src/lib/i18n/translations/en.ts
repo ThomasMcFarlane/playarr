@@ -333,7 +333,6 @@ export const en = {
   "pages.home.workKind.movie": "Movie",
   "pages.home.workKind.series": "Series",
   "pages.home.workKind.site": "Site",
-  "pages.library.artworkSize": "Artwork size",
   "pages.library.backToHome": "Back to Home",
   "pages.library.closeFilters": "Close filters",
   "pages.library.collectionNoun.artists": "artists",
@@ -713,6 +712,10 @@ export const en = {
   "settings.appearance.description":
     "Choose this device's theme and home screen artwork.",
   "settings.appearance.documentTitle": "Appearance - Settings",
+  "settings.appearance.artworkSizeAriaLabel": "Artwork size",
+  "settings.appearance.artworkSizeDescription": "Sets the size of posters and thumbnails everywhere: Home, Library, Search and more.",
+  "settings.appearance.artworkSizeSaved": "Artwork size saved.",
+  "settings.appearance.artworkSizeTitle": "Artwork size",
   "settings.appearance.homeViewAriaLabel": "Home screen artwork",
   "settings.appearance.homeViewCover": "Covers",
   "settings.appearance.homeViewDescription":

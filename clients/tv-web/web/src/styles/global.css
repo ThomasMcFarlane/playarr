@@ -1216,6 +1216,11 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   transform: scale(1.04);
 }
 
+.artwork-size-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 8rem));
+}
+
 .appearance-setting {
   display: grid;
   gap: clamp(12px, calc(1.5 * var(--viewport-unit)), 20px);
@@ -5473,22 +5478,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 .tv-library-grid-panel.is-cover .tv-title-grid-content {
   grid-template-columns: repeat(var(--card-cols-cover), var(--card-w-cover));
   gap: clamp(26px, calc(3 * var(--viewport-unit)), 42px) var(--card-grid-gap-cover);
-}
-
-.tv-library-grid-panel.is-screen.artwork-small .tv-title-grid-content {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-screen.artwork-large .tv-title-grid-content {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-cover.artwork-small .tv-title-grid-content {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-cover.artwork-large .tv-title-grid-content {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .tv-library-grid-panel.is-cover .tv-title-card-art {

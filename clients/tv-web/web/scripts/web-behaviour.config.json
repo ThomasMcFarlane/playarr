@@ -26,7 +26,8 @@
     "nav-library-preview-e2e",
     "nav-focus-e2e",
     "relay-port-e2e",
-    "card-size-e2e"
+    "card-size-e2e",
+    "artwork-size-setting-e2e"
   ],
   "args": {
     "tablet-layout": [
@@ -73,6 +74,7 @@
     "nav-library-preview-e2e": 13,
     "nav-focus-e2e": 47,
     "relay-port-e2e": 15,
-    "card-size-e2e": 120
+    "card-size-e2e": 120,
+    "artwork-size-setting-e2e": 120
   }
 }

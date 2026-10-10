@@ -1,6 +1,6 @@
 /**
- * Library view, card size and sort/order and their URL (query string)
- * representation: `?view=list&size=large&sort=date_added&order=desc`.
+ * Library view and sort/order and their URL (query string)
+ * representation: `?view=list&sort=date_added&order=desc`.
  *
  * The URL is the source of truth, so refresh, back/forward and deep links
  * restore the exact view. localStorage only supplies the default for a fresh
@@ -9,28 +9,24 @@
  */
 export type LibraryKind = "movie" | "series" | "site" | "artist";
 export type LibraryView = "list" | "screen" | "cover" | "cover-flow";
-export type ArtworkSize = "small" | "medium" | "large";
 export type LibrarySort = "title" | "date_added";
 export type SortOrder = "asc" | "desc";
 
 export interface LibraryViewState {
   view: LibraryView;
-  size: ArtworkSize;
   sort: LibrarySort;
   order: SortOrder;
 }
 
-export const LIBRARY_VIEW_PARAMS = ["view", "size", "sort", "order"] as const;
+export const LIBRARY_VIEW_PARAMS = ["view", "sort", "order"] as const;
 
 export const LIBRARY_VIEW_DEFAULTS: LibraryViewState = {
   view: "screen",
-  size: "medium",
   sort: "title",
   order: "asc",
 };
 
 const VIEWS: readonly LibraryView[] = ["list", "screen", "cover", "cover-flow"];
-const SIZES: readonly ArtworkSize[] = ["small", "medium", "large"];
 const SORTS: readonly LibrarySort[] = ["title", "date_added"];
 const ORDERS: readonly SortOrder[] = ["asc", "desc"];
 
@@ -67,7 +63,6 @@ export function storedLibraryView(kind: LibraryKind, storage: StorageLike | null
   };
   return {
     view: coerceView(kind, pick(VIEWS, read("libraryView"))) ?? LIBRARY_VIEW_DEFAULTS.view,
-    size: pick(SIZES, read("artworkSize")) ?? LIBRARY_VIEW_DEFAULTS.size,
     sort: pick(SORTS, read("librarySort")) ?? LIBRARY_VIEW_DEFAULTS.sort,
     order: pick(ORDERS, read("libraryOrder")) ?? LIBRARY_VIEW_DEFAULTS.order,
   };
@@ -78,7 +73,7 @@ export function rememberLibraryView(
   patch: Partial<LibraryViewState>,
   storage: StorageLike | null = defaultStorage()
 ): void {
-  const names = { view: "libraryView", size: "artworkSize", sort: "librarySort", order: "libraryOrder" } as const;
+  const names = { view: "libraryView", sort: "librarySort", order: "libraryOrder" } as const;
   for (const field of LIBRARY_VIEW_PARAMS) {
     const value = patch[field];
     if (value === undefined) continue;
@@ -90,6 +85,12 @@ export function rememberLibraryView(
   }
 }
 
+/**
+ * The artwork size is a global setting now (lib/artworkSize.ts). An old `?size=` param is read once so it
+ * can be adopted into that setting, then dropped from the URL.
+ */
+export const LEGACY_SIZE_PARAM = "size";
+
 /** URL params win field by field; anything missing or invalid falls back to `defaults`. */
 export function parseLibraryView(
   params: URLSearchParams,
@@ -98,7 +99,6 @@ export function parseLibraryView(
 ): LibraryViewState {
   return {
     view: coerceView(kind, pick(VIEWS, params.get("view"))) ?? defaults.view,
-    size: pick(SIZES, params.get("size")) ?? defaults.size,
     sort: pick(SORTS, params.get("sort")) ?? defaults.sort,
     order: pick(ORDERS, params.get("order")) ?? defaults.order,
   };

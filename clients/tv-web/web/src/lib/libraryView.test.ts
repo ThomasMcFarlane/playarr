@@ -19,12 +19,11 @@ function memory(initial: Record<string, string> = {}) {
 }
 
 describe("library view query", () => {
-  it("round-trips every view, size, sort and order through the URL", () => {
+  it("round-trips every view, sort and order through the URL", () => {
     for (const view of ["list", "screen", "cover", "cover-flow"] as const)
-      for (const size of ["small", "medium", "large"] as const)
-        for (const sort of ["title", "date_added"] as const)
+      for (const sort of ["title", "date_added"] as const)
           for (const order of ["asc", "desc"] as const) {
-            const state: LibraryViewState = { view, size, sort, order };
+            const state: LibraryViewState = { view, sort, order };
             const query = applyLibraryView(new URLSearchParams(), state).toString();
             expect(parseLibraryView(new URLSearchParams(query), "artist")).toEqual(state);
           }
@@ -43,7 +42,7 @@ describe("library view query", () => {
 
   it("ignores malformed values and falls back per field", () => {
     const parsed = parseLibraryView(new URLSearchParams("view=bogus&size=large&sort=nope&order=desc"), "movie");
-    expect(parsed).toEqual({ ...LIBRARY_VIEW_DEFAULTS, size: "large", order: "desc" });
+    expect(parsed).toEqual({ ...LIBRARY_VIEW_DEFAULTS, order: "desc" });
   });
 
   it("allows Cover Flow for artists only", () => {
@@ -52,11 +51,11 @@ describe("library view query", () => {
   });
 
   it("uses stored defaults only for fields the URL omits", () => {
-    const storage = memory({ "playarr.libraryView.movie": "list", "playarr.artworkSize.movie": "small" });
+    const storage = memory({ "playarr.libraryView.movie": "list" });
     const stored = storedLibraryView("movie", storage);
     expect(stored.view).toBe("list");
-    expect(parseLibraryView(new URLSearchParams(""), "movie", stored)).toMatchObject({ view: "list", size: "small" });
-    expect(parseLibraryView(new URLSearchParams("view=cover"), "movie", stored)).toMatchObject({ view: "cover", size: "small" });
+    expect(parseLibraryView(new URLSearchParams(""), "movie", stored)).toMatchObject({ view: "list" });
+    expect(parseLibraryView(new URLSearchParams("view=cover"), "movie", stored)).toMatchObject({ view: "cover" });
   });
 
   it("remembers the last choice per kind and tolerates missing storage", () => {
@@ -74,16 +73,16 @@ describe("library view history", () => {
 
   it("restores earlier views on back and later ones on forward, and deep links restore directly", async () => {
     const router = createMemoryRouter([{ path: "/movies", element: null }], { initialEntries: ["/movies?view=list&size=large"] });
-    expect(parseLibraryView(search(router), "movie")).toMatchObject({ view: "list", size: "large" });
+    expect(parseLibraryView(search(router), "movie")).toMatchObject({ view: "list" });
 
     await router.navigate({ pathname: "/movies", search: applyLibraryView(search(router), { sort: "date_added", order: "desc" }).toString() });
     await router.navigate({ pathname: "/movies", search: applyLibraryView(search(router), { view: "cover" }).toString() });
-    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "cover", size: "large", sort: "date_added", order: "desc" });
+    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "cover", sort: "date_added", order: "desc" });
 
     await router.navigate(-1);
-    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "list", size: "large", sort: "date_added", order: "desc" });
+    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "list", sort: "date_added", order: "desc" });
     await router.navigate(-1);
-    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "list", size: "large", sort: "title", order: "asc" });
+    expect(parseLibraryView(search(router), "movie")).toEqual({ view: "list", sort: "title", order: "asc" });
     await router.navigate(1);
     expect(parseLibraryView(search(router), "movie").sort).toBe("date_added");
   });
