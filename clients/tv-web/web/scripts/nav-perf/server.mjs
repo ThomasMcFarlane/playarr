@@ -226,9 +226,11 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
         req.on("close", () => { clearInterval(beat); clearTimeout(resync); });
         return;
       }
-      // A slow link: every other API answer (artwork included) takes `latencyMs` on top, like a round trip to a remote server.
+      // A slow link: every other API answer takes `latencyMs` on top, like a round trip to a remote server. Artwork is
+      // left out: a real server answers over HTTP/2, where images never queue the data reads, and this mock is HTTP/1.1
+      // (six connections), where a dozen delayed images would.
       if (url.pathname.startsWith("/api/")) {
-        if (latencyMs > 0 && !/^\/api\/v1\/remote\b/.test(url.pathname)) return void setTimeout(() => handleApi(url, req, res), latencyMs);
+        if (latencyMs > 0 && !/^\/api\/v1\/(remote|artwork)\b/.test(url.pathname)) return void setTimeout(() => handleApi(url, req, res), latencyMs);
         return handleApi(url, req, res);
       }
       return json(res, { status: "ok" });
