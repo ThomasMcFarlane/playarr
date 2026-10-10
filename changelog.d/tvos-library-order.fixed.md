@@ -1,1 +1,0 @@
-- Apple TV: libraries list playable titles in the web order (numbers by value, so 2 comes before 10) and open with the first title focused.

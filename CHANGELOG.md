@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: libraries list playable titles in the web order (numbers by value, so 2 comes before 10) and open with the first title focused.
 - Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
 - Tizen and webOS: web rules that use `:has()` (nav group spacing, search field focus ring, calendar agenda panel, downloads layout) now apply, through a build-time rewrite plus a small runtime that keeps a matching attribute up to date.
 - Apple TV: calendar week and month views, a focusable agenda whose details follow focus, the shared right-side drawer for Filters (library sort and order, calendar view) and the calendar link, search results in the web grid, a full-screen player that opens transcoded streams (session headers, waits for the playlist, no Matroska direct play) and no longer crashes before the duration is known, Play focused on film pages, and today on the calendar is your local day.
