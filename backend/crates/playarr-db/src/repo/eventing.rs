@@ -574,6 +574,9 @@ impl MediaFileRepo for EventingMediaFileRepo {
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError> {
         self.inner.get_by_id(id).await
     }
+    async fn get_playable(&self, id: Uuid) -> Result<MediaFile, DbError> {
+        self.inner.get_playable(id).await
+    }
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_by_work_id(work_id).await
     }

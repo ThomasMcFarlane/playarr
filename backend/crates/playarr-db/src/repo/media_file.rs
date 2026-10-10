@@ -38,6 +38,24 @@ pub trait MediaFileRepo: Send + Sync {
 
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError>;
 
+    /// Like [`Self::get_by_id`], but `NotFound` for a row the source dropped
+    /// and a sync marked missing. Playback, streaming, downloads and
+    /// transcodes resolve files through this.
+    async fn get_playable(&self, id: Uuid) -> Result<MediaFile, DbError> {
+        let file = self.get_by_id(id).await?;
+        // The default cannot see the mark, so it checks the visible listing.
+        if self
+            .list_by_work_id(file.work_id)
+            .await?
+            .iter()
+            .any(|f| f.id == id)
+        {
+            Ok(file)
+        } else {
+            Err(DbError::NotFound)
+        }
+    }
+
     /// All `MediaFile`s belonging to `work_id`, across all of its leaves
     /// (the work itself for a movie, or every episode/track/book file for a
     /// series/artist/author).
@@ -95,13 +113,14 @@ pub trait MediaFileRepo: Send + Sync {
     /// Reconciles `work_id`'s rows from `source_instance_id` with the source's
     /// current file listing (`keep_source_file_ids`, the full listing, never
     /// empty). A listed row that was marked missing is restored. A row the
-    /// source no longer lists is deleted ONLY when exactly one surviving row
-    /// exists for the same leaf (same instance first, then any) and it is the
-    /// only stale row for that leaf; viewers' resume positions and playback
-    /// choices move to the survivor first. Every other unlisted row is marked
-    /// missing (hidden from playable views, kept with its progress). A pass
-    /// that would touch over half of the instance's rows for the work, or over
-    /// 200, changes nothing and reports `skipped`.
+    /// source no longer lists (including rows an earlier pass marked missing)
+    /// is deleted ONLY when exactly one surviving row exists for the same leaf
+    /// (this instance's listed rows first, then another instance's live rows);
+    /// each user's newest resume position and playback choices move to the
+    /// survivor first. Every other unlisted row is marked missing (hidden from
+    /// playable views, kept with its progress). More than 200 deletes, or
+    /// one-to-one replacements covering over half of the instance's rows, are
+    /// not deleted in one pass (they are marked instead) and `skipped` is set.
     async fn prune_superseded_files(
         &self,
         work_id: Uuid,
@@ -287,6 +306,17 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             })
         })
         .await
+    }
+
+    async fn get_playable(&self, id: Uuid) -> Result<MediaFile, DbError> {
+        let sql = "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+                 source_instance_id, source_file_id FROM media_files WHERE id = ? AND missing_since IS NULL";
+        let row = sqlx::query(sql)
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(DbError::NotFound)?;
+        Self::from_row(&row)
     }
 
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError> {
@@ -476,47 +506,75 @@ impl MediaFileRepo for SqlxMediaFileRepo {
         })
         .collect::<Result<_, sqlx::Error>>()?;
 
-        let live_mine = rows.iter().filter(|r| r.mine && !r.missing).count();
-        let stale: Vec<&Row> = rows
-            .iter()
-            .filter(|r| r.mine && !r.missing && !r.listed)
-            .collect();
+        let mine_total = rows.iter().filter(|r| r.mine).count();
+        // Rows the source no longer lists, including ones an earlier pass only
+        // marked missing: those still hold progress that must reach a
+        // replacement once one exists.
+        let stale: Vec<&Row> = rows.iter().filter(|r| r.mine && !r.listed).collect();
         let restore: Vec<String> = rows
             .iter()
             .filter(|r| r.mine && r.missing && r.listed)
             .map(|r| r.id.clone())
             .collect();
-        if stale.len() > MAX_PRUNE_ROWS || stale.len() * 2 > live_mine {
-            if !stale.is_empty() {
-                tracing::warn!(
-                    %work_id, stale = stale.len(), rows = live_mine,
-                    "not pruning source files: too many rows would change in one pass"
-                );
-            }
-            return Ok(PruneOutcome {
-                skipped: !stale.is_empty(),
-                ..PruneOutcome::default()
-            });
-        }
         if stale.is_empty() && restore.is_empty() {
             return Ok(PruneOutcome::default());
         }
 
-        // (stale id, survivor to move progress to and delete into, or None to mark missing)
+        // (stale id, survivor to move progress to and delete into, or None)
         let mut plan: Vec<(String, Option<String>)> = Vec::new();
         for s in &stale {
-            let same_leaf = |r: &&Row| r.leaf_ref == s.leaf_ref && !r.missing && r.listed;
-            let same_instance: Vec<&Row> =
-                rows.iter().filter(|r| r.mine).filter(same_leaf).collect();
+            // This instance's survivors are the rows it lists now (a listed row
+            // being restored counts); another instance's are its live rows.
+            let same_instance: Vec<&Row> = rows
+                .iter()
+                .filter(|r| r.mine && r.listed && r.leaf_ref == s.leaf_ref)
+                .collect();
             let candidates: Vec<&Row> = if same_instance.is_empty() {
-                rows.iter().filter(|r| !r.mine).filter(same_leaf).collect()
+                rows.iter()
+                    .filter(|r| !r.mine && !r.missing && r.leaf_ref == s.leaf_ref)
+                    .collect()
             } else {
                 same_instance
             };
-            let stale_in_leaf = stale.iter().filter(|o| o.leaf_ref == s.leaf_ref).count();
-            let survivor =
-                (candidates.len() == 1 && stale_in_leaf == 1).then(|| candidates[0].id.clone());
+            let survivor = (candidates.len() == 1).then(|| candidates[0].id.clone());
             plan.push((s.id.clone(), survivor));
+        }
+        // The guard limits deletes only: marking and restoring are reversible.
+        let deletes = plan.iter().filter(|(_, s)| s.is_some()).count();
+        // Plain one-to-one replacements are the ones a bad listing could mass
+        // produce, so the half-of-the-rows limit counts those; a backlog of
+        // several old versions of one file (all but one are stale) does not.
+        let mut per_leaf: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for r in &stale {
+            *per_leaf.entry(r.leaf_ref.as_str()).or_default() += 1;
+        }
+        let one_to_one = stale
+            .iter()
+            .zip(&plan)
+            .filter(|(r, (_, survivor))| survivor.is_some() && per_leaf[r.leaf_ref.as_str()] == 1)
+            .count();
+        let guarded = deletes > MAX_PRUNE_ROWS || one_to_one * 2 > mine_total;
+        if guarded {
+            tracing::warn!(
+                %work_id, deletes, rows = mine_total,
+                "not deleting superseded source files: too many rows would change in one pass"
+            );
+            for (_, survivor) in plan.iter_mut() {
+                *survivor = None;
+            }
+        }
+        // Rows that are already missing and have nowhere to go stay as they are.
+        let missing_ids: HashSet<&str> = stale
+            .iter()
+            .filter(|r| r.missing)
+            .map(|r| r.id.as_str())
+            .collect();
+        plan.retain(|(id, survivor)| survivor.is_some() || !missing_ids.contains(id.as_str()));
+        if plan.is_empty() && restore.is_empty() {
+            return Ok(PruneOutcome {
+                skipped: guarded,
+                ..PruneOutcome::default()
+            });
         }
         let outcome_deleted = plan.iter().filter(|(_, s)| s.is_some()).count();
         let outcome_missing = plan.len() - outcome_deleted;
@@ -555,8 +613,18 @@ impl MediaFileRepo for SqlxMediaFileRepo {
                         for u in users {
                             moved.push(u.try_get("user_id")?);
                         }
-                        // Keep a viewer's place and choices; a user who already
-                        // has their own on the survivor keeps that one.
+                        // A user with a place on both files keeps the newer one:
+                        // drop the survivor's when the stale row's is newer...
+                        sqlx::query(&format!(
+                            "DELETE FROM {table} WHERE media_file_id = ? AND EXISTS ( \
+                               SELECT 1 FROM {table} other WHERE other.user_id = {table}.user_id \
+                               AND other.media_file_id = ? AND other.updated_at > {table}.updated_at)"
+                        ))
+                        .bind(survivor.clone())
+                        .bind(stale_id.clone())
+                        .execute(&mut *conn)
+                        .await?;
+                        // ...then move every remaining place across.
                         sqlx::query(&format!(
                             "UPDATE {table} SET media_file_id = ? WHERE media_file_id = ? \
                              AND NOT EXISTS (SELECT 1 FROM {table} other \
@@ -594,7 +662,7 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             marked_missing: outcome_missing,
             restored,
             moved_users,
-            skipped: false,
+            skipped: guarded,
         })
     }
 
@@ -1240,31 +1308,214 @@ mod tests {
         assert_eq!(progress_file(&pool, &user).await, ids[0].id.to_string());
     }
 
-    /// Touching more than half of an instance's rows for a work in one pass
-    /// (a source returning a bad listing) changes nothing.
+    /// More than 200 deletes in one pass (a bad listing) delete nothing: the
+    /// rows are marked missing instead, which the next good listing reverses.
     #[tokio::test]
-    async fn prune_guard_skips_a_pass_that_would_remove_most_rows() {
+    async fn prune_guard_marks_instead_of_deleting_a_mass_replacement() {
         let pool = test_sqlite_pool().await;
         let work_id = Uuid::new_v4();
         insert_work(&pool, work_id).await;
         let repo = SqlxMediaFileRepo::new(pool.clone());
         let instance = Uuid::new_v4();
-        for id in ["1", "2", "3", "4"] {
+        let mut keep = Vec::new();
+        for i in 0..201 {
+            let leaf = LeafRef::Episode(Uuid::new_v4());
             repo.upsert_by_source(&sample_media_file(
                 work_id,
-                LeafRef::Episode(Uuid::new_v4()),
+                leaf,
                 instance,
-                Some(id),
+                Some(&format!("o{i}")),
             ))
             .await
             .unwrap();
+            repo.upsert_by_source(&sample_media_file(
+                work_id,
+                leaf,
+                instance,
+                Some(&format!("n{i}")),
+            ))
+            .await
+            .unwrap();
+            keep.push(format!("n{i}"));
         }
         let outcome = repo
-            .prune_superseded_files(work_id, instance, &["1".to_string()])
+            .prune_superseded_files(work_id, instance, &keep)
             .await
             .unwrap();
         assert!(outcome.skipped);
-        assert_eq!(repo.list_by_work_id(work_id).await.unwrap().len(), 4);
+        assert_eq!((outcome.deleted, outcome.marked_missing), (0, 201));
+        assert_eq!(repo.list_by_work_id(work_id).await.unwrap().len(), 201);
+        let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media_files")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(total.0, 402, "nothing was deleted");
+    }
+
+    async fn seed_progress_at(pool: &DbPool, user: &str, file: Uuid, position: i64, at: &str) {
+        sqlx::query(
+            "INSERT INTO watch_progress (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
+             VALUES (?, ?, ?, 100, 'in_progress', ?)",
+        )
+        .bind(user)
+        .bind(file.to_string())
+        .bind(position)
+        .bind(at)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    async fn progress_position(pool: &DbPool, user: &str, file: Uuid) -> Option<i64> {
+        sqlx::query_scalar(
+            "SELECT position_ms FROM watch_progress WHERE user_id = ? AND media_file_id = ?",
+        )
+        .bind(user)
+        .bind(file.to_string())
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+    }
+
+    /// Two upgrades in a row leave A and B stale with C live: the user's
+    /// newest place (on B) ends on C, and a place on C that is older loses.
+    #[tokio::test]
+    async fn prune_moves_the_newest_progress_of_a_double_upgrade_backlog() {
+        let pool = test_sqlite_pool().await;
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let repo = SqlxMediaFileRepo::new(pool.clone());
+        let instance = Uuid::new_v4();
+        let leaf = LeafRef::Episode(Uuid::new_v4());
+        let mut rows = Vec::new();
+        for id in ["a", "b", "c"] {
+            rows.push(
+                repo.upsert_by_source(&sample_media_file(work_id, leaf, instance, Some(id)))
+                    .await
+                    .unwrap(),
+            );
+        }
+        let user = seed_user(&pool).await;
+        seed_progress_at(&pool, &user, rows[0].id, 10, "2024-01-01T00:00:00.000Z").await;
+        seed_progress_at(&pool, &user, rows[1].id, 20, "2024-03-01T00:00:00.000Z").await;
+        seed_progress_at(&pool, &user, rows[2].id, 30, "2024-02-01T00:00:00.000Z").await;
+
+        let outcome = repo
+            .prune_superseded_files(work_id, instance, &["c".to_string()])
+            .await
+            .unwrap();
+        assert_eq!((outcome.deleted, outcome.marked_missing), (2, 0));
+        assert_eq!(
+            progress_position(&pool, &user, rows[2].id).await,
+            Some(20),
+            "the newest place must end on the survivor"
+        );
+        let all: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM watch_progress WHERE user_id = ?")
+            .bind(&user)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(all.0, 1);
+    }
+
+    /// When the user's place on the survivor is newer, it is kept.
+    #[tokio::test]
+    async fn prune_keeps_the_survivors_progress_when_it_is_newer() {
+        let pool = test_sqlite_pool().await;
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let repo = SqlxMediaFileRepo::new(pool.clone());
+        let instance = Uuid::new_v4();
+        let leaf = LeafRef::Episode(Uuid::new_v4());
+        let old = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("1")))
+            .await
+            .unwrap();
+        let new = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("2")))
+            .await
+            .unwrap();
+        let user = seed_user(&pool).await;
+        seed_progress_at(&pool, &user, old.id, 10, "2024-01-01T00:00:00.000Z").await;
+        seed_progress_at(&pool, &user, new.id, 99, "2024-05-01T00:00:00.000Z").await;
+        repo.prune_superseded_files(work_id, instance, &["2".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(progress_position(&pool, &user, new.id).await, Some(99));
+    }
+
+    /// A survivor from another instance (disjoint file ids, so never in this
+    /// instance's listing) still receives the progress.
+    #[tokio::test]
+    async fn prune_uses_another_instances_live_row_as_the_survivor() {
+        let pool = test_sqlite_pool().await;
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let repo = SqlxMediaFileRepo::new(pool.clone());
+        let (mine, theirs) = (Uuid::new_v4(), Uuid::new_v4());
+        let leaf = LeafRef::Episode(Uuid::new_v4());
+        let old = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, mine, Some("1")))
+            .await
+            .unwrap();
+        let other = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, theirs, Some("900")))
+            .await
+            .unwrap();
+        // Keeps another leaf listed so the listing is not empty.
+        repo.upsert_by_source(&sample_media_file(
+            work_id,
+            LeafRef::Episode(Uuid::new_v4()),
+            mine,
+            Some("2"),
+        ))
+        .await
+        .unwrap();
+        let user = seed_user(&pool).await;
+        seed_progress_at(&pool, &user, old.id, 7, "2024-01-01T00:00:00.000Z").await;
+        let outcome = repo
+            .prune_superseded_files(work_id, mine, &["2".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(outcome.deleted, 1);
+        assert_eq!(progress_position(&pool, &user, other.id).await, Some(7));
+    }
+
+    /// A row marked missing earlier is reconciled once a survivor appears.
+    #[tokio::test]
+    async fn prune_reconciles_a_missing_row_when_a_survivor_appears() {
+        let pool = test_sqlite_pool().await;
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let repo = SqlxMediaFileRepo::new(pool.clone());
+        let instance = Uuid::new_v4();
+        let leaf = LeafRef::Episode(Uuid::new_v4());
+        let other_leaf = LeafRef::Episode(Uuid::new_v4());
+        let old = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("1")))
+            .await
+            .unwrap();
+        repo.upsert_by_source(&sample_media_file(work_id, other_leaf, instance, Some("9")))
+            .await
+            .unwrap();
+        let user = seed_user(&pool).await;
+        seed_progress_at(&pool, &user, old.id, 5, "2024-01-01T00:00:00.000Z").await;
+        let first = repo
+            .prune_superseded_files(work_id, instance, &["9".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(first.marked_missing, 1);
+        let new = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("2")))
+            .await
+            .unwrap();
+        let second = repo
+            .prune_superseded_files(work_id, instance, &["2".to_string(), "9".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(second.deleted, 1);
+        assert_eq!(progress_position(&pool, &user, new.id).await, Some(5));
+        assert!(repo.get_by_id(old.id).await.is_err());
     }
 
     /// After progress moves to a replacement file, the viewer gets a watch

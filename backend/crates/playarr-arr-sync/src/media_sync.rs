@@ -1917,6 +1917,41 @@ mod tests {
             !sync.has_missing_duration(work_id).await.unwrap(),
             "a hidden row must not keep the work in the backfill"
         );
+
+        // The episode list catches up and points at 11: the hidden row is
+        // reconciled, its progress moves to 11's row and the old row goes.
+        let third = sonarr(
+            vec![
+                sonarr_episode_file_json(11, 1, "S01E01-new.mkv"),
+                sonarr_episode_file_json(12, 1, "S01E02.mkv"),
+            ],
+            vec![
+                sonarr_episode_json(10, 1, 1, "One", 11),
+                sonarr_episode_json(11, 1, 2, "Two", 12),
+            ],
+        )
+        .await;
+        let client = ArrClient::Sonarr(SonarrClient::new(third.uri(), "test-key"));
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+        let new = repo
+            .find_by_source(instance_id, "11")
+            .await
+            .unwrap()
+            .expect("file 11 synced");
+        let progress: (String,) =
+            sqlx::query_as("SELECT media_file_id FROM watch_progress WHERE user_id = ?")
+                .bind(&user)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            progress.0,
+            new.id.to_string(),
+            "progress must reach file 11"
+        );
+        assert!(repo.get_by_id(old.id).await.is_err(), "old row is deleted");
     }
 
     #[tokio::test]

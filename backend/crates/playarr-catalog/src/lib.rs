@@ -1286,10 +1286,27 @@ impl CatalogService {
         &self,
         user_id: Uuid,
     ) -> Result<HashMap<Uuid, WorkWatch>, CatalogError> {
-        let progress = self.watch_progress_repo.list_for_user(user_id).await?;
+        let mut progress = self.watch_progress_repo.list_for_user(user_id).await?;
         if progress.is_empty() {
             return Ok(HashMap::new());
         }
+        // Progress on a file the source dropped (hidden, not deleted) must not
+        // count: `total_files` no longer includes it, so it would read as more
+        // watched files than the work has.
+        let works: Vec<Uuid> = progress
+            .iter()
+            .map(|p| p.work_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let visible: std::collections::HashSet<Uuid> = self
+            .media_file_repo
+            .list_by_work_ids(&works)
+            .await?
+            .into_iter()
+            .map(|f| f.id)
+            .collect();
+        progress.retain(|p| visible.contains(&p.media_file_id));
         let snapshot = self.snapshots.get().await?;
         let mut out: HashMap<Uuid, WorkWatch> = HashMap::new();
         for row in progress {
@@ -2851,6 +2868,57 @@ mod tests {
         .execute(pool)
         .await
         .expect("insert book");
+    }
+
+    /// Progress on a file that was hidden (marked missing) must not count as
+    /// a watched file: the work's file total excludes the hidden row, so the
+    /// work would otherwise read as fully watched.
+    #[tokio::test]
+    async fn watch_summaries_ignore_progress_on_hidden_files() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let work = movie("Hidden Rows", "Hidden Rows", &["drama"], 1);
+        repo.upsert(&work).await.unwrap();
+        let visible = seed_media_file(&pool, work.id, LeafRef::Work).await;
+        let hidden = seed_media_file(&pool, work.id, LeafRef::Work).await;
+        sqlx::query("UPDATE media_files SET missing_since = '2024-01-01T00:00:00Z' WHERE id = ?")
+            .bind(hidden.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let user = Uuid::new_v4();
+        let policy = Uuid::new_v4();
+        sqlx::query("INSERT INTO policies (id, name) VALUES (?, 'p')")
+            .bind(policy.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO users (id, username, display_name, password_hash, policy_id, created_at, disabled) \
+             VALUES (?, 'u', 'U', 'x', ?, '2024-01-01T00:00:00.000Z', 0)",
+        )
+        .bind(user.to_string())
+        .bind(policy.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        for (file, state) in [(hidden, "watched"), (visible, "part_watched")] {
+            sqlx::query(
+                "INSERT INTO watch_progress (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
+                 VALUES (?, ?, 5, 10, ?, '2024-01-01T00:00:00.000Z')",
+            )
+            .bind(user.to_string())
+            .bind(file.to_string())
+            .bind(state)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let svc = service(pool, repo);
+        let summaries = svc.watch_summaries(user).await.unwrap();
+        let watch = &summaries[&work.id];
+        assert_eq!((watch.total_files, watch.watched_files), (1, 0));
+        assert!(!watch.is_complete());
     }
 
     #[tokio::test]
