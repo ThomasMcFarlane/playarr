@@ -1,3 +1,4 @@
+import PlayarrKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
@@ -16,6 +17,21 @@ extension View {
         alignment: Alignment = .leading
     ) -> some View {
         frame(width: w, height: h, alignment: alignment).offset(x: x, y: y)
+    }
+
+    /// `placed` with real layout (padding, not an offset): the focus engine sees the view where it is drawn. Use it for
+    /// focusable controls and the containers that hold them.
+    func pinned(
+        x: CGFloat,
+        y: CGFloat,
+        w: CGFloat? = nil,
+        h: CGFloat? = nil,
+        alignment: Alignment = .leading
+    ) -> some View {
+        frame(width: w, height: h, alignment: alignment)
+            .padding(.leading, x)
+            .padding(.top, y)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -314,8 +330,10 @@ struct TVStageWash: View {
         ZStack {
             LinearGradient(
                 stops: [
+                    // Web `.tv-stage-wash`: surface 94% at 0, 90% at 36%, clear at 52%.
                     .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.31),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.90), location: 0.36),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.52),
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -371,5 +389,237 @@ enum TVVideoFrameColour {
         guard let output = filter.outputImage,
               let cg = context.createCGImage(output, from: output.extent) else { return data }
         return UIImage(cgImage: cg).pngData() ?? data
+    }
+}
+
+
+/// Web control focus (`--page-focus-ring`): a 3 px ring 2 px outside the control, never a fill. Buttons, pills, tiles.
+struct TVRingButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 14
+
+    func makeBody(configuration: Configuration) -> some View {
+        Ring(label: configuration.label, cornerRadius: cornerRadius)
+    }
+
+    private struct Ring<Label: View>: View {
+        let label: Label
+        let cornerRadius: CGFloat
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            label.overlay(
+                RoundedRectangle(cornerRadius: cornerRadius + 5, style: .continuous)
+                    .stroke(DesignTokens.Stage.focusRing, lineWidth: 3)
+                    .padding(-5)
+                    .opacity(isFocused ? 1 : 0)
+            )
+        }
+    }
+}
+
+/// A shell action column tile (Filters, Calendar link) that opens its side panel.
+struct TVActionTile: View {
+    let label: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            TVHeaderPill(label: label, symbol: symbol, width: TVShellActionColumn.width)
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
+    }
+}
+
+/// The one shared right-side panel (web `.tv-filter-drawer`): 360 wide, full height from the first frame, kicker,
+/// title and close button, then the page's sections. Menu closes it; focus stays inside while it is open.
+struct TVDrawer<Content: View>: View {
+    let kicker: String
+    let title: String
+    let onClose: () -> Void
+    @ViewBuilder var content: () -> Content
+    /// Focus moves into the drawer when it opens (web: the panel takes focus; Back closes it).
+    @FocusState private var closeFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 3.2) {
+                    Text(kicker.uppercased())
+                        .font(TVTheme.font(size: 9.6, css: 720))
+                        .tracking(0.672)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .frame(height: 14.4)
+                    Text(title)
+                        .font(TVTheme.font(size: 38.4, css: 590))
+                        .tracking(-2.1)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(2)
+                        .frame(width: 204, alignment: .leading)
+                }
+                Spacer(minLength: 0)
+                Button(action: onClose) {
+                    Text("\u{00D7}")
+                        .font(TVTheme.font(size: 26.88, css: 720))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .frame(width: 48, height: 50)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DesignTokens.Stage.surfaceSoft))
+                }
+                .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+                .focusEffectDisabled()
+                .focused($closeFocused)
+                .accessibilityLabel("Close")
+            }
+            .padding(.top, 54)
+            content()
+                .padding(.top, 34)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 46)
+        .padding(.trailing, 46)
+        .frame(width: 360, height: 1080, alignment: .topLeading)
+        .background(DesignTokens.Stage.surfaceStrong.opacity(0.94))
+        .focusSection()
+        .onExitCommand(perform: onClose)
+        .task { closeFocused = true }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .ignoresSafeArea()
+    }
+}
+
+/// A drawer section (web `FilterSection` with the shared choice control): label, then one button per option.
+struct TVChoiceSection<Value: Hashable>: View {
+    let title: String
+    let options: [(value: Value, label: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11.9) {
+            Text(title.uppercased())
+                .font(TVTheme.font(size: 9.6, css: 720))
+                .tracking(0.672)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .frame(height: 14.4)
+            HStack(spacing: 8) {
+                ForEach(options, id: \.value) { option in
+                    let active = option.value == selection
+                    Button { selection = option.value } label: {
+                        Text(option.label)
+                            .font(TVTheme.font(size: 10.56, css: 680))
+                            .foregroundStyle(active ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textDisabled)
+                            .frame(width: (268 - 8 * CGFloat(options.count - 1)) / CGFloat(options.count), height: 56)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(active ? DesignTokens.Color.textPrimary : DesignTokens.Stage.surfaceSoft.opacity(0.64))
+                            )
+                            .scaleEffect(active ? 1.025 : 1)
+                    }
+                    .buttonStyle(TVRingButtonStyle(cornerRadius: 12))
+                    .focusEffectDisabled()
+                }
+            }
+        }
+        .padding(.bottom, 30.3)
+    }
+}
+
+
+/// Web media actions (`MediaContextMenu`): a long press (650 ms) on a media card opens its actions in the shared drawer.
+struct TVOpenActionsKey: EnvironmentKey {
+    static let defaultValue: (Work) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openActions: (Work) -> Void {
+        get { self[TVOpenActionsKey.self] }
+        set { self[TVOpenActionsKey.self] = newValue }
+    }
+}
+
+/// A pushed page of the stage (shell navigation path).
+enum TVRoute: Hashable {
+    case work(Work)
+    case playlist(id: UUID, name: String)
+}
+
+/// The title whose actions drawer is open (nil when closed): its card takes focus back when the drawer closes.
+struct TVActionsWorkIDKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+extension EnvironmentValues {
+    var actionsWorkID: UUID? {
+        get { self[TVActionsWorkIDKey.self] }
+        set { self[TVActionsWorkIDKey.self] = newValue }
+    }
+}
+
+struct TVOpenRouteKey: EnvironmentKey {
+    static let defaultValue: (TVRoute) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openRoute: (TVRoute) -> Void {
+        get { self[TVOpenRouteKey.self] }
+        set { self[TVOpenRouteKey.self] = newValue }
+    }
+}
+
+/// A media card's button: Select opens the title; holding Select for 650 ms opens its actions instead (web long
+/// press), and the release that follows does not also open the title.
+struct TVCardButton<Label: View>: View {
+    let work: Work
+    var route: TVRoute? = nil
+    @ViewBuilder var label: () -> Label
+    @Environment(\.openActions) private var openActions
+    @Environment(\.openRoute) private var openRoute
+    @Environment(\.actionsWorkID) private var actionsWorkID
+    @State private var longPressed = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Button {
+            if longPressed { longPressed = false } else { openRoute(route ?? .work(work)) }
+        } label: {
+            label()
+        }
+        .focused($focused)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in
+            longPressed = true
+            openActions(work)
+        })
+        // Web: closing the actions drawer returns focus to the card that opened it.
+        .onChange(of: actionsWorkID) { previous, current in
+            if previous == work.id, current == nil { focused = true }
+        }
+    }
+}
+
+/// One action row (web `.media-context-actions` button): 268 x 68, brand glyph and a bold label, control focus ring.
+struct TVActionRow: View {
+    let glyph: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                Text(glyph)
+                    .font(TVTheme.font(size: 19.52, css: 400))
+                    .foregroundStyle(DesignTokens.Stage.brandPink)
+                    .frame(width: 42, alignment: .leading)
+                Text(label)
+                    .font(TVTheme.font(size: 19.2, css: 700))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 18)
+            .frame(width: 268, height: 68)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DesignTokens.Stage.surfaceSoft))
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
     }
 }

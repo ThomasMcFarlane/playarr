@@ -7,6 +7,9 @@ const VERTICALLY_ESCAPABLE_INPUT_TYPES = new Set([
   "tel",
 ]);
 
+/** Inputs whose arrow keys change nothing natively (a checkbox toggles on Space), so every arrow is spatial. */
+const ARROW_FREE_INPUT_TYPES = new Set(["checkbox", "button", "submit", "reset", "image"]);
+
 export type FormControlDescriptor =
   | {
       kind: "input";
@@ -43,6 +46,9 @@ export function shouldNavigateFromFormControl(
   key: string,
   control: FormControlDescriptor
 ): boolean {
+  if (control.kind === "input" && ARROW_FREE_INPUT_TYPES.has(control.type)) {
+    return key.startsWith("Arrow");
+  }
   if (
     control.kind !== "input" ||
     !VERTICALLY_ESCAPABLE_INPUT_TYPES.has(control.type)

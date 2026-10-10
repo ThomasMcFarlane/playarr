@@ -262,6 +262,21 @@ function clearActiveProfileMarker(): void {
   window.localStorage.removeItem(ACTIVE_PROFILE_STORAGE_KEY);
 }
 
+/**
+ * Device state that a sign-out of the active session clears. It includes the
+ * remembered server group (`forgetGroup`, docs/architecture/peer-groups.md
+ * §7.1/§7.3): an account belongs to its server, so signing out is the
+ * recovery path, and the next start no longer prefers the group's
+ * `lastGoodUrl` in `resolveInitialApiBaseUrl`.
+ */
+export function clearSignedInDeviceState(): void {
+  window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+  clearActiveProfileMarker();
+  clearJoinedServerRegistry();
+  clearProfileDirectory();
+  forgetGroup();
+}
+
 export function selectRestorableProfileSession(
   profiles: StoredProfileSession[],
   apiBaseUrl: string,
@@ -1476,11 +1491,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     const activeProfile = activeProfileRef.current;
     tokenStoreRef.current?.clear();
-    window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
-    clearActiveProfileMarker();
+    clearSignedInDeviceState();
     activeProfileRef.current = undefined;
-    clearJoinedServerRegistry();
-    clearProfileDirectory();
     if (activeProfile) {
       setStoredProfileSessions((stale) => {
         const existing = freshStoredProfileSessions(stale, activeProfile.apiBaseUrl);
@@ -1504,11 +1516,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
 
       if (isActiveProfile) {
         tokenStoreRef.current?.clear();
-        window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
-        clearActiveProfileMarker();
+        clearSignedInDeviceState();
         activeProfileRef.current = undefined;
-        clearJoinedServerRegistry();
-        clearProfileDirectory();
         setAuthFailed(false);
         setCurrentUserId(undefined);
         setCurrentUserName(undefined);

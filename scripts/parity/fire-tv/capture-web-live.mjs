@@ -165,6 +165,8 @@ async function capture(theme, screen) {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
     await page.locator(".tv-compact-loading, .tv-orbit-loader").first().waitFor({ state: "detached", timeout: 30000 }).catch(() => {});
+    // Skeleton loaders keep the final geometry, so a capture taken while one shows looks plausible but is empty.
+    await page.locator(".skeleton-set").first().waitFor({ state: "detached", timeout: 30000 }).catch(() => {});
     if (screen.waitGone) await page.getByText(screen.waitGone).first().waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
     if (screen.type) {
       await page.locator(screen.type.selector).first().fill(screen.type.text);

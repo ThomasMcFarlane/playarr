@@ -46,6 +46,28 @@ final class TVDisplayPreferences {
         case dark
     }
 
+    /// Web Settings > Appearance > Artwork size (`playarr-artwork-size`): one size for all artwork. Small adds a column
+    /// to every card grid and rail, large removes one.
+    enum ArtworkSize: String, CaseIterable {
+        case small, medium, large
+        var columnStep: Int { self == .small ? 1 : self == .large ? -1 : 0 }
+    }
+
+    private static let artworkSizeKey = "com.playarr.playarr.tvos.artworkSize"
+
+    var artworkSize: ArtworkSize {
+        didSet { defaults.set(artworkSize.rawValue, forKey: Self.artworkSizeKey) }
+    }
+
+    /// Web `--card-w` at 1920x1080: the 1190.4-wide rail minus 156.96 of padding, split into 3 + step columns with
+    /// 25.92 gaps (medium 327.2, small 238.9, large 503.8).
+    var cardWidth: CGFloat {
+        let columns = CGFloat(3 + artworkSize.columnStep)
+        return (1033.44 - (columns - 1) * 25.92) / columns
+    }
+
+    var cardColumns: Int { 3 + artworkSize.columnStep }
+
     private static let themeKey = "com.playarr.playarr.tvos.theme"
     private static let languageKey = "com.playarr.playarr.tvos.language"
 
@@ -61,6 +83,7 @@ final class TVDisplayPreferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        artworkSize = defaults.string(forKey: Self.artworkSizeKey).flatMap(ArtworkSize.init(rawValue:)) ?? .medium
         if let raw = defaults.string(forKey: Self.themeKey),
            let value = ThemePreference(rawValue: raw) {
             themePreference = value

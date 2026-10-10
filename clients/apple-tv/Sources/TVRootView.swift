@@ -166,7 +166,7 @@ struct TVRootView: View {
             .frame(maxHeight: .infinity, alignment: .center)
             .zIndex(50)
 
-            TVShellHeader(frozenClock: true, clockLeading: TVParityLaunch.isLive ? (tab == .home ? 492.4 : 568.8) : nil)
+            TVShellHeader(frozenClock: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .allowsHitTesting(false)
                 .zIndex(80)
@@ -241,7 +241,8 @@ struct TVRootView: View {
                     kindLabel: "Playlists",
                     emptyMessage: "No playlists yet.",
                     workKind: nil,
-                    collectionNoun: "PLAYLISTS"
+                    collectionNoun: "PLAYLISTS",
+                    listsPlaylists: true
                 )
             }
         }
@@ -260,6 +261,20 @@ private struct TVProductionShell<Stage: View>: View {
     @Environment(TVAppEnvironment.self) private var environment
     @Namespace private var shellFocusNamespace
     @State private var preferNavDefault = false
+    /// Who's watching, opened from the nav's profile tile (web `/profiles`).
+    @State private var showProfiles = false
+    /// A full-screen page (the player) is showing: no nav, no clock.
+    @State private var chromeHidden = false
+    /// The stage's pushed pages (titles, playlists); a tab change starts from the root.
+    @State private var path: [TVRoute] = []
+    /// The media actions drawer (long press on a card) and the title it started playing.
+    @State private var actionsWork: Work?
+    @State private var playing: PlayRequest?
+
+    private struct PlayRequest: Identifiable {
+        let id: UUID
+        let title: String
+    }
     @Environment(\.resetFocus) private var resetFocus
 
     private var navColumn: CGFloat {
@@ -274,23 +289,52 @@ private struct TVProductionShell<Stage: View>: View {
                 TVFloatingNav(
                     selection: $nav,
                     suppressFocusChrome: false,
-                    showSettings: true,
+                    // Web TV nav: no Settings group; Settings opens from the profile's gear on Who's watching.
+                    showSettings: false,
                     externalFocus: shellFocus,
                     focusNamespace: shellFocusNamespace,
                     preferDefaultFocus: preferNavDefault,
-                    browseKinds: environment.catalogKinds
+                    browseKinds: environment.catalogKinds,
+                    profile: TVNavProfile(
+                        name: environment.profileName ?? "Viewer",
+                        userID: environment.currentUserID,
+                        preset: environment.currentAvatarPreset,
+                        image: environment.currentAvatarImage,
+                        version: "v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")",
+                        open: { showProfiles = true }
+                    )
                 )
                 .frame(width: navColumn)
+                .opacity(chromeHidden ? 0 : 1)
+                .disabled(chromeHidden)
                 .focusSection()
+                // Web: Back on a top-level page goes Home (from the nav or the page's root, never a pushed page).
+                .modifier(TVBackToHome(active: tab != .home) { nav = .home })
+                .zIndex(1)
 
-                NavigationStack {
+                // The stage spans the whole screen under the floating nav, as on the web: pages place their content
+                // in screen coordinates (back button at 153.6, rails at 881.6) and backdrops run to the left edge.
+                NavigationStack(path: $path) {
                     stageContent()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationBarBackButtonHidden(true)
                         .focusSection()
+                        .modifier(TVBackToHome(active: tab != .home) { nav = .home })
+                        .navigationDestination(for: TVRoute.self) { route in
+                            switch route {
+                            case .work(let work):
+                                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                            case .playlist(let id, let name):
+                                TVLibraryKindView(kindLabel: name, emptyMessage: "This playlist is empty.", playlistID: id)
+                            }
+                        }
                 }
+                .environment(\.openRoute) { path.append($0) }
+                .onChange(of: tab) { _, _ in path = [] }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.setShellChromeHidden) { chromeHidden = $0 }
+                .padding(.leading, -navColumn)
                 .focusSection()
                 .focused(shellFocus, equals: .stage)
             }
@@ -316,23 +360,63 @@ private struct TVProductionShell<Stage: View>: View {
             }
 
             TVShellHeader(frozenClock: TVParityLaunch.isLive)
+                .opacity(chromeHidden ? 0 : 1)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .allowsHitTesting(false)
                 .zIndex(80)
 
-            VStack {
-                Spacer()
-                HStack {
-                    TVProfileChip(name: environment.profileName ?? "Viewer", version: nil)
-                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
-                        .padding(.bottom, 36)
-                    Spacer()
+        }
+        .overlay {
+            if let actionsWork {
+                TVActionsDrawer(work: actionsWork, onClose: { self.actionsWork = nil }) { id, title in
+                    self.actionsWork = nil
+                    playing = PlayRequest(id: id, title: title)
                 }
             }
-            .allowsHitTesting(false)
-            .zIndex(50)
         }
+        .environment(\.openActions) { actionsWork = $0 }
+        .environment(\.actionsWorkID, actionsWork?.id)
         .ignoresSafeArea()
+        .fullScreenCover(item: $playing) { request in
+            TVPlayerView(mediaFileID: request.id, title: request.title, apiClient: environment.apiClient)
+        }
+        .fullScreenCover(isPresented: $showProfiles) {
+            TVProfilesView(
+                onLinkTV: { showProfiles = false },
+                onManual: {},
+                onSettings: {
+                    showProfiles = false
+                    nav = .settings
+                }
+            )
+        }
+    }
+}
+
+/// Called by a full-screen page (the player) on appear and disappear: the shell hides the nav and the clock meanwhile.
+struct TVShellChromeHiddenKey: EnvironmentKey {
+    static let defaultValue: (Bool) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var setShellChromeHidden: (Bool) -> Void {
+        get { self[TVShellChromeHiddenKey.self] }
+        set { self[TVShellChromeHiddenKey.self] = newValue }
+    }
+}
+
+/// Menu on a top-level page returns to Home (web Back), only while that page is the stack's root.
+private struct TVBackToHome: ViewModifier {
+    let active: Bool
+    let goHome: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if active {
+            content.onExitCommand(perform: goHome)
+        } else {
+            content
+        }
     }
 }
 
@@ -515,6 +599,8 @@ struct TVProfilesView: View {
     var onLinkTV: () -> Void
     /// Kept for pairing-gate call-site parity; manual entry lives on the QR chrome.
     var onManual: () -> Void
+    /// The profile's gear: opens Settings when Who's watching is shown over the signed-in shell.
+    var onSettings: (() -> Void)? = nil
 
     @Environment(TVAppEnvironment.self) private var environment
     @Environment(TVDisplayPreferences.self) private var displayPreferences
@@ -816,7 +902,7 @@ struct TVProfilesView: View {
         HStack(spacing: 9 * s) {
             // Web `.profile-settings-button` — 44×44 glass circle, pink gear.
             Button {
-                // Settings is owned by the signed-in shell; visual parity only here.
+                onSettings?()
             } label: {
                 TVProfileActionLabel(
                     palette: palette,

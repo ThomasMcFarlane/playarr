@@ -17,51 +17,6 @@ export function FilterSection({
   );
 }
 
-/** Shared calendar-range control: inclusive from/to days (`YYYY-MM-DD`), either may be empty. */
-export function DateRangeField({
-  from,
-  to,
-  fromLabel,
-  toLabel,
-  clearLabel,
-  onChange,
-}: {
-  from: string | null;
-  to: string | null;
-  fromLabel: string;
-  toLabel: string;
-  clearLabel: string;
-  onChange: (range: { from: string | null; to: string | null }) => void;
-}) {
-  return (
-    <div className="filters-date-range">
-      <label>
-        <span>{fromLabel}</span>
-        <input
-          type="date"
-          value={from ?? ""}
-          max={to ?? undefined}
-          onChange={(event) => onChange({ from: event.target.value || null, to })}
-        />
-      </label>
-      <label>
-        <span>{toLabel}</span>
-        <input
-          type="date"
-          value={to ?? ""}
-          min={from ?? undefined}
-          onChange={(event) => onChange({ from, to: event.target.value || null })}
-        />
-      </label>
-      {from || to ? (
-        <button type="button" className="filters-date-clear" onClick={() => onChange({ from: null, to: null })}>
-          {clearLabel}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 /** A group of mutually exclusive filter chips (type, sort, view ...). */
 export function ChoiceGroup<T extends string>({
   options,

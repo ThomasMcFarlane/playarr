@@ -152,7 +152,7 @@ export function rememberServerSuccess(url: string): void {
   rememberGroup({ ...group, servers, lastGoodUrl: url });
 }
 
-/** Explicit manual reset -- the only recovery path if a group becomes fully defunct (§7.1, §7.3). */
+/** Called on sign-out -- the only recovery path if a group becomes fully defunct (§7.1, §7.3). */
 export function forgetGroup(): void {
   if (typeof localStorage === "undefined") return;
   localStorage.removeItem(KNOWN_SERVER_GROUP_STORAGE_KEY);

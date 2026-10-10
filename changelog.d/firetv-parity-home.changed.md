@@ -1,0 +1,1 @@
+- Fire TV: Home uses the web's bigger cards (327 px art on a 352 px pitch), its rail geometry and profile tile, and its stage wash, so Home matches the web TV layout (18.462).

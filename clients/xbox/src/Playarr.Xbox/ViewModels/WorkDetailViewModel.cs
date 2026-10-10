@@ -74,6 +74,9 @@ namespace Playarr.Xbox.ViewModels
             private set => SetProperty(ref _errorMessage, value);
         }
 
+        /// <summary>The loaded work (null until loaded).</summary>
+        public Work? Work => _detail?.Work;
+
         public string Title => _detail?.Work.Title ?? string.Empty;
 
         public string Overview => _detail?.Work.Overview ?? string.Empty;

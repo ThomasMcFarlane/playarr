@@ -10,6 +10,8 @@ struct TVWorkDetailView: View {
     @State private var viewModel: TVWorkDetailViewModel
     @State private var showDownloadNote = false
     @FocusState private var focusedEpisodeID: UUID?
+    /// Web: the primary action (Play, Start, Resume) holds focus when the page opens.
+    @FocusState private var playFocused: Bool
 
     private var frozen: Bool { TVParityLaunch.frozen }
 
@@ -41,9 +43,8 @@ struct TVWorkDetailView: View {
             Group {
                 switch viewModel.state {
                 case .idle, .loading:
-                    ProgressView("Loading \(work.title)…")
-                        .tint(DesignTokens.Color.brandPrimary)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    // Skeleton loading (owner rule): the page frame with its header, never a spinner screen.
+                    TVPageHeader(title: work.kind == .series ? "Series" : "Movies", detail: work.title)
                 case .failed(let message):
                     TVErrorView(title: "Couldn’t load this title", message: message) {
                         Task { await viewModel.load() }
@@ -58,6 +59,9 @@ struct TVWorkDetailView: View {
         .ignoresSafeArea()
         .task {
             if viewModel.state == .idle { await viewModel.load() }
+            try? await Task.sleep(for: .milliseconds(200))
+            // Films focus Play; series focus the next-up episode tile instead (owner rule).
+            if !frozen, work.kind != .series { playFocused = true }
         }
     }
 
@@ -321,6 +325,7 @@ struct TVWorkDetailView: View {
                 label
             }
             .buttonStyle(TVFocusableCardButtonStyle())
+            .focused($playFocused)
             .placed(x: x, y: y, w: 156, h: 64)
         } else {
             label.placed(x: x, y: y, w: 156, h: 64)
@@ -349,6 +354,7 @@ struct TVWorkDetailView: View {
                 label
             }
             .buttonStyle(TVFocusableCardButtonStyle())
+            .focused($playFocused)
             .placed(x: x, y: y, w: 156, h: 64)
         } else {
             label.placed(x: x, y: y, w: 156, h: 64)
@@ -424,7 +430,9 @@ struct TVWorkDetailView: View {
                     .placed(x: x, y: 620.7, w: 268, h: 190, alignment: .topLeading)
                 }
             }
-            if !viewModel.similar.isEmpty {
+            if !viewModel.cast.isEmpty {
+                castRail(viewModel.cast)
+            } else if !viewModel.similar.isEmpty {
                 railHeading("Similar Titles", count: "\(viewModel.similar.count) titles", y: 854.3)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 25) {
@@ -444,7 +452,7 @@ struct TVWorkDetailView: View {
                                 }
                             }
                             .buttonStyle(TVFocusableCardButtonStyle())
-                            .focusable(!frozen)
+                            .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                         }
                     }
                     .padding(.trailing, 80)
@@ -454,6 +462,39 @@ struct TVWorkDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Web detail "Cast" rail: heading at y 891, 103.7 circles from x 905.8 at a 176.95 pitch, the person's photo or
+    /// initials (34.4 / 640) on the raised surface.
+    private func castRail(_ cast: [Credit]) -> some View {
+        ZStack(alignment: .topLeading) {
+            Text("Cast")
+                .font(TVTheme.font(size: 17.664, css: 610))
+                .tracking(-0.53)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .placed(x: 881.6, y: 891, w: 400, h: 26.5)
+            Text(cast.count == 1 ? "1 person" : "\(cast.count) people")
+                .font(TVTheme.font(size: 9.984, css: 400))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 881.6, y: 921.5, w: 400, h: 15)
+            ForEach(Array(cast.prefix(12).enumerated()), id: \.element.id) { index, credit in
+                let initials = credit.person.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+                ZStack {
+                    Circle().fill(DesignTokens.Stage.surfaceSoft)
+                    Text(initials)
+                        .font(TVTheme.font(size: 34.4, css: 640))
+                        .tracking(-1.72)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    if let url = credit.person.headshotURL.flatMap({ apiClient.resolvedURL(forPath: $0) }),
+                       url.scheme?.hasPrefix("http") == true {
+                        AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color.clear }
+                    }
+                }
+                .frame(width: 103.7, height: 103.7)
+                .clipShape(Circle())
+                .placed(x: 905.8 + 176.95 * CGFloat(index), y: 971.7, w: 103.7, h: 103.7)
+            }
+        }
     }
 
     /// Web `.tv-episode-art`: a raised tile, radius 13.44, with the picture filling it.
@@ -549,7 +590,14 @@ struct TVWorkDetailView: View {
         let code = "S \(String(format: "%02d", season.season.seasonNumber)) \u{00B7} E \(String(format: "%02d", ep.episodeNumber))"
         let card = ZStack(alignment: .topLeading) {
             episodeArt(width: 268, height: 150.8, heavy: selected) {
-                TVWorkArt(work: detail.work, apiClient: apiClient)
+                // Web `MediaThumbnailArtwork`: the episode's own frame at 30 s; the series art until it loads.
+                if let mediaFileID = episode.mediaFileID {
+                    TVAuthedImage(load: {
+                        try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: 30_000)
+                    }) { TVWorkArt(work: detail.work, apiClient: apiClient) }
+                } else {
+                    TVWorkArt(work: detail.work, apiClient: apiClient)
+                }
             }
             // The art grows to 1.025 over 240 ms (ease) when focused.
             .scaleEffect(selected ? 1.025 : 1)

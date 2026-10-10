@@ -20,6 +20,7 @@
     "nav-rail-e2e",
     "nav-profile-link-e2e",
     "edge-fade-e2e",
+    "settings-menu-e2e",
     "alphabet-rail-e2e",
     "nav-search-e2e",
     "nav-library-drawer-e2e",
@@ -32,7 +33,10 @@
     "artwork-size-setting-e2e",
     "download-flow-e2e",
     "drawer-consistency-e2e",
-    "avatar-focus-circle-e2e"
+    "avatar-focus-circle-e2e",
+    "checkbox-focus-e2e",
+    "settings-language-select-e2e",
+    "settings-server-group-e2e"
   ],
   "args": {
     "tablet-layout": [
@@ -50,8 +54,7 @@
     "drawer-close": "runs in the `web layout parity` job",
     "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)",
     "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)",
-    "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate",
-    "settings-language-select-e2e": "reached main early via board PR #568; listed in the gate with 1.9981 in integration batch 12"
+    "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate"
   },
   "tracked": {},
   "seconds": {
@@ -73,6 +76,7 @@
     "nav-rail-e2e": 24,
     "nav-profile-link-e2e": 167,
     "edge-fade-e2e": 17,
+    "settings-menu-e2e": 60,
     "alphabet-rail-e2e": 120,
     "nav-search-e2e": 7,
     "nav-library-drawer-e2e": 66,
@@ -81,7 +85,7 @@
     "nav-focus-e2e": 47,
     "relay-port-e2e": 15,
     "card-size-e2e": 120,
-    "filters-panel-e2e": 85,
+    "filters-panel-e2e": 90,
     "artwork-size-setting-e2e": 120,
     "download-flow-e2e": 120,
     "drawer-consistency-e2e": 180

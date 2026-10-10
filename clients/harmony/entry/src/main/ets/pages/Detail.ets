@@ -865,7 +865,9 @@ struct Detail {
             itemGap: (isTvMetrics() ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap),
             headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
             items: rail.items,
-            itemBuilder: this.rowItem,
+            itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+              this.rowItem(item, index, activeRailFactor);
+            },
           })
         },
         (rail: DetailRail): string => rail.id
@@ -877,7 +879,9 @@ struct Detail {
           heading: this.similarRail.heading,
           headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
           items: this.similarRail.items,
-          itemBuilder: this.similarItem,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.similarItem(item, index, activeRailFactor);
+          },
         })
       }
     }

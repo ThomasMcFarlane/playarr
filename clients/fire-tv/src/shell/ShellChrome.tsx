@@ -2,7 +2,7 @@
  * The shell chrome every signed-in screen sits in, drawn at the web TV layout's measurements (1920x1080 CSS px, from the
  * web client's DOM): the logo, the clock, the three-group left rail and the profile chip with the app version.
  */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {TvFocusScope} from '../platform';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {WorkKind} from '@playarr-tv/api-client';
@@ -70,13 +70,17 @@ export function visibleRailGroups(kinds: ReadonlySet<WorkKind> | null): readonly
 
 export const RAIL_ORDER: readonly RailTarget[] = RAIL_GROUPS.flatMap((group) => group.items.map((item) => item.target));
 
-const ITEM = 64;
-const GROUP_PAD_X = 5.76;
-const GROUP_PAD_Y = 6.72;
-const GROUP_GAP = 9.6;
+// Measured from the web TV rail (1920x1080): 67 px links, 78 px wide groups, 14 px between groups, top-anchored at 119 px.
+const ITEM = 67;
+const GROUP_PAD_X = 4.5;
+const GROUP_PAD_Y = 5;
+const GROUP_GAP = 6.5;
 const GROUP_BORDER = 1;
-const BETWEEN_GROUPS = 13.6;
-const GROUP_X = 42.2;
+const BETWEEN_GROUPS = 14;
+const GROUP_X = 42;
+const RAIL_TOP = 119;
+/** The profile group sits at the rail's foot (bottom 1031 px), with the version label under it. */
+const PROFILE_TOP = 952;
 
 function groupHeight(count: number): number {
   return 2 * GROUP_BORDER + 2 * GROUP_PAD_Y + count * ITEM + (count - 1) * GROUP_GAP;
@@ -86,12 +90,12 @@ function RailLink({
   item,
   active,
   onSelect,
-  activeRef,
+  onActiveNode,
 }: {
   item: RailItem;
   active: boolean;
   onSelect: (target: RailTarget) => void;
-  activeRef: React.MutableRefObject<unknown>;
+  onActiveNode: (node: unknown) => void;
 }): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
@@ -100,7 +104,7 @@ function RailLink({
   return (
     <Pressable
       ref={(node) => {
-        if (active) activeRef.current = node;
+        if (active && node) onActiveNode(node);
       }}
       accessibilityRole="button"
       accessibilityLabel={item.label}
@@ -141,12 +145,12 @@ function Rail({
   groups: readonly RailGroup[];
 }): React.ReactElement {
   const {colour} = useTheme();
-  const total =
-    groups.reduce((sum, group) => sum + groupHeight(group.items.length), 0) + (groups.length - 1) * BETWEEN_GROUPS;
-  const top = 540 - total / 2;
-  let y = top;
+  let y = RAIL_TOP;
   // Entering the rail from the content (LEFT) lands on the page's own item, and UP/DOWN stay inside it, like the web.
-  const activeRef = useRef<unknown>(null);
+  // Held in state, not a ref: the focus guide reads its destination at render, and a ref is still empty on the first render,
+  // so LEFT from the content found no rail item until something else re-rendered the rail.
+  const [activeNode, setActiveNode] = useState<unknown>(null);
+  const activeRef = useMemo(() => ({current: activeNode}), [activeNode]);
   return (
     <TvFocusScope trap={['up', 'down']} destinations={[activeRef]} style={{position: 'absolute', left: 0, top: 0, width: sw(128), height: sw(1080)}}>
       {groups.map((group) => {
@@ -172,7 +176,7 @@ function Rail({
           >
             {group.items.map((item, index) => (
               <View key={item.target} style={{marginTop: index === 0 ? 0 : sw(GROUP_GAP)}}>
-                <RailLink item={item} active={active === item.target} onSelect={onSelect} activeRef={activeRef} />
+                <RailLink item={item} active={active === item.target} onSelect={onSelect} onActiveNode={setActiveNode} />
               </View>
             ))}
           </View>
@@ -215,47 +219,60 @@ export interface ProfileChipProps {
 function ProfileChip({profileId, name, version, onPress}: ProfileChipProps): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
+  const ink = focused ? colour.ink : colour.inkMuted;
+  // The web's rail profile group: one rail link holding the 20 px avatar and the first word of the name (shortProfileName).
+  const shortName = name.trim().split(/\s+/)[0] || name;
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Profile ${name}`}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onPress={onPress}
+      <View
         style={{
           position: 'absolute',
-          left: sw(58.5),
-          top: sw(997.3),
-          width: sw(143.5),
-          height: sw(48.2),
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: mix(colour.line, 0.7),
-          backgroundColor: focused ? colour.ink : mix(colour.surfaceStrong, 0.66),
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingLeft: sw(6.1),
-          transform: [{translateY: focused ? -3 : 0}],
+          left: sw(GROUP_X),
+          top: sw(PROFILE_TOP),
+          width: sw(2 * GROUP_BORDER + 2 * GROUP_PAD_X + ITEM),
+          height: sw(groupHeight(1)),
+          borderRadius: sw(22),
+          borderWidth: GROUP_BORDER,
+          borderColor: mix(colour.line, 0.48),
+          backgroundColor: mix(colour.surfaceStrong, 0.56),
+          paddingHorizontal: sw(GROUP_PAD_X),
+          paddingVertical: sw(GROUP_PAD_Y),
         }}
       >
-        <View style={{width: sw(34), height: sw(34)}}>
-          {profileId ? <ProfileAvatar profileId={profileId} size={sw(34)} /> : null}
-        </View>
-        <Text
-          numberOfLines={1}
-          style={[
-            textRun(11.136, 690, {letterSpacing: 0.2227}),
-            {color: focused ? colour.bg : colour.inkSoft, marginLeft: sw(10.4), maxWidth: sw(88), fontSize: sw(11.136)},
-          ]}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Profile ${name}`}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onPress={onPress}
+          style={{
+            width: sw(ITEM),
+            height: sw(ITEM),
+            borderRadius: sw(16),
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: focused ? mix(colour.ink, 0.14) : 'transparent',
+            transform: [{scale: focused ? 1.1 : 1}],
+          }}
         >
-          {name}
-        </Text>
-      </Pressable>
+          <View style={{width: sw(20), height: sw(20)}}>
+            {profileId ? <ProfileAvatar profileId={profileId} size={sw(20)} /> : null}
+          </View>
+          <Text
+            numberOfLines={1}
+            style={[
+              textRun(8.832, 680, {letterSpacing: 0.309, lineHeight: 8.832}),
+              {color: ink, marginTop: sw(4.8), maxWidth: sw(58), fontSize: sw(8.832)},
+            ]}
+          >
+            {shortName}
+          </Text>
+        </Pressable>
+      </View>
       <Text
         style={[
           textRun(8, 700, {letterSpacing: 0.32, mono: true}),
-          {position: 'absolute', left: sw(66.3), top: sw(1048.5), color: colour.inkMuted, fontSize: sw(8)},
+          {position: 'absolute', left: sw(GROUP_X), width: sw(78), textAlign: 'center', top: sw(1038), color: colour.ink, fontSize: sw(8)},
         ]}
       >
         {`v${version}`}

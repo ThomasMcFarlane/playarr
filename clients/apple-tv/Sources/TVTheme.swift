@@ -569,6 +569,8 @@ struct TVFloatingNav: View {
     var showMusic: Bool = false
     /// Kinds the profile can browse (`nil` while unknown shows Series and Movies).
     var browseKinds: Set<WorkKind>? = nil
+    /// Web `.app-nav-group-profile`: the profile tile at the foot of the nav (opens Who's watching).
+    var profile: TVNavProfile? = nil
 
     var body: some View {
         // Whole nav is one centred column (web: top 50% + translateY(-50%)).
@@ -577,6 +579,9 @@ struct TVFloatingNav: View {
             ForEach(navGroups, id: \.self) { navGroup(tabs: $0) }
             if showSettings {
                 navGroup(tabs: [.settings])
+            }
+            if let profile {
+                profileGroup(profile)
             }
         }
         .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
@@ -598,6 +603,43 @@ struct TVFloatingNav: View {
                         .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
                 )
         )
+    }
+
+    private func profileGroup(_ profile: TVNavProfile) -> some View {
+        VStack(spacing: 6) {
+            Button(action: profile.open) {
+                VStack(spacing: 5) {
+                    TVProfileAvatar(userID: profile.userID, size: 26, presetName: profile.preset, customImage: profile.image)
+                    Text(profile.name.split(separator: " ").first.map(String.init) ?? profile.name)
+                        .font(TVTheme.font(size: 9, weight: .semibold))
+                        .tracking(0.3)
+                        .lineLimit(1)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                }
+                .frame(width: DesignTokens.Shell.navItemSize, height: DesignTokens.Shell.navItemSize)
+                .modifier(TVNavItemFocusFill())
+            }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .accessibilityLabel("Profile \(profile.name)")
+            .padding(DesignTokens.Shell.navGroupPadding)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.56))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                            .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
+                    )
+            )
+            Text(profile.version)
+                .font(TVTheme.mono(size: 8, css: 700))
+                .tracking(0.32)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+        }
+    }
+
+    private var navHasFocus: Bool {
+        if case .nav = externalFocus.wrappedValue { return true }
+        return false
     }
 
     @ViewBuilder
@@ -633,22 +675,15 @@ struct TVFloatingNav: View {
                             : Color.clear
                     )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isFocused && !suppressFocusChrome
-                            ? DesignTokens.Color.brandPrimary.opacity(0.85)
-                            : Color.clear,
-                        lineWidth: 2
-                    )
-            )
-            .scaleEffect(isFocused && !suppressFocusChrome ? 1.05 : 1)
+            // Web TV nav: focus looks like the active tab (filled tile, ink text); no ring, no scale.
         }
         // Card-like style stays focusable; .plain can drop remote hand-off.
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         .focused(externalFocus, equals: .nav(tab))
-        .focusable(!suppressFocusChrome)
+        // not .focusable: on a Button it adds a second, inert focus target. While focus is outside the nav only the
+        // active tab can take it, so Left from the page lands on the active tab (web), not the nearest one.
+        .disabled(suppressFocusChrome || (!navHasFocus && !isActive))
         .focusEffectDisabled(suppressFocusChrome)
         .onMoveCommand { direction in
             // Right from any dock item jumps into the stage (first rail card).
@@ -680,65 +715,54 @@ struct TVParityFocusChrome: ViewModifier {
     }
 }
 
+/// The nav's profile tile: who is signed in and what opening it does.
+struct TVNavProfile {
+    var name: String
+    var userID: String
+    var preset: String?
+    var image: UIImage?
+    var version: String
+    var open: () -> Void
+}
+
+/// A row or nav item's focus: the selected fill (web TV), driven by the system focus; no ring, no platter.
+struct TVNavItemFocusFill: ViewModifier {
+    var fill: Color = DesignTokens.Color.textPrimary.opacity(0.09)
+    var cornerRadius: CGFloat = 16
+    @Environment(\.isFocused) private var isFocused
+    func body(content: Content) -> some View {
+        content.background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(isFocused ? fill : .clear)
+        )
+    }
+}
+
 struct TVShellHeader: View {
     /// Frozen clock for parity suite (matches Android mask strategy).
     var frozenClock: Bool = false
-    /// Web places the clock after the page header: x 492.4 on Home, 568.8 elsewhere.
-    var clockLeading: CGFloat? = nil
+    /// Web `.app-clock`: x 476.1 on every TV page (live web, 2026-10-11).
+    var clockLeading: CGFloat = 476.1
 
     var body: some View {
-        if let clockLeading {
-            ZStack(alignment: .topLeading) {
-                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
-                    .placed(x: 60.6, y: 60.2)
-                HStack(spacing: 11.2) {
-                    Text(Self.timeString(frozen: frozenClock))
-                        .font(TVTheme.font(size: 17.28, weight: .bold))
-                        .tracking(-0.52)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text(Self.dateString(frozen: frozenClock))
-                        .font(TVTheme.font(size: 11.14, weight: .semibold))
-                        .tracking(0.45)
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                }
-                .placed(x: clockLeading, y: 68.2, h: 25.9)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(false)
-        } else {
-            legacyBody
-        }
-    }
-
-    private var legacyBody: some View {
-        ZStack {
-            // Clock is centred on the live SPA header.
-            HStack(spacing: 11) {
-                // Frozen time matches the Playwright reference frames used by
-                // the honest suite (`run-4` / `run-honest-*` capture 05:59).
+        ZStack(alignment: .topLeading) {
+            PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
+                .placed(x: 60.6, y: 60.2)
+            TimelineView(.everyMinute) { _ in
+            HStack(spacing: 11.3) {
                 Text(Self.timeString(frozen: frozenClock))
-                    .font(TVTheme.font(size: 17, weight: .bold))
-                    .tracking(-0.5)
+                    .font(TVTheme.font(size: 17.28, css: 760))
+                    .tracking(-0.52)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text(Self.dateString(frozen: frozenClock))
-                    .font(TVTheme.font(size: 11, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .font(TVTheme.font(size: 11.136, css: 640))
+                    .tracking(0.45)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
             }
-            HStack {
-                // Logo sits on the nav centre-x on web
-                // (`--tv-nav-centre-x` − logo/2).
-                let navCentreX = DesignTokens.Shell.navEdge
-                    + DesignTokens.Shell.navPaddingInline
-                    + DesignTokens.Shell.navItemSize / 2
-                    + 1
-                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
-                    .padding(.leading, max(0, navCentreX - DesignTokens.Shell.logoSize / 2))
-                Spacer()
             }
+            .placed(x: clockLeading, y: 68.2, h: 25.9)
         }
-        .padding(.top, DesignTokens.Shell.headerTop)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
     }
 

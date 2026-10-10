@@ -124,6 +124,8 @@ namespace Playarr.Xbox.Views
         private void CancelPairingButton_Click(object sender, RoutedEventArgs e) =>
             _viewModel.ServerConnection.CancelPairing();
 
+        private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
+
         private void SignOutButton_Click(object sender, RoutedEventArgs e)
         {
             _viewModel.SignOut();

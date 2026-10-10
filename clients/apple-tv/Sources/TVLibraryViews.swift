@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TVHomeView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVHomeViewModel?
     /// Focus target is rail+work so the same title never lights up on two rails.
@@ -15,10 +16,7 @@ struct TVHomeView: View {
             if let viewModel {
                 homeContent(viewModel)
             } else {
-                ProgressView("Connecting to Playarr Server…")
-                    .tint(DesignTokens.Color.brandPrimary)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                TVHomeSkeleton()
             }
         }
         .task(id: environment.serverURL) {
@@ -38,14 +36,12 @@ struct TVHomeView: View {
     private func homeContent(_ viewModel: TVHomeViewModel) -> some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading your library…")
-                .tint(DesignTokens.Color.brandPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            TVHomeSkeleton()
         case .failed(let message):
             TVErrorView(title: "Couldn’t load your library", message: message) {
                 Task { await viewModel.load() }
             }
-        case .loaded where viewModel.works.isEmpty:
+        case .loaded where viewModel.works.isEmpty && viewModel.rails.isEmpty:
             ContentUnavailableView(
                 "Your library is empty",
                 systemImage: "rectangle.stack",
@@ -61,113 +57,98 @@ struct TVHomeView: View {
         }
     }
 
-    /// Focus-first production home: rails are real layout children (not buried
-    /// under GeometryReader absolute stacks), so the remote can land focus.
+    /// The web TV Home (`.tv-home`), interactive: the hero on the left follows the focused card; the server's shelves
+    /// stack on the right (`.tv-home-rails`, from x 881.6) and the focused rail scrolls up to the first rail's line.
+    /// Geometry is the web's at 1920x1080 in screen points; the stage starts after the nav column, hence `- nav`.
     private func productionHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
-        let (startWatching, newMovies) = Self.homeRailMembership(
-            works: viewModel.works,
-            interactive: true
-        )
-        let hero = heroWork(from: viewModel.works)
-        let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
-            HomeRailCardFocus(rail: "start", workID: $0.id)
-        } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
-        let leadingIDs = Set(
-            [startWatching.first?.id, newMovies.first?.id].compactMap { $0 }
-        )
-
-        return ZStack(alignment: .topLeading) {
-            GeometryReader { geo in
-                heroBackdrop(hero: hero, size: geo.size)
+        let rails = Self.productionRails(viewModel)
+        let firstFocus = rails.first?.works.first.map { HomeRailCardFocus(rail: "r0", workID: $0.id) }
+        let hero = focusedCard.flatMap { focus in rails.lazy.flatMap(\.works).first { $0.id == focus.workID } }
+            ?? rails.first?.works.first
+        return GeometryReader { geo in
+        // Screen coordinates: the stage's own origin (after the nav column) is subtracted once here.
+        let origin = geo.frame(in: .global).origin
+        ZStack(alignment: .topLeading) {
+            liveHeroBackdrop(hero)
+                .frame(width: 1920, height: 1080)
+                .offset(x: -origin.x, y: -origin.y)
+                .allowsHitTesting(false)
+            if let hero {
+                TVHomeHeroCopy(work: hero, apiClient: environment.apiClient)
+                    .offset(x: -origin.x, y: -origin.y)
                     .allowsHitTesting(false)
             }
-            .ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 28) {
-                if let hero {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(kindKicker(hero))
-                            .font(TVTheme.font(size: 12, weight: .heavy))
-                            .tracking(1.2)
-                            .foregroundStyle(DesignTokens.Color.brandPrimary)
-                            .textCase(.uppercase)
-                        Text(hero.title)
-                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                            .tracking(-4.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .lineLimit(2)
-                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
-                            .padding(.top, 10)
-                        if let overview = hero.overview, !overview.isEmpty {
-                            Text(overview)
-                                .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                                .lineLimit(3)
-                                .lineSpacing(4)
-                                .frame(maxWidth: DesignTokens.Shell.featureOverviewMaxWidth, alignment: .leading)
-                                .padding(.top, 16)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 365.9 - railHeight(displayPreferences.cardWidth)) {
+                        ForEach(Array(rails.enumerated()), id: \.offset) { index, rail in
+                            webRail(id: "r\(index)", title: rail.title, works: rail.works).id("r\(index)")
                         }
                     }
-                    .padding(.leading, 28)
-                    .padding(.top, 36)
-                    .allowsHitTesting(false)
+                    .padding(.bottom, 1080)
                 }
+                .scrollClipDisabled()
+                .onChange(of: focusedCard?.rail) { _, rail in
+                    guard let rail else { return }
+                    withAnimation(.smooth(duration: 0.26)) { proxy.scrollTo(rail, anchor: .top) }
+                }
+            }
+            // The first rail heading sits at y 402; rails above the focused one slide up past it, as on the web.
+            .padding(.top, 402 - origin.y)
+            .padding(.leading, 881.6 - origin.x - Self.cardBleed)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .defaultFocus($focusedCard, firstFocus)
+        // The lead rail can change after the first paint (On deck arrives): keep focus on a card that still exists.
+        .task(id: firstFocus) {
+            // The lazy rail creates its cards after this first layout pass: wait a frame or two before focusing.
+            try? await Task.sleep(for: .milliseconds(200))
+            let ids = Set(rails.flatMap(\.works).map(\.id))
+            if focusedCard.map({ !ids.contains($0.workID) }) ?? true { focusedCard = firstFocus }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 36) {
-                    if !startWatching.isEmpty {
-                        interactiveRail(
-                            railID: "start",
-                            title: "Start watching",
-                            works: startWatching,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
-                    }
-                    if !newMovies.isEmpty {
-                        interactiveRail(
-                            railID: "movies",
-                            title: "New movies",
-                            works: newMovies,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
+    /// Web: an 8 px left bleed keeps the first card's focus glow unclipped.
+    private static let cardBleed: CGFloat = 8
+    /// Heading (26.5) and the gap to the art (35.3), plus the card (art and caption) and the track's 18/24 padding.
+    private func railHeight(_ width: CGFloat) -> CGFloat { 61.8 + TVWebHomeCard.height(width: width) + 24 }
+
+    /// The server shelves with the web's primary rail first; older servers without shelves get the local rails.
+    private static func productionRails(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
+        if !viewModel.rails.isEmpty { return liveRailDefinitions(viewModel) }
+        let (start, movies) = homeRailMembership(works: viewModel.works, interactive: true)
+        return [("Start watching", start), ("New movies", movies)].filter { !$0.works.isEmpty }
+    }
+
+    private func webRail(id: String, title: String, works: [Work]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(TVTheme.font(size: 17.664, css: 610))
+                .tracking(-0.53)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .frame(height: 26.5)
+                .padding(.leading, Self.cardBleed)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 24.9) {
+                    ForEach(works) { work in
+                        let focus = HomeRailCardFocus(rail: id, workID: work.id)
+                        TVCardButton(work: work) {
+                            TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus,
+                                          progress: id == "r0" ? viewModel?.progress[work.id] : nil,
+                                          artWidth: displayPreferences.cardWidth)
+                        }
+                        .buttonStyle(TVFocusableCardButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedCard, equals: focus)
                     }
                 }
-                .padding(.leading, 28)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.leading, Self.cardBleed)
+                .padding(.trailing, 46)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultFocus($focusedCard, defaultFocus)
-        .onAppear {
-            leadingWorkIDs = leadingIDs
-            // Force a preferred focus target; without one, arrow keys do nothing.
-            if focusedCard == nil {
-                focusedCard = defaultFocus
-            }
-        }
-        .task(id: viewModel.works.map(\.id)) {
-            leadingWorkIDs = leadingIDs
-            // After async load, re-assert focus once rails exist.
-            if focusedCard == nil {
-                focusedCard = defaultFocus
-            }
-        }
-        .onMoveCommand { direction in
-            // ScrollView / card focus often keeps Left local. At a rail head,
-            // release card focus then ask the shell to land on the dock.
-            guard direction == .left else { return }
-            guard let focused = focusedCard, leadingWorkIDs.contains(focused.workID) else {
-                return
-            }
-            focusedCard = nil
-            requestNavFocus()
+            .padding(.top, 35.3 - 18)
         }
     }
 
@@ -456,8 +437,11 @@ struct TVHomeView: View {
             primary.append(work)
             if primary.count >= 8 { break }
         }
-        let definitions: [(title: String, works: [Work])] =
-            [("Start watching", primary)] + viewModel.rails.map { ($0.title, $0.items) }
+        // Web Home: "On deck" (part-watched, at most 10) when there is any, else "Start watching" (8 most recent).
+        let lead: (title: String, works: [Work]) = viewModel.onDeck.isEmpty
+            ? ("Start watching", primary)
+            : ("On deck", Array(viewModel.onDeck.prefix(10)))
+        let definitions: [(title: String, works: [Work])] = [lead] + viewModel.rails.map { ($0.title, $0.items) }
         return definitions.filter { !$0.works.isEmpty }
     }
 
@@ -783,6 +767,158 @@ struct TVHomeCard: View {
     }
 }
 
+/// Web `.tv-home-card` at 1920x1080: 327.2 x 184 art (radius 12.48), title 11.9/610 at +11.5, meta 8.8/400 at +2.5.
+/// Focus: the card rises 6, the art grows to 1.025 with the heavy shadow and the brand glow ring (owner 2026-10-09).
+struct TVWebHomeCard: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+    var focused = false
+    /// Web `.tv-watch-progress`: a 3 px bar along the art's foot on On deck cards (replaces the unseen dot).
+    var progress: Double? = nil
+    /// The artwork size setting's card width (medium 327.2); 16:9 art.
+    var artWidth: CGFloat = 327.2
+
+    private var artHeight: CGFloat { artWidth * 9 / 16 }
+    static func height(width: CGFloat) -> CGFloat { width * 9 / 16 + 11.5 + 17.9 + 2.5 + 11.5 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                TVWorkArt(work: work, apiClient: apiClient)
+                    .frame(width: artWidth, height: artHeight)
+                    .overlay(alignment: .bottomLeading) {
+                        if let progress {
+                            ZStack(alignment: .leading) {
+                                Color.white.opacity(0.2)
+                                DesignTokens.Color.brandPrimary.frame(width: max(3, artWidth * min(1, progress)))
+                            }
+                            .frame(height: 3)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12.48, style: .continuous))
+                if progress == nil {
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 13, height: 13)
+                        .padding(10.6)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12.48, style: .continuous)
+                    .fill(DesignTokens.Stage.surfaceSoft)
+                    .shadow(color: Self.shadow.opacity(focused ? 0.32 : 0.16), radius: focused ? 26 : 11, y: focused ? 26 : 10)
+                    .shadow(color: Self.shadow.opacity(focused ? 0.22 : 0.10), radius: focused ? 11 : 4.5, y: focused ? 11 : 3)
+            )
+            .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.48))
+            .scaleEffect(focused ? 1.025 : 1)
+            Text(work.title)
+                .font(TVTheme.font(size: 11.904, css: 610))
+                .tracking(-0.18)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .frame(width: artWidth, height: 17.9, alignment: .leading)
+                .padding(.top, 11.5)
+            Text([work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 }.joined(separator: " \u{00B7} "))
+                .font(TVTheme.font(size: 8.832, css: 400))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .lineLimit(1)
+                .frame(width: artWidth, height: 11.5, alignment: .leading)
+                .padding(.top, 2.5)
+        }
+        .offset(y: focused ? -6 : 0)
+        .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.22), value: focused)
+    }
+
+    private static let shadow = Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
+}
+
+/// The one card focus ring (owner 2026-10-09, web `--card-glow`): a 3 px brand ring outside the art plus a soft
+/// glow, following the art's shape. Every media card uses it with its own lift and shadow.
+struct TVCardFocusGlow: ViewModifier {
+    let focused: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: cornerRadius + 3, style: .continuous)
+                    .stroke(DesignTokens.Stage.cardGlow, lineWidth: 3)
+                    .padding(-3)
+                    .shadow(color: DesignTokens.Stage.cardGlow.opacity(0.45), radius: 12)
+            }
+        }
+    }
+}
+
+/// Web Home `.details-panel` for the focused card: kicker, title, runtime and overview (detail fetched on focus).
+struct TVHomeHeroCopy: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+    @State private var runtime: (id: UUID, text: String?)?
+
+    var body: some View {
+        let lines = TVTextWrap.lines(work.title, weight: 560, size: 69.12, kern: -4.98, width: 379.5)
+        let metaY = 303.5 + 62.2 * CGFloat(max(1, lines.count)) + 22.6
+        let meta = runtime?.id == work.id ? runtime?.text : nil
+        let overviewY = meta == nil ? metaY : metaY + 18 + 22.9
+        ZStack(alignment: .topLeading) {
+            Text([work.kind.rawValue, work.genres.first].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
+                .font(TVTheme.font(size: 12.29, css: 860))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
+                .placed(x: 153.6, y: 259.2, w: 455, h: 18.4)
+            TVHeroTitle(title: work.title)
+                .placed(x: 153.6, y: 303.5, w: 379.5, h: 62.2 * CGFloat(max(1, lines.count)), alignment: .topLeading)
+            if let meta {
+                Text(meta)
+                    .font(TVTheme.font(size: 12.864, css: 600))
+                    .foregroundStyle(DesignTokens.Color.textPrimary.opacity(0.86))
+                    .placed(x: 153.6, y: metaY, h: 18)
+            }
+            if let overview = work.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(TVTheme.font(size: 12.864, css: 600))
+                    .foregroundStyle(DesignTokens.Color.textPrimary.opacity(0.86))
+                    .lineLimit(5)
+                    .frame(width: 336, alignment: .topLeading)
+                    .placed(x: 153.6, y: overviewY, w: 336, h: 101.6, alignment: .topLeading)
+            }
+        }
+        .frame(width: 1920, height: 1080, alignment: .topLeading)
+        .task(id: work.id) {
+            let detail = try? await apiClient.fetchWork(id: work.id)
+            runtime = (work.id, TVWebFormat.runtime(ms: detail?.runtimeMs))
+        }
+    }
+}
+
+/// Web skeleton loading (owner 2026-10-08): the Home's final geometry with placeholder cards, never a spinner screen.
+struct TVHomeSkeleton: View {
+    var body: some View {
+        GeometryReader { geo in
+        let origin = geo.frame(in: .global).origin
+        let block = DesignTokens.Stage.surfaceSoft
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 4).fill(block).frame(width: 120, height: 14).placed(x: 153.6, y: 261, w: 120, h: 14)
+            RoundedRectangle(cornerRadius: 8).fill(block).frame(width: 330, height: 56).placed(x: 153.6, y: 306, w: 330, h: 56)
+            ForEach(0..<2, id: \.self) { rail in
+                let top = 402 + 365.9 * CGFloat(rail)
+                RoundedRectangle(cornerRadius: 4).fill(block).frame(width: 180, height: 18).placed(x: 881.6, y: top + 4, w: 180, h: 18)
+                ForEach(0..<4, id: \.self) { card in
+                    let x = 881.6 + 352.1 * CGFloat(card)
+                    RoundedRectangle(cornerRadius: 12.48, style: .continuous).fill(block)
+                        .placed(x: x, y: top + 61.8, w: 327.2, h: 184)
+                    RoundedRectangle(cornerRadius: 3).fill(block).placed(x: x, y: top + 61.8 + 195.3, w: 180, h: 12)
+                }
+            }
+        }
+        .frame(width: 1920, height: 1080, alignment: .topLeading)
+        .offset(x: -origin.x, y: -origin.y)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// Landscape artwork for a work (backdrop, then poster) with the web's text tile as the fallback.
 struct TVWorkArt: View {
     let work: Work
@@ -825,6 +961,7 @@ struct TVWorkArt: View {
 
 struct TVSearchView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var viewModel: TVSearchViewModel?
     @FocusState private var searchFieldFocused: Bool
     @FocusState private var focusedWorkID: UUID?
@@ -879,7 +1016,11 @@ struct TVSearchView: View {
             Task { await model.search() }
         }
 
-        searchFiltersChip
+        // Web: Filters is the shell action column tile, as on the libraries.
+        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, TVShellActionColumn.edge)
+            .padding(.top, TVShellActionColumn.top)
 
         switch model.state {
         case .idle:
@@ -910,7 +1051,6 @@ struct TVSearchView: View {
                 searchPreview(work)
             }
             searchResultRow(model)
-            otherSources
         }
     }
 
@@ -959,72 +1099,56 @@ struct TVSearchView: View {
         .placed(x: 153.6, y: 172.8, w: 590, h: 76)
     }
 
-    private var searchFiltersChip: some View {
-        // Web `.tv-search-filter-toggle`: 172.3 x 56 pill at (153.6, 268.2).
-        ZStack(alignment: .topLeading) {
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
-                .frame(width: 172.3, height: 56)
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 24, y: 19, w: 18, h: 18)
-            Text("Filters")
-                .font(TVTheme.font(size: 11.14, weight: .bold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .placed(x: 44.8, y: 19.7, w: 40, h: 16.7)
-            Text("All \u{00B7} All libraries")
-                .font(TVTheme.font(size: 9.2, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-                .placed(x: 91.4, y: 21.1, w: 70, h: 13.8)
-        }
-        .frame(width: 172.3, height: 56, alignment: .topLeading)
-        .placed(x: 153.6, y: 268.2, w: 172.3, h: 56)
-    }
-
+    /// Web search `.details-panel` (TV): kicker 286.6, title 49.92/560 at 330.9 (420 wide, wraps), meta 13.056/600 at
+    /// title bottom + 27, overview 13.824/600 (336 wide, 4 lines) at meta bottom + 21.6.
     private func searchPreview(_ work: Work) -> some View {
-        let year = work.releaseDate.map { String($0.prefix(4)) }
+        let year = TVWebFormat.year(work.releaseDate)
         let kind = work.kind.rawValue.capitalized
+        let lines = TVTextWrap.lines(work.title, weight: 560, size: 49.92, kern: -3, width: 420).count
+        let metaY = 330.9 + 47.4 * CGFloat(max(1, lines)) + 27
+        let soft = DesignTokens.Color.textPrimary.opacity(0.86)
         return ZStack(alignment: .topLeading) {
             Text([kind, year].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
-                .font(TVTheme.font(size: 9.98, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 153.6, y: 362, w: 534.5, h: 15)
+                .font(TVTheme.font(size: 12.288, css: 860))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
+                .placed(x: 153.6, y: 286.6, w: 544, h: 18.4)
             Text(work.title)
-                .font(TVTheme.font(size: 48, weight: .medium))
-                .tracking(-2.88)
+                .font(TVTheme.font(size: 49.92, css: 560))
+                .tracking(-3)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-                .lineLimit(1)
-                .placed(x: 153.6, y: 385.8, w: 534.5, h: 47)
-            HStack(spacing: 12) {
+                .lineLimit(2)
+                .frame(width: 420, alignment: .topLeading)
+                .placed(x: 153.6, y: 330.9, w: 420, h: 47.4 * CGFloat(max(1, lines)), alignment: .topLeading)
+            HStack(spacing: 12.8) {
                 if let year { Text(year) }
-                ForEach(work.genres.prefix(2), id: \.self) { Text($0) }
+                if !work.genres.isEmpty { Text(work.genres.prefix(2).joined(separator: " \u{00B7} ")) }
             }
-            .font(TVTheme.font(size: 10.37, weight: .regular))
-            .foregroundStyle(DesignTokens.Color.textDisabled)
-            .placed(x: 153.6, y: 447.2, h: 15.6)
+            .font(TVTheme.font(size: 13.056, css: 600))
+            .foregroundStyle(soft)
+            .placed(x: 153.6, y: metaY, h: 19.6)
             if let overview = work.overview, !overview.isEmpty {
                 Text(overview)
-                    .font(TVTheme.font(size: 12.29, weight: .regular))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .lineLimit(2)
-                    .placed(x: 153.6, y: 480.4, w: 534.5, h: 19)
+                    .font(TVTheme.font(size: 13.824, css: 600))
+                    .foregroundStyle(soft)
+                    .lineLimit(4)
+                    .frame(width: 336, alignment: .topLeading)
+                    .placed(x: 153.6, y: metaY + 19.6 + 21.6, w: 336, h: 87.4, alignment: .topLeading)
             }
         }
     }
 
+    /// Web `.tv-search-results`: a 3-column grid from x 825.6, y 172.8 (327.2 x 184 art, pitch 353.1 x 251.2) in the
+    /// right rail, scrolling under a top edge fade; other sources follow the results.
     private func searchResultRow(_ model: TVSearchViewModel) -> some View {
-        // Normal cards 320.6 x 180.3, pitch 346.65, first at x 825.55; the focused card scales 1.04.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 26.05) {
-                ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
-                    // Web: the first hit is not scaled until the remote moves onto the results.
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(displayPreferences.cardWidth), spacing: 25.9),
+                                     count: displayPreferences.cardColumns),
+                      alignment: .leading, spacing: 251.2 - 184 - 11.5 - 20) {
+                ForEach(model.results) { work in
+                    // Web: the first hit is not lifted until the remote moves onto the results.
                     let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
-                    NavigationLink {
-                        TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                    } label: {
+                    TVCardButton(work: work) {
                         searchResultCard(work, focused: selected)
                             // Pinned web search focus: translateY(-6px) scale(1.015) over 230 ms, cubic-bezier(0.16, 1, 0.3, 1).
                             .scaleEffect(selected ? 1.015 : 1)
@@ -1033,24 +1157,35 @@ struct TVSearchView: View {
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
-                    .focusable(!frozen)
-                    .focusEffectDisabled(frozen)
+                    .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
+                    .focusEffectDisabled()
                 }
             }
-            .padding(.leading, 96.45)
-            .padding(.top, 20)
-            .padding(.trailing, 80)
+            .padding(.leading, 825.6 - 729.6)
+            .padding(.top, 172.8)
+            otherSources
+                .padding(.leading, 825.6 - 729.6)
+                .padding(.top, 36)
+                .padding(.bottom, 120)
         }
-        .frame(width: 1190.4 - 96.45 + 96.45, height: 300, alignment: .topLeading)
-        .placed(x: 729.6, y: 172.8 - 20, w: 1190.4, h: 300, alignment: .topLeading)
+        .mask(
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 40 / 1080),
+                        .init(color: .black, location: 92 / 1080), .init(color: .black, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
+        .placed(x: 729.6, y: 0, w: 1190.4, h: 1080, alignment: .topLeading)
     }
 
     private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let w = displayPreferences.cardWidth
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
-                    .frame(width: 320.6, height: 180.3)
+                    .frame(width: w, height: w * 9 / 16)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.5))
                     // Focused search shadow: 0 22px 52px rgba(31, 14, 20, 0.28); the rest shadow is the card default.
                     .shadow(
                         color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(focused ? 0.28 : 0),
@@ -1064,35 +1199,34 @@ struct TVSearchView: View {
             }
             ZStack(alignment: .topLeading) {
                 Text(work.title)
-                    .font(TVTheme.font(size: 12.29, weight: .semibold))
+                    .font(TVTheme.font(size: 11.904, css: 610))
+                    .tracking(-0.18)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
-                    .placed(x: 1.6, y: 0, w: 246.8, h: 18.4)
+                    .placed(x: 1.9, y: 0, w: w - 66.4, h: 18.4)
                 Text(
                     ([work.kind.rawValue.capitalized] + [work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 })
                         .joined(separator: " \u{00B7} ").uppercased()
                 )
-                    .font(TVTheme.font(size: 8.45, weight: .bold))
+                    .font(TVTheme.font(size: 8.448, css: 720))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .placed(x: 259.6, y: 5, w: 61, h: 12.7, alignment: .trailing)
+                    .placed(x: w - 120, y: 3, w: 120, h: 12.7, alignment: .trailing)
             }
-            .frame(width: 320.6, height: 20, alignment: .topLeading)
-            .padding(.top, 11.2)
+            .frame(width: w, height: 20, alignment: .topLeading)
+            .padding(.top, 11.5)
         }
-        .frame(width: 320.6, alignment: .topLeading)
+        .frame(width: w, alignment: .topLeading)
     }
 
     private var otherSources: some View {
-        ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("OTHER SOURCES")
                 .font(TVTheme.font(size: 10.88, weight: .bold))
                 .tracking(0.76)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 418.4, w: 1013.8, h: 16.3)
             Text("Nothing found in other sources.")
                 .font(TVTheme.font(size: 11.52, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 446.7, w: 1013.8, h: 17.3)
         }
     }
 
@@ -1124,16 +1258,27 @@ struct TVSearchView: View {
 /// Movies / Series / Music directory: left preview + right 3-col title grid.
 /// Mirrors `LibraryPage` + `.tv-library` / `.tv-directory` CSS at 1920×1080.
 struct TVLibraryKindView: View {
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     let kindLabel: String
     let emptyMessage: String
     /// When set, filters fixture/API catalogue to this work kind.
     var workKind: WorkKind? = nil
     /// Collection noun for the heading count ("TITLES" / "ARTISTS").
     var collectionNoun: String = "TITLES"
+    /// The Playlists tab: lists the profile's playlists (web `/playlists`), not the catalogue.
+    var listsPlaylists = false
+    /// One playlist's titles (opened from the Playlists tab).
+    var playlistID: UUID? = nil
 
     @Environment(TVAppEnvironment.self) private var environment
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var items: [Work] = []
+    /// Title counts of the listed playlists (the preview's "5 titles").
+    @State private var playlistCounts: [UUID: Int] = [:]
+    /// Web library Filters drawer: sort (`title` / `date_added`) and order (`asc` / `desc`).
+    @State private var filtersOpen = false
+    @State private var sort = "title"
+    @State private var order = "asc"
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1196,16 +1341,27 @@ struct TVLibraryKindView: View {
                     .padding(.top, 277.2 - (25.6 - 9.2) / 2)
                     .zIndex(20)
 
-                filterLauncher
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
-                    .padding(.trailing, TVShellActionColumn.edge)
-                    .padding(.top, TVShellActionColumn.top)
-                    .zIndex(21)
+                if playlistID == nil, !listsPlaylists {
+                    TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { filtersOpen = true }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
+                        .padding(.trailing, TVShellActionColumn.edge)
+                        .padding(.top, TVShellActionColumn.top)
+                        .zIndex(21)
+                }
+
+                if filtersOpen {
+                    TVDrawer(kicker: "Library controls", title: "Filters", onClose: { filtersOpen = false }) {
+                        TVChoiceSection(title: "Sort by", options: [("title", "Title"), ("date_added", "Date added")], selection: $sort)
+                        TVChoiceSection(title: "Order", options: [("asc", sort == "title" ? "A-Z" : "Oldest"),
+                                                                  ("desc", sort == "title" ? "Z-A" : "Newest")], selection: $order)
+                    }
+                    .zIndex(30)
+                }
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
+        .task(id: "\(workKind?.rawValue ?? "all")-\(sort)-\(order)-\(environment.serverURL.absoluteString)") {
             await loadItems()
         }
     }
@@ -1265,9 +1421,9 @@ struct TVLibraryKindView: View {
     private func libraryPreview(_ work: Work) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text((work.genres.first ?? kindLabel).uppercased())
-                .font(TVTheme.font(size: 12, weight: .heavy))
-                .tracking(1.2)
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                .font(TVTheme.font(size: 12.29, css: 820))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
             // SPA `.tv-library-preview h2` / `.tv-detail-copy h1`: weight 560,
             // tracking -0.072em, max-width 9ch. DemiBold (semibold) matches
             // white-pixel mass better than Medium (full109 title thr200:
@@ -1347,14 +1503,15 @@ struct TVLibraryKindView: View {
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
+    /// Web `.tv-title-grid` at 1920x1080: columns of `--card-w` (327.2 at medium) from x 783.4, 25.92 apart, first row at
+    /// y 162, rows 240.4 apart at medium (27 between a card's caption and the next art).
     private func productionTitleGrid(size: CGSize) -> some View {
-        let gridWidth = size.width * DesignTokens.Shell.libraryGridWidthFraction
-        let padL = DesignTokens.Shell.libraryRailLeft
-        let padR = DesignTokens.Shell.libraryRailRight
-        let cols = DesignTokens.Shell.libraryGridColumns
-        let gap = DesignTokens.Shell.libraryGridColGap
-        let inner = max(0, gridWidth - padL - padR)
-        let cardW = (inner - gap * CGFloat(cols - 1)) / CGFloat(cols)
+        let gridWidth = size.width - 783.4
+        let padL: CGFloat = 0
+        let padR: CGFloat = 0
+        let cols = displayPreferences.cardColumns
+        let gap: CGFloat = 25.92
+        let cardW = displayPreferences.cardWidth
         let artH = cardW * 9 / 16
 
         return ScrollView(.vertical, showsIndicators: false) {
@@ -1364,7 +1521,7 @@ struct TVLibraryKindView: View {
                     count: cols
                 ),
                 alignment: .leading,
-                spacing: DesignTokens.Shell.libraryGridRowGap
+                spacing: 27
             ) {
                 ForEach(items) { work in
                     libraryCard(work: work, width: cardW, artHeight: artH, showTitle: true, artIncludesDot: false)
@@ -1376,6 +1533,16 @@ struct TVLibraryKindView: View {
             .padding(.trailing, padR)
         }
         .frame(width: gridWidth)
+        // Web: the first title is focused when the page opens.
+        .defaultFocus($selectedID, items.first?.id)
+        // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
+        .mask(
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 40 / 1080),
+                        .init(color: .black, location: 92 / 1080), .init(color: .black, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 
@@ -1387,9 +1554,7 @@ struct TVLibraryKindView: View {
         artIncludesDot: Bool
     ) -> some View {
         let isSelected = selected?.id == work.id
-        return Button {
-            selectedID = work.id
-        } label: {
+        return TVCardButton(work: work, route: playlistCounts[work.id] != nil ? .playlist(id: work.id, name: work.title) : nil) {
             // SPA `.tv-title-card-copy { padding-top: 0.72rem; gap }` +
             // `strong { font-size: clamp(0.54rem, 0.6vw, 0.74rem) → ~11.5 @ 1920,
             // font-weight: 610, letter-spacing: -0.015em }`.
@@ -1411,6 +1576,7 @@ struct TVLibraryKindView: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: isSelected && !parityMode, cornerRadius: DesignTokens.Radius.card))
                     // Pinned web values: rest 0 10 20 .14 + 0 3 8 .10; focused 0 24 48 .30 + 0 10 20 .20.
                     .shadow(
                         color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
@@ -1452,7 +1618,7 @@ struct TVLibraryKindView: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
-        .focusable(!parityMode)
+        .disabled(parityMode) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(parityMode)
         .onMoveCommand { direction in
             guard !parityMode, direction == .left else { return }
@@ -1482,14 +1648,9 @@ struct TVLibraryKindView: View {
         }
     }
 
-    /// Web `.page-filters-button`: the 62 x 72 action tile at the top right of the header row.
-    private var filterLauncher: some View {
-        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
-    }
-
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
-        if TVParityLaunch.isLive {
+        if TVParityLaunch.requestedScreen == nil {
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundElevated
                 if let selected {
@@ -1555,9 +1716,25 @@ struct TVLibraryKindView: View {
         .frame(width: size.width, height: size.height)
     }
 
+    /// The release year (owner ruling 2026-10-08: never the date the title was added); a playlist shows its count.
     private func yearString(for work: Work) -> String {
-        let cal = Calendar(identifier: .gregorian)
-        return String(cal.component(.year, from: work.addedAt))
+        if let count = playlistCounts[work.id] { return count == 1 ? "1 title" : "\(count) titles" }
+        return TVWebFormat.year(work.releaseDate) ?? ""
+    }
+
+    /// Web `orderWorks`: titles compare like a person reads them (numbers by value, case and accents ignored: "2"
+    /// before "10"), on the sort title; date added by date.
+    static func ordered(_ works: [Work], sort: String, order: String) -> [Work] {
+        let ascending = order != "desc"
+        if sort == "date_added" {
+            return works.sorted { ascending ? $0.addedAt < $1.addedAt : $0.addedAt > $1.addedAt }
+        }
+        return works.sorted {
+            let a = $0.sortTitle.isEmpty ? $0.title : $0.sortTitle
+            let b = $1.sortTitle.isEmpty ? $1.title : $1.sortTitle
+            let result = a.compare(b, options: [.numeric, .caseInsensitive, .diacriticInsensitive], locale: .current)
+            return ascending ? result == .orderedAscending : result == .orderedDescending
+        }
     }
 
     @MainActor
@@ -1570,17 +1747,22 @@ struct TVLibraryKindView: View {
             return
         }
         let api = environment.apiClient
+        if listsPlaylists || playlistID != nil {
+            await loadPlaylists(api)
+            return
+        }
         do {
             // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
-            let page = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 48, offset: 0)
+            let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 48, offset: 0)
             items = page.items
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
-            while !page.items.isEmpty, items.count < (total ?? Int.max) {
-                let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
+            items = Self.ordered(items, sort: sort, order: order)
+            while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
+                let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
-                items += next.items
+                items = Self.ordered(items + next.items, sort: sort, order: order)
             }
         } catch {
             didLoad = true // keep what loaded; never show fixture titles to a real user
@@ -1590,6 +1772,47 @@ struct TVLibraryKindView: View {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+extension TVLibraryKindView {
+    /// The Playlists tab (each playlist as a card with its first title's art) or one playlist's titles.
+    @MainActor
+    fileprivate func loadPlaylists(_ api: PlayarrAPIClient) async {
+        defer { didLoad = true }
+        if let playlistID {
+            let rows = (try? await api.listPlaylistItems(playlistID: playlistID)) ?? []
+            items = await Self.works(rows.sorted { $0.position < $1.position }.map(\.workID), api: api)
+        } else {
+            let lists = (try? await api.listPlaylists()) ?? []
+            var cards: [Work] = []
+            var counts: [UUID: Int] = [:]
+            for list in lists {
+                let rows = (try? await api.listPlaylistItems(playlistID: list.id)) ?? []
+                let first = await Self.works(rows.min { $0.position < $1.position }.map { [$0.workID] } ?? [], api: api).first
+                counts[list.id] = rows.count
+                cards.append(Work(
+                    id: list.id, kind: list.mediaType == .audio ? .artist : .movie, title: list.name, sortTitle: list.name,
+                    images: first?.images ?? [], genres: ["\(list.mediaType.rawValue.capitalized) \u{00B7} Your playlist"],
+                    addedAt: list.createdAt, monitored: false, availability: .available
+                ))
+            }
+            playlistCounts = counts
+            items = cards
+        }
+        total = items.count
+        selectedID = items.first?.id
+    }
+
+    private static func works(_ ids: [UUID], api: PlayarrAPIClient) async -> [Work] {
+        await withTaskGroup(of: (Int, Work?).self) { group in
+            for (index, id) in ids.enumerated() {
+                group.addTask { (index, try? await api.fetchWork(id: id).work) }
+            }
+            var found: [(Int, Work)] = []
+            for await (index, work) in group { if let work { found.append((index, work)) } }
+            return found.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
 }
 
 struct TVWorkTile: View {
@@ -1632,5 +1855,98 @@ struct TVErrorView: View {
         }
         .padding(DesignTokens.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+
+/// Web `MediaContextMenu` "Title actions" in the shared drawer: Play, Add to Playlist, Mark as Watched / Unwatched.
+/// Download is left out: Apple TV keeps no offline copies (web hides it without download storage).
+struct TVActionsDrawer: View {
+    let work: Work
+    let onClose: () -> Void
+    let onPlay: (UUID, String) -> Void
+
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var playlists: [Playlist]?
+    @State private var message: String?
+    @State private var busy = false
+
+    var body: some View {
+        TVDrawer(kicker: playlists == nil ? "Title actions" : "Add to Playlist", title: work.title, onClose: onClose) {
+            VStack(alignment: .leading, spacing: 14) {
+                if let playlists {
+                    ForEach(playlists) { list in
+                        TVActionRow(glyph: "\u{FF0B}", label: list.name) { Task { await add(to: list) } }
+                    }
+                    if playlists.isEmpty {
+                        Text("No playlists yet.").font(TVTheme.font(size: 12.48, css: 400)).foregroundStyle(DesignTokens.Color.textDisabled)
+                    }
+                    TVActionRow(glyph: "\u{2190}", label: "Back") { self.playlists = nil }
+                } else {
+                    TVActionRow(glyph: "\u{25B6}\u{FE0E}", label: "Play") { Task { await play() } }
+                    TVActionRow(glyph: "\u{FF0B}", label: "Add to Playlist") {
+                        Task { playlists = (try? await environment.apiClient.listPlaylists()) ?? [] }
+                    }
+                    TVActionRow(glyph: "\u{2713}", label: "Mark as Watched") { Task { await setWatched(true) } }
+                    TVActionRow(glyph: "\u{25CB}", label: "Mark as Unwatched") { Task { await setWatched(false) } }
+                }
+                if let message {
+                    Text(message)
+                        .font(TVTheme.font(size: 12.48, css: 400))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 268, alignment: .leading)
+                }
+            }
+            .disabled(busy)
+        }
+    }
+
+    /// The playable leaves: the film itself, or every episode (in order) of a series.
+    private func leaves() async throws -> [(id: UUID, runtimeMs: Int64?, title: String)] {
+        let detail = try await environment.apiClient.fetchWork(id: work.id)
+        switch detail.children {
+        case .series(let seasons):
+            return seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+                .flatMap { $0.episodes.sorted { $0.episode.episodeNumber < $1.episode.episodeNumber } }
+                .compactMap { ep in ep.mediaFileID.map { ($0, ep.runtimeMs, ep.episode.title ?? work.title) } }
+        default:
+            return detail.mediaFileID.map { [($0, detail.runtimeMs, work.title)] } ?? []
+        }
+    }
+
+    private func play() async {
+        busy = true
+        defer { busy = false }
+        do {
+            guard let first = try await leaves().first else { message = "Nothing to play yet."; return }
+            onPlay(first.id, first.title)
+        } catch { message = "Playback could not be started." }
+    }
+
+    private func setWatched(_ watched: Bool) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let items = try await leaves()
+            guard !items.isEmpty else { message = "Nothing to mark yet."; return }
+            for item in items {
+                let duration = item.runtimeMs ?? 0
+                _ = try await environment.apiClient.updateWatchProgress(
+                    mediaFileID: item.id,
+                    body: UpdateWatchProgressRequest(positionMS: watched ? duration : 0, durationMS: duration, completed: watched)
+                )
+            }
+            onClose()
+        } catch { message = "The change could not be made." }
+    }
+
+    private func add(to list: Playlist) async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await environment.apiClient.addPlaylistItem(playlistID: list.id, body: AddPlaylistItemRequest(workID: work.id))
+            onClose()
+        } catch { message = "\(work.title) could not be added to \(list.name)." }
     }
 }

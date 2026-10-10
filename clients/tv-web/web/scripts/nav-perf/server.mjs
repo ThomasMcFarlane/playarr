@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, calendarPerDay = 4, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, latencyMs = 0, resyncAfterMs = -1, lagAverageSeconds = null, calendarOverviews = false }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, calendarPerDay = 4, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, latencyMs = 0, resyncAfterMs = -1, lagAverageSeconds = null, calendarOverviews = false, languagesDelayMs = 0, serverGroup = false }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -64,6 +64,14 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     }
     if (p === "/api/v1/auth/login") {
       return json(res, { access_token: "nav-perf-token", refresh_token: "nav-perf-refresh", expires_in: 86400, token_type: "Bearer", user_id: userId });
+    }
+    if (p === "/api/v1/peer-groups/self/members") {
+      return json(res, serverGroup
+        ? { group_name: "Test Group", members: [
+            { name: "Server A", is_self: true, url: "https://server-a.example.test" },
+            { name: "Server B", is_self: false, url: "https://server-b.example.test" },
+          ] }
+        : { group_name: null, members: [] });
     }
     if (p === "/api/v1/catalog/kinds") return json(res, ["movie", "series", "artist"]);
     if (p === "/api/v1/catalog") {
@@ -94,6 +102,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     if (p === "/api/v1/catalog/languages") {
       const names = { en: "English", ja: "Japanese", fr: "French", de: "German", es: "Spanish", it: "Italian", ko: "Korean", pt: "Portuguese", ru: "Russian", th: "Thai", zh: "Chinese", nl: "Dutch", sv: "Swedish", pl: "Polish" };
       const facets = Object.entries(names).map(([code, name], i) => ({ code, name, count: 20 - i }));
+      if (languagesDelayMs > 0) return void setTimeout(() => json(res, { audio: facets, subtitle: facets }), languagesDelayMs);
       return json(res, { audio: facets, subtitle: facets });
     }
     if (p === "/api/v1/catalog/search") {

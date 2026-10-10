@@ -559,7 +559,10 @@ pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Route
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
     let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
-    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(playarr_db::EventingPeerNodeRepo::new(
+        Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let peer_join_token_repo: Arc<dyn PeerJoinTokenRepo> =
         Arc::new(SqlxPeerJoinTokenRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =

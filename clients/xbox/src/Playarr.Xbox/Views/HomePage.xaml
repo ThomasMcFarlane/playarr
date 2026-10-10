@@ -12,61 +12,53 @@
         The real home/catalog screen, replacing the Screens-phase placeholder
         left behind by the foundation agent. Follows Views/LoginPage.xaml.cs's
         pattern, see HomePage.xaml.cs's type-level remarks. Tiles are built
-        in code from HomeViewModel.RecentWorks via CatalogTileFactory, so
-        RecentWorksList's items are added with Items.Add(...) in Render(),
+        in code from HomeViewModel.Rails via CatalogTileFactory, so
+        each rail ListView's items are added with Items.Add(...) in Render(),
         never an ItemTemplate/{Binding}.
     -->
+    <!-- Web TV Home: rails start at the web's x (881 px) under the shell clock; one row per server rail. -->
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <!-- Web Home hero: the focused title, very large and faint, behind the left of the rails. -->
+        <TextBlock
+            x:Name="HeroTitle"
+            Width="700"
+            Margin="337,282,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            FontSize="150"
+            FontWeight="Bold"
+            LineHeight="135"
+            CharacterSpacing="-20"
+            TextWrapping="WrapWholeWords"
+            MaxLines="2"
+            Opacity="0.07"
+            IsHitTestVisible="False" />
 
-        <!-- Top nav: shared shape, duplicated on LibraryPage; see that page's own copy. -->
+        <ProgressRing
+            x:Name="LoadingRing"
+            IsActive="False"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="881,415,0,0"
+            Width="40"
+            Height="40" />
+
         <StackPanel
-            Grid.Row="0"
-            Orientation="Horizontal"
-            Spacing="24"
-            Margin="48,32,48,24"
-            VerticalAlignment="Center">
-            <TextBlock Text="Playarr" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" />
-            <Button x:Name="HomeNavButton" Content="Home" IsEnabled="False" />
-            <Button x:Name="LibraryNavButton" Content="Library" Click="LibraryNavButton_Click" />
+            x:Name="ErrorPanel"
+            Spacing="12"
+            Visibility="Collapsed"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="881,415,0,0">
+            <TextBlock x:Name="ErrorText" Style="{StaticResource PlayarrRailTitle}" />
+            <Button x:Name="RetryButton" Content="Try again" Click="RetryButton_Click" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="48,0,48,48" Spacing="16">
-            <TextBlock Text="Recently added" Style="{StaticResource TitleTextBlockStyle}" />
-
-            <ProgressRing
-                x:Name="LoadingRing"
-                IsActive="False"
-                HorizontalAlignment="Left"
-                Width="40"
-                Height="40" />
-
-            <StackPanel x:Name="ErrorPanel" Spacing="12" Visibility="Collapsed">
-                <TextBlock
-                    x:Name="ErrorText"
-                    Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
-                    Style="{StaticResource BodyTextBlockStyle}" />
-                <Button x:Name="RetryButton" Content="Try again" Click="RetryButton_Click" />
-            </StackPanel>
-
-            <ListView
-                x:Name="RecentWorksList"
-                SelectionMode="None"
-                IsItemClickEnabled="True"
-                ItemClick="RecentWorksList_ItemClick"
-                ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                ScrollViewer.HorizontalScrollMode="Enabled"
-                ScrollViewer.VerticalScrollMode="Disabled"
-                Height="340">
-                <ListView.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsStackPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ListView.ItemsPanel>
-            </ListView>
-        </StackPanel>
+        <ScrollViewer
+            x:Name="RailsScroll"
+            VerticalScrollBarVisibility="Hidden"
+            HorizontalScrollMode="Disabled">
+            <StackPanel x:Name="RailsPanel" Margin="881,395,0,48" Spacing="38" />
+        </ScrollViewer>
     </Grid>
 </Page>

@@ -103,7 +103,7 @@ struct TVPlayerChrome: View {
                     .background(Circle().fill(Color(red: 12 / 255, green: 10 / 255, blue: 11 / 255).opacity(0.58)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(interactive)
+            .disabled(!interactive) // not .focusable: on a Button it adds a second, inert focus target
             .modifier(TVFocusTag(binding: focus, control: .close))
             .placed(x: 1814, y: 37.8, w: 48, h: 48)
         }
@@ -118,7 +118,7 @@ struct TVPlayerChrome: View {
             TVScrubberBody(progress: progress)
         }
         .buttonStyle(TVFocusableCardButtonStyle())
-        .focusable(interactive)
+        .disabled(!interactive) // not .focusable: on a Button it adds a second, inert focus target
         .modifier(TVFocusTag(binding: focus, control: .scrubber))
         .placed(x: 70, y: 921, w: 1780, h: 36)
     }
@@ -136,7 +136,8 @@ struct TVPlayerChrome: View {
     }
 
     private static func clock(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds))
+        // A stream that has not reported its duration yet gives NaN or infinity: show 0:00, never crash.
+        let total = seconds.isFinite ? max(0, Int(seconds)) : 0
         return "\(total / 60):" + String(format: "%02d", total % 60)
     }
 
@@ -151,7 +152,7 @@ struct TVPlayerChrome: View {
                     .background(Circle().fill(Color.white.opacity(0.14)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(interactive)
+            .disabled(!interactive) // not .focusable: on a Button it adds a second, inert focus target
             .modifier(TVFocusTag(binding: focus, control: .play))
             .placed(x: 147.6, y: 958, w: 64, h: 64)
             icon("forward.end", x: 247.2, opacity: 0.3)
@@ -193,7 +194,7 @@ struct TVPlayerChrome: View {
                 .background(Capsule().fill(Color.white.opacity(state.menuOpen ? 0.15 : 0)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(interactive)
+            .disabled(!interactive) // not .focusable: on a Button it adds a second, inert focus target
             .modifier(TVFocusTag(binding: focus, control: .quality))
             .placed(x: 1527.8, y: 959.8, w: 173.4, h: 60.5)
             icon("info.circle", x: 1730.4)

@@ -1541,7 +1541,10 @@ async fn boot_api(
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
     let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
-    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(playarr_db::EventingPeerNodeRepo::new(
+        Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let peer_join_token_repo: Arc<dyn PeerJoinTokenRepo> =
         Arc::new(SqlxPeerJoinTokenRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =
@@ -1879,6 +1882,23 @@ async fn boot_api(
     );
     tokio::spawn(analytics_flusher.run());
 
+    // Keep the query planner's table statistics current (`PRAGMA optimize` is
+    // cheap when nothing changed); a new connection already analyses tables
+    // that have none.
+    {
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+            tick.tick().await;
+            loop {
+                tick.tick().await;
+                if let Err(error) = playarr_db::optimize(&pool).await {
+                    tracing::warn!(%error, "PRAGMA optimize failed");
+                }
+            }
+        });
+    }
+
     // Audio/subtitle language index backfill (task 180): ffprobe for files
     // the *arr app could not describe, plus periodic sidecar subtitle scans.
     // Runs where the media is readable (the API role); idempotent, so
@@ -1939,7 +1959,10 @@ async fn boot_api(
     // after a start does not pay for the scan.
     {
         let catalog = state.catalog.clone();
-        tokio::spawn(async move { catalog.warm_snapshot().await });
+        tokio::spawn(async move {
+            catalog.warm_snapshot().await;
+            catalog.warm_languages().await;
+        });
     }
 
     let (router, _openapi) = playarr_api::build_router_with_tv(
@@ -2769,7 +2792,7 @@ async fn boot_worker(
     ));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
         Arc::new(SqlxMediaFileRepo::new(pool.clone()).with_write_queue(write_queue.clone())),
-        live_events,
+        live_events.clone(),
     ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     // §9.1/§3.6 (`docs/architecture/peer-groups.md`): this function's own
@@ -2783,7 +2806,10 @@ async fn boot_worker(
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
-    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(playarr_db::EventingPeerNodeRepo::new(
+        Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =

@@ -33,6 +33,12 @@ data class PlayarrWebPalette(
      */
     val focusRing: Color get() = if (dark) Color.White else ink
 
+    /** `--brand-ink`: the one small subtitle colour (page subtitles, kickers, details-panel eyebrows). */
+    val brandInk: Color get() = if (dark) Color(0xFFEAA6B6) else Color(0xFF821E36)
+
+    /** `--dp-soft`: details-panel meta and description, `color-mix(in srgb, var(--ink) 88%, var(--surface))`. */
+    val detailsSoft: Color get() = androidx.compose.ui.graphics.lerp(surface, ink, 0.88f)
+
     /** `--danger`: the one error colour. */
     val danger: Color get() = if (dark) Color(0xFFEE9297) else Color(0xFFA8464C)
 

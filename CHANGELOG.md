@@ -13,6 +13,20 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: libraries list playable titles in the web order (numbers by value, so 2 comes before 10) and open with the first title focused.
+- Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
+- Tizen and webOS: web rules that use `:has()` (nav group spacing, search field focus ring, calendar agenda panel, downloads layout) now apply, through a build-time rewrite plus a small runtime that keeps a matching attribute up to date.
+- Apple TV: calendar week and month views, a focusable agenda whose details follow focus, the shared right-side drawer for Filters (library sort and order, calendar view) and the calendar link, search results in the web grid, a full-screen player that opens transcoded streams (session headers, waits for the playlist, no Matroska direct play) and no longer crashes before the duration is known, Play focused on film pages, and today on the calendar is your local day.
+- Web: a focused checkbox (Settings Your data and Remote, Calendar monitored-only switch) no longer traps keyboard and D-pad focus; arrow keys now move spatial focus away, Space still toggles.
+- Apple TV: library cards open the title on Select and show the card focus glow; the Playlists tab lists your playlists; Back on a top-level page returns Home and pops pushed pages first; Left into the nav lands on the active tab; the nav ends with the profile tile (Who's watching, Settings from the gear) instead of a Settings group; settings rows use the web focus look and the panel follows focus.
+- Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
+- LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
+- Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).
+- Arr sync: a file the source replaced is removed only when exactly one replacement exists for the same episode or movie, and viewers's resume positions and choices move to it first. A file the source drops with no replacement is hidden (marked missing) and keeps its progress; it returns if the source lists it again. A pass that would change over half of a work's files, or over 200, changes nothing.
+- Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
+- Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.
+- Server: the language reads now start from the media files and use the language primary key (16 to 26 s down to about a second in a reviewer repro), `PRAGMA optimize` runs on every new database connection and hourly so the query planner has table statistics, and the in-memory language cache is shared per kind, refreshed on language writes and library changes, and capped at ten minutes old.
+- Apple TV: the app stays signed in after it has been idle for more than 15 minutes; it refreshes the expired access token instead of showing the sign-in code.
 - Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.
 - Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
 - Web: player Up next and health drawers use the shared Drawer theme tokens and close button (1.9978)
@@ -251,6 +265,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV: holding Select on a media card opens its actions (Play, Add to Playlist, Mark as Watched or Unwatched) in the shared drawer and returns focus to the card; title pages show the cast; episode tiles show their own frame; Settings has the Artwork size choice (small, medium, large) and the colour theme choice works; Right from a settings row enters its panel.
+- Settings → Server lists the server group's members automatically and read-only, each with its first-priority client address, and updates live when a member joins, leaves or changes its client address. Users can no longer forget or edit the group; signing out clears the remembered group instead. New signed-in-only `GET /api/v1/peer-groups/self/members`.
+- Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
 - Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).
 - Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.
 - Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.
@@ -401,6 +418,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Calendar: no Request button in any calendar view, and the "not in your catalogue" and "request provider" messages are gone from the calendar details. The request-unavailable reason shown elsewhere now reads "Requests are not available for this title yet".
+- Web: the shared multi-select is a plain checkbox list driven only by D-pad or arrow keys (no search box or on-screen keyboard); the Calendar Filters lose the duplicate Source filter and the date range (old links keep working). Rows 1.9984, 1.9985.
+- Web: Search Filters keep only Type; the duplicate Library filter is removed (old `?library=` links keep working). Row 1.9988.
+- Apple TV: Home is the web TV Home: the hero follows the focused card, the server shelves sit on the right with the web card size, focus lift and glow, On deck leads with progress bars, and a skeleton replaces the "Loading your library" screen. Remote focus reaches the nav rail again, pages sit at the web positions under the floating nav, and the clock sits and ticks where the web shows it.
 - Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
 - Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.
 - Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
@@ -897,6 +918,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the tvOS live simulator workflow and its keepalive script: the live Apple TV simulator runs only on the MacBook over ssh (owner decision), and this public repository never runs a self-hosted or long-lived Apple runner job.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.

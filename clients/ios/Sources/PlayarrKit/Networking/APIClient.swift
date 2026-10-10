@@ -168,6 +168,14 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
         limit: Int?,
         offset: Int?
     ) async throws -> CatalogPage
+    /// The library browse with an explicit order (`asc` or `desc`, web `?order=`), playable titles only.
+    func browseCatalog(
+        kind: WorkKind?,
+        sort: String?,
+        order: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> CatalogPage
     func browseLibrary(
         kind: WorkKind,
         sort: String,
@@ -389,6 +397,24 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
         if let genre { query.append(URLQueryItem(name: "genre", value: genre)) }
         if let tag { query.append(URLQueryItem(name: "tag", value: tag)) }
         if let sort { query.append(URLQueryItem(name: "sort", value: sort)) }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        if let offset { query.append(URLQueryItem(name: "offset", value: String(offset))) }
+        return try await get("/api/v1/catalog", query: query)
+    }
+
+    public func browseCatalog(
+        kind: WorkKind?,
+        sort: String?,
+        order: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> CatalogPage {
+        var query: [URLQueryItem] = []
+        if let kind { query.append(URLQueryItem(name: "kind", value: kind.rawValue)) }
+        if let sort { query.append(URLQueryItem(name: "sort", value: sort)) }
+        if let order { query.append(URLQueryItem(name: "order", value: order)) }
+        // The library lists what can be played, as the web does (`available_only`).
+        query.append(URLQueryItem(name: "available_only", value: "true"))
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
         if let offset { query.append(URLQueryItem(name: "offset", value: String(offset))) }
         return try await get("/api/v1/catalog", query: query)
@@ -1247,5 +1273,12 @@ public struct RequestSummary: Decodable, Sendable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, title, year, status
         case statusNote = "status_note"
+    }
+}
+
+public extension PlayarrAPIClient {
+    /// Default for test doubles: the order is ignored.
+    func browseCatalog(kind: WorkKind?, sort: String?, order: String?, limit: Int?, offset: Int?) async throws -> CatalogPage {
+        try await browseCatalog(kind: kind, genre: nil, tag: nil, sort: sort, limit: limit, offset: offset)
     }
 }

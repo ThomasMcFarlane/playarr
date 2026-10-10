@@ -987,6 +987,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   scrollbar-width: none;
 }
 
+/* A focused option lifts with the shared card shadow and glow (up to 72px below, 48px to the left): the scroller keeps
+   that room as padding on the list, and a focused option settles clear of the fades. */
+.settings-options-scroll {
+  scroll-padding-block: var(--page-edge-fade-size);
+}
+
 .settings-options-scroll::-webkit-scrollbar,
 .settings-detail-scroll::-webkit-scrollbar {
   width: 0;
@@ -1122,38 +1128,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 .settings-card-wide {
   width: 100%;
-}
-
-.theme-choice {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
-  width: fit-content;
-  max-width: 100%;
-  background: var(--line);
-  border: 1px solid var(--line);
-}
-
-.theme-choice-button {
-  min-height: 48px;
-  padding: 0.7rem 1.15rem;
-  background: var(--bg);
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  font-weight: 720;
-  text-transform: capitalize;
-  cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    color 180ms ease,
-    transform 220ms ease;
-}
-
-.theme-choice-button:hover,
-.theme-choice-button.is-active {
-  background: var(--ink);
-  color: var(--bg);
-  transform: scale(1.04);
 }
 
 .appearance-setting {
@@ -1384,130 +1358,9 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   line-height: 1.55;
 }
 
-.player-default-choice {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(8px, calc(0.7 * var(--vw)), 12px);
-}
-
-.player-default-button {
-  min-width: 0;
-  min-height: clamp(54px, calc(4.4 * var(--vw)), 68px);
-  display: grid;
-  align-content: center;
-  gap: 0.25rem;
-  padding: 0.72rem 0.9rem;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.player-default-button span {
-  overflow: hidden;
-  font-size: clamp(0.7rem, calc(0.8 * var(--vw)), 0.88rem);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.player-default-button small {
-  color: var(--ink-muted);
-  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.68rem);
-}
-
-.player-default-button:hover {
-  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
-  background: var(--surface-strong);
-  color: var(--ink);
-  box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
-  transform: scale(1.035);
-}
-
-.player-default-button.is-active {
-  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  color: var(--ink);
-  box-shadow: inset 4px 0 var(--brand);
-}
-
-.player-subtitle-language-choice {
-  padding-top: 0.25rem;
-}
-
 .player-default-device-note {
   padding-top: clamp(22px, calc(2.8 * var(--viewport-unit)), 36px);
   border-top: 1px solid var(--line);
-}
-
-.player-language-choice {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(8px, calc(0.7 * var(--vw)), 12px);
-}
-
-.player-language-button {
-  min-width: 0;
-  min-height: clamp(48px, calc(4 * var(--vw)), 62px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.72rem 1rem;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.player-language-button span {
-  overflow: hidden;
-  font-size: clamp(0.72rem, calc(0.82 * var(--vw)), 0.92rem);
-  font-weight: 680;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.player-language-button small {
-  color: var(--ink-muted);
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  font-weight: 720;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.player-language-button:hover {
-  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
-  background: var(--surface-strong);
-  color: var(--ink);
-  box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
-  transform: scale(1.035);
-}
-
-.player-language-button.is-active {
-  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  color: var(--ink);
-  box-shadow: inset 4px 0 var(--brand);
-}
-
-.player-language-button.is-active small {
-  color: var(--brand-ink);
 }
 
 .player-preference-status {
@@ -3899,11 +3752,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
     gap: 12px;
   }
 
-  .player-language-choice,
-  .player-default-choice {
-    grid-template-columns: 1fr;
-  }
-
   .app-logo > span:last-child{
     display: none;
   }
@@ -5120,39 +4968,18 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   transform: rotate(180deg);
 }
 
-.ui-multiselect-popup {
-  display: grid;
+.ui-multiselect-list {
+  --page-edge-fade-size: 28px;
+  display: block;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: var(--surface-strong);
-  overflow: hidden;
-}
-
-.ui-multiselect-search {
-  min-height: 44px;
-  width: 100%;
-  min-width: 0;
-  padding: 0.5rem 0.8rem;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.74rem);
-}
-
-.ui-multiselect-search::placeholder {
-  color: var(--ink-muted);
-}
-
-.ui-multiselect-list {
   max-height: min(260px, calc(34 * var(--viewport-unit)));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 0.3rem;
-  scroll-padding-block: 0.3rem;
+  scroll-padding-block: 28px;
 }
 
 .ui-multiselect-option {
@@ -5208,15 +5035,9 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   color: var(--ink-muted);
 }
 
-.ui-multiselect-empty {
-  padding: 0.9rem 0.6rem;
-  color: var(--ink-muted);
-  text-align: center;
-}
-
 .ui-multiselect-trigger:focus-visible,
 .ui-multiselect-token:focus-visible,
-.ui-multiselect-search:focus-visible {
+.ui-multiselect-list:focus-visible {
   outline: var(--page-focus-ring);
   outline-offset: var(--page-focus-ring-offset);
 }
@@ -6612,42 +6433,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-playback-settings-drawer {
   z-index: var(--z-drawer);
-}
-
-.tv-playback-settings-options {
-  grid-template-columns: 1fr;
-}
-
-.tv-playback-settings-options button {
-  justify-content: space-between;
-  text-align: left;
-  text-transform: none;
-}
-
-.tv-playback-settings-options button > span {
-  min-width: 0;
-  display: grid;
-}
-
-.tv-playback-settings-options button strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tv-playback-settings-options button small {
-  margin-top: 0.12rem;
-  color: currentColor;
-  opacity: 1;
-  font-size: 0.82em;
-}
-
-.tv-playback-settings-options button > i {
-  width: 1.25rem;
-  flex: 0 0 auto;
-  color: var(--brand-ink);
-  font-style: normal;
-  text-align: center;
 }
 
 .tv-playback-settings-status {
@@ -9527,21 +9312,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     gap: 0.4rem;
   }
 
-  .theme-choice {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .home-view-choice {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .theme-choice-button {
-    min-width: 0;
-    padding-inline: 0.5rem;
-  }
-
   .language-dropdown {
     width: 100%;
   }
@@ -9574,8 +9344,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     max-width: min(320px, calc(84 * var(--vw)));
   }
 
-  .player-language-choice,
-  .player-default-choice,
   .connection-form-row {
     grid-template-columns: 1fr;
   }
@@ -9974,9 +9742,15 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
  * sidebar split, so the padding it needs belongs back on the panel itself.
  */
 .tv-downloads-panel {
+  /* Room for a focused row's full glow (page-layout.css --card-shadow-focus: 48px to the left) inside the scroller's clip box.
+     The panel grows left by that room and the scroller takes it back as padding, so the rows keep the page gutter (padding,
+     never a negative margin). */
+  --list-glow-room: 48px;
+  --panel-pad: clamp(24px, calc(3 * var(--vw)), 58px);
   /* Home's column split, like every other library-style page (page-layout.css, --stage-rail-width). */
-  width: var(--stage-rail-width);
-  padding: clamp(24px, calc(3 * var(--vw)), 58px);
+  width: calc(var(--stage-rail-width) + var(--list-glow-room));
+  padding: var(--panel-pad);
+  padding-left: 0;
 }
 
 /* On a phone the Downloads panel and the state panels are the whole page (they keep Home's 62% column on larger
@@ -9989,12 +9763,16 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   .app-main .tv-downloads-panel {
     padding: var(--page-body-top) var(--mobile-page-gutter) calc(var(--mobile-nav-height) + 12px);
   }
+  .app-main .tv-downloads-content {
+    padding-left: 0;
+    scroll-padding-left: 0;
+  }
 }
 
 .tv-downloads-content {
   display: grid;
   gap: clamp(20px, calc(2.4 * var(--vw)), 36px);
-  padding: clamp(18px, calc(2 * var(--vw)), 32px) 0;
+  padding: clamp(18px, calc(2 * var(--vw)), 32px) 0 clamp(18px, calc(2 * var(--vw)), 32px) calc(var(--panel-pad, 0px) + var(--list-glow-room, 0px));
 }
 
 /* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel).
@@ -10632,40 +10410,6 @@ body[data-input-mode="remote"] :is(
   font-size: 0.9rem;
 }
 
-.filters-date-range {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.filters-date-range label {
-  display: grid;
-  gap: 0.25rem;
-  color: var(--ink-muted);
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
-  font-weight: 680;
-}
-
-.filters-date-range input[type="date"] {
-  min-height: clamp(40px, calc(3.2 * var(--vw)), 52px);
-  padding: 0 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
-  border-radius: 12px;
-  background: var(--surface-soft);
-  color: var(--ink);
-  color-scheme: light dark;
-  font: inherit;
-}
-
-.filters-date-clear {
-  justify-self: start;
-  padding: 0.5rem 0.9rem;
-  border-radius: 12px;
-  background: var(--surface-soft);
-  color: var(--ink);
-  font-weight: 680;
-  cursor: pointer;
-}
-
 @media (max-width: 760px) {
 
   /* Keep the drawer's close control clear of the floating avatar and bottom nav. */
@@ -11286,6 +11030,11 @@ body[data-input-mode="remote"] .circle-focus-host[data-remote-active] .circle-fo
   font-weight: 680;
   text-align: left;
   cursor: pointer;
+}
+
+.tv-filter-language-skeleton {
+  min-height: 48px;
+  border-radius: var(--radius-control, 12px);
 }
 
 .ui-select-trigger {

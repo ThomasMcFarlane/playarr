@@ -74,8 +74,31 @@ namespace Playarr.Xbox.Views
             ErrorText.Text = _viewModel.ErrorMessage ?? string.Empty;
             ErrorText.Visibility = hasError ? Visibility.Visible : Visibility.Collapsed;
 
+            var work = _viewModel.Work;
             TitleText.Text = _viewModel.Title;
-            GenresText.Text = _viewModel.GenresText;
+            LibraryText.Text = work?.Kind switch
+            {
+                WorkKind.Movie => "Movies",
+                WorkKind.Series => "Series",
+                WorkKind.Artist => "Music",
+                _ => string.Empty,
+            };
+            SubtitleText.Text = _viewModel.Title.ToUpperInvariant();
+            EyebrowText.Text = work != null && work.Genres.Count > 0 ? work.Genres[0].ToUpperInvariant() : string.Empty;
+            // Web meta row: kind, year, then genres, spaced (runtime and release date need fields this client lacks).
+            var meta = new System.Collections.Generic.List<string>();
+            if (work != null)
+            {
+                meta.Add(WorkLabels.KindLabel(work.Kind));
+                if (WorkLabels.YearRange(work) is { } years)
+                {
+                    meta.Add(years);
+                }
+
+                meta.AddRange(work.Genres);
+            }
+
+            MetaText.Text = string.Join("      ", meta);
             OverviewText.Text = _viewModel.Overview;
 
             var backdropUrl = _viewModel.BackdropImageUrl;
@@ -162,6 +185,8 @@ namespace Playarr.Xbox.Views
                 _viewModel.SelectEpisode(episode);
             }
         }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
 
         private void PlayButton_Click(object sender, RoutedEventArgs e)
         {

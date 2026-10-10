@@ -147,6 +147,12 @@ namespace Playarr.Core.Models
 
         [JsonProperty("availability")] public Availability Availability { get; set; }
 
+        /// <summary>ISO release date; the only source of a title's year (never <see cref="AddedAt"/>).</summary>
+        [JsonProperty("release_date")] public string? ReleaseDate { get; set; }
+
+        /// <summary>ISO date a series ended; set by the server only once the source reports it ended.</summary>
+        [JsonProperty("end_date")] public string? EndDate { get; set; }
+
         /// <summary>
         /// The best artwork of <paramref name="kind"/>, or <c>null</c>. A
         /// convenience for the tile and detail views, which both want "the
@@ -319,5 +325,70 @@ namespace Playarr.Core.Models
         [JsonProperty("pin_locked")] public bool PinLocked { get; set; }
 
         [JsonProperty("is_current")] public bool IsCurrent { get; set; }
+    }
+
+    /// <summary>One server-computed Home rail (<c>GET /api/v1/home/rails</c>); empty rails are omitted, titles localised.</summary>
+    public sealed class HomeRail
+    {
+        [JsonProperty("id")] public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("kind")] public string Kind { get; set; } = string.Empty;
+
+        [JsonProperty("title")] public string Title { get; set; } = string.Empty;
+
+        [JsonProperty("items")] public IList<Work> Items { get; set; } = new List<Work>();
+    }
+
+    public sealed class HomeRailsResponse
+    {
+        [JsonProperty("rails")] public IList<HomeRail> Rails { get; set; } = new List<HomeRail>();
+    }
+
+    /// <summary>Card captions, matching the web's <c>lib/workYear.ts</c>.</summary>
+    public static class WorkLabels
+    {
+        /// <summary>"2011", or "2011–2019" for a series that ended in a later year; null without a release year.</summary>
+        public static string? YearRange(Work work)
+        {
+            var start = YearOf(work.ReleaseDate);
+            if (start == null)
+            {
+                return null;
+            }
+
+            var end = YearOf(work.EndDate);
+            return end != null && end > start ? $"{start}\u2013{end}" : start.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>"Movie · 2019" or "Series · 2011–2019"; the bare kind label when no year is known.</summary>
+        public static string KindWithYear(Work work)
+        {
+            var label = KindLabel(work.Kind);
+            var years = YearRange(work);
+            return years == null ? label : label.Length == 0 ? years : $"{label} \u00b7 {years}";
+        }
+
+        /// <summary>Singular kind label ("Movie", "Series"); empty for kinds the web does not label.</summary>
+        public static string KindLabel(WorkKind kind) => kind switch
+        {
+            WorkKind.Movie => "Movie",
+            WorkKind.Series => "Series",
+            WorkKind.Artist => "Artist",
+            WorkKind.Author => "Author",
+            _ => string.Empty,
+        };
+
+        private static int? YearOf(string? value)
+        {
+            if (string.IsNullOrEmpty(value)
+                || !DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var date))
+            {
+                return null;
+            }
+
+            var year = date.UtcDateTime.Year;
+            return year > 0 ? year : (int?)null;
+        }
     }
 }

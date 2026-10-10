@@ -31,25 +31,26 @@ function entry(over: Partial<CalendarEntry>): CalendarEntry {
 
 describe("calendar filter URL round trip", () => {
   it("parses and writes every filter, preserving unrelated params", () => {
-    const params = new URLSearchParams("view=month&type=tv,movie&source=s2,s1&status=missing&from=2026-10-01&to=2026-10-31&monitored=1");
+    const params = new URLSearchParams("view=month&type=tv,movie&status=missing&monitored=1");
     const filters = parseCalendarFilters(params);
     expect([...filters.types]).toEqual(["tv", "movie"]);
-    expect(filters.from).toBe("2026-10-01");
     expect(filters.monitoredOnly).toBe(true);
-    expect(activeFilterCount(filters)).toBe(5);
+    expect(activeFilterCount(filters)).toBe(3);
     const out = writeCalendarFilters(params, filters);
     expect(out.get("view")).toBe("month");
     expect(out.get("type")).toBe("tv,movie");
-    expect(out.get("source")).toBe("s1,s2");
-    expect(out.get("to")).toBe("2026-10-31");
   });
 
-  it("ignores junk, swaps inverted ranges and drops cleared filters", () => {
-    const filters = parseCalendarFilters(new URLSearchParams("type=tv,bogus&from=2026-11-05&to=2026-11-01&status=nope"));
+  it("ignores and drops the removed source and date range params", () => {
+    const params = new URLSearchParams("type=tv&source=s1&from=2026-10-01&to=2026-10-31");
+    expect(parseCalendarFilters(params)).toEqual({ ...EMPTY_CALENDAR_FILTERS, types: new Set(["tv"]) });
+    expect(writeCalendarFilters(params, parseCalendarFilters(params)).toString()).toBe("type=tv");
+  });
+
+  it("ignores junk and drops cleared filters", () => {
+    const filters = parseCalendarFilters(new URLSearchParams("type=tv,bogus&status=nope"));
     expect([...filters.types]).toEqual(["tv"]);
     expect(filters.statuses.size).toBe(0);
-    expect([filters.from, filters.to]).toEqual(["2026-11-01", "2026-11-05"]);
-    expect(parseCalendarFilters(new URLSearchParams("from=2026-13-40")).from).toBeNull();
     const cleared = writeCalendarFilters(new URLSearchParams("type=tv&monitored=1"), EMPTY_CALENDAR_FILTERS);
     expect(cleared.toString()).toBe("");
   });
@@ -65,14 +66,12 @@ describe("applyCalendarFilters", () => {
   ];
   const ids = (filters: string) => applyCalendarFilters(entries, parseCalendarFilters(new URLSearchParams(filters)), today).map((e) => e.id);
 
-  it("filters by type, source, status, monitored and range", () => {
+  it("filters by type, status and monitored", () => {
     expect(ids("type=movie")).toEqual(["movie"]);
-    expect(ids("source=s2")).toEqual(["movie"]);
     expect(ids("status=missing")).toEqual(["past-missing"]);
     expect(ids("status=upcoming")).toEqual(["future", "movie"]);
     expect(ids("status=downloaded")).toEqual(["past-file"]);
     expect(ids("monitored=1")).toEqual(["past-missing", "past-file", "movie"]);
-    expect(ids("from=2026-10-02&to=2026-10-09&type=tv")).toEqual(["past-file", "future"]);
     expect(ids("")).toHaveLength(4);
   });
 });
@@ -104,7 +103,7 @@ describe("series episode grouping", () => {
 });
 
 describe("calendar URL state", () => {
-  const url = "view=agenda&date=2026-10-04&type=tv,movie&status=upcoming&selected=series:w1:2026-10-10:12:00&panel=link&from=2026-10-01";
+  const url = "view=agenda&date=2026-10-04&type=tv,movie&status=upcoming&selected=series:w1:2026-10-10:12:00&panel=link";
 
   it("round-trips view, date, selection, panel and filters through one query string", () => {
     const params = new URLSearchParams(url);

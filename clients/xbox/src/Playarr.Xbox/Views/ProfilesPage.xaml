@@ -16,17 +16,37 @@
         runtime-loaded list, not static XAML.
     -->
     <Grid>
+        <!-- Web TV profile picker: logo top left, "PROFILES" eyebrow, large title, 270 px avatar circles. -->
+        <Image
+            Source="ms-appx:///Assets/Square44x44Logo.png"
+            Width="40"
+            Height="40"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="63,60,0,0" />
+
         <StackPanel
             x:Name="ContentPanel"
-            MaxWidth="1100"
+            MaxWidth="1600"
             HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="32">
+            VerticalAlignment="Top"
+            Margin="0,158,0,0"
+            Spacing="0">
 
             <TextBlock
-                Text="Who's watching?"
-                Style="{StaticResource TitleTextBlockStyle}"
+                Text="PROFILES"
+                FontSize="11"
+                FontWeight="Bold"
+                CharacterSpacing="120"
+                Foreground="{StaticResource PlayarrBrandInk}"
                 HorizontalAlignment="Center" />
+            <TextBlock
+                Text="Who&#x2019;s watching?"
+                FontSize="80"
+                FontWeight="SemiBold"
+                CharacterSpacing="-40"
+                HorizontalAlignment="Center"
+                Margin="0,0,0,90" />
 
             <ProgressRing
                 x:Name="LoadingRing"
@@ -60,7 +80,8 @@
                 <StackPanel
                     x:Name="ProfilesPanel"
                     Orientation="Horizontal"
-                    Spacing="24" />
+                    HorizontalAlignment="Center"
+                    Spacing="16" />
             </ScrollViewer>
         </StackPanel>
     </Grid>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LoginResponse, RefreshResponse } from "@playarr-tv/api-client";
 import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@playarr-tv/domain";
 import {
+  clearSignedInDeviceState,
   createManagedApiClient,
   profileDisplayNameFor,
   resolveInitialApiBaseUrl,
@@ -171,6 +172,24 @@ describe("resolveInitialApiBaseUrl -- group-aware (§7.3)", () => {
     stubWindowLocation("https://media.example.com/login");
     setStoredApiBaseUrl("http://192.168.1.20:8484");
     rememberGroup({ servers: [] });
+    expect(resolveInitialApiBaseUrl()).toBe("http://192.168.1.20:8484");
+  });
+});
+
+describe("sign-out forgets the remembered server group", () => {
+  it("clears KnownServerGroup so the next start no longer prefers its lastGoodUrl", () => {
+    stubWindowLocation("https://media.example.com/login");
+    vi.stubGlobal("window", { ...window, localStorage });
+    setStoredApiBaseUrl("http://192.168.1.20:8484");
+    rememberGroup({
+      servers: [{ url: "https://home.example.com" }, { url: "https://east.example.com" }],
+      lastGoodUrl: "https://east.example.com",
+    });
+    expect(resolveInitialApiBaseUrl()).toBe("https://east.example.com");
+
+    clearSignedInDeviceState();
+
+    expect(readKnownServers()).toBeUndefined();
     expect(resolveInitialApiBaseUrl()).toBe("http://192.168.1.20:8484");
   });
 });

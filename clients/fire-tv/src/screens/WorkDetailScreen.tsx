@@ -15,6 +15,7 @@ import {useApiClient} from '../api/ApiClientProvider';
 import {episodeArtworkUrl, mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
 import {useLanguage} from '../i18n/LanguageProvider';
 import {ROUTES, type RouteName} from '../navigation/routes';
+import {runtimeLabel} from '../lib/runtimeLabel';
 import {snapshotFromWork, useWatchlistToggle} from '../lib/watchlist';
 import {Icon} from '../shell/icons';
 import {mix} from '../theme/color';
@@ -233,16 +234,8 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
           ? t('pages.workDetail.datePremiered')
           : t('pages.workDetail.dateReleased')
         : t('pages.workDetail.dateAdded');
-  let runtimeText: string;
-  if (runtimeMs && runtimeMs > 0) {
-    const minutes = Math.max(1, Math.round(runtimeMs / 60_000));
-    const hours = Math.floor(minutes / 60);
-    const rest = minutes % 60;
-    if (hours <= 0) runtimeText = t('pages.workDetail.runtimeMinutes', {minutes: rest});
-    else runtimeText = rest > 0 ? t('pages.workDetail.runtimeHoursMinutes', {hours, minutes: rest}) : t('pages.workDetail.runtimeHours', {hours});
-  } else {
-    runtimeText = playMediaFileId ? t('pages.workDetail.loadingRuntime') : t('pages.workDetail.runtimeUnavailable');
-  }
+  const runtimeText =
+    runtimeLabel(runtimeMs, t) ?? (playMediaFileId ? t('pages.workDetail.loadingRuntime') : t('pages.workDetail.runtimeUnavailable'));
   const year = releaseYear(work.release_date);
   const dateText = dateValue ? formatDetailDate(dateValue, language) : null;
   const meta: Array<{key: string; text: string; lead?: boolean}> = [

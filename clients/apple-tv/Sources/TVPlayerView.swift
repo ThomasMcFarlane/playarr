@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 
 struct TVPlayerView: View {
+    @Environment(\.setShellChromeHidden) private var setShellChromeHidden
     let mediaFileID: UUID
     let title: String
     let apiClient: PlayarrAPIClient
@@ -40,6 +41,14 @@ struct TVPlayerView: View {
     }
 
     var body: some View {
+        // The player is full screen like the web's player page: the shell hides its nav and clock.
+        screen
+            .onAppear { setShellChromeHidden(true) }
+            .onDisappear { setShellChromeHidden(false) }
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         if let parity {
             // Parity route: the fixture clips are Matroska and the runner cannot transcode, so the video
             // layer is the server's frame of the clip at the paused position, scaled to the stage.

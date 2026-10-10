@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
 using Windows.UI.Text;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -26,16 +29,25 @@ namespace Playarr.Xbox.Views
     public sealed partial class LibraryPage : Page
     {
         private readonly LibraryViewModel _viewModel;
+        private readonly Dictionary<Guid, Work> _worksById = new Dictionary<Guid, Work>();
 
         public LibraryPage()
         {
             InitializeComponent();
             _viewModel = new LibraryViewModel(App.Environment);
+            WorksGridView.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
+            WorksGridView.GotFocus += WorksGridView_GotFocus;
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+            if (e.Parameter is WorkKind kind && kind != _viewModel.SelectedKind)
+            {
+                // Opened from the nav rail's Series, Movies or Music item.
+                _viewModel.SelectKind(kind);
+            }
+
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
             Render();
         }
@@ -66,65 +78,59 @@ namespace Playarr.Xbox.Views
 
             WorksGridView.Visibility = isLoading || hasError ? Visibility.Collapsed : Visibility.Visible;
 
-            RenderKindTabs();
-            RenderSortButtons();
+            var kind = _viewModel.SelectedKind;
+            TitleText.Text = kind is { } k ? DisplayNameFor(k) : "Library";
+            CountText.Text = _viewModel.Total is { } total
+                ? $"{total.ToString("N0", CultureInfo.CurrentCulture)} TITLES"
+                : string.Empty;
 
             WorksGridView.Items.Clear();
+            _worksById.Clear();
             foreach (var work in _viewModel.Works)
             {
-                var posterUrl = work.Image(ImageKind.Poster)?.Url;
-                var posterUri = string.IsNullOrEmpty(posterUrl)
-                    ? null
-                    : App.Environment.ApiClient.ResolveUrl(posterUrl);
-                WorksGridView.Items.Add(CatalogTileFactory.CreateTile(work, posterUri));
+                _worksById[work.Id] = work;
+                WorksGridView.Items.Add(CatalogTileFactory.CreateLandscapeCard(work, caption: false));
+            }
+
+            ShowFocused(_viewModel.Works.Count > 0 ? _viewModel.Works[0] : null);
+        }
+
+        private void WorksGridView_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (e.OriginalSource is GridViewItem { Content: FrameworkElement { Tag: Guid id } }
+                && _worksById.TryGetValue(id, out var work))
+            {
+                ShowFocused(work);
             }
         }
 
-        private void RenderKindTabs()
+        /// <summary>The web library's left column: genre eyebrow, title, year and genres, synopsis.</summary>
+        private void ShowFocused(Work? work)
         {
-            KindTabsPanel.Children.Clear();
-            KindTabsPanel.Children.Add(BuildKindTab("All", null));
-
-            foreach (var kind in _viewModel.Kinds)
+            FocusPanel.Visibility = work == null ? Visibility.Collapsed : Visibility.Visible;
+            if (work == null)
             {
-                if (kind == WorkKind.Unknown)
-                {
-                    continue;
-                }
-
-                KindTabsPanel.Children.Add(BuildKindTab(DisplayNameFor(kind), kind));
+                return;
             }
-        }
 
-        private Button BuildKindTab(string label, WorkKind? kind)
-        {
-            var button = new Button
+            FocusEyebrow.Text = work.Genres.Count > 0 ? work.Genres[0].ToUpperInvariant() : string.Empty;
+            FocusTitle.Text = work.Title;
+            var meta = new List<string>();
+            if (WorkLabels.YearRange(work) is { } years)
             {
-                Content = label,
-                Tag = kind,
-                FontWeight = kind == _viewModel.SelectedKind ? FontWeights.Bold : FontWeights.Normal,
-            };
-            button.Click += KindTab_Click;
-            return button;
+                meta.Add(years);
+            }
+
+            if (work.Genres.Count > 0)
+            {
+                meta.Add(string.Join(" \u00b7 ", work.Genres.Take(2)));
+            }
+
+            FocusMeta.Text = string.Join("   ", meta);
+            FocusOverview.Text = work.Overview ?? string.Empty;
         }
 
-        private void KindTab_Click(object sender, RoutedEventArgs e)
-        {
-            var kind = (WorkKind?)((Button)sender).Tag;
-            _viewModel.SelectKind(kind);
-        }
-
-        private void RenderSortButtons()
-        {
-            SortRecentButton.FontWeight =
-                _viewModel.SelectedSort == LibraryViewModel.SortRecentlyAdded ? FontWeights.Bold : FontWeights.Normal;
-            SortTitleButton.FontWeight = _viewModel.SelectedSort == null ? FontWeights.Bold : FontWeights.Normal;
-        }
-
-        private void SortRecentButton_Click(object sender, RoutedEventArgs e) =>
-            _viewModel.SelectSort(LibraryViewModel.SortRecentlyAdded);
-
-        private void SortTitleButton_Click(object sender, RoutedEventArgs e) => _viewModel.SelectSort(null);
+        private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
 
         private void WorksGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
@@ -135,9 +141,6 @@ namespace Playarr.Xbox.Views
         }
 
         private void RetryButton_Click(object sender, RoutedEventArgs e) => _viewModel.Retry();
-
-        private void HomeNavButton_Click(object sender, RoutedEventArgs e) =>
-            App.Navigation.Navigate(typeof(HomePage));
 
         private static string DisplayNameFor(WorkKind kind) => kind switch
         {

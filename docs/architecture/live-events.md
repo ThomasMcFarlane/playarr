@@ -57,6 +57,7 @@ read API.
 | `download` | `download` / ticket id | `created`, `status`, `deleted` | the account | download list and detail |
 | `household` | `profile` / profile id | `policy`, `status`, `approval` | the profile and its guardians | household status, approvals, schedule gate |
 | `account` | `profile` / user id | `policy`, `profile`, `removed` | the account | capabilities, profile, library access |
+| `account` | `server_group` / `self` | `members` (a member joined, left or changed its name or client-reachable address) | every unlocked user | Settings → Server group list only |
 | `admin` | `source_instance` / instance id | `created`, `removed`, `sync_started`, `sync_finished` | admins | source lists and sync status |
 | `admin` | `folder_root` / root id | `scan` (a scan started or finished) | admins | the admin folders page |
 

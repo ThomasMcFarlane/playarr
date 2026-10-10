@@ -227,6 +227,8 @@ struct Index {
       .alignItems(HorizontalAlign.Center)
       .backgroundColor(toResourceColor(activeColors().bg))
     }
+    // Stack, never Auto: at TV and tablet widths Auto splits off an empty 240 vp nav bar beside every page.
+    .mode(NavigationMode.Stack)
     .hideTitleBar(true)
   }
 }

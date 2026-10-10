@@ -47,10 +47,10 @@ public final class CalendarViewModel {
         self.zone = zone
         self.firstWeekday = firstWeekday
         self.nowProvider = now
-        self.anchor = CalendarDays.today(now: now())
+        self.anchor = CalendarDays.today(now: now(), zone: zone)
     }
 
-    public var today: String { CalendarDays.today(now: nowProvider()) }
+    public var today: String { CalendarDays.today(now: nowProvider(), zone: zone) }
     public var window: CalendarWindow { calendarWindow(mode: mode, anchor: anchor, firstWeekday: firstWeekday) }
     public var sources: [CalendarSourceStatus] { response?.sources ?? [] }
     public var unhealthySources: [CalendarSourceStatus] { sources.filter { !$0.isOK } }
@@ -132,6 +132,14 @@ public final class CalendarViewModel {
         anchor = calendarAnchor(mode: mode, today)
         selectedKey = nil
         selectedDay = nil
+        await load()
+    }
+
+    /// Jumps to a day (web: a month cell opens the agenda there).
+    public func goTo(_ day: String) async {
+        anchor = calendarAnchor(mode: mode, day)
+        selectedKey = nil
+        selectedDay = day
         await load()
     }
 

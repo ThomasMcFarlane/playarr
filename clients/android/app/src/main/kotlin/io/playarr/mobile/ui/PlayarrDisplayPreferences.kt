@@ -33,6 +33,9 @@ internal data class PlayarrDisplayPreferences(
     val setPlayerQuality: (String) -> Unit,
     val setSubtitleMode: (PlayarrSubtitleDefault) -> Unit,
     val setSubtitleLanguage: (String) -> Unit,
+    /** Web Settings > Appearance > Artwork size: one size for every poster and thumbnail (Home, Library, Search). */
+    val artworkSize: LibraryArtworkSize = LibraryArtworkSize.Medium,
+    val setArtworkSize: (LibraryArtworkSize) -> Unit = {},
 )
 
 internal val LocalPlayarrDisplayPreferences = compositionLocalOf<PlayarrDisplayPreferences> {
@@ -60,6 +63,9 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
     var playerQuality by remember { mutableStateOf(parsePlayarrQualityDefault(store.getString("player_quality", null))) }
     var subtitleMode by remember { mutableStateOf(parsePlayarrSubtitleDefault(store.getString("subtitle_mode", null))) }
     var subtitleLanguage by remember { mutableStateOf(parsePlayarrSubtitleLanguage(store.getString("subtitle_language", null))) }
+    var artworkSize by remember {
+        mutableStateOf(LibraryArtworkSize.entries.firstOrNull { it.name == store.getString("artwork_size", null) } ?: LibraryArtworkSize.Medium)
+    }
     val darkTheme = when (theme) {
         PlayarrThemePreference.System -> isSystemInDarkTheme()
         PlayarrThemePreference.Light -> false
@@ -98,6 +104,11 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
         setSubtitleLanguage = {
             subtitleLanguage = parsePlayarrSubtitleLanguage(it)
             store.edit { putString("subtitle_language", subtitleLanguage) }
+        },
+        artworkSize = artworkSize,
+        setArtworkSize = {
+            artworkSize = it
+            store.edit { putString("artwork_size", it.name) }
         },
     )
     return RememberedPlayarrDisplayPreferences(value, darkTheme)

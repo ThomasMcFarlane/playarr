@@ -5,9 +5,13 @@
 //   2. Audio and subtitle languages are ONE multi-select each (no toggle pills): opens by keyboard, filters by typing,
 //      toggles two languages with Enter, closes on Escape with focus back on the field, same ?audio= query param.
 //   3. The View control is one row of equal segments, the same height as the other panel choice buttons.
+//   4. While the language lists load (slow on a big library) the panel shows a skeleton per list, never "No languages
+//      indexed yet"; the lists replace the skeletons when they arrive (row 1.9977).
 // 1920x1080 and 1280x720.   node scripts/filters-panel-e2e.mjs [--no-build] [--dist dir] [--shots dir]
 import { mkdirSync } from "node:fs";
-import { boot, opt } from "./e2e-common.mjs";
+import { boot, opt, root } from "./e2e-common.mjs";
+import { join } from "node:path";
+import { startServer } from "./nav-perf/server.mjs";
 
 const { check, open, finish } = await boot({ movies: 24, series: 12 });
 const shots = opt("shots", "");
@@ -72,8 +76,27 @@ async function walkPanel(page, tag) {
 
 }
 
+const slow = await startServer({ distDir: opt("dist", join(root, "dist")), movies: 8, series: 2, languagesDelayMs: 2500 });
 for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   const tag = `${width}x${height}`;
+  {
+    const { context: slowContext, page: slowPage } = await open("/movies?panel=filters", { width, height, server: slow });
+    await slowPage.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await slowPage.waitForTimeout(600);
+    const loading = await slowPage.evaluate(() => ({
+      skeletons: document.querySelectorAll("[data-language-filter] .tv-filter-language-skeleton[aria-busy='true']").length,
+      claimsEmpty: /No languages indexed yet/.test(document.querySelector(".tv-filter-drawer")?.textContent ?? ""),
+    }));
+    check(`${tag}: language lists show a skeleton each while loading`, loading.skeletons === 2, JSON.stringify(loading));
+    check(`${tag}: no "No languages indexed yet" while the lists load`, !loading.claimsEmpty);
+    await slowPage.waitForSelector("[data-language-filter] .ui-multiselect", { timeout: 8000 });
+    const loaded = await slowPage.evaluate(() => ({
+      skeletons: document.querySelectorAll(".tv-filter-language-skeleton").length,
+      fields: document.querySelectorAll("[data-language-filter] .ui-multiselect").length,
+    }));
+    check(`${tag}: the lists replace the skeletons`, loaded.skeletons === 0 && loaded.fields === 2, JSON.stringify(loaded));
+    await slowContext.close();
+  }
   const { context, page, errors } = await open("/movies?panel=filters", { width, height });
   try {
     await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
@@ -104,25 +127,30 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
         const root = document.querySelector(`[data-language-filter="${w}"]`);
         const lb = root.querySelector('[role="listbox"]');
         const opts = [...lb.querySelectorAll('[role="option"]')];
-        const input = root.querySelector('[role="combobox"]');
         return {
           multi: lb.getAttribute("aria-multiselectable"),
           opts: opts.length,
           small: opts.some((o) => o.getBoundingClientRect().height < 43.5),
-          inputFocused: document.activeElement === input,
+          listFocused: document.activeElement === lb,
+          inputs: document.querySelectorAll('.tv-filter-drawer input[type="text"], .tv-filter-drawer input[type="search"], .tv-filter-drawer [role="combobox"]').length,
           status: root.querySelector('[role="status"]').textContent,
         };
       }, which);
       check(`${tag} ${which}: listbox is aria-multiselectable with options`, aria.multi === "true" && aria.opts >= 10, JSON.stringify(aria));
       check(`${tag} ${which}: options at least 44px tall`, !aria.small);
-      check(`${tag} ${which}: search box focused on open and count announced`, aria.inputFocused && /\d/.test(aria.status), JSON.stringify(aria));
-      await page.keyboard.type("an");
-      const filtered = await page.locator(`[data-language-filter="${which}"] [role="option"]`).allTextContents();
-      check(`${tag} ${which}: typing filters the list`, filtered.length > 0 && filtered.length < aria.opts && filtered.every((t) => /an/i.test(t)), JSON.stringify(filtered));
+      check(`${tag} ${which}: the list itself is focused and the count announced`, aria.listFocused && /\d/.test(aria.status), JSON.stringify(aria));
+      check(`${tag} ${which}: no text input or combobox in the panel`, aria.inputs === 0, JSON.stringify(aria));
+      await page.keyboard.press("t"); // letter jump on a physical keyboard, no visible input
+      const jumped = await page.evaluate(() => {
+        const lb = document.querySelector('[role="listbox"]');
+        return document.getElementById(lb.getAttribute("aria-activedescendant"))?.textContent ?? "";
+      });
+      check(`${tag} ${which}: typing a letter jumps to a matching language`, /^Thai/i.test(jumped), jumped);
+      await page.keyboard.press("Home");
       if (which === "audio" && shots) await page.screenshot({ path: `${shots}/multiselect-${tag}.png` });
       await page.keyboard.press("Enter");
       await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("Enter");
+      await page.keyboard.press("Space");
       await page.waitForTimeout(500);
       const param = which;
       const url = new URL(page.url());
@@ -164,15 +192,14 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
       [...document.querySelectorAll(".tv-filter-drawer .tv-filter-choice-grid:not(.tv-segmented) button")].map((b) => b.textContent.trim())
     );
     check(`${tag}: no filter chips or pills (only the Clear action may use the grid)`, pills.every((t) => /clear/i.test(t)), JSON.stringify(pills));
-    for (const [title, type, param, expect] of [["Type", "mus", "type", "music"], ["Status", "air", "status", "aired"]]) {
+    for (const [title, downs, param, expect] of [["Type", 2, "type", "music"], ["Status", 0, "status", "aired"]]) {
       const section = page.locator(`.tv-filter-drawer .drawer-body section:has(> h3:text-is("${title}"))`);
       check(`${tag} ${title}: is a multi-select`, (await section.locator(".ui-multiselect").count()) === 1);
       await section.locator(".ui-multiselect-trigger").focus();
       await page.keyboard.press("Enter");
       await page.waitForSelector(`.tv-filter-drawer [role="listbox"]`);
-      await page.keyboard.type(type);
-      const shown = await section.locator('[role="option"]').allTextContents();
-      check(`${tag} ${title}: typing filters`, shown.length === 1, JSON.stringify(shown));
+      check(`${tag} ${title}: no text input in the list`, (await page.locator('.tv-filter-drawer input[type="text"], .tv-filter-drawer [role="combobox"]').count()) === 0);
+      for (let i = 0; i < downs; i++) await page.keyboard.press("ArrowDown");
       await page.keyboard.press("Enter");
       await page.waitForTimeout(400);
       check(`${tag} ${title}: toggling sets ?${param}=${expect}`, new URL(page.url()).searchParams.get(param) === expect, page.url());
@@ -181,6 +208,8 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
       const state = await page.evaluate(() => ({ drawer: !!document.querySelector(".tv-filter-drawer"), onField: document.activeElement?.classList.contains("ui-multiselect-trigger") }));
       check(`${tag} ${title}: Escape closes the list only and refocuses the field`, state.drawer && state.onField, JSON.stringify(state));
     }
+    const titles = await page.locator(".tv-filter-drawer .drawer-body section > h3").allTextContents();
+    check(`${tag}: no Source or date range section`, !titles.some((x) => /source|range|from|to$/i.test(x)) && (await page.locator('.tv-filter-drawer input[type="date"]').count()) === 0, JSON.stringify(titles));
     const sw = page.locator('.tv-filter-drawer input[role="switch"]');
     check(`${tag}: Monitored only is one switch`, (await sw.count()) === 1);
     check(`${tag}: switch target is at least 44px`, await sw.evaluate((el) => el.offsetHeight >= 44 && el.offsetWidth >= 44));
@@ -193,6 +222,32 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     check(`${tag}: switch off clears ?monitored`, new URL(page.url()).searchParams.get("monitored") === null && !(await sw.isChecked()), page.url());
     check(`${tag}: no page errors`, errors.length === 0, errors.join("; "));
     if (shots) await page.screenshot({ path: `${shots}/calendar-filters-${width}x${height}.png` });
+  } finally {
+    await context.close();
+  }
+}
+// Search Filters: only Type remains (no duplicate Library section); an old ?library= is dropped.
+{
+  const { context, page } = await open("/search?q=a&panel=filters&library=v1", { width: 1280, height: 720 });
+  try {
+    await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await page.waitForTimeout(700);
+    const titles = await page.locator(".tv-filter-drawer .drawer-body section > h3").allTextContents();
+    check("search filters: only the Type section remains (no Library)", titles.length === 1 && /type/i.test(titles[0]), JSON.stringify(titles));
+    check("search filters: old ?library= is dropped from the URL", !new URL(page.url()).searchParams.has("library"), page.url());
+  } finally {
+    await context.close();
+  }
+}
+// Old links with the removed Source and date range filters keep working: dropped from the URL, the range start becomes the period.
+{
+  const { context, page } = await open("/calendar?panel=filters&view=month&source=s1&from=2026-10-01&to=2026-10-31", { width: 1280, height: 720 });
+  try {
+    await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await page.waitForTimeout(700);
+    const q = new URL(page.url()).searchParams;
+    check("calendar legacy link: source, from and to are dropped from the URL", !q.has("source") && !q.has("from") && !q.has("to"), page.url());
+    check("calendar legacy link: the range start becomes the shown date", q.get("date") === "2026-10-01" && q.get("view") === "month", page.url());
   } finally {
     await context.close();
   }

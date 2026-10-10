@@ -1517,7 +1517,7 @@ export interface paths {
         /**
          * A work's cast and crew, in the source's own billing/department order
          *     -- empty (not 404) for a work with no credits, which is the normal
-         *     case for every non-Radarr-sourced work (see this module's doc
+         *     case for a music, book or not-yet-synced work (see this module's doc
          *     comment).
          */
         get: operations["work_credits_handler"];
@@ -2111,6 +2111,26 @@ export interface paths {
         };
         /** The live OpenAPI 3.x spec for this server, as JSON. */
         get: operations["openapi_json_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer-groups/self/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read-only list of the server group's members for any signed-in user.
+         *     Group membership is admin-configured; end users cannot change it.
+         */
+        get: operations["server_group_members_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6941,6 +6961,28 @@ export interface components {
             name: string;
             public_key?: string | null;
             status?: null | components["schemas"]["PeerNodeStatus"];
+        };
+        /**
+         * @description One member of the signed-in user's server group, as an end user may see
+         *     it: a display name and the one address clients should reach it at.
+         *     Nothing else (no ids, keys, sync state or other addresses).
+         */
+        ServerGroupMember: {
+            /** @description True for the node that answered this request. */
+            is_self: boolean;
+            name: string;
+            /** @description The member's first-priority client-reachable address. */
+            url: string;
+        };
+        /** @description The server group the signed-in user's server belongs to. */
+        ServerGroupMembers: {
+            /** @description `None` only for a standalone deployment. */
+            group_name?: string | null;
+            /**
+             * @description Active members that have at least one client-reachable address.
+             *     Empty for a standalone deployment.
+             */
+            members: components["schemas"]["ServerGroupMember"][];
         };
         /**
          * @description Historical playback-session fields plus the same best-effort linked
@@ -15026,6 +15068,33 @@ export interface operations {
             };
             /** @description Caller is authenticated but not an admin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    server_group_members_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members of this server's group, as visible to a signed-in user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerGroupMembers"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

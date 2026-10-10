@@ -1,0 +1,1 @@
+- Fire TV: LEFT from Home reaches the nav rail on the first try, and a late On Deck answer no longer leaves Home with nothing focused (18.462).
