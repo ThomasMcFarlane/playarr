@@ -1272,6 +1272,10 @@ struct TVLibraryKindView: View {
     @State private var items: [Work] = []
     /// Title counts of the listed playlists (the preview's "5 titles").
     @State private var playlistCounts: [UUID: Int] = [:]
+    /// Web library Filters drawer: sort (`title` / `date_added`) and order (`asc` / `desc`).
+    @State private var filtersOpen = false
+    @State private var sort = "title"
+    @State private var order = "asc"
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1334,16 +1338,27 @@ struct TVLibraryKindView: View {
                     .padding(.top, 277.2 - (25.6 - 9.2) / 2)
                     .zIndex(20)
 
-                filterLauncher
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
-                    .padding(.trailing, TVShellActionColumn.edge)
-                    .padding(.top, TVShellActionColumn.top)
-                    .zIndex(21)
+                if playlistID == nil, !listsPlaylists {
+                    TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { filtersOpen = true }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
+                        .padding(.trailing, TVShellActionColumn.edge)
+                        .padding(.top, TVShellActionColumn.top)
+                        .zIndex(21)
+                }
+
+                if filtersOpen {
+                    TVDrawer(kicker: "Library controls", title: "Filters", onClose: { filtersOpen = false }) {
+                        TVChoiceSection(title: "Sort by", options: [("title", "Title"), ("date_added", "Date added")], selection: $sort)
+                        TVChoiceSection(title: "Order", options: [("asc", sort == "title" ? "A-Z" : "Oldest"),
+                                                                  ("desc", sort == "title" ? "Z-A" : "Newest")], selection: $order)
+                    }
+                    .zIndex(30)
+                }
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
+        .task(id: "\(workKind?.rawValue ?? "all")-\(sort)-\(order)-\(environment.serverURL.absoluteString)") {
             await loadItems()
         }
     }
@@ -1633,11 +1648,6 @@ struct TVLibraryKindView: View {
         }
     }
 
-    /// Web `.page-filters-button`: the 62 x 72 action tile at the top right of the header row.
-    private var filterLauncher: some View {
-        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
-    }
-
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
         if TVParityLaunch.requestedScreen == nil {
@@ -1728,13 +1738,13 @@ struct TVLibraryKindView: View {
         }
         do {
             // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
-            let page = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 48, offset: 0)
+            let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 48, offset: 0)
             items = page.items
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
             while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
-                let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
+                let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
                 items += next.items
             }

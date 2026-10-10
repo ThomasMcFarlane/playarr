@@ -135,6 +135,14 @@ public final class CalendarViewModel {
         await load()
     }
 
+    /// Jumps to a day (web: a month cell opens the agenda there).
+    public func goTo(_ day: String) async {
+        anchor = calendarAnchor(mode: mode, day)
+        selectedKey = nil
+        selectedDay = day
+        await load()
+    }
+
     public func select(_ item: CalendarItem?) {
         selectedKey = item?.id
     }
