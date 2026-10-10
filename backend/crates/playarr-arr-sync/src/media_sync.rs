@@ -222,6 +222,10 @@ impl From<Option<i64>> for Bind {
     }
 }
 
+/// Consecutive 4xx answers from the series cast service after which lookups
+/// stop until restart (the request itself is being refused, not one series).
+const SERIES_CAST_REJECT_LIMIT: u32 = 5;
+
 pub struct MediaSync {
     pool: DbPool,
     media_file_repo: std::sync::Arc<dyn MediaFileRepo>,
@@ -242,6 +246,14 @@ pub struct MediaSync {
     /// the service has no cast for (or that failed) is not asked again on
     /// every reconciliation pass. A restart tries each once more.
     series_cast_tried: std::sync::Mutex<std::collections::HashSet<Uuid>>,
+    /// Lookup outcomes since the last [`Self::take_series_cast_summary`].
+    series_cast_ok: std::sync::atomic::AtomicU32,
+    series_cast_failed: std::sync::atomic::AtomicU32,
+    /// Consecutive 4xx answers (other than 404) with no success between.
+    series_cast_rejected_run: std::sync::atomic::AtomicU32,
+    /// Set after [`SERIES_CAST_REJECT_LIMIT`] consecutive rejections: the
+    /// service is refusing every request, so lookups stop until a restart.
+    series_cast_stopped: std::sync::atomic::AtomicBool,
     /// Live-event publisher (task 278). `None` by default, same opt-in builder
     /// shape as `credit_repo`. Season and episode rows are written with raw SQL
     /// (no event-decorated repository wraps them), so this announces the
@@ -261,6 +273,10 @@ impl MediaSync {
             language_repo: None,
             series_cast: None,
             series_cast_tried: Default::default(),
+            series_cast_ok: Default::default(),
+            series_cast_failed: Default::default(),
+            series_cast_rejected_run: Default::default(),
+            series_cast_stopped: Default::default(),
             live_events: None,
             write_queue: None,
         }
@@ -370,12 +386,27 @@ impl MediaSync {
         self
     }
 
+    /// Series cast lookups since the last call: `(succeeded, failed)`.
+    pub fn take_series_cast_summary(&self) -> (u32, u32) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            self.series_cast_ok.swap(0, Relaxed),
+            self.series_cast_failed.swap(0, Relaxed),
+        )
+    }
+
     /// Whether `work_id` is a series with no credits yet that this process
     /// has not already looked up. Cheap: local DB reads only.
     pub async fn needs_series_cast(&self, work_id: Uuid) -> bool {
         let (Some(_), Some(credit_repo)) = (&self.series_cast, &self.credit_repo) else {
             return false;
         };
+        if self
+            .series_cast_stopped
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return false;
+        }
         if self
             .series_cast_tried
             .lock()
@@ -416,7 +447,35 @@ impl MediaSync {
             return Ok(());
         };
 
-        let actors = client.list_cast(tvdb_id).await?;
+        let actors = match client.list_cast(tvdb_id).await {
+            Ok(actors) => {
+                use std::sync::atomic::Ordering::Relaxed;
+                self.series_cast_ok.fetch_add(1, Relaxed);
+                self.series_cast_rejected_run.store(0, Relaxed);
+                actors
+            }
+            Err(error) => {
+                use std::sync::atomic::Ordering::Relaxed;
+                self.series_cast_failed.fetch_add(1, Relaxed);
+                let rejected = matches!(
+                    &error,
+                    ArrClientError::UnexpectedStatus { status, .. }
+                        if status.is_client_error() && status.as_u16() != 404
+                );
+                if rejected
+                    && self.series_cast_rejected_run.fetch_add(1, Relaxed) + 1
+                        >= SERIES_CAST_REJECT_LIMIT
+                    && !self.series_cast_stopped.swap(true, Relaxed)
+                {
+                    tracing::warn!(
+                        %error,
+                        "the series cast service rejected {SERIES_CAST_REJECT_LIMIT} requests in a row; \
+                         stopping series cast lookups until restart"
+                    );
+                }
+                return Err(error.into());
+            }
+        };
         let mut credits = Vec::with_capacity(actors.len());
         for (order, actor) in actors.into_iter().enumerate() {
             let name = actor.name.trim().to_string();
@@ -515,7 +574,7 @@ impl MediaSync {
                     .await;
                 // Best effort: a cast lookup failure never fails the file sync.
                 if let Err(error) = self.sync_series_cast(work_id).await {
-                    tracing::warn!(%work_id, %error, "could not sync series cast; will retry after a restart");
+                    tracing::debug!(%work_id, %error, "could not sync series cast; will retry after a restart");
                 }
                 files
             }
@@ -2337,5 +2396,43 @@ mod tests {
         // No tvdb ref: nothing requested (the mock server has no routes), no credits.
         on.sync_series_cast(work_id).await.unwrap();
         assert!(credit_repo.list_for_work(work_id).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn series_cast_lookups_stop_after_repeated_rejections() {
+        let first = Uuid::new_v4();
+        let pool = test_pool_with_work(first, "series").await;
+        let mut ids = vec![first];
+        sqlx::query(
+            "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, 'tvdb', '1')",
+        )
+        .bind(first.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        for n in 2..=8 {
+            ids.push(add_series(&pool, &n.to_string()).await);
+        }
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid request"))
+            .mount(&server)
+            .await;
+        let credit_repo: Arc<dyn CreditRepo> =
+            Arc::new(playarr_db::repo::SqlxCreditRepo::new(pool.clone()));
+        let sync = media_sync(pool)
+            .with_credit_repo(credit_repo)
+            .with_series_cast(SeriesCastClient::new(&server.uri()));
+
+        let mut attempted = 0;
+        for id in ids {
+            if sync.needs_series_cast(id).await {
+                attempted += 1;
+                assert!(sync.sync_series_cast(id).await.is_err());
+            }
+        }
+        assert_eq!(attempted, 5, "stops after the reject limit");
+        assert_eq!(sync.take_series_cast_summary(), (0, 5));
+        assert_eq!(sync.take_series_cast_summary(), (0, 0));
     }
 }
