@@ -193,7 +193,6 @@ private fun ExperienceCalendarScreen(
             PlayarrNavItem("next", playarrString(PlayarrString.CalendarNext), PlayarrActionIcon.Next, onClick = holder::next),
         ),
     )
-    Box(Modifier.fillMaxSize()) {
     PlayarrPageLayout(
         pageId = PlayarrPageId.Calendar,
         header = playarrPageHeader(title = playarrString(PlayarrString.CalendarTitle), onBack = onBack, filters = PlayarrFilterAction(
@@ -206,6 +205,10 @@ private fun ExperienceCalendarScreen(
     ) {
         if (!isTelevision) {
             PhoneCalendarHeader(state, language.locale, holder) { jumpOpen = true }
+        } else if (state.mode != CalendarViewMode.Agenda) {
+            // shortcut: web puts the range button in the header's Previous / Today / Next group; the shared navigation
+            // pill has a fixed width (page package, owner-request gate), so the range stays in the page until it can grow.
+            CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         }
         when (val load = state.load) {
             is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth()) { PlayarrErrorState(load.message, holder::load) }
@@ -249,15 +252,6 @@ private fun ExperienceCalendarScreen(
                 }
             }
         }
-    }
-    if (isTelevision) {
-        // Web: the date range button opens the jump picker and sits first in the Previous / Today / Next group (its
-        // right edge at x 1609, level with the title). Drawn here because the shared navigation pill has a fixed width.
-        CalendarRangeButton(
-            remember(state.window, state.mode, state.anchor, language.locale) { calendarRangeButtonLabel(state.mode, state.anchor, state.window, language.locale) },
-            Modifier.align(Alignment.TopEnd).padding(end = 311.dp, top = 56.2.dp),
-        ) { jumpOpen = true }
-    }
     }
     if (jumpOpen) {
         CalendarJumpDialog(
@@ -617,6 +611,22 @@ internal fun TvCalendarAgenda(
             // and the day list starts under the header. Both panes end at the bottom of the screen.
             val detailsTop = 259.dp
             val listTop = 168.dp
+            // shortcut: the range label stays here until the shared header navigation pill can size to its label (web puts it there).
+            val title = remember(state.window, state.mode, state.anchor, locale) { calendarRangeLabelShort(state.mode, state.anchor, state.window, locale) }
+            Row(
+                Modifier.offset(x = playarrPageMetrics(true).start, y = 160.dp).height(50.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    title, color = WebInkSoft, fontSize = 14.4.sp, fontWeight = FontWeight(720), style = WebTextStyle, maxLines = 1,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                val ink = WebInkSoft
+                androidx.compose.foundation.Canvas(Modifier.size(width = 9.dp, height = 8.dp)) {
+                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close() }
+                    drawPath(path, ink)
+                }
+            }
             val detailScroll = rememberScrollState()
             Column(
                 Modifier.offset(x = playarrPageMetrics(true).start, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))
@@ -1938,29 +1948,9 @@ private fun CalendarDetailActions(item: CalendarItem, onOpenWork: (String) -> Un
 }
 
 /** Web `formatRangeButtonLabel`: "11 Oct – 9 Nov" for a span, "Oct 2026" for a month. */
-internal fun calendarRangeButtonLabel(mode: CalendarViewMode, anchor: LocalDate, window: CalendarWindow, locale: Locale): String {
+internal fun calendarRangeLabelShort(mode: CalendarViewMode, anchor: LocalDate, window: CalendarWindow, locale: Locale): String {
     if (mode == CalendarViewMode.Month) return PlayarrDateFormat("yMMM", locale).format(anchor)
     val end = if (mode == CalendarViewMode.Agenda) window.end.minusDays(1) else window.end
     val day = PlayarrDateFormat("MMMd", locale)
     return "${day.format(window.start)} \u2013 ${day.format(end)}"
-}
-
-/** The web header range button: an outlined 50 dp pill sized to its label. */
-@Composable
-private fun CalendarRangeButton(label: String, modifier: Modifier, onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    Surface(
-        onClick = onClick,
-        interactionSource = source,
-        shape = CircleShape,
-        color = WebSurface,
-        contentColor = WebInkSoft,
-        border = BorderStroke(1.dp, WebPillBorder),
-        modifier = modifier.height(50.dp).webFocusRing(focused, offset = 2.dp).semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
-        Box(Modifier.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-            Text(label, fontSize = 14.4.sp, fontWeight = FontWeight(720), maxLines = 1)
-        }
-    }
 }
