@@ -586,10 +586,10 @@ function AppShell() {
               route={location.pathname}
               entryKey={location.key}
             />
-            <span className="app-user-version" aria-hidden="true">
-              v{__APP_VERSION__}
-            </span>
           </div>
+          <span className="app-user-version" aria-hidden="true">
+            v{__APP_VERSION__}
+          </span>
         </nav>
       )}
       </ShellActionColumnProvider>
