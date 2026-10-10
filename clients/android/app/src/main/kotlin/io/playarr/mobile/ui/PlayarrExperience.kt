@@ -3736,7 +3736,6 @@ private fun ExperienceLibraryScreen(
             }
             // Saved, so coming back from a title restores the card that last had focus.
             var savedSelectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
-            val selectedId = savedSelectedId?.takeIf { id -> state.value.any { it.id == id } } ?: state.value.first().id
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var activeLetter by remember(kind) { mutableStateOf("#") }
             val libraryScope = rememberCoroutineScope()
@@ -3760,6 +3759,9 @@ private fun ExperienceLibraryScreen(
                 val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedWith(compareBy(PlayarrTitleOrder) { it.sortTitle.ifBlank { it.title } })
                 if (descending) sorted.reversed() else sorted
             }
+            // With nothing saved, the first card in the displayed order (web), not the first title the server sent.
+            val selectedId = savedSelectedId?.takeIf { id -> state.value.any { it.id == id } }
+                ?: filteredWorks.firstOrNull()?.id ?: state.value.first().id
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
             PlayarrPageLayout(
                 pageId = PlayarrPageId.Library,
