@@ -7,7 +7,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, Easing, Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
 import type {ResumePlan, WatchProgress, Work} from '@playarr-tv/api-client';
-import {useCatalogBrowse, useHomeRails} from '@playarr-tv/api-client/react';
+import {useCatalogBrowse, useHomeRails, useWorkDetail} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
 import {ArtworkImage} from '../components/ArtworkImage';
@@ -15,7 +15,10 @@ import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
+import {focusNode, getFocusedTag} from '../platform';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
+import {runtimeLabel} from '../lib/runtimeLabel';
+import {blend} from '../theme/color';
 import {EdgeFade, TRACK_GUTTER} from '../tv/EdgeFade';
 import {MediaFocus} from '../tv/mediaFocus';
 import {BalancedT, Box, T, u} from '../tv/kit';
@@ -29,14 +32,18 @@ interface HomeRail {
   items: Work[];
 }
 
-const RAIL_PITCH = 317.9;
-const FIRST_HEADING_Y = 426.1;
-const CARD_PITCH = 243.85;
-const CARD_W = 218.9;
-/** Art 123.13 + gap 9.9 + title 17 + gap 2.6 + subtitle 13. */
-const CARD_H = 165.7;
+// The web's bigger Home cards (TV, 1920x1080): 327.2 px wide 16:9 art on a 352.1 px pitch, rails 365.9 px apart.
+const RAIL_PITCH = 365.9;
+const FIRST_HEADING_Y = 402;
+const CARD_PITCH = 352.1;
+const CARD_W = 327.2;
+const ART_H = 184.05;
+/** Art 184.05 + gap 11.25 + title 17.9 + gap 2.5 + subtitle 11.5. */
+const CARD_H = 227.2;
+/** How far the edge fades reach below the card art (the copy lines). */
+const FADE_EXTRA = CARD_H - ART_H;
 /**
- * The web snaps each card to a whole pixel from its fractional position (x = 881.6 + n * 243.85); the device's row layout
+ * The web snaps each card to a whole pixel from its fractional position (x = 881.6 + n * 352.1); the device's row layout
  * rounds every card's width and margin separately and drifts by a pixel per card, so cards are placed one by one instead.
  */
 function cardLeft(index: number): number {
@@ -152,6 +159,12 @@ export function HomeScreen(): React.ReactElement {
 
   const [focus, setFocus] = useState<{rail: number; item: number}>({rail: 0, item: 0});
   const selected = rails[focus.rail]?.items[focus.item] ?? rails[0]?.items[0];
+  // A late On Deck answer rebuilds the rails and unmounts the focused card, which leaves nothing focused and the remote
+  // dead. Put focus back on the selected card whenever the rails change and focus was lost (web keeps it in place).
+  const selectedCardRef = useRef<View>(null);
+  useEffect(() => {
+    if (!getFocusedTag()) focusNode(selectedCardRef);
+  }, [rails]);
 
   const railY = useRef(new Animated.Value(0)).current;
   // The rails scroll through their LEFT offset (JS-driven), not a transform: Vega's focus engine measures layout frames and
@@ -199,11 +212,13 @@ export function HomeScreen(): React.ReactElement {
   const artKind = preferredArtworkKind(selected, ['backdrop', 'poster']);
   const artUri = artKind ? workArtworkUrl(baseUrl, selected.id, artKind) : undefined;
   const dark = scheme === 'dark';
+  // The web details panel's --dp-soft: ink 88% over the surface.
+  const soft = blend(colour.ink, colour.surface, 0.88);
 
   return (
     <Stage artUri={artUri} accessToken={token}>
       <Box x={153.6} y={259.2} w={455}>
-        <T size={12.288} weight={820} ls={0.983} color="#cf3157" upper lh={18.4}>
+        <T size={12.288} weight={860} ls={0.983} color={dark ? '#eaa6b6' : '#821e36'} upper lh={18.4}>
           {kicker}
         </T>
         <View style={{marginTop: u(25.9), left: u(2.5), top: u(3)}}>
@@ -211,8 +226,9 @@ export function HomeScreen(): React.ReactElement {
             {featureTitle}
           </BalancedT>
         </View>
+        <FeatureRuntime workId={selected.id} color={soft} />
         <View style={{marginTop: u(21.6), width: u(324), top: u(2)}}>
-          <T size={12.864} weight={400} lh={20.3} color={colour.inkMuted} lines={5}>
+          <T size={12.864} weight={600} lh={20.3} color={soft} lines={5}>
             {featureOverview}
           </T>
         </View>
@@ -255,6 +271,7 @@ export function HomeScreen(): React.ReactElement {
                       progress={progress}
                       progressReady={progressRows !== null}
                       first={railIndex === 0 && itemIndex === 0}
+                      cardRef={active && itemIndex === focus.item ? selectedCardRef : undefined}
                       index={itemIndex}
                       baseUrl={baseUrl}
                       token={token}
@@ -274,7 +291,7 @@ export function HomeScreen(): React.ReactElement {
                   x={0}
                   y={headingY + 26.5}
                   w={1190.4}
-                  h={230}
+                  h={ART_H + FADE_EXTRA + 47}
                   size={TRACK_GUTTER}
                 />
                 <EdgeFade
@@ -284,7 +301,7 @@ export function HomeScreen(): React.ReactElement {
                   x={0}
                   y={headingY + 44}
                   w={1190.4}
-                  h={183}
+                  h={ART_H + 60}
                   size={70}
                   solid={8}
                 />
@@ -294,6 +311,22 @@ export function HomeScreen(): React.ReactElement {
         </Animated.View>
       </Box>
     </Stage>
+  );
+}
+
+/** The web Home feature's runtime line ("2h 17m"), from the focused title's detail; nothing until it arrives. */
+function FeatureRuntime({workId, color}: {workId: string; color: string}): React.ReactElement | null {
+  const client = useApiClient();
+  const {t} = useLanguage();
+  const state = useWorkDetail(client, workId);
+  const label = state.status === 'ready' ? runtimeLabel(state.data.runtime_ms, t) : null;
+  if (!label) return null;
+  return (
+    <View style={{marginTop: u(22.6)}}>
+      <T size={12.864} weight={600} lh={18} color={color} lines={1}>
+        {label}
+      </T>
+    </View>
   );
 }
 
@@ -325,6 +358,7 @@ function HomeCard(props: {
   progress: WatchProgress | undefined;
   progressReady: boolean;
   first: boolean;
+  cardRef?: React.Ref<View>;
   index: number;
   baseUrl: string;
   token: string | undefined;
@@ -333,12 +367,13 @@ function HomeCard(props: {
   onFocus: () => void;
   onPress: () => void;
 }): React.ReactElement {
-  const {work, mediaFileId, title, progress, progressReady, first, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
+  const {work, mediaFileId, title, progress, progressReady, first, cardRef, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
   const {colour} = useTheme();
   const kind = preferredArtworkKind(work, ['backdrop', 'poster']);
   const uri = mediaFileId ? mediaThumbnailUrl(baseUrl, mediaFileId) : kind ? workArtworkUrl(baseUrl, work.id, kind) : undefined;
   return (
     <Pressable
+      ref={cardRef}
       accessibilityRole="button"
       accessibilityLabel={work.title}
       hasTVPreferredFocus={first}
@@ -346,19 +381,19 @@ function HomeCard(props: {
       onPress={onPress}
       style={{position: 'absolute', top: 0, left: u(cardLeft(index)), width: u(CARD_W)}}
     >
-      <MediaFocus variant="home" focused={selected} width={CARD_W} height={123.13} radius={12.48}>
+      <MediaFocus variant="home" focused={selected} width={CARD_W} height={ART_H} radius={12.48}>
         <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
           <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
           <WatchState progress={progress} showUnwatched={progressReady} />
         </View>
       </MediaFocus>
-      <View style={{marginTop: u(9.9)}}>
-        <T size={11.328} weight={630} color={colour.ink} lh={17} lines={1} dy={-2}>
+      <View style={{marginTop: u(11.25)}}>
+        <T size={11.904} weight={610} ls={-0.17856} color={colour.ink} lh={17.9} lines={1} dy={-2}>
           {title}
         </T>
       </View>
-      <View style={{marginTop: u(2.6)}}>
-        <T size={8.64} weight={400} color={colour.inkMuted} lh={13} lines={1} dy={-2}>
+      <View style={{marginTop: u(2.5)}}>
+        <T size={8.832} weight={400} color={colour.inkMuted} lh={11.5} lines={1} dy={-2}>
           {subtitle}
         </T>
       </View>

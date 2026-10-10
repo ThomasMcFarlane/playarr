@@ -113,8 +113,8 @@ export function Stage({artUri, accessToken, children}: StageProps): React.ReactE
         style={StyleSheet.absoluteFill}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 0}}
-        colors={[mix(surface, 0.94), clear(surface)]}
-        locations={[0, 0.31]}
+        colors={[mix(surface, 0.94), mix(surface, 0.9), clear(surface)]}
+        locations={[0, 0.36, 0.52]}
         pointerEvents="none"
       />
       <LinearGradient
