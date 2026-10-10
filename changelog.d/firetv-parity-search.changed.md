@@ -1,1 +1,0 @@
-- Fire TV: page subtitles sit under the title in the web's one subtitle style; Search uses the web's field, details panel and bigger result cards; balanced titles never break inside a word; a direction key with nothing focused lands on the nav rail (18.462).
