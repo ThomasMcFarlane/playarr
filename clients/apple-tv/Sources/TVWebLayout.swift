@@ -674,7 +674,7 @@ struct TVMultiSelectSection: View {
                             HStack {
                                 Text(chosen ? "\u{2713}" : "")
                                     .frame(width: 18, alignment: .leading)
-                                Text(facet.name).lineLimit(1)
+                                Text(facet.displayName).lineLimit(1)
                                 Spacer(minLength: 0)
                                 if let count = facet.count {
                                     Text("\(count)").foregroundStyle(DesignTokens.Color.textDisabled)
@@ -700,13 +700,13 @@ struct TVMultiSelectSection: View {
     private var options: [LanguageFacet] {
         var rows = facets ?? []
         for code in selection where !rows.contains(where: { $0.code == code }) {
-            rows.append(LanguageFacet(code: code, name: Locale.current.localizedString(forLanguageCode: code) ?? code, count: nil))
+            rows.append(LanguageFacet(code: code, name: nil, count: nil))
         }
         return rows
     }
 
     private var summary: String {
         if selection.isEmpty { return "Any language" }
-        return selection.map { code in options.first { $0.code == code }?.name ?? code }.joined(separator: ", ")
+        return selection.map { code in options.first { $0.code == code }?.displayName ?? code }.joined(separator: ", ")
     }
 }

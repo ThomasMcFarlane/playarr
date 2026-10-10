@@ -3,11 +3,16 @@ import Foundation
 /// One language the catalogue can be filtered by (`GET /api/v1/catalog/languages`), with how many titles have it.
 public struct LanguageFacet: Codable, Hashable, Sendable, Identifiable {
     public let code: String
-    public let name: String
+    /// Nil for a code the server has no name for; `displayName` falls back to the system name or the code.
+    public let name: String?
     public let count: Int?
+
+    public var displayName: String {
+        name ?? Locale(identifier: "en_GB").localizedString(forLanguageCode: code) ?? code
+    }
     public var id: String { code }
 
-    public init(code: String, name: String, count: Int?) {
+    public init(code: String, name: String?, count: Int?) {
         self.code = code
         self.name = name
         self.count = count
