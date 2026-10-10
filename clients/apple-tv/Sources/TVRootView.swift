@@ -265,6 +265,16 @@ private struct TVProductionShell<Stage: View>: View {
     @State private var showProfiles = false
     /// A full-screen page (the player) is showing: no nav, no clock.
     @State private var chromeHidden = false
+    /// The stage's pushed pages (titles, playlists); a tab change starts from the root.
+    @State private var path: [TVRoute] = []
+    /// The media actions drawer (long press on a card) and the title it started playing.
+    @State private var actionsWork: Work?
+    @State private var playing: PlayRequest?
+
+    private struct PlayRequest: Identifiable {
+        let id: UUID
+        let title: String
+    }
     @Environment(\.resetFocus) private var resetFocus
 
     private var navColumn: CGFloat {
@@ -304,14 +314,24 @@ private struct TVProductionShell<Stage: View>: View {
 
                 // The stage spans the whole screen under the floating nav, as on the web: pages place their content
                 // in screen coordinates (back button at 153.6, rails at 881.6) and backdrops run to the left edge.
-                NavigationStack {
+                NavigationStack(path: $path) {
                     stageContent()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationBarBackButtonHidden(true)
                         .focusSection()
                         .modifier(TVBackToHome(active: tab != .home) { nav = .home })
+                        .navigationDestination(for: TVRoute.self) { route in
+                            switch route {
+                            case .work(let work):
+                                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                            case .playlist(let id, let name):
+                                TVLibraryKindView(kindLabel: name, emptyMessage: "This playlist is empty.", playlistID: id)
+                            }
+                        }
                 }
+                .environment(\.openRoute) { path.append($0) }
+                .onChange(of: tab) { _, _ in path = [] }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .environment(\.setShellChromeHidden) { chromeHidden = $0 }
                 .padding(.leading, -navColumn)
@@ -346,7 +366,20 @@ private struct TVProductionShell<Stage: View>: View {
                 .zIndex(80)
 
         }
+        .overlay {
+            if let actionsWork {
+                TVActionsDrawer(work: actionsWork, onClose: { self.actionsWork = nil }) { id, title in
+                    self.actionsWork = nil
+                    playing = PlayRequest(id: id, title: title)
+                }
+            }
+        }
+        .environment(\.openActions) { actionsWork = $0 }
+        .environment(\.actionsWorkID, actionsWork?.id)
         .ignoresSafeArea()
+        .fullScreenCover(item: $playing) { request in
+            TVPlayerView(mediaFileID: request.id, title: request.title, apiClient: environment.apiClient)
+        }
         .fullScreenCover(isPresented: $showProfiles) {
             TVProfilesView(
                 onLinkTV: { showProfiles = false },

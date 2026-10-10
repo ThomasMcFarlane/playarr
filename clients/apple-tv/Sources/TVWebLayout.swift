@@ -1,3 +1,4 @@
+import PlayarrKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
@@ -16,6 +17,21 @@ extension View {
         alignment: Alignment = .leading
     ) -> some View {
         frame(width: w, height: h, alignment: alignment).offset(x: x, y: y)
+    }
+
+    /// `placed` with real layout (padding, not an offset): the focus engine sees the view where it is drawn. Use it for
+    /// focusable controls and the containers that hold them.
+    func pinned(
+        x: CGFloat,
+        y: CGFloat,
+        w: CGFloat? = nil,
+        h: CGFloat? = nil,
+        alignment: Alignment = .leading
+    ) -> some View {
+        frame(width: w, height: h, alignment: alignment)
+            .padding(.leading, x)
+            .padding(.top, y)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -439,7 +455,8 @@ struct TVDrawer<Content: View>: View {
                         .font(TVTheme.font(size: 38.4, css: 590))
                         .tracking(-2.1)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(height: 57.6)
+                        .lineLimit(2)
+                        .frame(width: 204, alignment: .leading)
                 }
                 Spacer(minLength: 0)
                 Button(action: onClose) {
@@ -504,5 +521,105 @@ struct TVChoiceSection<Value: Hashable>: View {
             }
         }
         .padding(.bottom, 30.3)
+    }
+}
+
+
+/// Web media actions (`MediaContextMenu`): a long press (650 ms) on a media card opens its actions in the shared drawer.
+struct TVOpenActionsKey: EnvironmentKey {
+    static let defaultValue: (Work) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openActions: (Work) -> Void {
+        get { self[TVOpenActionsKey.self] }
+        set { self[TVOpenActionsKey.self] = newValue }
+    }
+}
+
+/// A pushed page of the stage (shell navigation path).
+enum TVRoute: Hashable {
+    case work(Work)
+    case playlist(id: UUID, name: String)
+}
+
+/// The title whose actions drawer is open (nil when closed): its card takes focus back when the drawer closes.
+struct TVActionsWorkIDKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+extension EnvironmentValues {
+    var actionsWorkID: UUID? {
+        get { self[TVActionsWorkIDKey.self] }
+        set { self[TVActionsWorkIDKey.self] = newValue }
+    }
+}
+
+struct TVOpenRouteKey: EnvironmentKey {
+    static let defaultValue: (TVRoute) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openRoute: (TVRoute) -> Void {
+        get { self[TVOpenRouteKey.self] }
+        set { self[TVOpenRouteKey.self] = newValue }
+    }
+}
+
+/// A media card's button: Select opens the title; holding Select for 650 ms opens its actions instead (web long
+/// press), and the release that follows does not also open the title.
+struct TVCardButton<Label: View>: View {
+    let work: Work
+    var route: TVRoute? = nil
+    @ViewBuilder var label: () -> Label
+    @Environment(\.openActions) private var openActions
+    @Environment(\.openRoute) private var openRoute
+    @Environment(\.actionsWorkID) private var actionsWorkID
+    @State private var longPressed = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Button {
+            if longPressed { longPressed = false } else { openRoute(route ?? .work(work)) }
+        } label: {
+            label()
+        }
+        .focused($focused)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in
+            longPressed = true
+            openActions(work)
+        })
+        // Web: closing the actions drawer returns focus to the card that opened it.
+        .onChange(of: actionsWorkID) { previous, current in
+            if previous == work.id, current == nil { focused = true }
+        }
+    }
+}
+
+/// One action row (web `.media-context-actions` button): 268 x 68, brand glyph and a bold label, control focus ring.
+struct TVActionRow: View {
+    let glyph: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                Text(glyph)
+                    .font(TVTheme.font(size: 19.52, css: 400))
+                    .foregroundStyle(DesignTokens.Stage.brandPink)
+                    .frame(width: 42, alignment: .leading)
+                Text(label)
+                    .font(TVTheme.font(size: 19.2, css: 700))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 18)
+            .frame(width: 268, height: 68)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DesignTokens.Stage.surfaceSoft))
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
     }
 }

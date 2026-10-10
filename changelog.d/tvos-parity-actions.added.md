@@ -1,0 +1,1 @@
+- Apple TV: holding Select on a media card opens its actions (Play, Add to Playlist, Mark as Watched or Unwatched) in the shared drawer and returns focus to the card; title pages show the cast; episode tiles show their own frame; Settings has the Artwork size choice (small, medium, large) and the colour theme choice works; Right from a settings row enters its panel.

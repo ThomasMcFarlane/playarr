@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TVHomeView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVHomeViewModel?
     /// Focus target is rail+work so the same title never lights up on two rails.
@@ -79,7 +80,7 @@ struct TVHomeView: View {
             }
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: Self.railSpacing) {
+                    VStack(alignment: .leading, spacing: 365.9 - railHeight(displayPreferences.cardWidth)) {
                         ForEach(Array(rails.enumerated()), id: \.offset) { index, rail in
                             webRail(id: "r\(index)", title: rail.title, works: rail.works).id("r\(index)")
                         }
@@ -110,10 +111,8 @@ struct TVHomeView: View {
 
     /// Web: an 8 px left bleed keeps the first card's focus glow unclipped.
     private static let cardBleed: CGFloat = 8
-    /// Rail pitch 365.9 (heading 402 to 767.9) less one rail's height.
-    private static let railSpacing: CGFloat = 365.9 - railHeight
     /// Heading (26.5) and the gap to the art (35.3), plus the card (art and caption) and the track's 18/24 padding.
-    private static let railHeight: CGFloat = 61.8 + TVWebHomeCard.height + 24
+    private func railHeight(_ width: CGFloat) -> CGFloat { 61.8 + TVWebHomeCard.height(width: width) + 24 }
 
     /// The server shelves with the web's primary rail first; older servers without shelves get the local rails.
     private static func productionRails(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
@@ -134,11 +133,10 @@ struct TVHomeView: View {
                 LazyHStack(alignment: .top, spacing: 24.9) {
                     ForEach(works) { work in
                         let focus = HomeRailCardFocus(rail: id, workID: work.id)
-                        NavigationLink {
-                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                        } label: {
+                        TVCardButton(work: work) {
                             TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus,
-                                          progress: id == "r0" ? viewModel?.progress[work.id] : nil)
+                                          progress: id == "r0" ? viewModel?.progress[work.id] : nil,
+                                          artWidth: displayPreferences.cardWidth)
                         }
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
@@ -777,21 +775,22 @@ struct TVWebHomeCard: View {
     var focused = false
     /// Web `.tv-watch-progress`: a 3 px bar along the art's foot on On deck cards (replaces the unseen dot).
     var progress: Double? = nil
+    /// The artwork size setting's card width (medium 327.2); 16:9 art.
+    var artWidth: CGFloat = 327.2
 
-    static let artWidth: CGFloat = 327.2
-    static let artHeight: CGFloat = 184
-    static let height: CGFloat = artHeight + 11.5 + 17.9 + 2.5 + 11.5
+    private var artHeight: CGFloat { artWidth * 9 / 16 }
+    static func height(width: CGFloat) -> CGFloat { width * 9 / 16 + 11.5 + 17.9 + 2.5 + 11.5 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: apiClient)
-                    .frame(width: Self.artWidth, height: Self.artHeight)
+                    .frame(width: artWidth, height: artHeight)
                     .overlay(alignment: .bottomLeading) {
                         if let progress {
                             ZStack(alignment: .leading) {
                                 Color.white.opacity(0.2)
-                                DesignTokens.Color.brandPrimary.frame(width: max(3, Self.artWidth * min(1, progress)))
+                                DesignTokens.Color.brandPrimary.frame(width: max(3, artWidth * min(1, progress)))
                             }
                             .frame(height: 3)
                         }
@@ -817,13 +816,13 @@ struct TVWebHomeCard: View {
                 .tracking(-0.18)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(1)
-                .frame(width: Self.artWidth, height: 17.9, alignment: .leading)
+                .frame(width: artWidth, height: 17.9, alignment: .leading)
                 .padding(.top, 11.5)
             Text([work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 }.joined(separator: " \u{00B7} "))
                 .font(TVTheme.font(size: 8.832, css: 400))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .lineLimit(1)
-                .frame(width: Self.artWidth, height: 11.5, alignment: .leading)
+                .frame(width: artWidth, height: 11.5, alignment: .leading)
                 .padding(.top, 2.5)
         }
         .offset(y: focused ? -6 : 0)
@@ -908,7 +907,7 @@ struct TVHomeSkeleton: View {
                 ForEach(0..<4, id: \.self) { card in
                     let x = 881.6 + 352.1 * CGFloat(card)
                     RoundedRectangle(cornerRadius: 12.48, style: .continuous).fill(block)
-                        .placed(x: x, y: top + 61.8, w: TVWebHomeCard.artWidth, h: TVWebHomeCard.artHeight)
+                        .placed(x: x, y: top + 61.8, w: 327.2, h: 184)
                     RoundedRectangle(cornerRadius: 3).fill(block).placed(x: x, y: top + 61.8 + 195.3, w: 180, h: 12)
                 }
             }
@@ -962,6 +961,7 @@ struct TVWorkArt: View {
 
 struct TVSearchView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var viewModel: TVSearchViewModel?
     @FocusState private var searchFieldFocused: Bool
     @FocusState private var focusedWorkID: UUID?
@@ -1142,14 +1142,13 @@ struct TVSearchView: View {
     /// right rail, scrolling under a top edge fade; other sources follow the results.
     private func searchResultRow(_ model: TVSearchViewModel) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(327.2), spacing: 25.9), count: 3),
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(displayPreferences.cardWidth), spacing: 25.9),
+                                     count: displayPreferences.cardColumns),
                       alignment: .leading, spacing: 251.2 - 184 - 11.5 - 20) {
                 ForEach(model.results) { work in
                     // Web: the first hit is not lifted until the remote moves onto the results.
                     let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
-                    NavigationLink {
-                        TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                    } label: {
+                    TVCardButton(work: work) {
                         searchResultCard(work, focused: selected)
                             // Pinned web search focus: translateY(-6px) scale(1.015) over 230 ms, cubic-bezier(0.16, 1, 0.3, 1).
                             .scaleEffect(selected ? 1.015 : 1)
@@ -1180,10 +1179,11 @@ struct TVSearchView: View {
     }
 
     private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let w = displayPreferences.cardWidth
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
-                    .frame(width: 327.2, height: 184)
+                    .frame(width: w, height: w * 9 / 16)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
                     .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.5))
                     // Focused search shadow: 0 22px 52px rgba(31, 14, 20, 0.28); the rest shadow is the card default.
@@ -1203,19 +1203,19 @@ struct TVSearchView: View {
                     .tracking(-0.18)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
-                    .placed(x: 1.9, y: 0, w: 260.8, h: 18.4)
+                    .placed(x: 1.9, y: 0, w: w - 66.4, h: 18.4)
                 Text(
                     ([work.kind.rawValue.capitalized] + [work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 })
                         .joined(separator: " \u{00B7} ").uppercased()
                 )
                     .font(TVTheme.font(size: 8.448, css: 720))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .placed(x: 327.2 - 120, y: 3, w: 120, h: 12.7, alignment: .trailing)
+                    .placed(x: w - 120, y: 3, w: 120, h: 12.7, alignment: .trailing)
             }
-            .frame(width: 327.2, height: 20, alignment: .topLeading)
+            .frame(width: w, height: 20, alignment: .topLeading)
             .padding(.top, 11.5)
         }
-        .frame(width: 327.2, alignment: .topLeading)
+        .frame(width: w, alignment: .topLeading)
     }
 
     private var otherSources: some View {
@@ -1258,6 +1258,7 @@ struct TVSearchView: View {
 /// Movies / Series / Music directory: left preview + right 3-col title grid.
 /// Mirrors `LibraryPage` + `.tv-library` / `.tv-directory` CSS at 1920×1080.
 struct TVLibraryKindView: View {
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     let kindLabel: String
     let emptyMessage: String
     /// When set, filters fixture/API catalogue to this work kind.
@@ -1506,7 +1507,7 @@ struct TVLibraryKindView: View {
         let gridWidth = size.width * DesignTokens.Shell.libraryGridWidthFraction
         let padL = DesignTokens.Shell.libraryRailLeft
         let padR = DesignTokens.Shell.libraryRailRight
-        let cols = DesignTokens.Shell.libraryGridColumns
+        let cols = displayPreferences.cardColumns
         let gap = DesignTokens.Shell.libraryGridColGap
         let inner = max(0, gridWidth - padL - padR)
         let cardW = (inner - gap * CGFloat(cols - 1)) / CGFloat(cols)
@@ -1550,13 +1551,7 @@ struct TVLibraryKindView: View {
         artIncludesDot: Bool
     ) -> some View {
         let isSelected = selected?.id == work.id
-        return NavigationLink {
-            if playlistCounts[work.id] != nil {
-                TVLibraryKindView(kindLabel: work.title, emptyMessage: "This playlist is empty.", playlistID: work.id)
-            } else {
-                TVWorkDetailView(work: work, apiClient: environment.apiClient)
-            }
-        } label: {
+        return TVCardButton(work: work, route: playlistCounts[work.id] != nil ? .playlist(id: work.id, name: work.title) : nil) {
             // SPA `.tv-title-card-copy { padding-top: 0.72rem; gap }` +
             // `strong { font-size: clamp(0.54rem, 0.6vw, 0.74rem) → ~11.5 @ 1920,
             // font-weight: 610, letter-spacing: -0.015em }`.
@@ -1841,5 +1836,98 @@ struct TVErrorView: View {
         }
         .padding(DesignTokens.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+
+/// Web `MediaContextMenu` "Title actions" in the shared drawer: Play, Add to Playlist, Mark as Watched / Unwatched.
+/// Download is left out: Apple TV keeps no offline copies (web hides it without download storage).
+struct TVActionsDrawer: View {
+    let work: Work
+    let onClose: () -> Void
+    let onPlay: (UUID, String) -> Void
+
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var playlists: [Playlist]?
+    @State private var message: String?
+    @State private var busy = false
+
+    var body: some View {
+        TVDrawer(kicker: playlists == nil ? "Title actions" : "Add to Playlist", title: work.title, onClose: onClose) {
+            VStack(alignment: .leading, spacing: 14) {
+                if let playlists {
+                    ForEach(playlists) { list in
+                        TVActionRow(glyph: "\u{FF0B}", label: list.name) { Task { await add(to: list) } }
+                    }
+                    if playlists.isEmpty {
+                        Text("No playlists yet.").font(TVTheme.font(size: 12.48, css: 400)).foregroundStyle(DesignTokens.Color.textDisabled)
+                    }
+                    TVActionRow(glyph: "\u{2190}", label: "Back") { self.playlists = nil }
+                } else {
+                    TVActionRow(glyph: "\u{25B6}\u{FE0E}", label: "Play") { Task { await play() } }
+                    TVActionRow(glyph: "\u{FF0B}", label: "Add to Playlist") {
+                        Task { playlists = (try? await environment.apiClient.listPlaylists()) ?? [] }
+                    }
+                    TVActionRow(glyph: "\u{2713}", label: "Mark as Watched") { Task { await setWatched(true) } }
+                    TVActionRow(glyph: "\u{25CB}", label: "Mark as Unwatched") { Task { await setWatched(false) } }
+                }
+                if let message {
+                    Text(message)
+                        .font(TVTheme.font(size: 12.48, css: 400))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 268, alignment: .leading)
+                }
+            }
+            .disabled(busy)
+        }
+    }
+
+    /// The playable leaves: the film itself, or every episode (in order) of a series.
+    private func leaves() async throws -> [(id: UUID, runtimeMs: Int64?, title: String)] {
+        let detail = try await environment.apiClient.fetchWork(id: work.id)
+        switch detail.children {
+        case .series(let seasons):
+            return seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+                .flatMap { $0.episodes.sorted { $0.episode.episodeNumber < $1.episode.episodeNumber } }
+                .compactMap { ep in ep.mediaFileID.map { ($0, ep.runtimeMs, ep.episode.title ?? work.title) } }
+        default:
+            return detail.mediaFileID.map { [($0, detail.runtimeMs, work.title)] } ?? []
+        }
+    }
+
+    private func play() async {
+        busy = true
+        defer { busy = false }
+        do {
+            guard let first = try await leaves().first else { message = "Nothing to play yet."; return }
+            onPlay(first.id, first.title)
+        } catch { message = "Playback could not be started." }
+    }
+
+    private func setWatched(_ watched: Bool) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let items = try await leaves()
+            guard !items.isEmpty else { message = "Nothing to mark yet."; return }
+            for item in items {
+                let duration = item.runtimeMs ?? 0
+                _ = try await environment.apiClient.updateWatchProgress(
+                    mediaFileID: item.id,
+                    body: UpdateWatchProgressRequest(positionMS: watched ? duration : 0, durationMS: duration, completed: watched)
+                )
+            }
+            onClose()
+        } catch { message = "The change could not be made." }
+    }
+
+    private func add(to list: Playlist) async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await environment.apiClient.addPlaylistItem(playlistID: list.id, body: AddPlaylistItemRequest(workID: work.id))
+            onClose()
+        } catch { message = "\(work.title) could not be added to \(list.name)." }
     }
 }
