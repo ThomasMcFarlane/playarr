@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Arr sync: a file the source replaced is removed only when exactly one replacement exists for the same episode or movie, and viewers's resume positions and choices move to it first. A file the source drops with no replacement is hidden (marked missing) and keeps its progress; it returns if the source lists it again. A pass that would change over half of a work's files, or over 200, changes nothing.
+- Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
+- Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.
+- Server: the language reads now start from the media files and use the language primary key (16 to 26 s down to about a second in a reviewer repro), `PRAGMA optimize` runs on every new database connection and hourly so the query planner has table statistics, and the in-memory language cache is shared per kind, refreshed on language writes and library changes, and capped at ten minutes old.
 - Apple TV: the app stays signed in after it has been idle for more than 15 minutes; it refreshes the expired access token instead of showing the sign-in code.
 - Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.
 - Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
