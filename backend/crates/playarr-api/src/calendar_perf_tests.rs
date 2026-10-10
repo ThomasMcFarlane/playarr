@@ -335,6 +335,7 @@ pub(crate) async fn build_fixture(state: &TestState, scale: Scale) -> Fixture {
                     poster_url: Some("https://img.example.com/p.jpg".to_string()),
                     work_id: None,
                     average_lag_seconds: None,
+                    overview: Some(format!("Synopsis of episode {episode}.")),
                     sources: vec![src(arr_id)],
                     snapshot: None,
                     actions: vec![],
@@ -369,6 +370,7 @@ pub(crate) async fn build_fixture(state: &TestState, scale: Scale) -> Fixture {
                 poster_url: None,
                 work_id: None,
                 average_lag_seconds: None,
+                overview: Some(format!("Synopsis of Test Movie {ext}.")),
                 sources: vec![src(arr_id)],
                 snapshot: None,
                 actions: vec![],
@@ -639,6 +641,52 @@ async fn cold_calendar_statement_count_does_not_grow_with_titles() {
     for (a, b) in small.iter().zip(big) {
         assert!(a.abs_diff(*b) <= 2, "{counts:?}");
     }
+}
+
+/// The synopsis rides in the source snapshot, so carrying it costs no statement: the entries of a cold
+/// calendar keep their episode and movie overviews and the count stays within the same bound.
+#[tokio::test]
+async fn cold_calendar_carries_overviews_without_extra_statements() {
+    const BOUND: usize = 20;
+    let (router, state) = test_state().await;
+    let fx = build_fixture(&state, Scale::SMALL).await;
+    let (probe, _guard) = Probe::install(&state);
+    probe.reset();
+    let response = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/calendar?{}", window(-3, 92)))
+                .header("Authorization", bearer_header(&fx.viewer_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let statements = probe.statements();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let entries = body["entries"].as_array().unwrap();
+    let with = |kind: &str| {
+        entries
+            .iter()
+            .filter(|e| {
+                e["media_kind"] == kind
+                    && e["overview"]
+                        .as_str()
+                        .is_some_and(|o| o.starts_with("Synopsis of"))
+            })
+            .count()
+    };
+    assert!(with("movie") > 0, "movie entries keep their overview");
+    assert!(with("episode") > 0, "episode entries keep their overview");
+    assert!(
+        statements <= BOUND,
+        "cold calendar ran {statements} statements"
+    );
 }
 
 /// A cached calendar is answered with no statement beyond authentication.

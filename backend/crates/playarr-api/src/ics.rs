@@ -177,6 +177,7 @@ mod tests {
             poster_url: None,
             work_id: None,
             average_lag_seconds: None,
+            overview: None,
             snapshot: None,
             actions: vec![],
             members: vec![],

@@ -890,6 +890,45 @@ pub(crate) fn leaf_selectors_for(
     leaves
 }
 
+/// A derived snapshot of this node's own availability: the rows and their
+/// [`playarr_peer_sync::availability_sync::wire_digest`], computed once per
+/// derivation so a push can tell a peer "unchanged" without hashing 50,000
+/// rows every minute.
+pub struct OwnAvailability {
+    pub rows: Vec<PeerAvailabilityRow>,
+    pub digest: String,
+}
+
+impl OwnAvailability {
+    fn new(rows: Vec<PeerAvailabilityRow>) -> Self {
+        let wire: Vec<_> = rows.iter().map(wire_row).collect();
+        let digest = playarr_peer_sync::availability_sync::wire_digest(&wire);
+        Self { rows, digest }
+    }
+}
+
+fn wire_row(row: &PeerAvailabilityRow) -> playarr_peer_sync::availability_sync::AvailabilityRow {
+    playarr_peer_sync::availability_sync::AvailabilityRow {
+        media_file_id: row.media_file_id,
+        source_instance_id: row.source_instance_id,
+        path: row.path.clone(),
+        provider: row.provider.clone(),
+        external_id: row.external_id.clone(),
+        leaf_selector: row.leaf_selector.clone(),
+        group_library_id: row.group_library_id,
+        availability: row.availability,
+        container: row.container.clone(),
+        codec: row.codec.clone(),
+        bitrate: row.bitrate,
+        size_bytes: row.size_bytes,
+        duration_ms: row.duration_ms,
+        updated_at: row.updated_at,
+        title: row.title.clone(),
+        kind: row.kind,
+        release_date: row.release_date,
+    }
+}
+
 /// This node's own availability rows, from the shared snapshot when it is
 /// fresh (see [`crate::own_availability`]) and derived otherwise.
 ///
@@ -897,15 +936,19 @@ pub(crate) fn leaf_selectors_for(
 /// derives the next (up to [`crate::own_availability::DEFAULT_MAX_STALE`]), so
 /// a derivation that takes minutes on a large library never holds a peer's
 /// pull or push waiting.
-async fn derive_own_availability(
-    state: &AppState,
-) -> Result<Arc<Vec<PeerAvailabilityRow>>, ApiError> {
+async fn derive_own_availability(state: &AppState) -> Result<Arc<OwnAvailability>, ApiError> {
     let owned = state.clone();
     state
         .own_availability
         .get_or_refresh(
             crate::own_availability::DEFAULT_MAX_STALE,
-            move || async move { derive_own_availability_uncached(&owned, Utc::now()).await },
+            move || async move {
+                let rows = derive_own_availability_uncached(&owned, Utc::now()).await?;
+                // Hashing every row is CPU work for tens of thousands of rows.
+                tokio::task::spawn_blocking(move || OwnAvailability::new(rows))
+                    .await
+                    .map_err(|err| ApiError::internal(format!("availability digest failed: {err}")))
+            },
         )
         .await
 }
@@ -1045,7 +1088,7 @@ pub async fn availability_handler(
     let now = Utc::now();
     let rows = derive_own_availability(&state).await?;
     Ok(Json(AvailabilityResponse {
-        rows: rows.as_ref().clone(),
+        rows: rows.rows.clone(),
         server_time: cursor(now),
     }))
 }
@@ -1177,9 +1220,12 @@ pub async fn push_sync_handler(
     Ok(Json(response))
 }
 
+/// `send_availability` false leaves the inventory out ("unchanged"); the
+/// request still carries its digest.
 async fn build_push_request(
     state: &AppState,
     since: Option<DateTime<Utc>>,
+    send_availability: bool,
 ) -> Result<playarr_peer_sync::PushSyncRequest, ApiError> {
     use playarr_peer_sync::{account_sync, availability_sync, membership_sync, routing_sync};
 
@@ -1260,33 +1306,11 @@ async fn build_push_request(
             .map_err(|err| ApiError::internal(format!("failed to list group libraries: {err}")))?,
         server_time: server_time.clone(),
     };
-    let availability = availability_sync::AvailabilityResponse {
-        rows: derive_own_availability(state)
-            .await?
-            .iter()
-            .cloned()
-            .map(|row| availability_sync::AvailabilityRow {
-                media_file_id: row.media_file_id,
-                source_instance_id: row.source_instance_id,
-                path: row.path,
-                provider: row.provider,
-                external_id: row.external_id,
-                leaf_selector: row.leaf_selector,
-                group_library_id: row.group_library_id,
-                availability: row.availability,
-                container: row.container,
-                codec: row.codec,
-                bitrate: row.bitrate,
-                size_bytes: row.size_bytes,
-                duration_ms: row.duration_ms,
-                updated_at: row.updated_at,
-                title: row.title,
-                kind: row.kind,
-                release_date: row.release_date,
-            })
-            .collect(),
+    let own = derive_own_availability(state).await?;
+    let availability = send_availability.then(|| availability_sync::AvailabilityResponse {
+        rows: own.rows.iter().map(wire_row).collect(),
         server_time: server_time.clone(),
-    };
+    });
     let routing_rules = routing_sync::RoutingRulesResponse {
         rows: state
             .routing_rule_repo
@@ -1302,8 +1326,76 @@ async fn build_push_request(
         invites,
         libraries,
         availability,
+        availability_digest: Some(own.digest.clone()),
         routing_rules,
     })
+}
+
+/// How often a push repeats the whole inventory even though the peer says it
+/// holds it. The receiver matches rows to its own works when it receives them,
+/// so a periodic full send is what lets rows that match a work added since
+/// find it, and bounds how long a receiver that lost its copy stays behind.
+const FULL_AVAILABILITY_RESEND: Duration = Duration::from_secs(10 * 60);
+
+/// What the last push to one peer established about its copy of our inventory.
+struct AvailabilityAck {
+    /// The digest the peer said it holds.
+    digest: String,
+    /// When the rows were last actually sent.
+    rows_sent_at: std::time::Instant,
+}
+
+/// Whether the next push to a peer must carry the inventory rows. They are
+/// left out only when the peer's last answer named exactly the digest of our
+/// current inventory (a peer that predates the field never does) and the rows
+/// went out in full less than [`FULL_AVAILABILITY_RESEND`] ago.
+fn must_send_availability(
+    ack: Option<&AvailabilityAck>,
+    own_digest: &str,
+    now: std::time::Instant,
+) -> bool {
+    match ack {
+        Some(ack) => {
+            ack.digest != own_digest
+                || now.saturating_duration_since(ack.rows_sent_at) >= FULL_AVAILABILITY_RESEND
+        }
+        None => true,
+    }
+}
+
+/// Updates what is known about a peer's copy of our inventory after a push.
+/// `response` is `None` when no address accepted the push: the acknowledgement
+/// is dropped, so the next push carries the rows again.
+fn record_push_outcome(
+    acknowledged: &mut HashMap<Uuid, AvailabilityAck>,
+    peer_id: Uuid,
+    sent_digest: Option<&str>,
+    sent_rows: bool,
+    response: Option<&playarr_peer_sync::PushSyncResponse>,
+    now: std::time::Instant,
+) {
+    match (
+        sent_digest,
+        response.and_then(|r| r.availability_digest.as_deref()),
+    ) {
+        (Some(sent), Some(held)) if sent == held => {
+            let rows_sent_at = match (sent_rows, acknowledged.get(&peer_id)) {
+                (false, Some(previous)) => previous.rows_sent_at,
+                _ => now,
+            };
+            acknowledged.insert(
+                peer_id,
+                AvailabilityAck {
+                    digest: held.to_string(),
+                    rows_sent_at,
+                },
+            );
+        }
+        // The peer holds something else, is too old to say, or never got it.
+        _ => {
+            acknowledged.remove(&peer_id);
+        }
+    }
 }
 
 /// Continuously publishes this node's local changes to every reachable peer.
@@ -1315,6 +1407,7 @@ pub async fn run_push_sync_loop(
     poll_interval: Duration,
 ) {
     let mut interval = tokio::time::interval(poll_interval);
+    let mut acknowledged: HashMap<Uuid, AvailabilityAck> = HashMap::new();
     loop {
         interval.tick().await;
         let peers = match state.peer_node_repo.list_others().await {
@@ -1349,7 +1442,18 @@ pub async fn run_push_sync_loop(
                     continue;
                 }
             };
-            let request = match build_push_request(&state, since).await {
+            let send_availability = match derive_own_availability(&state).await {
+                Ok(own) => must_send_availability(
+                    acknowledged.get(&peer.id),
+                    &own.digest,
+                    std::time::Instant::now(),
+                ),
+                Err(err) => {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err.body.message, "failed to derive own availability for push sync");
+                    continue;
+                }
+            };
+            let request = match build_push_request(&state, since, send_availability).await {
                 Ok(request) => request,
                 Err(err) => {
                     tracing::warn!(peer_node_id = %peer.id, error = %err.body.message, "failed to build push sync payload");
@@ -1367,8 +1471,16 @@ pub async fn run_push_sync_loop(
                     )
                     .await
                 {
-                    Ok(_) => {
+                    Ok(response) => {
                         delivered = true;
+                        record_push_outcome(
+                            &mut acknowledged,
+                            peer.id,
+                            request.availability_digest.as_deref(),
+                            send_availability,
+                            Some(&response),
+                            std::time::Instant::now(),
+                        );
                         break;
                     }
                     Err(err) => tracing::warn!(
@@ -1378,6 +1490,18 @@ pub async fn run_push_sync_loop(
                         "peer push failed at this address; trying the next one"
                     ),
                 }
+            }
+            if !delivered {
+                // The peer may have applied part of it, or none: do not trust
+                // what it last acknowledged.
+                record_push_outcome(
+                    &mut acknowledged,
+                    peer.id,
+                    None,
+                    send_availability,
+                    None,
+                    std::time::Instant::now(),
+                );
             }
             if delivered {
                 if let Err(err) = state
@@ -1951,10 +2075,11 @@ mod sync_endpoint_tests {
                 group_libraries: vec![],
                 server_time: server_time.clone(),
             },
-            availability: availability_sync::AvailabilityResponse {
+            availability: Some(availability_sync::AvailabilityResponse {
                 rows: vec![],
                 server_time: server_time.clone(),
-            },
+            }),
+            availability_digest: None,
             routing_rules: routing_sync::RoutingRulesResponse {
                 rows: vec![],
                 server_time: server_time.clone(),
@@ -1992,6 +2117,271 @@ mod sync_endpoint_tests {
                 .cursor
                 .as_deref(),
             Some(server_time.as_str())
+        );
+    }
+
+    async fn empty_push(
+        state: &crate::test_support::TestState,
+        availability: Option<Vec<playarr_peer_sync::availability_sync::AvailabilityRow>>,
+        digest: Option<&str>,
+    ) -> playarr_peer_sync::PushSyncRequest {
+        use playarr_peer_sync::{account_sync, availability_sync, membership_sync, routing_sync};
+        let server_time = Utc::now().timestamp_millis().to_string();
+        playarr_peer_sync::PushSyncRequest {
+            membership: membership_sync::NodesResponse {
+                rows: state.app.peer_node_repo.list_all().await.unwrap(),
+            },
+            accounts: account_sync::AccountsResponse {
+                users: vec![],
+                policies: vec![],
+                server_time: server_time.clone(),
+            },
+            invites: account_sync::InvitesResponse {
+                invites: vec![],
+                invite_requests: vec![],
+                server_time: server_time.clone(),
+            },
+            libraries: account_sync::LibrariesResponse {
+                source_instances: vec![],
+                group_libraries: vec![],
+                server_time: server_time.clone(),
+            },
+            availability: availability.map(|rows| availability_sync::AvailabilityResponse {
+                rows,
+                server_time: server_time.clone(),
+            }),
+            availability_digest: digest.map(str::to_string),
+            routing_rules: routing_sync::RoutingRulesResponse {
+                rows: vec![],
+                server_time,
+            },
+        }
+    }
+
+    fn pushed_row(external_id: &str) -> playarr_peer_sync::availability_sync::AvailabilityRow {
+        playarr_peer_sync::availability_sync::AvailabilityRow {
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: Uuid::new_v4(),
+            path: format!("/media/{external_id}.mkv"),
+            provider: ExternalProvider::Tmdb,
+            external_id: external_id.to_string(),
+            leaf_selector: LeafSelector::Movie,
+            group_library_id: None,
+            availability: Availability::Available,
+            container: Some("mkv".to_string()),
+            codec: Some("h264".to_string()),
+            bitrate: None,
+            size_bytes: Some(1_000),
+            duration_ms: Some(60_000),
+            updated_at: Utc::now(),
+            title: format!("Sample {external_id}"),
+            kind: WorkKind::Movie,
+            release_date: None,
+        }
+    }
+
+    /// Row 9952: the sender leaves its inventory out once the receiver says it
+    /// holds it. The receiver keeps its rows, says which snapshot it holds, and
+    /// asks for the rows again (by naming a different digest) when the sender
+    /// declares one it does not hold.
+    #[tokio::test]
+    async fn push_sync_can_leave_an_unchanged_inventory_out() {
+        use playarr_peer_sync::availability_sync::wire_digest;
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_group_and_signed_peer(&state, peer_id, &key).await;
+        let rows = vec![pushed_row("a"), pushed_row("b")];
+        let digest = wire_digest(&rows);
+
+        let send = |payload: playarr_peer_sync::PushSyncRequest| {
+            let router = router.clone();
+            let key = key.clone();
+            async move {
+                let response = router
+                    .oneshot(signed_post(
+                        "/api/v1/peer/sync-push",
+                        &payload,
+                        peer_id,
+                        &key,
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::OK);
+                body_json(response).await
+            }
+        };
+        let stored = || async {
+            state
+                .app
+                .peer_leaf_availability_repo
+                .list_for_peer(peer_id)
+                .await
+                .unwrap()
+                .len()
+        };
+
+        // Rows plus their digest: applied, and the digest is echoed.
+        let body = send(empty_push(&state, Some(rows.clone()), Some(&digest)).await).await;
+        assert_eq!(body["availability_digest"], digest.as_str());
+        assert_eq!(stored().await, 2);
+
+        // Unchanged: no rows on the wire, the stored rows stay.
+        let body = send(empty_push(&state, None, Some(&digest)).await).await;
+        assert_eq!(body["availability_digest"], digest.as_str());
+        assert_eq!(stored().await, 2);
+
+        // The sender's inventory moved on but it left the rows out anyway: the
+        // answer names the digest held, not the one declared, and nothing is
+        // applied or removed.
+        let body = send(empty_push(&state, None, Some("3-different")).await).await;
+        assert_eq!(body["availability_digest"], digest.as_str());
+        assert_eq!(stored().await, 2);
+
+        // A pull of the same rows in between (the poller path) keeps the
+        // held digest instead of wiping it.
+        playarr_peer_sync::availability_sync::apply_availability_response(
+            playarr_peer_sync::availability_sync::AvailabilityResponse {
+                rows: rows.clone(),
+                server_time: "cursor".to_string(),
+            },
+            peer_id,
+            &state.app.work_repo,
+            &state.app.peer_leaf_availability_repo,
+            &state.app.peer_sync_state_repo,
+        )
+        .await
+        .unwrap();
+        let body = send(empty_push(&state, None, Some(&digest)).await).await;
+        assert_eq!(body["availability_digest"], digest.as_str());
+        assert_eq!(stored().await, 2);
+
+        // A sender that predates the digest sends rows and none: applied, and
+        // the digest held is the one computed from those rows, so a later
+        // "unchanged" for the old inventory is answered with the new digest.
+        let other = vec![pushed_row("c")];
+        let other_digest = wire_digest(&other);
+        let body = send(empty_push(&state, Some(other), None).await).await;
+        assert_eq!(body["availability_digest"], other_digest.as_str());
+        assert_eq!(stored().await, 1);
+        let body = send(empty_push(&state, None, Some(&digest)).await).await;
+        assert_eq!(body["availability_digest"], other_digest.as_str());
+        assert_eq!(stored().await, 1);
+    }
+
+    /// A body in the shape an older sender produces (rows, no digest) still
+    /// parses, and an unchanged push serialises without the rows.
+    #[test]
+    fn push_sync_wire_shape_stays_compatible() {
+        let old = serde_json::json!({
+            "membership": {"rows": []},
+            "accounts": {"users": [], "policies": [], "server_time": "t"},
+            "invites": {"invites": [], "invite_requests": [], "server_time": "t"},
+            "libraries": {"source_instances": [], "group_libraries": [], "server_time": "t"},
+            "availability": {"rows": [], "server_time": "t"},
+            "routing_rules": {"rows": [], "server_time": "t"},
+        });
+        let parsed: playarr_peer_sync::PushSyncRequest = serde_json::from_value(old).unwrap();
+        assert!(parsed.availability.is_some());
+        assert!(parsed.availability_digest.is_none());
+        let unchanged = playarr_peer_sync::PushSyncRequest {
+            availability: None,
+            availability_digest: Some("0-0".to_string()),
+            ..parsed
+        };
+        let wire = serde_json::to_value(&unchanged).unwrap();
+        assert!(wire.get("availability").is_none());
+        assert_eq!(wire["availability_digest"], "0-0");
+        let response: playarr_peer_sync::PushSyncResponse =
+            serde_json::from_value(serde_json::json!({"accepted_at": "2026-10-10T00:00:00Z"}))
+                .unwrap();
+        assert!(response.availability_digest.is_none());
+    }
+
+    #[test]
+    fn a_failed_or_mismatched_push_drops_the_acknowledgement() {
+        use std::time::Instant;
+        let now = Instant::now();
+        let peer = Uuid::new_v4();
+        let reply = |digest: Option<&str>| playarr_peer_sync::PushSyncResponse {
+            accepted_at: Utc::now(),
+            availability_digest: digest.map(str::to_string),
+        };
+        let mut acks = HashMap::new();
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            now,
+        );
+        assert!(!must_send_availability(acks.get(&peer), "a", now));
+        // Rows left out and acknowledged again keep the time they last went out.
+        let later = now + std::time::Duration::from_secs(300);
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            false,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        assert!(must_send_availability(
+            acks.get(&peer),
+            "a",
+            now + std::time::Duration::from_secs(601)
+        ));
+        // No address accepted the push (a rejected request, an error): forget.
+        record_push_outcome(&mut acks, peer, Some("a"), false, None, later);
+        assert!(must_send_availability(acks.get(&peer), "a", later));
+        // A reply naming another digest, or none (an older peer), also forgets.
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            false,
+            Some(&reply(Some("b"))),
+            later,
+        );
+        assert!(acks.is_empty());
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        record_push_outcome(&mut acks, peer, Some("a"), false, Some(&reply(None)), later);
+        assert!(acks.is_empty());
+    }
+
+    #[test]
+    fn the_inventory_is_left_out_only_while_the_peer_holds_the_current_one() {
+        use std::time::Instant;
+        let now = Instant::now();
+        let ack = |digest: &str, age: u64| AvailabilityAck {
+            digest: digest.to_string(),
+            rows_sent_at: now - std::time::Duration::from_secs(age),
+        };
+        assert!(must_send_availability(None, "a", now), "never acknowledged");
+        assert!(!must_send_availability(Some(&ack("a", 60)), "a", now));
+        assert!(
+            must_send_availability(Some(&ack("a", 60)), "b", now),
+            "inventory changed"
+        );
+        assert!(
+            must_send_availability(Some(&ack("a", 601)), "a", now),
+            "periodic full send"
         );
     }
 
@@ -2540,18 +2930,26 @@ mod sync_endpoint_tests {
         let state = &state.app;
         let t = std::time::Instant::now();
         let rows = cache
-            .get_or_derive(|| derive_own_availability_uncached(state, Utc::now()))
+            .get_or_derive(|| async {
+                derive_own_availability_uncached(state, Utc::now())
+                    .await
+                    .map(OwnAvailability::new)
+            })
             .await
             .unwrap();
         let cold = t.elapsed();
         let t = std::time::Instant::now();
         let again = cache
-            .get_or_derive(|| derive_own_availability_uncached(state, Utc::now()))
+            .get_or_derive(|| async {
+                derive_own_availability_uncached(state, Utc::now())
+                    .await
+                    .map(OwnAvailability::new)
+            })
             .await
             .unwrap();
         println!(
             "{works} works ({} rows): cold derivation {cold:?}, next caller {:?}",
-            rows.len(),
+            rows.rows.len(),
             t.elapsed()
         );
         assert!(Arc::ptr_eq(&rows, &again));

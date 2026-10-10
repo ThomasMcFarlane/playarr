@@ -1,0 +1,1 @@
+- Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).

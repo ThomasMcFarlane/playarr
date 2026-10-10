@@ -1667,8 +1667,10 @@ async fn boot_api(
     // gate at boot here.
     let embedding_repo: Arc<dyn playarr_db::EmbeddingRepo> =
         Arc::new(playarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
-    let media_language_repo: Arc<dyn playarr_db::MediaLanguageRepo> =
-        Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone()));
+    let media_language_repo: Arc<dyn playarr_db::MediaLanguageRepo> = Arc::new(
+        playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone())
+            .with_write_queue(write_queue.clone()),
+    );
     let catalog = Arc::new(
         playarr_catalog::CatalogService::new(
             work_repo.clone(),
@@ -2573,8 +2575,10 @@ fn spawn_poller_for(
     // wiring lands.
     let (refetch_tx, refetch_rx) = tokio::sync::mpsc::channel(64);
     source_instances.register_trigger(instance.id, refetch_tx);
-    let language_repo: Arc<dyn playarr_db::MediaLanguageRepo> =
-        Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone()));
+    let language_repo: Arc<dyn playarr_db::MediaLanguageRepo> = Arc::new(
+        playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone())
+            .with_write_queue(write_queue.clone()),
+    );
     let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
     let poller = ReconciliationPoller::new(
         instance.id,

@@ -656,6 +656,8 @@ function ItemDetails({
       className={stage ? "calendar-details tv-library-preview" : "calendar-details"}
       eyebrow={`${t(KIND_KEYS[first.media_kind])} · ${t(RELEASE_KEYS[first.release_type])}`}
       title={<span id="calendar-details-title">{itemTitle(item)}</span>}
+      // A group of episodes has no single synopsis; a lone episode or movie shows its own, when the source gave one.
+      overview={item.kind === "single" ? first.overview?.trim() || undefined : undefined}
       meta={
         <>
           {subtitle ? <span>{subtitle}</span> : null}
@@ -1260,6 +1262,7 @@ export function CalendarPage() {
           scrollKey="calendar:list"
           refreshKey={`${items.length}:${loading}`}
           contentClassName="calendar-agenda-content"
+          gridProps={{ "data-tv-honour-scroll-padding": "" }}
         >
           {isPhoneWidth ? (
             <div className="calendar-header">

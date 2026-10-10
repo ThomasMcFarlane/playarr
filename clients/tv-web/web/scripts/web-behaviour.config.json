@@ -5,6 +5,7 @@
     "calendar-nav",
     "calendar-layout",
     "calendar-agenda-e2e",
+    "calendar-agenda-synopsis-e2e",
     "tv-viewport",
     "header-parity",
     "subtitle-style-e2e",

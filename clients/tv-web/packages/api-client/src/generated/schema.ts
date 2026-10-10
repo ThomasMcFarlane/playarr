@@ -4004,6 +4004,11 @@ export interface components {
              */
             members?: components["schemas"]["CalendarGroupMember"][];
             monitored: boolean;
+            /**
+             * @description Synopsis of the episode (the series' when the episode has none) or movie, as the source
+             *     reported it. Absent when the source gave none.
+             */
+            overview?: string | null;
             /** @description Absolute external artwork URL only, never an instance-local path. */
             poster_url?: string | null;
             /**
