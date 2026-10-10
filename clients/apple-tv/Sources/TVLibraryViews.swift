@@ -132,7 +132,6 @@ struct TVHomeView: View {
                 LazyHStack(alignment: .top, spacing: 24.9) {
                     ForEach(works) { work in
                         let focus = HomeRailCardFocus(rail: id, workID: work.id)
-                        let first = work.id == works.first?.id
                         NavigationLink {
                             TVWorkDetailView(work: work, apiClient: environment.apiClient)
                         } label: {
@@ -142,10 +141,6 @@ struct TVHomeView: View {
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCard, equals: focus)
-                        // Web: Left from a rail's first card lands on the active nav tab, not the nearest one.
-                        .onMoveCommand { direction in
-                            if direction == .left, first { requestNavFocus() }
-                        }
                     }
                 }
                 .padding(.leading, Self.cardBleed)

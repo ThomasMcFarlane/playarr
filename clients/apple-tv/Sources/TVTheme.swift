@@ -637,6 +637,11 @@ struct TVFloatingNav: View {
         }
     }
 
+    private var navHasFocus: Bool {
+        if case .nav = externalFocus.wrappedValue { return true }
+        return false
+    }
+
     @ViewBuilder
     private func navButton(_ tab: TVNavTab) -> some View {
         let isActive = selection == tab
@@ -676,7 +681,9 @@ struct TVFloatingNav: View {
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         .focused(externalFocus, equals: .nav(tab))
-        .disabled(suppressFocusChrome) // not .focusable: on a Button it adds a second, inert focus target
+        // not .focusable: on a Button it adds a second, inert focus target. While focus is outside the nav only the
+        // active tab can take it, so Left from the page lands on the active tab (web), not the nearest one.
+        .disabled(suppressFocusChrome || (!navHasFocus && !isActive))
         .focusEffectDisabled(suppressFocusChrome)
         .onMoveCommand { direction in
             // Right from any dock item jumps into the stage (first rail card).
