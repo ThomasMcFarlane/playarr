@@ -195,6 +195,7 @@ jobs:
           filters: |
             xbox:
               - 'clients/xbox/**'
+              - '.github/workflows/xbox-ci.yml'
               - '.github/workflows/ci.yml'
             harmony:
               - 'clients/harmony/**'
@@ -490,6 +491,63 @@ jobs:
 
       - name: dotnet test (Playarr.Core.Tests)
         run: dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj
+
+  # ---------------------------------------------------------------------
+  # Xbox UWP head (Windows): the PR-time Windows build. Builds the unsigned
+  # x64 sideload package exactly as xbox-ci.yml does (minus the release
+  # environment) and uploads it with its framework dependencies, so a PR
+  # build can be sideloaded on a Windows desktop for parity checks.
+  # ---------------------------------------------------------------------
+  xbox-uwp-package:
+    name: Xbox UWP package (Windows)
+    needs: changes
+    if: needs.changes.outputs.xbox == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # Test builds only: a publisher in Windows' unsigned namespace lets a desktop install this package with
+      # `Add-AppxPackage -AllowUnsigned`, with no certificate and no admin rights. Release builds keep CN=Playarr.
+      - name: Use the unsigned-namespace publisher
+        shell: pwsh
+        run: |
+          $manifest = 'clients/xbox/src/Playarr.Xbox/Package.appxmanifest'
+          $text = Get-Content $manifest -Raw
+          $updated = $text -replace 'Publisher="CN=Playarr"', 'Publisher="CN=Playarr, OID.2.25.311729368913984317654407730594956997722=1"'
+          if ($updated -eq $text) { throw 'Package.appxmanifest Publisher not found' }
+          Set-Content -Path $manifest -Value $updated -NoNewline
+
+      - name: Build the unsigned x64 package
+        shell: pwsh
+        run: |
+          msbuild clients/xbox/src/Playarr.Xbox/Playarr.Xbox.csproj /restore /m `
+            /p:Configuration=Release /p:Platform=x64 `
+            /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false `
+            "/p:AppxPackageDir=$env:RUNNER_TEMP\AppPackages\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $all = Get-ChildItem "$env:RUNNER_TEMP\AppPackages" -Recurse -Include *.msix, *.appx
+          $package = $all | Where-Object { $_.FullName -notmatch '\\Dependencies\\' } | Select-Object -First 1
+          if (-not $package) { throw 'msbuild produced no MSIX/APPX package' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\xbox" | Out-Null
+          Copy-Item $package.FullName "$env:RUNNER_TEMP\xbox\playarr-xbox-x64-unsigned$($package.Extension)"
+          $all | Where-Object { $_.FullName -match '\\Dependencies\\x64\\' } | ForEach-Object {
+            Copy-Item $_.FullName "$env:RUNNER_TEMP\xbox\dependency-$($_.Name)"
+          }
+          Get-ChildItem "$env:RUNNER_TEMP\xbox"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-xbox-pr-package
+          path: ${{ runner.temp }}/xbox/*
+          retention-days: 7
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------
   # HarmonyOS (clients/harmony -- native ArkTS/ArkUI HarmonyOS NEXT client).
@@ -949,6 +1007,7 @@ jobs:
       - android-check
       - android-apk
       - xbox-check
+      - xbox-uwp-package
       - harmony-check
       - tv-web-check
       - server-image-web
@@ -968,7 +1027,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check android-apk xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook web-behaviour openapi-contract-check; do
+          for job in changes backend-check android-check android-apk xbox-check xbox-uwp-package harmony-check tv-web-check server-image-web firetv-check web-layout-parity web-storybook web-behaviour openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

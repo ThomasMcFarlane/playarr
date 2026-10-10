@@ -118,10 +118,16 @@ jobs:
             /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false `
             "/p:AppxPackageDir=$env:RUNNER_TEMP\AppPackages\"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $package = Get-ChildItem "$env:RUNNER_TEMP\AppPackages" -Recurse -Include *.msix, *.appx | Select-Object -First 1
+          # The output also holds the framework packages under Dependencies\<arch>; pick the app's own package.
+          $all = Get-ChildItem "$env:RUNNER_TEMP\AppPackages" -Recurse -Include *.msix, *.appx
+          $package = $all | Where-Object { $_.FullName -notmatch '\\Dependencies\\' } | Select-Object -First 1
           if (-not $package) { throw 'msbuild produced no MSIX/APPX package' }
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\xbox" | Out-Null
           Copy-Item $package.FullName "$env:RUNNER_TEMP\xbox\playarr-xbox-$env:VERSION-x64-unsigned$($package.Extension)"
+          # x64 framework dependencies (.NET Native, VCLibs): sideloading needs them installed first.
+          $all | Where-Object { $_.FullName -match '\\Dependencies\\x64\\' } | ForEach-Object {
+            Copy-Item $_.FullName "$env:RUNNER_TEMP\xbox\playarr-xbox-$env:VERSION-x64-dependency-$($_.Name)"
+          }
           Get-ChildItem "$env:RUNNER_TEMP\xbox"
 
       - name: Keep the generated manifest for diagnosis

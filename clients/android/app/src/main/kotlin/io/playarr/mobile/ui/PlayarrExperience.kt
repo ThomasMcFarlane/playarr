@@ -2853,7 +2853,7 @@ internal fun webRailSurfaceBrush(): Brush {
  * 62.208 dp box with the glyphs centred, which is where CSS puts them.
  */
 @Composable
-private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
+internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = LocalDensity.current
     val style = androidx.compose.ui.text.TextStyle(
@@ -2864,16 +2864,31 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
         fontFamily = webFontFamily,
         textMotion = if (webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
     )
-    val lines = remember(title, density, webFontFamily) {
+    val lines = remember(title, density, webFontFamily, maxLines) {
         // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
         val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
-        val result = measurer.measure(
+        fun measureAt(width: Int) = measurer.measure(
             text = title,
             style = style,
-            constraints = androidx.compose.ui.unit.Constraints(maxWidth = nineCh),
-            maxLines = 2,
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = width),
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
+        // CSS `text-wrap: balance`: the narrowest width that keeps the same line count without overflowing.
+        val greedy = measureAt(nineCh)
+        val lineCount = greedy.lineCount
+        val result = if (lineCount < 2 || greedy.hasVisualOverflow) greedy else {
+            var low = nineCh / 2
+            var high = nineCh
+            while (high - low > 1) {
+                val mid = (low + high) / 2
+                val probe = measureAt(mid)
+                // Never narrower than a word: every line must end at a space, as CSS breaks only at soft wrap opportunities.
+                val wordBreaks = (0 until probe.lineCount - 1).all { probe.getLineEnd(it).let { end -> end <= 0 || end >= title.length || title[end - 1].isWhitespace() || title[end].isWhitespace() } }
+                if (probe.lineCount == lineCount && !probe.hasVisualOverflow && wordBreaks) high = mid else low = mid
+            }
+            measureAt(high)
+        }
         (0 until result.lineCount).map { title.substring(result.getLineStart(it), result.getLineEnd(it, visibleEnd = true)).trimEnd() }
     }
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = title }) {
@@ -3488,12 +3503,12 @@ private fun LibraryFiltersDialog(
     }
     PlayarrFiltersSheet(
         title = playarrString(PlayarrString.LibraryFilters),
-        kicker = null,
+        kicker = if (playarrTvDrawer()) playarrString(PlayarrString.LibraryControls) else null,
         closeLabel = playarrString(PlayarrString.LibraryCloseFilters),
         onClose = onDismiss,
     ) {
         run {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(if (playarrTvDrawer()) 30.dp else 14.dp)) {
                 LibraryFilterChoices(
                     playarrString(PlayarrString.LibraryView),
                     availableViewModes,
@@ -3576,10 +3591,12 @@ private fun LibraryLanguageChoices(
     // A selected language whose count dropped to zero must stay visible so it can be unticked.
     val entries = facets + selected.filter { code -> facets.none { it.code == code } }
         .map { LanguageFacetEntry(code = it, count = -1) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    val tv = playarrTvDrawer()
+    Column(verticalArrangement = Arrangement.spacedBy(if (tv) 13.dp else 6.dp)) {
+        if (tv) PlayarrTvDrawerHeading(title) else Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         if (entries.isEmpty()) {
-            Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
+            if (tv) Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInk, fontSize = 19.2.sp, lineHeight = 28.8.sp)
+            else Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(entries, key = { it.code }) { entry ->
@@ -3602,6 +3619,16 @@ private fun <T> LibraryFilterChoices(
     label: @Composable (T) -> String,
 ) {
     val language = LocalPlayarrLanguage.current
+    if (playarrTvDrawer()) {
+        // Web drawer segmented control: the segments share the row equally.
+        Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            PlayarrTvDrawerHeading(title)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                values.forEach { value -> PlayarrChoice(label(value), value == selected, Modifier.weight(1f)) { onSelected(value) } }
+            }
+        }
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -4599,7 +4626,34 @@ private fun MediaContextDialog(
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
     var resolvingDownload by remember(work.id) { mutableStateOf(false) }
     var downloadCandidates by remember(work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
-    PlayarrPanel(
+    val download = {
+        resolvingDownload = true
+        viewModel.resolveDownloadCandidates(work, language) { candidates ->
+            resolvingDownload = false
+            downloadCandidates = candidates
+        }
+    }
+    if (playarrTvDrawer()) {
+        // Web `MediaContextMenu` drawer: "Title actions", the title, then 68 dp rows with a crimson glyph.
+        PlayarrFiltersSheet(
+            title = work.title,
+            kicker = playarrString(PlayarrString.ContextTitleActions),
+            closeLabel = playarrString(PlayarrString.CommonClose),
+            onClose = onDismiss,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // shortcut: Open stands in for web's Play (a bare Work has no media file to start); add Play when the
+                // context menu can start playback from the work.
+                TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
+                if (canDownload) {
+                    TvDrawerActionRow("\u21E9", playarrString(if (resolvingDownload) PlayarrString.ContextResolving else PlayarrString.ContextDownload), download, enabled = !resolvingDownload)
+                }
+                TvDrawerActionRow("\uFF0B", playarrString(PlayarrString.ContextAddToPlaylist), { addToPlaylist = true })
+                TvDrawerActionRow("\u2713", playarrString(PlayarrString.ContextMarkWatched), { onMark(true) })
+                TvDrawerActionRow("\u25CB", playarrString(PlayarrString.ContextMarkUnwatched), { onMark(false) })
+            }
+        }
+    } else PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(work.title) },
         text = {
@@ -4612,13 +4666,7 @@ private fun MediaContextDialog(
                 }
                 if (canDownload) {
                     PlayarrButton(
-                        onClick = {
-                            resolvingDownload = true
-                            viewModel.resolveDownloadCandidates(work, language) { candidates ->
-                                resolvingDownload = false
-                                downloadCandidates = candidates
-                            }
-                        },
+                        onClick = download,
                         enabled = !resolvingDownload,
                         modifier = Modifier.fillMaxWidth(),
                         variant = PlayarrButtonVariant.Secondary,
@@ -4650,6 +4698,25 @@ private fun MediaContextDialog(
     }
     downloadCandidates?.let { candidates ->
         DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
+    }
+}
+
+/** Web drawer action row: 68 dp, 14 dp radius, `--surface-soft`, a 19.52 px crimson glyph in a 42 dp slot, a bold 19.2 px label; focus is the ring. */
+@Composable
+private fun TvDrawerActionRow(glyph: String, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(14.dp),
+        color = WebSurfaceSoft,
+        contentColor = WebInk,
+        modifier = Modifier.fillMaxWidth().height(68.dp).webFocusRing(focused, radius = 14.dp, offset = 0.dp).onFocusChanged { focused = it.isFocused },
+    ) {
+        Row(Modifier.padding(start = 18.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(glyph, color = WebKicker, fontSize = 19.52.sp, lineHeight = 29.28.sp, modifier = Modifier.width(42.dp))
+            Text(label, fontSize = 19.2.sp, lineHeight = 28.8.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -5870,7 +5937,7 @@ private fun VideoDetailCopy(
                 } else {
                     (work.genres.firstOrNull() ?: work.kind.playarrSingularLabel()).uppercase(language.locale)
                 },
-                color = WebKicker,
+                color = PlayarrWebTheme.palette.brandInk,
                 fontSize = 12.288.sp,
                 fontWeight = FontWeight(820),
                 letterSpacing = 0.983.sp,
@@ -5895,7 +5962,7 @@ private fun VideoDetailCopy(
                 chips.forEachIndexed { index, item ->
                     Text(
                         item,
-                        color = if (index == 0) WebInkSoft else WebInkMuted,
+                        color = WebInkSoft,
                         fontSize = 10.56.sp,
                         lineHeight = 15.84.sp,
                         fontWeight = if (index == 0) FontWeight(680) else FontWeight.Normal,
@@ -5909,12 +5976,12 @@ private fun VideoDetailCopy(
                     ?: playarrString(
                         if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
                     ),
-                color = WebInkMuted,
+                color = WebInkSoft,
                 fontSize = 12.864.sp,
                 lineHeight = 20.325.sp,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 360.dp),
+                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 324.dp),
             )
         }
         return
@@ -6077,7 +6144,8 @@ private fun VideoDetailActions(
         )
     }
     if (television) {
-        val playLabel = if (smartPlan != null) {
+        // Web `movieActionLabel`: a film says "Resume from m:ss" or "Play"; only series use the smart plan's label.
+        val playLabel = if (smartPlan != null && work.kind != WorkKind.Movie) {
             playarrString(smartPlan.buttonLabel())
         } else if (progress?.state == WatchState.PartWatched) {
             playarrString(PlayarrString.DetailResumeFrom, "position" to formatPlayarrPlayerTime(progress.positionMs))
@@ -6089,7 +6157,8 @@ private fun VideoDetailActions(
                 label = playLabel,
                 glyph = "\u25B6",
                 primary = true,
-                ink = episode != null || work.kind != WorkKind.Movie,
+                // Web `.tv-detail-play`: the ink pill for films and series alike.
+                ink = true,
                 onClick = {
                     val target = smartPlan?.target
                     when {
@@ -6359,7 +6428,7 @@ internal fun SeriesEpisodeBrowser(
         modifier = modifier
             .then(
                 if (isTelevision) {
-                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 410.dp)
+                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 348.dp)
                 } else {
                     Modifier.glass(RoundedCornerShape(16.dp), WebGlass.Panel).padding(14.dp)
                 },
@@ -6546,8 +6615,22 @@ private fun WebEpisodeDetailCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Web `MediaThumbnailArtwork`: the episode's own still when it has one, else the frame thumbnail, over the
+                // series backdrop fallback; each shows through if the one above fails.
+                episode.mediaFileId?.let { mediaFileId ->
+                    AuthenticatedMediaThumbnail(
+                        mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
+                        AuthenticatedMediaThumbnail(
+                            mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                            modifier = Modifier.fillMaxSize(),
+                            artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
+                        )
+                    }
+                }
             }
-            // Web `WorkDetail` draws the series backdrop on every episode tile (`episodeArtwork = backdrop`): no frame thumbnail or still.
             Text(
                 episode.episode.episodeNumber.toString().padStart(2, '0'),
                 color = Color.White,
@@ -6681,7 +6764,7 @@ internal fun MovieDetailBrowser(
             if (chapters.isNotEmpty()) {
                 WebMediaTrack(
                     title = playarrString(PlayarrString.DetailChapters),
-                    count = playarrString(PlayarrString.DetailSceneMarkersCount, "count" to chapters.size),
+                    count = playarrString(PlayarrString.DetailChaptersCount, "count" to chapters.size),
                     state = tvRails.rowState(chaptersRail),
                 ) {
                     itemsIndexed(chapters, key = { _, it -> it.index }) { chapterIndex, chapter ->

@@ -146,7 +146,7 @@ internal fun PlayarrFiltersSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     PlayarrSheetFrame(
-        titleContent = { Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() }) },
+        titleContent = { if (playarrTvDrawer()) Text(title, modifier = Modifier.semantics { heading() }) else Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() }) },
         kicker = kicker,
         closeLabel = closeLabel,
         onClose = onClose,
@@ -174,7 +174,7 @@ internal fun PlayarrPanel(
 ) {
     PlayarrSheetFrame(
         titleContent = title?.let { t ->
-            { androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 26.sp, fontWeight = FontWeight(590), color = WebInk)) { Box(Modifier.semantics { heading() }) { t() } } }
+            { if (playarrTvDrawer()) Box(Modifier.semantics { heading() }) { t() } else androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 26.sp, fontWeight = FontWeight(590), color = WebInk)) { Box(Modifier.semantics { heading() }) { t() } } }
         },
         kicker = null,
         closeLabel = playarrString(PlayarrString.CommonClose),
@@ -200,6 +200,10 @@ private fun PlayarrSheetFrame(
 ) {
     val focus = remember { FocusRequester() }
     val dismiss = if (dismissible) onClose else ({})
+    if (io.playarr.shared.designsystem.page.LocalPlayarrFormFactor.current == io.playarr.shared.designsystem.page.PlayarrFormFactor.Tv) {
+        PlayarrTvDrawer(titleContent, kicker, closeLabel, onClose, dismissible, footer, focus, content)
+        return
+    }
     Dialog(
         onDismissRequest = dismiss,
         properties = DialogProperties(
@@ -248,18 +252,123 @@ private fun PlayarrSheetFrame(
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
 
+/** True on the television layout, where the shared drawer and its controls take the web TV metrics. */
+@Composable
+internal fun playarrTvDrawer(): Boolean =
+    io.playarr.shared.designsystem.page.LocalPlayarrFormFactor.current == io.playarr.shared.designsystem.page.PlayarrFormFactor.Tv
+
+/**
+ * Web `Drawer` on the TV layout: a 360 dp column at the right edge, full height, `--surface-strong` at 94% with the
+ * `-32px 0 90px rgba(40,26,24,.24)` shadow, no page scrim; 46 dp gutters, the 9.6 px eyebrow, the 38.4 px title and the
+ * round 48 x 50 close button.
+ */
+@Composable
+private fun PlayarrTvDrawer(
+    titleContent: (@Composable () -> Unit)?,
+    kicker: String?,
+    closeLabel: String,
+    onClose: () -> Unit,
+    dismissible: Boolean,
+    footer: (@Composable RowScope.() -> Unit)?,
+    focus: FocusRequester,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val dismiss = if (dismissible) onClose else ({})
+    Dialog(
+        onDismissRequest = dismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = dismissible,
+            dismissOnClickOutside = dismissible,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setDimAmount(0f)
+        Box(Modifier.fillMaxSize().clickable(interactionSource = null, indication = null, onClick = dismiss)) {
+            val shadow = Color(0x3D281A18)
+            Box(
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(360.dp)
+                    .drawBehind {
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Transparent, shadow), startX = -122.dp.toPx(), endX = 0f),
+                            topLeft = androidx.compose.ui.geometry.Offset(-122.dp.toPx(), 0f),
+                            size = androidx.compose.ui.geometry.Size(122.dp.toPx(), size.height),
+                        )
+                    }
+                    .background(WebSurfaceStrong.copy(alpha = 0.94f))
+                    .clickable(interactionSource = null, indication = null, enabled = false) {},
+            ) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(start = 46.dp, end = 46.dp, top = 54.dp, bottom = 46.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                            if (kicker != null) {
+                                Text(kicker.uppercase(), color = WebInkSoft, fontSize = 9.6.sp, lineHeight = 14.4.sp, fontWeight = FontWeight(720), letterSpacing = 0.672.sp)
+                            }
+                            androidx.compose.material3.ProvideTextStyle(
+                                androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 38.4.sp, lineHeight = 57.6.sp, fontWeight = FontWeight(590), letterSpacing = (-2.112).sp),
+                            ) { Box(Modifier.padding(top = if (kicker != null) 4.dp else 0.dp)) { titleContent?.invoke() } }
+                        }
+                        if (dismissible) {
+                            val source = remember { MutableInteractionSource() }
+                            val focused by source.collectIsFocusedAsState()
+                            Surface(
+                                onClick = onClose,
+                                interactionSource = source,
+                                shape = CircleShape,
+                                color = WebSurfaceSoft,
+                                contentColor = WebInk,
+                                border = BorderStroke(1.dp, io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.pillBorder),
+                                modifier = Modifier.size(48.dp, 50.dp).focusRequester(focus).webFocusRing(focused, offset = 2.dp)
+                                    .semantics { contentDescription = closeLabel },
+                            ) {
+                                Box(contentAlignment = Alignment.Center) { Text("\u00D7", fontSize = 26.88.sp, fontWeight = FontWeight(720)) }
+                            }
+                        }
+                    }
+                    Column(Modifier.padding(top = 33.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) { content() }
+                    if (footer != null) {
+                        Row(Modifier.padding(top = 30.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = footer)
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
 @Composable
 internal fun PlayarrFilterSection(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title.uppercase(), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.semantics { heading() })
+    val tv = playarrTvDrawer()
+    Column(verticalArrangement = Arrangement.spacedBy(if (tv) 13.dp else 10.dp)) {
+        if (tv) PlayarrTvDrawerHeading(title)
+        else Text(title.uppercase(), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.semantics { heading() })
         content()
     }
 }
 
 @Composable
-internal fun PlayarrChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun PlayarrChoice(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
+    if (playarrTvDrawer()) {
+        // Web drawer segment: 56 dp, 12 dp radius, hairline border, `--surface-soft` at 64%; the active one is ink.
+        Surface(
+            onClick = onClick,
+            interactionSource = source,
+            color = if (selected) WebInk else WebSurfaceSoft.copy(alpha = 0.64f),
+            contentColor = if (selected) WebBackground else WebInkSoft,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.hairline(0.10f, 0.12f)),
+            modifier = modifier.height(56.dp).webFocusRing(focused, radius = 12.dp, offset = 2.dp),
+        ) {
+            Box(Modifier.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                Text(label.replaceFirstChar { it.titlecase() }, fontSize = 10.56.sp, lineHeight = 15.84.sp, fontWeight = FontWeight(680), maxLines = 1)
+            }
+        }
+        return
+    }
     val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
@@ -267,7 +376,7 @@ internal fun PlayarrChoice(label: String, selected: Boolean, onClick: () -> Unit
         color = if (selected) WebInk else WebSurfaceSoft.copy(alpha = 0.64f),
         contentColor = if (selected) WebSurface else WebInkSoft,
         shape = shape,
-        modifier = Modifier.heightIn(min = 44.dp).webFocusRing(focused, radius = 12.dp, offset = 0.dp),
+        modifier = modifier.heightIn(min = 44.dp).webFocusRing(focused, radius = 12.dp, offset = 0.dp),
     ) {
         Box(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
             Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -382,3 +491,9 @@ internal fun PlayarrErrorState(message: PlayarrMessage, onRetry: () -> Unit) {
 @Composable
 internal fun playarrErrorState(message: PlayarrMessage, onRetry: () -> Unit): PlayarrPageState =
     PlayarrPageState.Error(PlayarrErrorSpec(playarrText(message), playarrString(PlayarrString.CommonTryAgain)), onRetry)
+
+/** Web drawer section heading (`h3`): 9.6 px, weight 720, 0.07em, uppercase, `--ink-soft`. */
+@Composable
+internal fun PlayarrTvDrawerHeading(title: String) {
+    Text(title.uppercase(), color = WebInkSoft, fontSize = 9.6.sp, lineHeight = 14.4.sp, fontWeight = FontWeight(720), letterSpacing = 0.672.sp, modifier = Modifier.semantics { heading() })
+}

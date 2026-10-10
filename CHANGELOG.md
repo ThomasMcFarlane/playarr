@@ -13,6 +13,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: a focused checkbox (Settings Your data and Remote, Calendar monitored-only switch) no longer traps keyboard and D-pad focus; arrow keys now move spatial focus away, Space still toggles.
+- Apple TV: library cards open the title on Select and show the card focus glow; the Playlists tab lists your playlists; Back on a top-level page returns Home and pops pushed pages first; Left into the nav lands on the active tab; the nav ends with the profile tile (Who's watching, Settings from the gear) instead of a Settings group; settings rows use the web focus look and the panel follows focus.
+- Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
+- LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
+- Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).
 - Arr sync: a file the source replaced is removed only when exactly one replacement exists for the same episode or movie, and viewers's resume positions and choices move to it first. A file the source drops with no replacement is hidden (marked missing) and keeps its progress; it returns if the source lists it again. A pass that would change over half of a work's files, or over 200, changes nothing.
 - Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
 - Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.
@@ -406,6 +411,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Calendar: no Request button in any calendar view, and the "not in your catalogue" and "request provider" messages are gone from the calendar details. The request-unavailable reason shown elsewhere now reads "Requests are not available for this title yet".
+- Web: the shared multi-select is a plain checkbox list driven only by D-pad or arrow keys (no search box or on-screen keyboard); the Calendar Filters lose the duplicate Source filter and the date range (old links keep working). Rows 1.9984, 1.9985.
+- Web: Search Filters keep only Type; the duplicate Library filter is removed (old `?library=` links keep working). Row 1.9988.
 - Apple TV: Home is the web TV Home: the hero follows the focused card, the server shelves sit on the right with the web card size, focus lift and glow, On deck leads with progress bars, and a skeleton replaces the "Loading your library" screen. Remote focus reaches the nav rail again, pages sit at the web positions under the floating nav, and the clock sits and ticks where the web shows it.
 - Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
 - Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.
@@ -903,6 +911,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the tvOS live simulator workflow and its keepalive script: the live Apple TV simulator runs only on the MacBook over ssh (owner decision), and this public repository never runs a self-hosted or long-lived Apple runner job.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
