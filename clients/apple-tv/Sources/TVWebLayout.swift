@@ -534,7 +534,8 @@ private struct TVLongPressActions: ViewModifier {
     @Environment(\.openActions) private var openActions
 
     func body(content: Content) -> some View {
-        content.simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in openActions(work) })
+        // Exclusive (not simultaneous): a long press must not also open the card on release.
+        content.onLongPressGesture(minimumDuration: 0.65) { openActions(work) }
     }
 }
 

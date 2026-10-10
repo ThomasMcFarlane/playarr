@@ -1872,7 +1872,7 @@ struct TVActionsDrawer: View {
                     }
                     TVActionRow(glyph: "\u{2190}", label: "Back") { self.playlists = nil }
                 } else {
-                    TVActionRow(glyph: "\u{25B6}", label: "Play") { Task { await play() } }
+                    TVActionRow(glyph: "\u{25B6}\u{FE0E}", label: "Play") { Task { await play() } }
                     TVActionRow(glyph: "\u{FF0B}", label: "Add to Playlist") {
                         Task { playlists = (try? await environment.apiClient.listPlaylists()) ?? [] }
                     }
