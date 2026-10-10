@@ -1,1 +1,0 @@
-- Web: the profile group and the version label sit at the bottom of the left nav (version below the group), and the nav starts below the Playarr logo instead of overlapping it.

@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: list rows (Watchlist, Requests, Downloads) keep their natural height and stack from the top; one item no longer stretches to the panel height (1.9967).
+- Web: on a first visit with nothing cached (for example a cold load of the Watchlist) the left nav no longer sits empty while the library-kinds read is in flight. It shows its full tile set at once, with skeleton tiles for Series, Movies and Music (not focusable, hidden from assistive technology), and the other tiles stay in place when the answer arrives (1.9970).
+- Web: the profile group and the version label sit at the bottom of the left nav (version below the group), and the nav starts below the Playarr logo instead of overlapping it.
 - Series cast lookups send a User-Agent (the metadata service refused requests without one with HTTP 400), log one summary line per pass instead of one warning per series, and stop for the rest of the run after 5 consecutive rejections.
 - Web: the Library A to Z rail now runs to the bottom of the stage like the grid and fades out with the shared soft edge mask (the top fades to nothing, so no letter is cut by a straight clip edge); a focused letter settles clear of the fade. Owner request 2026-10-10.
 - Web calendar agenda: only the focused entry shows the pink ring and glow (a selected entry that lost focus keeps a firmer outline only), and each day heading now sticks under the page header while its entries scroll beneath it.
@@ -2649,6 +2652,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web: `nav-list-rows-e2e` checks row heights with 1, 2 and 10 watchlist items at 1920 and 1280 (1.9967).
+- Web: `nav-cold-start-e2e` loads Watchlist cold against a server that answers every read after 1 s and checks the nav is never blank, its skeleton tiles are inert, and no tile moves (1.9970).
 - Unit tests for the relay address normaliser and the 443 then 8484 probe order, plus `relay-port-e2e.mjs`, which signs in through a relay name served only on 8484.
 - Web: the focus-style end-to-end check covers calendar agenda, week and month cards in both themes at 1920 and 1280; Storybook stories for the details panel and status pill.
 - Web behaviour gate: nav-smoke, tablet-layout, focus-style-e2e and edge-fade-e2e no longer sit in `tracked`, so a failure now blocks `ci-required` (row 9623).

@@ -1,1 +1,0 @@
-- Web: `nav-list-rows-e2e` checks row heights with 1, 2 and 10 watchlist items at 1920 and 1280 (1.9967).

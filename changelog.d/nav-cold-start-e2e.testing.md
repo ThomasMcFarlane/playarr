@@ -1,1 +1,0 @@
-- Web: `nav-cold-start-e2e` loads Watchlist cold against a server that answers every read after 1 s and checks the nav is never blank, its skeleton tiles are inert, and no tile moves (1.9970).
