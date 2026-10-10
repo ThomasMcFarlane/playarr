@@ -35,6 +35,13 @@ describe("shouldNavigateFromFormControl", () => {
     }
   );
 
+  it.each(["checkbox", "button", "submit"])("releases every arrow from a %s input", (type) => {
+    for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+      expect(shouldNavigateFromFormControl(key, input(type, 0, 0, 0))).toBe(true);
+    }
+    expect(shouldNavigateFromFormControl(" ", input(type, 0, 0, 0))).toBe(false);
+  });
+
   it("keeps horizontal arrows native while text is selected", () => {
     expect(shouldNavigateFromFormControl("ArrowLeft", input("text", 0, 3))).toBe(false);
     expect(shouldNavigateFromFormControl("ArrowRight", input("text", 0, 5))).toBe(false);
