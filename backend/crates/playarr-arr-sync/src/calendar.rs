@@ -27,6 +27,11 @@ pub struct CalendarCandidate {
     pub work_ref: Option<(ExternalProvider, String)>,
 }
 
+/// A synopsis with its surrounding whitespace trimmed, or `None` when blank.
+fn non_empty(text: Option<&str>) -> Option<String> {
+    text.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string)
+}
+
 /// Fetches and normalises one instance's calendar for the inclusive window.
 /// Kinds without a calendar (Bazarr, Prowlarr, Whisparr) yield no entries.
 pub async fn fetch_calendar(
@@ -101,6 +106,9 @@ pub async fn fetch_calendar(
                         poster_url: ep.series.as_ref().and_then(|s| poster(&s.images)),
                         work_id: None,
                         average_lag_seconds: None,
+                        overview: non_empty(ep.overview.as_deref()).or_else(|| {
+                            non_empty(ep.series.as_ref().and_then(|s| s.overview.as_deref()))
+                        }),
                         sources: vec![source(ep.id)],
                         snapshot: None,
                         actions: vec![],
@@ -157,6 +165,7 @@ pub async fn fetch_calendar(
                             poster_url: poster(&movie.images),
                             work_id: None,
                             average_lag_seconds: None,
+                            overview: non_empty(movie.overview.as_deref()),
                             sources: vec![source(movie.id)],
                             snapshot: None,
                             actions: vec![],
@@ -206,6 +215,7 @@ pub async fn fetch_calendar(
                         poster_url: poster(&album.images),
                         work_id: None,
                         average_lag_seconds: None,
+                        overview: None,
                         sources: vec![source(album.id)],
                         snapshot: None,
                         actions: vec![],
@@ -257,6 +267,7 @@ pub async fn fetch_calendar(
                         poster_url: poster(&book.images),
                         work_id: None,
                         average_lag_seconds: None,
+                        overview: None,
                         sources: vec![source(book.id)],
                         snapshot: None,
                         actions: vec![],
@@ -473,6 +484,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn synopsis_is_the_episode_s_then_the_series_then_none() {
+        let server = MockServer::start().await;
+        let ep = |id: i64, number: i64, overview: serde_json::Value| {
+            json!({
+                "id": id, "seriesId": 3, "seasonNumber": 1, "episodeNumber": number, "title": "T",
+                "airDateUtc": "2026-10-04T01:00:00Z", "overview": overview,
+                "series": {"id": 3, "title": "Show", "tvdbId": 42, "overview": "Series synopsis."}
+            })
+        };
+        let mut blank_series = ep(3, 3, json!(""));
+        blank_series["series"]["overview"] = json!("  ");
+        mount(
+            &server,
+            "/api/v3/calendar",
+            json!([ep(1, 1, json!("Episode synopsis.")), ep(2, 2, json!("")), blank_series]),
+        )
+        .await;
+        let inst = instance(SourceKind::Sonarr, "TV", server.uri());
+        let got = fetch_calendar(&inst, day("2026-10-01"), day("2026-10-31"))
+            .await
+            .unwrap();
+        let by_episode = |n: i64| {
+            got.iter()
+                .find(|c| c.entry.episode_number == Some(n))
+                .unwrap()
+                .entry
+                .overview
+                .clone()
+        };
+        assert_eq!(by_episode(1).as_deref(), Some("Episode synopsis."));
+        assert_eq!(by_episode(2).as_deref(), Some("Series synopsis."));
+        assert_eq!(by_episode(3), None);
+    }
+
+    #[tokio::test]
     async fn radarr_movie_yields_one_entry_per_date_inside_the_window() {
         let server = MockServer::start().await;
         mount(
@@ -563,6 +609,7 @@ mod tests {
                     poster_url: None,
                     work_id: None,
                     average_lag_seconds: None,
+                    overview: None,
                     snapshot: None,
                     actions: vec![],
                     members: vec![],

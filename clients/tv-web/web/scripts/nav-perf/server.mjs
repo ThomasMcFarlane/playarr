@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, calendarPerDay = 4, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, latencyMs = 0, resyncAfterMs = -1, lagAverageSeconds = null }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, calendarPerDay = 4, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, latencyMs = 0, resyncAfterMs = -1, lagAverageSeconds = null, calendarOverviews = false }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -157,7 +157,10 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       for (let day = new Date(`${start}T00:00:00Z`), n = 0; day <= new Date(`${end}T00:00:00Z`); day = new Date(day.getTime() + 86_400_000), n += 1) {
         const date = day.toISOString().slice(0, 10);
         for (let i = 0; i < 1 + (n % calendarPerDay); i += 1) {
-          entries.push({ id: `e-${date}-${i}`, media_kind: "episode", release_type: "air", title: `Show ${(n + i) % 7}`, season_number: 1, episode_number: n + i, date, release_at: null, monitored: true, has_file: i % 2 === 0, work_id: null, sources: [{ source_instance_id: "s1", source_name: "Library source", source_kind: "sonarr", arr_id: n }] });
+          // `calendarOverviews`: slot 0 an episode with a synopsis, slot 1 a movie with one, slot 2 an episode without.
+          const movie = calendarOverviews && i === 1;
+          const overview = calendarOverviews && i < 2 ? (movie ? `Mock movie synopsis ${date}.` : `Mock episode synopsis ${date}.`) : undefined;
+          entries.push({ id: `e-${date}-${i}`, media_kind: movie ? "movie" : "episode", release_type: movie ? "digital" : "air", title: `${movie ? "Film" : "Show"} ${(n + i) % 7}`, ...(movie ? {} : { season_number: 1, episode_number: n + i }), ...(overview ? { overview } : {}), date, release_at: null, monitored: true, has_file: i % 2 === 0, work_id: null, sources: [{ source_instance_id: "s1", source_name: "Library source", source_kind: "sonarr", arr_id: n }] });
         }
       }
       const body = { start, end, entries, sources: [{ source_instance_id: "s1", name: "Library source", kind: "series_source", status: "ok", entry_count: entries.length }] };
