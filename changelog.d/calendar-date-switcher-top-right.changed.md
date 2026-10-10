@@ -1,1 +1,0 @@
-- Web calendar: the date switcher button now sits at the top right in one group with Previous, Today and Next; the shell action column keeps only Filters and the Calendar link, and the month and year jump opens below the switcher.

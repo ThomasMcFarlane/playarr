@@ -1,1 +1,0 @@
-- Web calendar agenda: only the focused entry shows the pink ring and glow (a selected entry that lost focus keeps a firmer outline only), and each day heading now sticks under the page header while its entries scroll beneath it.
