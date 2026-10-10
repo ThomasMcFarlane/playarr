@@ -276,6 +276,31 @@ function workKindKicker(kind: WorkKind): string {
 /** Nav tile label for a `getCatalogKinds()` kind -- names the library
  * section it opens (brief 9: "Nav destinations are driven by GET
  * /api/v1/catalog/kinds"), plural, distinct from `workKindKicker` above. */
+/** Web's library nav order (`PRODUCT_NAV_GROUPS`): Series, Movies, Sites, Music; anything else after. */
+const NAV_KIND_ORDER: WorkKind[] = ['series', 'movie', 'site', 'artist'];
+
+function navKindRank(kind: WorkKind): number {
+  const rank = NAV_KIND_ORDER.indexOf(kind);
+  return rank < 0 ? NAV_KIND_ORDER.length : rank;
+}
+
+/** The web nav icon for a nav id (generated from web `NavIcons.tsx`); the logo only for kinds web has no icon for. */
+function navIconFor(id: string): ResourceStr {
+  if (id === HOME_NAV_ID) {
+    return $r('app.media.nav_home');
+  }
+  if (id === 'series') {
+    return $r('app.media.nav_series');
+  }
+  if (id === 'movie') {
+    return $r('app.media.nav_movies');
+  }
+  if (id === 'artist') {
+    return $r('app.media.nav_music');
+  }
+  return PLACEHOLDER_NAV_ICON;
+}
+
 function catalogKindNavLabel(kind: WorkKind): string {
   if (kind === 'movie') {
     return 'Movies';
@@ -518,10 +543,12 @@ export struct Home {
     const moreMovieWorks: Work[] = moreMoviesResult.kind === 'ok' ? moreMoviesResult.value.items : [];
     const moreSeriesWorks: Work[] = moreSeriesResult.kind === 'ok' ? moreSeriesResult.value.items : [];
 
-    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: PLACEHOLDER_NAV_ICON, label: 'Home' }];
+    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: navIconFor(HOME_NAV_ID), label: 'Home' }];
     if (kindsResult.kind === 'ok') {
-      for (const kind of kindsResult.value) {
-        navRailItems.push({ id: kind, icon: PLACEHOLDER_NAV_ICON, label: catalogKindNavLabel(kind) });
+      const kinds: WorkKind[] = kindsResult.value.slice();
+      kinds.sort((a: WorkKind, b: WorkKind): number => navKindRank(a) - navKindRank(b));
+      for (const kind of kinds) {
+        navRailItems.push({ id: kind, icon: navIconFor(kind), label: catalogKindNavLabel(kind) });
       }
     }
     this.navItems = navRailItems;

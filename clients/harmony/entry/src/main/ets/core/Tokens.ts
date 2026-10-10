@@ -292,6 +292,9 @@ export interface TvGeometryTokens {
   navTileRadius: number;
   navTileIconSize: number;
   navTileLabelSize: number;
+  navTileLabelWeight: number;
+  navGroupTop: number;
+  navGroupShadowOffsetY: number;
   playerControlBarPaddingH: number;
   playerControlBarTitleSize: number;
   playerControlBarPlayIconSize: number;
@@ -376,17 +379,21 @@ export const TvGeometry: TvGeometryTokens = {
   libraryResultsBackgroundOpacity: 0.93,
   navStart: 42,
   navGroupRadius: 22,
-  navGroupBackgroundOpacity: 0.72,
+  navGroupBackgroundOpacity: 0.56,
   navGroupBorderWidth: 1,
-  navGroupBorderOpacity: 0.18,
-  navGroupShadow: 16,
-  navGroupPaddingH: 6,
-  navGroupPaddingV: 7,
-  navGroupItemGap: 5,
+  navGroupBorderOpacity: 0.053,
+  navGroupShadow: 42,
+  navGroupPaddingH: 7,
+  navGroupPaddingV: 8,
+  navGroupItemGap: 9,
   navTileSize: 64,
   navTileRadius: 16,
   navTileIconSize: 20,
-  navTileLabelSize: 7,
+  navTileLabelSize: 8.832,
+  navTileLabelWeight: 680,
+  // Web TV library group (Home, Series, Movies, Music) top edge; the Downloads/Search group sits above it on web.
+  navGroupTop: 286,
+  navGroupShadowOffsetY: 14,
   playerControlBarPaddingH: 48,
   playerControlBarTitleSize: 19,
   playerControlBarPlayIconSize: 34,
