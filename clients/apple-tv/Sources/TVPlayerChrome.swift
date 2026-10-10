@@ -136,7 +136,8 @@ struct TVPlayerChrome: View {
     }
 
     private static func clock(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds))
+        // A stream that has not reported its duration yet gives NaN or infinity: show 0:00, never crash.
+        let total = seconds.isFinite ? max(0, Int(seconds)) : 0
         return "\(total / 60):" + String(format: "%02d", total % 60)
     }
 

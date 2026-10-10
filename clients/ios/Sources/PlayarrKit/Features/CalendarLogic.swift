@@ -38,6 +38,14 @@ public enum CalendarDays {
     /// The UTC day containing `date`.
     public static func today(now: Date = Date()) -> String { format(now) }
 
+    /// The day containing `date` on the viewer's wall clock (web: the browser's local day).
+    public static func today(now: Date, zone: TimeZone) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let c = calendar.dateComponents([.year, .month, .day], from: now)
+        return key(year: c.year ?? 1970, month: c.month ?? 1, day: c.day ?? 1)
+    }
+
     public static func adding(days: Int, to key: String) -> String {
         guard let date = parse(key), let moved = utc.date(byAdding: .day, value: days, to: date) else { return key }
         return format(moved)

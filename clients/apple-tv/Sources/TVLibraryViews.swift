@@ -101,6 +101,8 @@ struct TVHomeView: View {
         .defaultFocus($focusedCard, firstFocus)
         // The lead rail can change after the first paint (On deck arrives): keep focus on a card that still exists.
         .task(id: firstFocus) {
+            // The lazy rail creates its cards after this first layout pass: wait a frame or two before focusing.
+            try? await Task.sleep(for: .milliseconds(200))
             let ids = Set(rails.flatMap(\.works).map(\.id))
             if focusedCard.map({ !ids.contains($0.workID) }) ?? true { focusedCard = firstFocus }
         }
@@ -1014,7 +1016,11 @@ struct TVSearchView: View {
             Task { await model.search() }
         }
 
-        searchFiltersChip
+        // Web: Filters is the shell action column tile, as on the libraries.
+        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, TVShellActionColumn.edge)
+            .padding(.top, TVShellActionColumn.top)
 
         switch model.state {
         case .idle:
@@ -1045,7 +1051,6 @@ struct TVSearchView: View {
                 searchPreview(work)
             }
             searchResultRow(model)
-            otherSources
         }
     }
 
@@ -1094,68 +1099,53 @@ struct TVSearchView: View {
         .placed(x: 153.6, y: 172.8, w: 590, h: 76)
     }
 
-    private var searchFiltersChip: some View {
-        // Web `.tv-search-filter-toggle`: 172.3 x 56 pill at (153.6, 268.2).
-        ZStack(alignment: .topLeading) {
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
-                .frame(width: 172.3, height: 56)
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 24, y: 19, w: 18, h: 18)
-            Text("Filters")
-                .font(TVTheme.font(size: 11.14, weight: .bold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .placed(x: 44.8, y: 19.7, w: 40, h: 16.7)
-            Text("All \u{00B7} All libraries")
-                .font(TVTheme.font(size: 9.2, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-                .placed(x: 91.4, y: 21.1, w: 70, h: 13.8)
-        }
-        .frame(width: 172.3, height: 56, alignment: .topLeading)
-        .placed(x: 153.6, y: 268.2, w: 172.3, h: 56)
-    }
-
+    /// Web search `.details-panel` (TV): kicker 286.6, title 49.92/560 at 330.9 (420 wide, wraps), meta 13.056/600 at
+    /// title bottom + 27, overview 13.824/600 (336 wide, 4 lines) at meta bottom + 21.6.
     private func searchPreview(_ work: Work) -> some View {
-        let year = work.releaseDate.map { String($0.prefix(4)) }
+        let year = TVWebFormat.year(work.releaseDate)
         let kind = work.kind.rawValue.capitalized
+        let lines = TVTextWrap.lines(work.title, weight: 560, size: 49.92, kern: -3, width: 420).count
+        let metaY = 330.9 + 47.4 * CGFloat(max(1, lines)) + 27
+        let soft = DesignTokens.Color.textPrimary.opacity(0.86)
         return ZStack(alignment: .topLeading) {
             Text([kind, year].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
-                .font(TVTheme.font(size: 9.98, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 153.6, y: 362, w: 534.5, h: 15)
+                .font(TVTheme.font(size: 12.288, css: 860))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
+                .placed(x: 153.6, y: 286.6, w: 544, h: 18.4)
             Text(work.title)
-                .font(TVTheme.font(size: 48, weight: .medium))
-                .tracking(-2.88)
+                .font(TVTheme.font(size: 49.92, css: 560))
+                .tracking(-3)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-                .lineLimit(1)
-                .placed(x: 153.6, y: 385.8, w: 534.5, h: 47)
-            HStack(spacing: 12) {
+                .lineLimit(2)
+                .frame(width: 420, alignment: .topLeading)
+                .placed(x: 153.6, y: 330.9, w: 420, h: 47.4 * CGFloat(max(1, lines)), alignment: .topLeading)
+            HStack(spacing: 12.8) {
                 if let year { Text(year) }
-                ForEach(work.genres.prefix(2), id: \.self) { Text($0) }
+                if !work.genres.isEmpty { Text(work.genres.prefix(2).joined(separator: " \u{00B7} ")) }
             }
-            .font(TVTheme.font(size: 10.37, weight: .regular))
-            .foregroundStyle(DesignTokens.Color.textDisabled)
-            .placed(x: 153.6, y: 447.2, h: 15.6)
+            .font(TVTheme.font(size: 13.056, css: 600))
+            .foregroundStyle(soft)
+            .placed(x: 153.6, y: metaY, h: 19.6)
             if let overview = work.overview, !overview.isEmpty {
                 Text(overview)
-                    .font(TVTheme.font(size: 12.29, weight: .regular))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .lineLimit(2)
-                    .placed(x: 153.6, y: 480.4, w: 534.5, h: 19)
+                    .font(TVTheme.font(size: 13.824, css: 600))
+                    .foregroundStyle(soft)
+                    .lineLimit(4)
+                    .frame(width: 336, alignment: .topLeading)
+                    .placed(x: 153.6, y: metaY + 19.6 + 21.6, w: 336, h: 87.4, alignment: .topLeading)
             }
         }
     }
 
+    /// Web `.tv-search-results`: a 3-column grid from x 825.6, y 172.8 (327.2 x 184 art, pitch 353.1 x 251.2) in the
+    /// right rail, scrolling under a top edge fade; other sources follow the results.
     private func searchResultRow(_ model: TVSearchViewModel) -> some View {
-        // Normal cards 320.6 x 180.3, pitch 346.65, first at x 825.55; the focused card scales 1.04.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 26.05) {
-                ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
-                    // Web: the first hit is not scaled until the remote moves onto the results.
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(327.2), spacing: 25.9), count: 3),
+                      alignment: .leading, spacing: 251.2 - 184 - 11.5 - 20) {
+                ForEach(model.results) { work in
+                    // Web: the first hit is not lifted until the remote moves onto the results.
                     let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
                     NavigationLink {
                         TVWorkDetailView(work: work, apiClient: environment.apiClient)
@@ -1169,23 +1159,33 @@ struct TVSearchView: View {
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
                     .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
-                    .focusEffectDisabled(frozen)
+                    .focusEffectDisabled()
                 }
             }
-            .padding(.leading, 96.45)
-            .padding(.top, 20)
-            .padding(.trailing, 80)
+            .padding(.leading, 825.6 - 729.6)
+            .padding(.top, 172.8)
+            otherSources
+                .padding(.leading, 825.6 - 729.6)
+                .padding(.top, 36)
+                .padding(.bottom, 120)
         }
-        .frame(width: 1190.4 - 96.45 + 96.45, height: 300, alignment: .topLeading)
-        .placed(x: 729.6, y: 172.8 - 20, w: 1190.4, h: 300, alignment: .topLeading)
+        .mask(
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 40 / 1080),
+                        .init(color: .black, location: 92 / 1080), .init(color: .black, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
+        .placed(x: 729.6, y: 0, w: 1190.4, h: 1080, alignment: .topLeading)
     }
 
     private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
-                    .frame(width: 320.6, height: 180.3)
+                    .frame(width: 327.2, height: 184)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.5))
                     // Focused search shadow: 0 22px 52px rgba(31, 14, 20, 0.28); the rest shadow is the card default.
                     .shadow(
                         color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(focused ? 0.28 : 0),
@@ -1199,35 +1199,34 @@ struct TVSearchView: View {
             }
             ZStack(alignment: .topLeading) {
                 Text(work.title)
-                    .font(TVTheme.font(size: 12.29, weight: .semibold))
+                    .font(TVTheme.font(size: 11.904, css: 610))
+                    .tracking(-0.18)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
-                    .placed(x: 1.6, y: 0, w: 246.8, h: 18.4)
+                    .placed(x: 1.9, y: 0, w: 260.8, h: 18.4)
                 Text(
                     ([work.kind.rawValue.capitalized] + [work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 })
                         .joined(separator: " \u{00B7} ").uppercased()
                 )
-                    .font(TVTheme.font(size: 8.45, weight: .bold))
+                    .font(TVTheme.font(size: 8.448, css: 720))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .placed(x: 259.6, y: 5, w: 61, h: 12.7, alignment: .trailing)
+                    .placed(x: 327.2 - 120, y: 3, w: 120, h: 12.7, alignment: .trailing)
             }
-            .frame(width: 320.6, height: 20, alignment: .topLeading)
-            .padding(.top, 11.2)
+            .frame(width: 327.2, height: 20, alignment: .topLeading)
+            .padding(.top, 11.5)
         }
-        .frame(width: 320.6, alignment: .topLeading)
+        .frame(width: 327.2, alignment: .topLeading)
     }
 
     private var otherSources: some View {
-        ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("OTHER SOURCES")
                 .font(TVTheme.font(size: 10.88, weight: .bold))
                 .tracking(0.76)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 418.4, w: 1013.8, h: 16.3)
             Text("Nothing found in other sources.")
                 .font(TVTheme.font(size: 11.52, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 446.7, w: 1013.8, h: 17.3)
         }
     }
 
@@ -1275,6 +1274,10 @@ struct TVLibraryKindView: View {
     @State private var items: [Work] = []
     /// Title counts of the listed playlists (the preview's "5 titles").
     @State private var playlistCounts: [UUID: Int] = [:]
+    /// Web library Filters drawer: sort (`title` / `date_added`) and order (`asc` / `desc`).
+    @State private var filtersOpen = false
+    @State private var sort = "title"
+    @State private var order = "asc"
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1337,16 +1340,27 @@ struct TVLibraryKindView: View {
                     .padding(.top, 277.2 - (25.6 - 9.2) / 2)
                     .zIndex(20)
 
-                filterLauncher
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
-                    .padding(.trailing, TVShellActionColumn.edge)
-                    .padding(.top, TVShellActionColumn.top)
-                    .zIndex(21)
+                if playlistID == nil, !listsPlaylists {
+                    TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { filtersOpen = true }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
+                        .padding(.trailing, TVShellActionColumn.edge)
+                        .padding(.top, TVShellActionColumn.top)
+                        .zIndex(21)
+                }
+
+                if filtersOpen {
+                    TVDrawer(kicker: "Library controls", title: "Filters", onClose: { filtersOpen = false }) {
+                        TVChoiceSection(title: "Sort by", options: [("title", "Title"), ("date_added", "Date added")], selection: $sort)
+                        TVChoiceSection(title: "Order", options: [("asc", sort == "title" ? "A-Z" : "Oldest"),
+                                                                  ("desc", sort == "title" ? "Z-A" : "Newest")], selection: $order)
+                    }
+                    .zIndex(30)
+                }
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
+        .task(id: "\(workKind?.rawValue ?? "all")-\(sort)-\(order)-\(environment.serverURL.absoluteString)") {
             await loadItems()
         }
     }
@@ -1636,11 +1650,6 @@ struct TVLibraryKindView: View {
         }
     }
 
-    /// Web `.page-filters-button`: the 62 x 72 action tile at the top right of the header row.
-    private var filterLauncher: some View {
-        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
-    }
-
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
         if TVParityLaunch.requestedScreen == nil {
@@ -1731,13 +1740,13 @@ struct TVLibraryKindView: View {
         }
         do {
             // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
-            let page = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 48, offset: 0)
+            let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 48, offset: 0)
             items = page.items
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
             while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
-                let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
+                let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
                 items += next.items
             }

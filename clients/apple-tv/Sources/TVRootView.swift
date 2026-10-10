@@ -263,6 +263,8 @@ private struct TVProductionShell<Stage: View>: View {
     @State private var preferNavDefault = false
     /// Who's watching, opened from the nav's profile tile (web `/profiles`).
     @State private var showProfiles = false
+    /// A full-screen page (the player) is showing: no nav, no clock.
+    @State private var chromeHidden = false
     @Environment(\.resetFocus) private var resetFocus
 
     private var navColumn: CGFloat {
@@ -293,6 +295,8 @@ private struct TVProductionShell<Stage: View>: View {
                     )
                 )
                 .frame(width: navColumn)
+                .opacity(chromeHidden ? 0 : 1)
+                .disabled(chromeHidden)
                 .focusSection()
                 // Web: Back on a top-level page goes Home (from the nav or the page's root, never a pushed page).
                 .modifier(TVBackToHome(active: tab != .home) { nav = .home })
@@ -309,6 +313,7 @@ private struct TVProductionShell<Stage: View>: View {
                         .modifier(TVBackToHome(active: tab != .home) { nav = .home })
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.setShellChromeHidden) { chromeHidden = $0 }
                 .padding(.leading, -navColumn)
                 .focusSection()
                 .focused(shellFocus, equals: .stage)
@@ -335,6 +340,7 @@ private struct TVProductionShell<Stage: View>: View {
             }
 
             TVShellHeader(frozenClock: TVParityLaunch.isLive)
+                .opacity(chromeHidden ? 0 : 1)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .allowsHitTesting(false)
                 .zIndex(80)
@@ -351,6 +357,18 @@ private struct TVProductionShell<Stage: View>: View {
                 }
             )
         }
+    }
+}
+
+/// Called by a full-screen page (the player) on appear and disappear: the shell hides the nav and the clock meanwhile.
+struct TVShellChromeHiddenKey: EnvironmentKey {
+    static let defaultValue: (Bool) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var setShellChromeHidden: (Bool) -> Void {
+        get { self[TVShellChromeHiddenKey.self] }
+        set { self[TVShellChromeHiddenKey.self] = newValue }
     }
 }
 

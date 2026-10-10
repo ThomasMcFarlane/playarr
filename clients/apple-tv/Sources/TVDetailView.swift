@@ -10,6 +10,8 @@ struct TVWorkDetailView: View {
     @State private var viewModel: TVWorkDetailViewModel
     @State private var showDownloadNote = false
     @FocusState private var focusedEpisodeID: UUID?
+    /// Web: the primary action (Play, Start, Resume) holds focus when the page opens.
+    @FocusState private var playFocused: Bool
 
     private var frozen: Bool { TVParityLaunch.frozen }
 
@@ -41,9 +43,8 @@ struct TVWorkDetailView: View {
             Group {
                 switch viewModel.state {
                 case .idle, .loading:
-                    ProgressView("Loading \(work.title)…")
-                        .tint(DesignTokens.Color.brandPrimary)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    // Skeleton loading (owner rule): the page frame with its header, never a spinner screen.
+                    TVPageHeader(title: work.kind == .series ? "Series" : "Movies", detail: work.title)
                 case .failed(let message):
                     TVErrorView(title: "Couldn’t load this title", message: message) {
                         Task { await viewModel.load() }
@@ -58,6 +59,9 @@ struct TVWorkDetailView: View {
         .ignoresSafeArea()
         .task {
             if viewModel.state == .idle { await viewModel.load() }
+            try? await Task.sleep(for: .milliseconds(200))
+            // Films focus Play; series focus the next-up episode tile instead (owner rule).
+            if !frozen, work.kind != .series { playFocused = true }
         }
     }
 
@@ -321,6 +325,7 @@ struct TVWorkDetailView: View {
                 label
             }
             .buttonStyle(TVFocusableCardButtonStyle())
+            .focused($playFocused)
             .placed(x: x, y: y, w: 156, h: 64)
         } else {
             label.placed(x: x, y: y, w: 156, h: 64)
@@ -349,6 +354,7 @@ struct TVWorkDetailView: View {
                 label
             }
             .buttonStyle(TVFocusableCardButtonStyle())
+            .focused($playFocused)
             .placed(x: x, y: y, w: 156, h: 64)
         } else {
             label.placed(x: x, y: y, w: 156, h: 64)

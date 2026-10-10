@@ -137,7 +137,7 @@ final class TVSearchViewModel {
 
         state = .loading
         do {
-            results = try await apiClient.searchCatalog(query: trimmed, limit: 50)
+            results = try await apiClient.searchCatalog(query: trimmed, limit: 60) // the web asks for 60
             state = .loaded
         } catch let error as APIError {
             state = .failed(error.displayMessage)
@@ -284,7 +284,9 @@ final class TVPlayerViewModel {
                 Task { @MainActor in
                     guard let self else { return }
                     self.position = seconds
-                    self.duration = self.engine.duration
+                    // A transcode playlist grows while it plays: keep the server's duration until the stream knows its own.
+                    let reported = self.engine.duration
+                    if self.duration <= 0, reported.isFinite, reported > 0 { self.duration = reported }
                 }
             }
     }
@@ -299,6 +301,17 @@ final class TVPlayerViewModel {
             flushProgress(completed: true)
         case .playing: endOfPlayback.playbackResumed()
         default: break
+        }
+    }
+
+    /// Polls the stream URL until it answers (at most about 20 s); any non-404 answer ends the wait.
+    private static func waitForPlaylist(_ url: URL, headers: [String: String]) async {
+        var request = URLRequest(url: url)
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        for _ in 0..<40 {
+            guard let (_, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 404 else { return }
+            try? await Task.sleep(for: .milliseconds(500))
         }
     }
 
@@ -318,7 +331,7 @@ final class TVPlayerViewModel {
             let saved = startFromBeginning ? nil : try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
-                containers: ["mp4", "mov", "m4v", "mkv"],
+                containers: ["mp4", "mov", "m4v"], // AVPlayer cannot open Matroska: the server remuxes it
                 videoCodecs: ["h264", "hevc"],
                 audioCodecs: ["aac", "ac3", "eac3"],
                 maxBitrateBps: 40_000_000,
@@ -333,7 +346,13 @@ final class TVPlayerViewModel {
             let resumeSeconds = saved.map {
                 Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000
             } ?? 0
-            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title, startPositionSeconds: resumeSeconds))
+            // The stream needs the session like every API call (AVPlayer does not send it on its own).
+            let headers = try await apiClient.playbackRequestHeaders()
+            // A transcode session writes its playlist a moment after the server answers (404 until then); AVPlayer
+            // gives up on the first 404, so wait for it like the web player does.
+            await Self.waitForPlaylist(streamURL, headers: headers)
+            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title,
+                                               startPositionSeconds: resumeSeconds, httpHeaders: headers))
             // `-PlayarrMuted` (shared test simulators, e.g. the device wall Mac): the player never makes a sound.
             if ProcessInfo.processInfo.arguments.contains("-PlayarrMuted") {
                 engine.isMuted = true
@@ -382,8 +401,8 @@ final class TVPlayerViewModel {
     /// teardown cannot change it. Nil when nothing should be written.
     private func progressSnapshot(completed: Bool) -> (UUID, UpdateWatchProgressRequest)? {
         guard let mediaFileID = activeMediaFileID else { return nil }
-        let durationMS = Int64(max(0, duration) * 1_000)
-        let positionMS = completed ? durationMS : Int64(max(0, position) * 1_000)
+        let durationMS = duration.isFinite ? Int64(max(0, duration) * 1_000) : 0
+        let positionMS = completed ? durationMS : (position.isFinite ? Int64(max(0, position) * 1_000) : 0)
         guard durationMS > 0, Self.shouldWriteProgress(positionMS: positionMS, completed: completed) else { return nil }
         return (mediaFileID, UpdateWatchProgressRequest(
             positionMS: positionMS,
@@ -452,7 +471,7 @@ final class TVPlayerViewModel {
     func loadInfo(mediaFileID: UUID) async {
         if let info = try? await apiClient.playbackInfo(
             mediaFileID: mediaFileID,
-            containers: ["mp4", "mov", "m4v", "mkv"],
+            containers: ["mp4", "mov", "m4v", "mkv"], // parity route: info only, never played
             videoCodecs: ["h264", "hevc"],
             audioCodecs: ["aac", "ac3", "eac3"],
             maxBitrateBps: 40_000_000,

@@ -375,3 +375,134 @@ enum TVVideoFrameColour {
         return UIImage(cgImage: cg).pngData() ?? data
     }
 }
+
+
+/// Web control focus (`--page-focus-ring`): a 3 px ring 2 px outside the control, never a fill. Buttons, pills, tiles.
+struct TVRingButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 14
+
+    func makeBody(configuration: Configuration) -> some View {
+        Ring(label: configuration.label, cornerRadius: cornerRadius)
+    }
+
+    private struct Ring<Label: View>: View {
+        let label: Label
+        let cornerRadius: CGFloat
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            label.overlay(
+                RoundedRectangle(cornerRadius: cornerRadius + 5, style: .continuous)
+                    .stroke(DesignTokens.Stage.focusRing, lineWidth: 3)
+                    .padding(-5)
+                    .opacity(isFocused ? 1 : 0)
+            )
+        }
+    }
+}
+
+/// A shell action column tile (Filters, Calendar link) that opens its side panel.
+struct TVActionTile: View {
+    let label: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            TVHeaderPill(label: label, symbol: symbol, width: TVShellActionColumn.width)
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
+    }
+}
+
+/// The one shared right-side panel (web `.tv-filter-drawer`): 360 wide, full height from the first frame, kicker,
+/// title and close button, then the page's sections. Menu closes it; focus stays inside while it is open.
+struct TVDrawer<Content: View>: View {
+    let kicker: String
+    let title: String
+    let onClose: () -> Void
+    @ViewBuilder var content: () -> Content
+    /// Focus moves into the drawer when it opens (web: the panel takes focus; Back closes it).
+    @FocusState private var closeFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 3.2) {
+                    Text(kicker.uppercased())
+                        .font(TVTheme.font(size: 9.6, css: 720))
+                        .tracking(0.672)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .frame(height: 14.4)
+                    Text(title)
+                        .font(TVTheme.font(size: 38.4, css: 590))
+                        .tracking(-2.1)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .frame(height: 57.6)
+                }
+                Spacer(minLength: 0)
+                Button(action: onClose) {
+                    Text("\u{00D7}")
+                        .font(TVTheme.font(size: 26.88, css: 720))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .frame(width: 48, height: 50)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DesignTokens.Stage.surfaceSoft))
+                }
+                .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+                .focusEffectDisabled()
+                .focused($closeFocused)
+                .accessibilityLabel("Close")
+            }
+            .padding(.top, 54)
+            content()
+                .padding(.top, 34)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 46)
+        .padding(.trailing, 46)
+        .frame(width: 360, height: 1080, alignment: .topLeading)
+        .background(DesignTokens.Stage.surfaceStrong.opacity(0.94))
+        .focusSection()
+        .onExitCommand(perform: onClose)
+        .task { closeFocused = true }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .ignoresSafeArea()
+    }
+}
+
+/// A drawer section (web `FilterSection` with the shared choice control): label, then one button per option.
+struct TVChoiceSection<Value: Hashable>: View {
+    let title: String
+    let options: [(value: Value, label: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11.9) {
+            Text(title.uppercased())
+                .font(TVTheme.font(size: 9.6, css: 720))
+                .tracking(0.672)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .frame(height: 14.4)
+            HStack(spacing: 8) {
+                ForEach(options, id: \.value) { option in
+                    let active = option.value == selection
+                    Button { selection = option.value } label: {
+                        Text(option.label)
+                            .font(TVTheme.font(size: 10.56, css: 680))
+                            .foregroundStyle(active ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textDisabled)
+                            .frame(width: (268 - 8 * CGFloat(options.count - 1)) / CGFloat(options.count), height: 56)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(active ? DesignTokens.Color.textPrimary : DesignTokens.Stage.surfaceSoft.opacity(0.64))
+                            )
+                            .scaleEffect(active ? 1.025 : 1)
+                    }
+                    .buttonStyle(TVRingButtonStyle(cornerRadius: 12))
+                    .focusEffectDisabled()
+                }
+            }
+        }
+        .padding(.bottom, 30.3)
+    }
+}
