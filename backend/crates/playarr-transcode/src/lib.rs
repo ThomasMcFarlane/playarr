@@ -318,6 +318,9 @@ impl TranscodeTargetProfile {
 
 /// Fixed HLS segment duration, in seconds, for on-demand output.
 pub const HLS_SEGMENT_SECONDS: u32 = 4;
+
+/// Audio layouts with a standard AAC channel configuration (6, 2, 1).
+const AAC_CHANNEL_LAYOUTS_FILTER: &str = "aformat=channel_layouts=5.1|stereo|mono";
 const DEFAULT_FFMPEG_THREADS: usize = 2;
 
 /// Builds the ffmpeg argv for transcoding `input_path` into an HLS
@@ -548,18 +551,22 @@ fn build_hls_args(
         "-sn".to_string(),
     ]);
 
+    // Fold any source layout onto one with a standard AAC channel
+    // configuration. For layouts such as DTS 5.1(side) or 7.1, ffmpeg's AAC
+    // encoder writes channel configuration 0 plus a PCE, which Android's AAC
+    // decoder and Chrome's MSE reject (TASKS 20.260: "Decoder failed" and
+    // Shaka 3014).
+    let mut audio_filter = AAC_CHANNEL_LAYOUTS_FILTER.to_string();
     if external.is_some() {
         // A dub can be shorter than the title (a partial run, or a seek past
         // its end). Pad it with silence so audio never runs out before the
         // video, and let the finite video stream end the output
         // (`-shortest`); otherwise ffmpeg emits no segments and the player
         // buffers forever.
-        args.extend([
-            "-af".to_string(),
-            "apad".to_string(),
-            "-shortest".to_string(),
-        ]);
+        audio_filter.push_str(",apad");
+        args.push("-shortest".to_string());
     }
+    args.extend(["-af".to_string(), audio_filter]);
 
     if video_copy.is_none() && profile.height > 0 {
         args.push("-vf".to_string());
@@ -1551,7 +1558,7 @@ mod tests {
         assert!(!joined.contains("X-Api-Key"));
         assert!(!joined.contains("http"));
         // A short dub is padded with silence and the finite video ends output.
-        assert!(joined.contains("-af apad -shortest"));
+        assert!(joined.contains("-shortest -af aformat=channel_layouts=5.1|stereo|mono,apad"));
         assert!(!joined.contains("0:a:0?"));
     }
 
@@ -1574,7 +1581,7 @@ mod tests {
         for forbidden in ["libx264", "-pix_fmt", "-vf", "-b:v", "scale="] {
             assert!(!joined.contains(forbidden), "{forbidden} in {joined}");
         }
-        assert!(joined.contains("-af apad -shortest"));
+        assert!(joined.contains("-shortest -af aformat=channel_layouts=5.1|stereo|mono,apad"));
         assert!(joined.contains("-c:a aac -b:a 256k"));
         assert!(joined.contains("-hls_segment_type fmp4 -hls_fmp4_init_filename init.mp4"));
         assert!(joined.contains("/out/segment_%05d.m4s"));
@@ -1619,7 +1626,11 @@ mod tests {
             0,
             None,
         );
-        assert!(!args.iter().any(|a| a == "apad" || a == "-shortest"));
+        assert!(!args.iter().any(|a| a.contains("apad") || a == "-shortest"));
+        // Every encode folds the layout onto a standard AAC channel configuration.
+        assert!(args
+            .iter()
+            .any(|a| a == "aformat=channel_layouts=5.1|stereo|mono"));
     }
 
     #[test]
@@ -1983,6 +1994,8 @@ mod tests {
                 "-map",
                 "0:a:0?",
                 "-sn",
+                "-af",
+                "aformat=channel_layouts=5.1|stereo|mono",
                 "-vf",
                 "scale=-2:min(720\\,ih)",
                 "-b:v",
