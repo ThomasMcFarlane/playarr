@@ -1174,8 +1174,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     labels={{
                       none: t("pages.library.anyLanguage"),
                       add: t("pages.library.addLanguage"),
-                      search: t("pages.library.searchLanguages"),
-                      noMatches: t("pages.library.noMatchingLanguages"),
                       remove: (name) => t("pages.library.removeLanguage", { name }),
                       announce: (count, shown) => t("pages.library.languagesAnnounce", { count, shown }),
                     }}

@@ -73,6 +73,7 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   await page.waitForSelector(".ui-select-list");
   const optionCount = await page.locator(".ui-select-option").count();
   check(`${tag}: select opens a list of qualities`, optionCount === 4, String(optionCount));
+  check(`${tag}: no text input or combobox in the drawer (D-pad only)`, (await page.locator('.download-quality-drawer input[type="text"], .download-quality-drawer input[type="search"], .download-quality-drawer [role="combobox"]').count()) === 0);
   const a = await page.evaluate(() => {
     const o = document.querySelector(".ui-select-option:not(.is-active)");
     const probe = document.createElement("i");

@@ -20,8 +20,6 @@ function Demo({ initial }: { initial: string[] }) {
         labels={{
           none: "Any language",
           add: "Add language",
-          search: "Search languages",
-          noMatches: "No matching languages",
           remove: (name) => `Remove ${name}`,
           announce: (count, shown) => `${count} selected, ${shown} listed`,
         }}

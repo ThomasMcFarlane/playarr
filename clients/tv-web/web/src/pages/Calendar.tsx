@@ -11,7 +11,6 @@ import { DetailsPanel } from "../components/DetailsPanel";
 import { ListPanel } from "../components/tv/ListPanel";
 import { StatusPill } from "../components/StatusPill";
 import {
-  DateRangeField,
   EmptyState,
   ErrorState,
   FilterSection,
@@ -75,6 +74,7 @@ import {
   writeCalendarFilters,
   writeCalendarUrl,
   type CalendarFilters,
+  LEGACY_KEYS,
   type CalendarStatus,
   type CalendarTypeParam,
 } from "../lib/calendarFilters";
@@ -826,7 +826,7 @@ export function CalendarPage() {
   const filters = useMemo(() => parseCalendarFilters(new URLSearchParams(filterKey)), [filterKey]);
   const urlState = useMemo(() => parseCalendarUrl(new URLSearchParams(searchKey)), [searchKey]);
   const view: CalendarView = urlState.view ?? defaultView;
-  const anchor: Day = anchorForView(view, urlState.date ?? filters.from ?? today);
+  const anchor: Day = anchorForView(view, urlState.date ?? today);
   const stepperRef = useRef<ReturnType<typeof createAnchorStepper> | null>(null);
   stepperRef.current ??= createAnchorStepper();
   const stepAnchor = (direction: -1 | 1) => setAnchor(stepperRef.current!.step(view, anchor, direction));
@@ -840,6 +840,17 @@ export function CalendarPage() {
     },
     [setSearchParams]
   );
+  // Old links carry the removed Source and date range filters: drop them, and keep a range start as the shown period.
+  useEffect(() => {
+    const current = new URLSearchParams(searchKey);
+    if (!LEGACY_KEYS.some((key) => current.has(key))) return;
+    updateParams((params) => {
+      const from = params.get("from");
+      if (from && /^\d{4}-\d{2}-\d{2}$/.test(from) && !params.has("date")) params.set("date", from);
+      for (const key of LEGACY_KEYS) params.delete(key);
+      return params;
+    });
+  }, [searchKey, updateParams]);
   const setAnchor = (next: Day) => updateParams((params) => writeCalendarUrl(params, { date: next }));
   const setFilters = (next: CalendarFilters) => updateParams((params) => writeCalendarFilters(params, next));
   const setPanel = (next: "filters" | "link" | null) =>
@@ -888,10 +899,7 @@ export function CalendarPage() {
     [data, filters, today, range.start, range.end]
   );
   const items = useMemo(() => groups.flatMap((group) => groupSeriesEpisodes(group.entries)), [groups]);
-  const sourceOptions = useMemo(
-    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.display_label ?? source.name })),
-    [data]
-  );
+
 
   // Back from a title or the player lands on the entry that was open (audit A19).
   useNavigationLayer(`calendar:${items.length}:${view}`, !loading, !loading && data !== null);
@@ -1120,11 +1128,9 @@ export function CalendarPage() {
       ],
   };
 
-  const selectLabels = (which: "Type" | "Source" | "Status") => ({
+  const selectLabels = (which: "Type" | "Status") => ({
     none: t(`pages.calendar.any${which}` as TranslationKey),
     add: t(`pages.calendar.add${which}` as TranslationKey),
-    search: t("pages.calendar.searchOptions"),
-    noMatches: t("pages.calendar.noMatchingOptions"),
     remove: (name: string) => t("pages.calendar.removeOption", { name }),
     announce: (count: number, shown: number) => t("pages.calendar.optionsAnnounce", { count, shown }),
   });
@@ -1161,17 +1167,6 @@ export function CalendarPage() {
             labels={selectLabels("Type")}
           />
         </FilterSection>
-        {sourceOptions.length > 0 ? (
-          <FilterSection title={t("pages.calendar.filterSource")}>
-            <MultiSelect
-              ariaLabel={t("pages.calendar.filterSource")}
-              options={sourceOptions}
-              selected={[...filters.sources]}
-              onChange={(next) => setFilters({ ...filters, sources: new Set(next) })}
-              labels={selectLabels("Source")}
-            />
-          </FilterSection>
-        ) : null}
         <FilterSection title={t("pages.calendar.filterStatus")}>
           <MultiSelect
             ariaLabel={t("pages.calendar.filterStatus")}
@@ -1179,21 +1174,6 @@ export function CalendarPage() {
             selected={[...filters.statuses]}
             onChange={(statuses) => setFilters({ ...filters, statuses: new Set(statuses as CalendarStatus[]) })}
             labels={selectLabels("Status")}
-          />
-        </FilterSection>
-        <FilterSection title={t("pages.calendar.filterDateRange")}>
-          <DateRangeField
-            from={filters.from}
-            to={filters.to}
-            fromLabel={t("pages.calendar.rangeFrom")}
-            toLabel={t("pages.calendar.rangeTo")}
-            clearLabel={t("pages.calendar.rangeClear")}
-            onChange={({ from, to }) => {
-              updateParams((params) => {
-                const next = writeCalendarFilters(params, { ...filters, from, to });
-                return from ? writeCalendarUrl(next, { date: from }) : next;
-              });
-            }}
           />
         </FilterSection>
         <FilterSection title={t("pages.calendar.filterMonitored")}>

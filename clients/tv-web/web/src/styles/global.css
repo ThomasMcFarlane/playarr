@@ -5097,39 +5097,18 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   transform: rotate(180deg);
 }
 
-.ui-multiselect-popup {
-  display: grid;
+.ui-multiselect-list {
+  --page-edge-fade-size: 28px;
+  display: block;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: var(--surface-strong);
-  overflow: hidden;
-}
-
-.ui-multiselect-search {
-  min-height: 44px;
-  width: 100%;
-  min-width: 0;
-  padding: 0.5rem 0.8rem;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.74rem);
-}
-
-.ui-multiselect-search::placeholder {
-  color: var(--ink-muted);
-}
-
-.ui-multiselect-list {
   max-height: min(260px, calc(34 * var(--viewport-unit)));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 0.3rem;
-  scroll-padding-block: 0.3rem;
+  scroll-padding-block: 28px;
 }
 
 .ui-multiselect-option {
@@ -5185,15 +5164,9 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   color: var(--ink-muted);
 }
 
-.ui-multiselect-empty {
-  padding: 0.9rem 0.6rem;
-  color: var(--ink-muted);
-  text-align: center;
-}
-
 .ui-multiselect-trigger:focus-visible,
 .ui-multiselect-token:focus-visible,
-.ui-multiselect-search:focus-visible {
+.ui-multiselect-list:focus-visible {
   outline: var(--page-focus-ring);
   outline-offset: var(--page-focus-ring-offset);
 }
@@ -10627,40 +10600,6 @@ body[data-input-mode="remote"] :is(
 .household-page-hint {
   opacity: 0.9;
   font-size: 0.9rem;
-}
-
-.filters-date-range {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.filters-date-range label {
-  display: grid;
-  gap: 0.25rem;
-  color: var(--ink-muted);
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
-  font-weight: 680;
-}
-
-.filters-date-range input[type="date"] {
-  min-height: clamp(40px, calc(3.2 * var(--vw)), 52px);
-  padding: 0 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
-  border-radius: 12px;
-  background: var(--surface-soft);
-  color: var(--ink);
-  color-scheme: light dark;
-  font: inherit;
-}
-
-.filters-date-clear {
-  justify-self: start;
-  padding: 0.5rem 0.9rem;
-  border-radius: 12px;
-  background: var(--surface-soft);
-  color: var(--ink);
-  font-weight: 680;
-  cursor: pointer;
 }
 
 @media (max-width: 760px) {
