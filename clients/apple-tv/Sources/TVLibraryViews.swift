@@ -808,14 +808,7 @@ struct TVWebHomeCard: View {
                     .shadow(color: Self.shadow.opacity(focused ? 0.32 : 0.16), radius: focused ? 26 : 11, y: focused ? 26 : 10)
                     .shadow(color: Self.shadow.opacity(focused ? 0.22 : 0.10), radius: focused ? 11 : 4.5, y: focused ? 11 : 3)
             )
-            .overlay {
-                if focused {
-                    RoundedRectangle(cornerRadius: 12.48 + 3, style: .continuous)
-                        .stroke(Self.glow, lineWidth: 3)
-                        .padding(-3)
-                        .shadow(color: Self.glow.opacity(0.45), radius: 12)
-                }
-            }
+            .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.48))
             .scaleEffect(focused ? 1.025 : 1)
             Text(work.title)
                 .font(TVTheme.font(size: 11.904, css: 610))
@@ -836,7 +829,24 @@ struct TVWebHomeCard: View {
     }
 
     private static let shadow = Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
-    private static let glow = DesignTokens.Stage.cardGlow
+}
+
+/// The one card focus ring (owner 2026-10-09, web `--card-glow`): a 3 px brand ring outside the art plus a soft
+/// glow, following the art's shape. Every media card uses it with its own lift and shadow.
+struct TVCardFocusGlow: ViewModifier {
+    let focused: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: cornerRadius + 3, style: .continuous)
+                    .stroke(DesignTokens.Stage.cardGlow, lineWidth: 3)
+                    .padding(-3)
+                    .shadow(color: DesignTokens.Stage.cardGlow.opacity(0.45), radius: 12)
+            }
+        }
+    }
 }
 
 /// Web Home `.details-panel` for the focused card: kicker, title, runtime and overview (detail fetched on focus).
@@ -1255,10 +1265,16 @@ struct TVLibraryKindView: View {
     var workKind: WorkKind? = nil
     /// Collection noun for the heading count ("TITLES" / "ARTISTS").
     var collectionNoun: String = "TITLES"
+    /// The Playlists tab: lists the profile's playlists (web `/playlists`), not the catalogue.
+    var listsPlaylists = false
+    /// One playlist's titles (opened from the Playlists tab).
+    var playlistID: UUID? = nil
 
     @Environment(TVAppEnvironment.self) private var environment
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var items: [Work] = []
+    /// Title counts of the listed playlists (the preview's "5 titles").
+    @State private var playlistCounts: [UUID: Int] = [:]
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1390,9 +1406,9 @@ struct TVLibraryKindView: View {
     private func libraryPreview(_ work: Work) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text((work.genres.first ?? kindLabel).uppercased())
-                .font(TVTheme.font(size: 12, weight: .heavy))
-                .tracking(1.2)
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                .font(TVTheme.font(size: 12.29, css: 820))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
             // SPA `.tv-library-preview h2` / `.tv-detail-copy h1`: weight 560,
             // tracking -0.072em, max-width 9ch. DemiBold (semibold) matches
             // white-pixel mass better than Medium (full109 title thr200:
@@ -1501,6 +1517,14 @@ struct TVLibraryKindView: View {
             .padding(.trailing, padR)
         }
         .frame(width: gridWidth)
+        // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
+        .mask(
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 40 / 1080),
+                        .init(color: .black, location: 92 / 1080), .init(color: .black, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 
@@ -1512,8 +1536,12 @@ struct TVLibraryKindView: View {
         artIncludesDot: Bool
     ) -> some View {
         let isSelected = selected?.id == work.id
-        return Button {
-            selectedID = work.id
+        return NavigationLink {
+            if playlistCounts[work.id] != nil {
+                TVLibraryKindView(kindLabel: work.title, emptyMessage: "This playlist is empty.", playlistID: work.id)
+            } else {
+                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+            }
         } label: {
             // SPA `.tv-title-card-copy { padding-top: 0.72rem; gap }` +
             // `strong { font-size: clamp(0.54rem, 0.6vw, 0.74rem) → ~11.5 @ 1920,
@@ -1536,6 +1564,7 @@ struct TVLibraryKindView: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: isSelected && !parityMode, cornerRadius: DesignTokens.Radius.card))
                     // Pinned web values: rest 0 10 20 .14 + 0 3 8 .10; focused 0 24 48 .30 + 0 10 20 .20.
                     .shadow(
                         color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
@@ -1614,7 +1643,7 @@ struct TVLibraryKindView: View {
 
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
-        if TVParityLaunch.isLive {
+        if TVParityLaunch.requestedScreen == nil {
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundElevated
                 if let selected {
@@ -1680,9 +1709,10 @@ struct TVLibraryKindView: View {
         .frame(width: size.width, height: size.height)
     }
 
+    /// The release year (owner ruling 2026-10-08: never the date the title was added); a playlist shows its count.
     private func yearString(for work: Work) -> String {
-        let cal = Calendar(identifier: .gregorian)
-        return String(cal.component(.year, from: work.addedAt))
+        if let count = playlistCounts[work.id] { return count == 1 ? "1 title" : "\(count) titles" }
+        return TVWebFormat.year(work.releaseDate) ?? ""
     }
 
     @MainActor
@@ -1695,6 +1725,10 @@ struct TVLibraryKindView: View {
             return
         }
         let api = environment.apiClient
+        if listsPlaylists || playlistID != nil {
+            await loadPlaylists(api)
+            return
+        }
         do {
             // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
             let page = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 48, offset: 0)
@@ -1715,6 +1749,47 @@ struct TVLibraryKindView: View {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+extension TVLibraryKindView {
+    /// The Playlists tab (each playlist as a card with its first title's art) or one playlist's titles.
+    @MainActor
+    fileprivate func loadPlaylists(_ api: PlayarrAPIClient) async {
+        defer { didLoad = true }
+        if let playlistID {
+            let rows = (try? await api.listPlaylistItems(playlistID: playlistID)) ?? []
+            items = await Self.works(rows.sorted { $0.position < $1.position }.map(\.workID), api: api)
+        } else {
+            let lists = (try? await api.listPlaylists()) ?? []
+            var cards: [Work] = []
+            var counts: [UUID: Int] = [:]
+            for list in lists {
+                let rows = (try? await api.listPlaylistItems(playlistID: list.id)) ?? []
+                let first = await Self.works(rows.min { $0.position < $1.position }.map { [$0.workID] } ?? [], api: api).first
+                counts[list.id] = rows.count
+                cards.append(Work(
+                    id: list.id, kind: list.mediaType == .audio ? .artist : .movie, title: list.name, sortTitle: list.name,
+                    images: first?.images ?? [], genres: ["\(list.mediaType.rawValue.capitalized) \u{00B7} Your playlist"],
+                    addedAt: list.createdAt, monitored: false, availability: .available
+                ))
+            }
+            playlistCounts = counts
+            items = cards
+        }
+        total = items.count
+        selectedID = items.first?.id
+    }
+
+    private static func works(_ ids: [UUID], api: PlayarrAPIClient) async -> [Work] {
+        await withTaskGroup(of: (Int, Work?).self) { group in
+            for (index, id) in ids.enumerated() {
+                group.addTask { (index, try? await api.fetchWork(id: id).work) }
+            }
+            var found: [(Int, Work)] = []
+            for await (index, work) in group { if let work { found.append((index, work)) } }
+            return found.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
 }
 
 struct TVWorkTile: View {

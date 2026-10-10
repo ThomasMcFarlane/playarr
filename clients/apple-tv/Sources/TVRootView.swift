@@ -241,7 +241,8 @@ struct TVRootView: View {
                     kindLabel: "Playlists",
                     emptyMessage: "No playlists yet.",
                     workKind: nil,
-                    collectionNoun: "PLAYLISTS"
+                    collectionNoun: "PLAYLISTS",
+                    listsPlaylists: true
                 )
             }
         }
@@ -260,6 +261,8 @@ private struct TVProductionShell<Stage: View>: View {
     @Environment(TVAppEnvironment.self) private var environment
     @Namespace private var shellFocusNamespace
     @State private var preferNavDefault = false
+    /// Who's watching, opened from the nav's profile tile (web `/profiles`).
+    @State private var showProfiles = false
     @Environment(\.resetFocus) private var resetFocus
 
     private var navColumn: CGFloat {
@@ -274,14 +277,25 @@ private struct TVProductionShell<Stage: View>: View {
                 TVFloatingNav(
                     selection: $nav,
                     suppressFocusChrome: false,
-                    showSettings: true,
+                    // Web TV nav: no Settings group; Settings opens from the profile's gear on Who's watching.
+                    showSettings: false,
                     externalFocus: shellFocus,
                     focusNamespace: shellFocusNamespace,
                     preferDefaultFocus: preferNavDefault,
-                    browseKinds: environment.catalogKinds
+                    browseKinds: environment.catalogKinds,
+                    profile: TVNavProfile(
+                        name: environment.profileName ?? "Viewer",
+                        userID: environment.currentUserID,
+                        preset: environment.currentAvatarPreset,
+                        image: environment.currentAvatarImage,
+                        version: "v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")",
+                        open: { showProfiles = true }
+                    )
                 )
                 .frame(width: navColumn)
                 .focusSection()
+                // Web: Back on a top-level page goes Home (from the nav or the page's root, never a pushed page).
+                .modifier(TVBackToHome(active: tab != .home) { nav = .home })
                 .zIndex(1)
 
                 // The stage spans the whole screen under the floating nav, as on the web: pages place their content
@@ -292,6 +306,7 @@ private struct TVProductionShell<Stage: View>: View {
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationBarBackButtonHidden(true)
                         .focusSection()
+                        .modifier(TVBackToHome(active: tab != .home) { nav = .home })
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.leading, -navColumn)
@@ -324,19 +339,33 @@ private struct TVProductionShell<Stage: View>: View {
                 .allowsHitTesting(false)
                 .zIndex(80)
 
-            VStack {
-                Spacer()
-                HStack {
-                    TVProfileChip(name: environment.profileName ?? "Viewer", version: nil)
-                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
-                        .padding(.bottom, 36)
-                    Spacer()
-                }
-            }
-            .allowsHitTesting(false)
-            .zIndex(50)
         }
         .ignoresSafeArea()
+        .fullScreenCover(isPresented: $showProfiles) {
+            TVProfilesView(
+                onLinkTV: { showProfiles = false },
+                onManual: {},
+                onSettings: {
+                    showProfiles = false
+                    nav = .settings
+                }
+            )
+        }
+    }
+}
+
+/// Menu on a top-level page returns to Home (web Back), only while that page is the stack's root.
+private struct TVBackToHome: ViewModifier {
+    let active: Bool
+    let goHome: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if active {
+            content.onExitCommand(perform: goHome)
+        } else {
+            content
+        }
     }
 }
 
@@ -519,6 +548,8 @@ struct TVProfilesView: View {
     var onLinkTV: () -> Void
     /// Kept for pairing-gate call-site parity; manual entry lives on the QR chrome.
     var onManual: () -> Void
+    /// The profile's gear: opens Settings when Who's watching is shown over the signed-in shell.
+    var onSettings: (() -> Void)? = nil
 
     @Environment(TVAppEnvironment.self) private var environment
     @Environment(TVDisplayPreferences.self) private var displayPreferences
@@ -820,7 +851,7 @@ struct TVProfilesView: View {
         HStack(spacing: 9 * s) {
             // Web `.profile-settings-button` — 44×44 glass circle, pink gear.
             Button {
-                // Settings is owned by the signed-in shell; visual parity only here.
+                onSettings?()
             } label: {
                 TVProfileActionLabel(
                     palette: palette,
