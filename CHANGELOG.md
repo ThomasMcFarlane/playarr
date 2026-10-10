@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Samsung Tizen and LG webOS: external links (for example the platform guides on the Clients page) open in the TV's browser instead of replacing Playarr with the web page and leaving no way back. Tizen asks for the `application.launch` privilege for this.
 - On-demand HLS now copies the source video (encoding only the audio) whenever the client can play the video codec at original quality, so a 1080p H.264 Matroska file in a browser is remuxed instead of re-encoded in real time; the re-encode missed the first-segment wait and played nothing (20.260).
 - On-demand transcodes use the libx264 `veryfast` preset with a keyframe on every segment boundary, roughly doubling throughput and making the first segment available after one segment length (20.260).
 - Android TV: an automatic retry after the decoder fallback stays on the converted stream instead of direct-playing the undecodable original again (20.260).
