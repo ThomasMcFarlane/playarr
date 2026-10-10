@@ -260,6 +260,7 @@ export interface TvGeometryTokens {
   logoSize: number;
   logoLeft: number;
   logoTop: number;
+  clockLeft: number;
 
   // 5.10 card and rail metrics, TV column.
   homeRailCardWidthLandscape: number;
@@ -370,8 +371,10 @@ export const TvGeometry: TvGeometryTokens = {
   utilityRowHeight: 50,
 
   logoSize: 42,
-  logoLeft: 59,
-  logoTop: 34,
+  // Web TV shell: logo at (61, 60), clock row starting at x=478, 56..106 high.
+  logoLeft: 61,
+  logoTop: 60,
+  clockLeft: 478,
 
   homeRailCardWidthLandscape: 327,
   homeRailCardWidthCover: 172,
