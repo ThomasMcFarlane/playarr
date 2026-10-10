@@ -479,8 +479,12 @@ export struct Library {
     if (index < 0) {
       return;
     }
-    this.gridScroller.scrollToIndex(index);
     this.setHero(this.items[index]);
+    // Pages loaded by the jump are not laid out yet in this frame; scroll once they are.
+    const target = index;
+    setTimeout((): void => {
+      this.gridScroller.scrollToIndex(target, false, ScrollAlign.START);
+    }, JUMP_SCROLL_DELAY_MS);
   }
 
   private loadedLetters(): string[] {
@@ -923,6 +927,7 @@ export struct Library {
 // Web `.tv-library-heading`: round Back (50, surfaceStrong at 0.7), title 33.6/580, pink count 12.288/820.
 const JUMP_MAX_ATTEMPTS: number = 200;
 const JUMP_WAIT_MS: number = 100;
+const JUMP_SCROLL_DELAY_MS: number = 50;
 
 const TV_BACK_SIZE: number = 50;
 const TV_BACK_GLYPH_SIZE: number = 17.28;
