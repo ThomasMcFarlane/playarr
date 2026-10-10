@@ -282,8 +282,8 @@
     <Content Include="Assets\SplashScreen.png" />
     <EmbeddedResource Include="Properties\Default.rd.xml" />
     <!-- The web's fonts (docs/parity/fonts, SIL OFL 1.1; licence texts alongside). -->
-    <Content Include="Assets\Fonts\NunitoSans.ttf" />
-    <Content Include="Assets\Fonts\JetBrainsMono.ttf" />
+    <Content Include="Assets\Fonts\NunitoSans.ttc" />
+    <Content Include="Assets\Fonts\JetBrainsMono.ttc" />
     <Content Include="Assets\Fonts\OFL-NunitoSans.txt" />
     <Content Include="Assets\Fonts\OFL-JetBrainsMono.txt" />
   </ItemGroup>
