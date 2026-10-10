@@ -261,6 +261,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
 - Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).
 - Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.
 - Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.

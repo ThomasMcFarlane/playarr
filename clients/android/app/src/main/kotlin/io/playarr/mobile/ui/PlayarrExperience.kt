@@ -2732,10 +2732,11 @@ private fun ExperienceHomeScreen(
                         modifier = if (isTelevision) Modifier.fillMaxSize().extendStart(railGutter) else Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = railGutter,
-                            top = if (isTelevision) 424.9.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
+                            // Web: the first rail heading at y 402 and rail headings 365.9 dp apart with the poster-size cards.
+                            top = if (isTelevision) 389.9.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 77.6.dp else 66.93.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 52.8.dp else 66.93.dp),
                     ) {
                         itemsIndexed(current.value, key = { _, rail -> rail.key }) { railIndex, rail ->
                             ExperienceMediaRail(
@@ -2866,7 +2867,8 @@ internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines
     )
     val lines = remember(title, density, webFontFamily, maxLines) {
         // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
-        val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
+        // Exact (float) advance, floored once: nine rounded-up single advances made the box ~4 px wider than web's.
+        val nineCh = measurer.measure("0".repeat(9), style.copy(letterSpacing = 0.sp)).getLineRight(0).toInt()
         fun measureAt(width: Int) = measurer.measure(
             text = title,
             style = style,
@@ -2877,7 +2879,9 @@ internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines
         // CSS `text-wrap: balance`: the narrowest width that keeps the same line count without overflowing.
         val greedy = measureAt(nineCh)
         val lineCount = greedy.lineCount
-        val result = if (lineCount < 2 || greedy.hasVisualOverflow) greedy else {
+        // Overflow is judged by the line count only: the -0.072em tracking leaves glyph overhang that Compose reports as
+        // width overflow on every line, which made balancing never run.
+        val result = if (lineCount < 2 || greedy.multiParagraph.didExceedMaxLines) greedy else {
             var low = nineCh / 2
             var high = nineCh
             while (high - low > 1) {
@@ -2885,7 +2889,7 @@ internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines
                 val probe = measureAt(mid)
                 // Never narrower than a word: every line must end at a space, as CSS breaks only at soft wrap opportunities.
                 val wordBreaks = (0 until probe.lineCount - 1).all { probe.getLineEnd(it).let { end -> end <= 0 || end >= title.length || title[end - 1].isWhitespace() || title[end].isWhitespace() } }
-                if (probe.lineCount == lineCount && !probe.hasVisualOverflow && wordBreaks) high = mid else low = mid
+                if (probe.lineCount == lineCount && !probe.multiParagraph.didExceedMaxLines && wordBreaks) high = mid else low = mid
             }
             measureAt(high)
         }
@@ -3044,7 +3048,7 @@ internal fun ExperienceMediaRail(
             state = railState,
             fade = if (isTelevision) PlayarrFadeKind.Rail else PlayarrFadeKind.PhoneRail,
             startGutter = trackGutter,
-            modifier = (if (isTelevision) Modifier.fillMaxWidth().extendStart(trackGutter) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = if (railIndex == 0) 30.4.dp else 28.4.dp) else Modifier),
+            modifier = (if (isTelevision) Modifier.fillMaxWidth().extendStart(trackGutter) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = if (railIndex == 0) 43.2.dp else 41.2.dp) else Modifier),
             contentPadding = if (isTelevision) PaddingValues(start = trackGutter, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
         ) {
@@ -3056,9 +3060,11 @@ internal fun ExperienceMediaRail(
                     work = work,
                     serverUrl = serverUrl,
                     accessToken = accessToken,
+                    // Web: Home cards are THE poster card, the Library grid card (owner request 2026-10-10): `--card-w`
+                    // 327.2 dp and `--card-w-cover` 191.3 dp at 1920 x 1080.
                     width = when (homeView) {
-                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 219.dp else 179.4.dp
-                        PlayarrHomeViewPreference.Cover -> if (isTelevision) 172.dp else 118.dp
+                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 327.2.dp else 179.4.dp
+                        PlayarrHomeViewPreference.Cover -> if (isTelevision) 191.3.dp else 118.dp
                     },
                     homeView = homeView,
                     webPhone = !isTelevision && homeView == PlayarrHomeViewPreference.Thumbnail,
