@@ -82,6 +82,7 @@ const NON_CONTROL_FOCUS = [
   /\.tv-download-row-copy/,
   /\.tv-discovery-item/,
   /\.player-video/,
+  /\.circle-focus-host/, // circular avatars: the ring is drawn on the circle (box-shadow), not on the square host
 ];
 
 describe("focus ring tokens", () => {
