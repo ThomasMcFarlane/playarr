@@ -4801,45 +4801,17 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   }
 }
 
-.app-user-identity-cluster {
-  position: fixed;
-  z-index: var(--z-identity);
-  right: auto;
-  bottom: clamp(22px, calc(3.2 * var(--viewport-unit)), 46px);
-  left: calc(
-    var(--tv-nav-centre-x) - var(--tv-user-padding-start) -
-      (var(--tv-user-avatar-size) / 2)
-  );
-}
-
-.app-user-identity {
-  position: relative;
-  display: flex;
+/*
+ * The profile item is the last tile of the rail, in its own group: it takes the same box, spacing, states and focus
+ * treatment as every other .app-nav-link, so it never overlaps the other items, the page, the clock or the details panel.
+ */
+.app-nav-group-profile {
   align-items: center;
-  gap: 0.65rem;
-  min-height: 44px;
-  padding: 0.38rem 0.78rem 0.38rem var(--tv-user-padding-start);
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-strong) 66%, transparent);
-  color: var(--ink-soft);
-  box-shadow: 0 18px 48px rgba(56, 38, 33, 0.1);
-  backdrop-filter: blur(22px) saturate(120%);
-  transition:
-    background 200ms ease,
-    color 200ms ease,
-    transform 200ms ease;
-}
-
-.app-user-identity:hover {
-  background: var(--ink);
-  color: var(--bg);
-  transform: translateY(-3px);
 }
 
 .app-user-avatar {
-  width: var(--tv-user-avatar-size);
-  height: var(--tv-user-avatar-size);
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -4852,38 +4824,46 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   color: #fff;
 }
 
-.app-user-identity:hover .app-user-avatar {
-  background: color-mix(in srgb, var(--brand) 26%, var(--bg));
-}
-
 .app-user-avatar > svg {
   width: 86%;
   height: 86%;
 }
 
 .app-user-name {
-  max-width: 10rem;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.7rem);
-  font-weight: 690;
-  letter-spacing: 0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-user-version {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: calc(var(--tv-user-padding-start) + var(--tv-user-avatar-size) / 2);
-  color: var(--ink);
-  font: 700 clamp(0.38rem, calc(0.42 * var(--vw)), 0.5rem)/1 var(--mono);
-  letter-spacing: 0.04em;
-  transform: translateX(-50%);
+.app-nav-group-profile .app-nav-link.app-user-identity .app-user-name {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-user-identity-cluster:focus-within .app-user-version {
+.app-nav-group-profile .household-remaining-chip {
+  max-width: 100%;
+  justify-content: center;
+  padding: 0.15rem 0.3rem;
+  border-radius: 12px;
+  font-size: 0.6rem;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+
+.app-user-version {
+  display: block;
   color: var(--ink);
+  font: 700 clamp(0.38rem, calc(0.42 * var(--vw)), 0.5rem)/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .app-nav {
@@ -8440,24 +8420,6 @@ html.is-native-scroll-root .profile-auth-scroll {
 }
 
 @media (max-width: 760px) {
-  .app-user-name{
-    display: none;
-  }
-
-  .app-user-identity-cluster {
-    right: auto;
-    bottom: 20px;
-    left: 14px;
-  }
-
-  .app-user-identity {
-    padding: 0.3rem;
-  }
-
-  .app-user-version {
-    left: 50%;
-  }
-
   .app-utility {
     right: 14px;
     left: auto;
@@ -8689,33 +8651,23 @@ html.is-native-scroll-root .profile-auth-scroll {
     overscroll-behavior-y: contain;
   }
 
-  .app-user-identity-cluster {
-    top: var(--mobile-top-inset);
-    right: var(--mobile-page-gutter);
-    bottom: auto;
-    left: auto;
-  }
-
-  .app-user-identity {
-    width: 44px;
-    height: 44px;
-    justify-content: center;
-    padding: 4px;
-    border-radius: 50%;
-    overflow: visible;
-  }
-
   .app-user-avatar {
-    width: 32px;
-    height: 32px;
-  }
-
-  .app-user-name {
-    display: none;
+    width: 21px;
+    height: 21px;
   }
 
   .app-user-version {
-    left: 50%;
+    display: none;
+  }
+
+  /* The bar scrolls sideways: the profile tile leads it so it is never scrolled out of view. */
+  .app-nav-group-profile .app-user-identity {
+    order: -1;
+  }
+
+  .app-nav-group-profile .household-remaining-chip {
+    flex: 0 0 auto;
+    max-width: 72px;
   }
 
   .app-nav {
