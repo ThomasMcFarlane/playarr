@@ -392,6 +392,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
 - Web: every poster or title card (Home and playlist rails, Search results, playlist grids, "more like this" on detail pages) is now exactly the size of the Library grid card at every stage size, from one shared token set (`--card-w` and friends in `page-layout.css`). A guard (`scripts/card-size-e2e.mjs`) checks width, height, art, caption size and spacing on every surface in both themes.
 - Web: the profile item in the left nav is a real link to the profiles page (it opens in a new tab with Ctrl/Cmd-click, middle-click or the context menu) and is now a square nav tile in its own group, with the first name beneath the avatar, that never overlaps other items or the page.
 - Web calendar: the date switcher button now sits at the top right in one group with Previous, Today and Next; the shell action column keeps only Filters and the Calendar link, and the month and year jump opens below the switcher.
