@@ -14,7 +14,6 @@ import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import {
   describeApiError,
   type PlaylistResponse,
-  type ViewSummary,
   type WatchProgress,
   type Work,
   type WorkKind,
@@ -100,13 +99,11 @@ function resultKey(result: SearchResult): string {
 function searchRoute(
   query: string,
   mediaType: SearchMediaType,
-  libraryId: string | null,
   focus?: string
 ): string {
   const params = new URLSearchParams();
   if (query) params.set("q", query);
   if (mediaType !== "all") params.set("type", mediaType);
-  if (libraryId) params.set("library", libraryId);
   if (focus) params.set("focus", focus);
   return `/search?${params.toString()}`;
 }
@@ -114,25 +111,22 @@ function searchRoute(
 function resultDetailRoute(
   query: string,
   mediaType: SearchMediaType,
-  libraryId: string | null,
   workId: string,
   focus: string
 ): string {
   const params = new URLSearchParams({ q: query, focus });
   if (mediaType !== "all") params.set("type", mediaType);
-  if (libraryId) params.set("library", libraryId);
   return `/search/${workId}?${params.toString()}`;
 }
 
-/** The query-cache key of one search (works only; playlists and the library filter are applied on top). */
+/** The query-cache key of one search (works only; playlists are applied on top). */
 function searchCacheKey(query: string): string {
   return `search:${SEARCH_LIMIT}:${query.toLocaleLowerCase()}`;
 }
 
-/** Rows for a search: works that pass the type and library filters, then the matching playlists. */
+/** Rows for a search: works that pass the type filter, then the matching playlists. */
 function buildSearchRows(input: {
   works: Work[];
-  libraryWorkIds: Set<string> | null;
   mediaType: SearchMediaType;
   includesPlaylists: boolean;
   playlists: PlaylistResponse[] | null;
@@ -141,7 +135,6 @@ function buildSearchRows(input: {
   const rows: SearchResult[] = input.works
     .filter(isSupportedWork)
     .filter((work) => workMatchesType(work, input.mediaType))
-    .filter((work) => !input.libraryWorkIds || input.libraryWorkIds.has(work.id))
     .map((work) => ({ type: "work" as const, id: work.id, work }));
   if (input.includesPlaylists) {
     rows.push(
@@ -207,7 +200,6 @@ interface SearchResultCardProps {
   isSelected: boolean;
   requestedQuery: string;
   requestedMediaType: SearchMediaType;
-  requestedLibraryId: string | null;
   requestedFocusId: string | null;
   playlists: PlaylistResponse[] | null;
   progress: WatchProgress | undefined;
@@ -225,7 +217,6 @@ const SearchResultCard = memo(function SearchResultCard({
   isSelected,
   requestedQuery,
   requestedMediaType,
-  requestedLibraryId,
   requestedFocusId,
   playlists,
   progress,
@@ -241,7 +232,7 @@ const SearchResultCard = memo(function SearchResultCard({
     (element: HTMLAnchorElement | null) => registerRef(key, element),
     [key, registerRef]
   );
-  const backTo = searchRoute(requestedQuery, requestedMediaType, requestedLibraryId, key);
+  const backTo = searchRoute(requestedQuery, requestedMediaType, key);
   const linkState = useMemo(
     () => ({ backTo, navigationOrigin }),
     [backTo, navigationOrigin]
@@ -283,7 +274,7 @@ const SearchResultCard = memo(function SearchResultCard({
   const detailRoute =
     work.kind === "artist"
       ? `/music/${work.id}`
-      : resultDetailRoute(requestedQuery, requestedMediaType, requestedLibraryId, work.id, key);
+      : resultDetailRoute(requestedQuery, requestedMediaType, work.id, key);
   const contextProps = itemProps({
     work,
     detailRoute,
@@ -330,23 +321,20 @@ export function SearchPage() {
   const requestedQuery = searchParams.get("q")?.trim() ?? "";
   const requestedFocusId = searchParams.get("focus");
   const requestedMediaType = parseMediaType(searchParams.get("type"));
-  const requestedLibraryId = searchParams.get("library");
   const [query, setQuery] = useState(requestedQuery);
   const [panel, setPanel] = usePanelParam(["filters"] as const);
   const filtersOpen = panel === "filters";
-  const [views, setViews] = useState<ViewSummary[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistResponse[] | null>(null);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
   // Stale-while-revalidate on the first render: a stored search (Back from a result) paints its rows at once.
   const [seed] = useState<SearchState | null>(() => {
-    if (!requestedQuery || requestedLibraryId || requestedMediaType === "playlist" || requestedMediaType === "game") return null;
+    if (!requestedQuery || requestedMediaType === "playlist" || requestedMediaType === "game") return null;
     const stored = client.queries.peek<Work[]>(searchCacheKey(requestedQuery));
     if (!stored) return null;
     return {
       status: "ready",
       results: buildSearchRows({
         works: stored.data,
-        libraryWorkIds: null,
         mediaType: requestedMediaType,
         includesPlaylists: requestedMediaType === "all",
         playlists: null,
@@ -429,14 +417,6 @@ export function SearchPage() {
   useEffect(() => {
     let cancelled = false;
     void client
-      .listViews()
-      .then((rows) => {
-        if (!cancelled) setViews(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setViews([]);
-      });
-    void client
       .listPlaylists()
       .then((rows) => {
         if (cancelled) return;
@@ -464,10 +444,8 @@ export function SearchPage() {
 
     const includesWorks =
       requestedMediaType !== "playlist" && requestedMediaType !== "game";
-    const includesPlaylists =
-      !requestedLibraryId &&
-      (requestedMediaType === "all" || requestedMediaType === "playlist");
-    const requestKey = `${requestedQuery}|${requestedMediaType}|${requestedLibraryId ?? ""}`;
+    const includesPlaylists = requestedMediaType === "all" || requestedMediaType === "playlist";
+    const requestKey = `${requestedQuery}|${requestedMediaType}`;
     // Only playlist-only searches have to wait for playlists; "all" shows the works at once and the playlists join
     // when they arrive. Re-running for the same request never blanks rows that are already shown.
     if (requestedMediaType === "playlist" && playlists === null) {
@@ -483,20 +461,12 @@ export function SearchPage() {
     const workRequest = includesWorks
       ? client.queries.fetch(searchCacheKey(requestedQuery), () => client.searchCatalog(requestedQuery, SEARCH_LIMIT, { availableOnly: true }), { tags: ["catalog"] })
       : Promise.resolve<Work[]>([]);
-    const libraryRequest =
-      includesWorks && requestedLibraryId
-        ? client.resolveView(requestedLibraryId, { limit: 500 }).then((page) => page.items)
-        : Promise.resolve<Work[] | null>(null);
 
-    void Promise.all([workRequest, libraryRequest])
-      .then(([workResults, libraryWorks]) => {
+    void workRequest
+      .then((workResults) => {
         if (requestGenerationRef.current !== generation) return;
-        const libraryWorkIds = libraryWorks
-          ? new Set(libraryWorks.map((work) => work.id))
-          : null;
         const resultRows = buildSearchRows({
           works: workResults,
-          libraryWorkIds,
           mediaType: requestedMediaType,
           includesPlaylists,
           playlists,
@@ -546,7 +516,6 @@ export function SearchPage() {
     playlistError,
     playlists,
     requestedFocusId,
-    requestedLibraryId,
     requestedMediaType,
     requestedQuery,
   ]);
@@ -591,7 +560,7 @@ export function SearchPage() {
     onProgressChanged: handleProgressChanged,
   });
   const navigationLayer = useNavigationLayer(
-    `${requestedQuery}:${requestedMediaType}:${requestedLibraryId ?? "all"}:${
+    `${requestedQuery}:${requestedMediaType}:${
       results.map(resultKey).join(",") || state.status
     }`,
     true
@@ -615,27 +584,20 @@ export function SearchPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [navigationLayer.hasSnapshot, requestedFocusId, state]);
 
-  const activeLibrary = useMemo(
-    () => views.find((view) => view.id === requestedLibraryId) ?? null,
-    [requestedLibraryId, views]
-  );
+  // Old links carry the removed Library filter: drop it.
+  useEffect(() => {
+    if (!searchParams.has("library")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("library");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
-  function updateFilters(next: {
-    mediaType?: SearchMediaType;
-    libraryId?: string | null;
-  }) {
+  function updateFilters(next: { mediaType?: SearchMediaType }) {
     const params = new URLSearchParams(searchParams);
-    let mediaType = next.mediaType ?? requestedMediaType;
-    let libraryId =
-      next.libraryId === undefined ? requestedLibraryId : next.libraryId;
-    if (next.libraryId && requestedMediaType === "playlist") {
-      mediaType = "all";
-    }
-    if (mediaType === "playlist") libraryId = null;
+    const mediaType = next.mediaType ?? requestedMediaType;
     if (mediaType === "all") params.delete("type");
     else params.set("type", mediaType);
-    if (libraryId) params.set("library", libraryId);
-    else params.delete("library");
+    params.delete("library");
     params.delete("focus");
     setSearchParams(params, { replace: true });
   }
@@ -793,7 +755,7 @@ export function SearchPage() {
             open: filtersOpen,
             onToggle: () => setPanel(filtersOpen ? null : "filters"),
             controls: "search-filters-drawer",
-            activeCount: (requestedMediaType !== "all" ? 1 : 0) + (activeLibrary ? 1 : 0),
+            activeCount: requestedMediaType !== "all" ? 1 : 0,
           },
         ],
       }}
@@ -882,7 +844,7 @@ export function SearchPage() {
           axis="vertical"
           scrollKey="search:results"
           className="tv-search-results tv-search-rail-scroll"
-          refreshKey={`${requestedQuery}:${requestedMediaType}:${requestedLibraryId ?? "all"}:${
+          refreshKey={`${requestedQuery}:${requestedMediaType}:${
             state.status === "ready" ? state.results.length : 0
           }`}
           viewportProps={{ "aria-live": "polite", "aria-busy": state.status === "loading" }}
@@ -928,7 +890,6 @@ export function SearchPage() {
                   isSelected={selectedId === resultKey(result)}
                   requestedQuery={requestedQuery}
                   requestedMediaType={requestedMediaType}
-                  requestedLibraryId={requestedLibraryId}
                   requestedFocusId={requestedFocusId}
                   playlists={playlists}
                   progress={
@@ -945,10 +906,9 @@ export function SearchPage() {
           )}
           {state.status === "ready" &&
           (requestedMediaType === "game" ||
-            (!requestedLibraryId &&
-              (requestedMediaType === "all" ||
-                requestedMediaType === "movie" ||
-                requestedMediaType === "series"))) ? (
+            requestedMediaType === "all" ||
+            requestedMediaType === "movie" ||
+            requestedMediaType === "series") ? (
             <DiscoveryExtras
               query={requestedQuery}
               gamesOnly={requestedMediaType === "game"}
@@ -971,17 +931,6 @@ export function SearchPage() {
             value={requestedMediaType}
             options={visibleSearchTypes.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
             onChange={(mediaType) => updateFilters({ mediaType })}
-          />
-        </FilterSection>
-        <FilterSection title={t("pages.search.libraryLabel")}>
-          <ChoiceGroup
-            ariaLabel={t("pages.search.filterByLibrary")}
-            value={requestedLibraryId ?? ""}
-            options={[
-              { value: "", label: t("pages.search.all") },
-              ...views.map((view) => ({ value: view.id, label: view.name })),
-            ]}
-            onChange={(libraryId) => updateFilters({ libraryId: libraryId || null })}
           />
         </FilterSection>
       </FiltersDrawer>

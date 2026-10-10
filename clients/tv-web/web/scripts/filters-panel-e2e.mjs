@@ -203,6 +203,19 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     await context.close();
   }
 }
+// Search Filters: only Type remains (no duplicate Library section); an old ?library= is dropped.
+{
+  const { context, page } = await open("/search?q=a&panel=filters&library=v1", { width: 1280, height: 720 });
+  try {
+    await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await page.waitForTimeout(700);
+    const titles = await page.locator(".tv-filter-drawer .drawer-body section > h3").allTextContents();
+    check("search filters: only the Type section remains (no Library)", titles.length === 1 && /type/i.test(titles[0]), JSON.stringify(titles));
+    check("search filters: old ?library= is dropped from the URL", !new URL(page.url()).searchParams.has("library"), page.url());
+  } finally {
+    await context.close();
+  }
+}
 // Old links with the removed Source and date range filters keep working: dropped from the URL, the range start becomes the period.
 {
   const { context, page } = await open("/calendar?panel=filters&view=month&source=s1&from=2026-10-01&to=2026-10-31", { width: 1280, height: 720 });

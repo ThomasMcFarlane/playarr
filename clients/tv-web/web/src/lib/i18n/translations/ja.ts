@@ -573,8 +573,6 @@ export const ja: Translations = {
   "pages.search.libraryFilterAll": " ・すべてのライブラリ",
   "pages.search.filterByType": "種類で絞り込む",
   "pages.search.typeLabel": "種類",
-  "pages.search.filterByLibrary": "ライブラリで絞り込む",
-  "pages.search.libraryLabel": "ライブラリ",
   "pages.search.systemPlaylist": "システムプレイリスト",
   "pages.search.playlist": "プレイリスト",
   "pages.search.availableToPlay": "再生可能",

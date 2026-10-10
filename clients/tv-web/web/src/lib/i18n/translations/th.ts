@@ -576,8 +576,6 @@ export const th: Translations = {
   "pages.search.libraryFilterAll": " · ทุกไลบรารี",
   "pages.search.filterByType": "กรองตามประเภท",
   "pages.search.typeLabel": "ประเภท",
-  "pages.search.filterByLibrary": "กรองตามไลบรารี",
-  "pages.search.libraryLabel": "ไลบรารี",
   "pages.search.systemPlaylist": "เพลย์ลิสต์ระบบ",
   "pages.search.playlist": "เพลย์ลิสต์",
   "pages.search.availableToPlay": "พร้อมเล่น",
