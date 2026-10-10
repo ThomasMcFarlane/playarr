@@ -470,6 +470,8 @@ internal enum class PlayarrString(
     HomeCustomiseReset("Reset", "รีเซ็ต", "リセット"),
 
     LibraryCollectionArtists("artists", "ศิลปิน", "アーティスト"),
+    LibraryControls("Library controls", "ตัวควบคุมไลบรารี", "ライブラリの操作"),
+    ContextTitleActions("Title actions", "การดำเนินการของเรื่อง", "タイトルの操作"),
     LibraryCollectionTitles("titles", "เรื่อง", "タイトル"),
     LibraryCollectionCount(
         "{{count}} {{collection}}",
@@ -781,6 +783,7 @@ internal enum class PlayarrString(
     DetailUnavailable("Unavailable", "ไม่พร้อมใช้งาน", "利用できません"),
     DetailReleased("Released {{date}}", "เข้าฉายเมื่อ {{date}}", "公開日 {{date}}"),
     DetailDownloadButton("Download", "ดาวน์โหลด", "ダウンロード"),
+    DetailChaptersCount("{{count}} chapters", "{{count}} บท", "{{count}}件のチャプター"),
     DetailSceneMarkersCount("{{count}} scene markers", "{{count}} จุดคั่นฉาก", "{{count}}件のシーンマーカー"),
     DetailKindMovie("Movie", "ภาพยนตร์", "映画"),
     DetailChapters("Chapters", "บท", "チャプター"),

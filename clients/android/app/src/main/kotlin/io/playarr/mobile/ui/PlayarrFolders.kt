@@ -444,7 +444,7 @@ private fun FolderFiltersSheet(url: FolderUrlState, holder: FolderStateHolder) {
             )
         }
         if (url.activeFilterCount > 0) {
-            PlayarrChoice(playarrString(PlayarrString.FoldersClearFilters), false, holder::clearFilters)
+            PlayarrChoice(playarrString(PlayarrString.FoldersClearFilters), false, onClick = holder::clearFilters)
         }
     }
 }

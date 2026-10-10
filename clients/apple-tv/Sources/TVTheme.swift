@@ -569,6 +569,8 @@ struct TVFloatingNav: View {
     var showMusic: Bool = false
     /// Kinds the profile can browse (`nil` while unknown shows Series and Movies).
     var browseKinds: Set<WorkKind>? = nil
+    /// Web `.app-nav-group-profile`: the profile tile at the foot of the nav (opens Who's watching).
+    var profile: TVNavProfile? = nil
 
     var body: some View {
         // Whole nav is one centred column (web: top 50% + translateY(-50%)).
@@ -577,6 +579,9 @@ struct TVFloatingNav: View {
             ForEach(navGroups, id: \.self) { navGroup(tabs: $0) }
             if showSettings {
                 navGroup(tabs: [.settings])
+            }
+            if let profile {
+                profileGroup(profile)
             }
         }
         .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
@@ -598,6 +603,43 @@ struct TVFloatingNav: View {
                         .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
                 )
         )
+    }
+
+    private func profileGroup(_ profile: TVNavProfile) -> some View {
+        VStack(spacing: 6) {
+            Button(action: profile.open) {
+                VStack(spacing: 5) {
+                    TVProfileAvatar(userID: profile.userID, size: 26, presetName: profile.preset, customImage: profile.image)
+                    Text(profile.name.split(separator: " ").first.map(String.init) ?? profile.name)
+                        .font(TVTheme.font(size: 9, weight: .semibold))
+                        .tracking(0.3)
+                        .lineLimit(1)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                }
+                .frame(width: DesignTokens.Shell.navItemSize, height: DesignTokens.Shell.navItemSize)
+                .modifier(TVNavItemFocusFill())
+            }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .accessibilityLabel("Profile \(profile.name)")
+            .padding(DesignTokens.Shell.navGroupPadding)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.56))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                            .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
+                    )
+            )
+            Text(profile.version)
+                .font(TVTheme.mono(size: 8, css: 700))
+                .tracking(0.32)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+        }
+    }
+
+    private var navHasFocus: Bool {
+        if case .nav = externalFocus.wrappedValue { return true }
+        return false
     }
 
     @ViewBuilder
@@ -639,7 +681,9 @@ struct TVFloatingNav: View {
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         .focused(externalFocus, equals: .nav(tab))
-        .disabled(suppressFocusChrome) // not .focusable: on a Button it adds a second, inert focus target
+        // not .focusable: on a Button it adds a second, inert focus target. While focus is outside the nav only the
+        // active tab can take it, so Left from the page lands on the active tab (web), not the nearest one.
+        .disabled(suppressFocusChrome || (!navHasFocus && !isActive))
         .focusEffectDisabled(suppressFocusChrome)
         .onMoveCommand { direction in
             // Right from any dock item jumps into the stage (first rail card).
@@ -668,6 +712,29 @@ struct TVParityFocusChrome: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// The nav's profile tile: who is signed in and what opening it does.
+struct TVNavProfile {
+    var name: String
+    var userID: String
+    var preset: String?
+    var image: UIImage?
+    var version: String
+    var open: () -> Void
+}
+
+/// A row or nav item's focus: the selected fill (web TV), driven by the system focus; no ring, no platter.
+struct TVNavItemFocusFill: ViewModifier {
+    var fill: Color = DesignTokens.Color.textPrimary.opacity(0.09)
+    var cornerRadius: CGFloat = 16
+    @Environment(\.isFocused) private var isFocused
+    func body(content: Content) -> some View {
+        content.background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(isFocused ? fill : .clear)
+        )
     }
 }
 

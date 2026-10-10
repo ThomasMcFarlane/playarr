@@ -866,7 +866,7 @@ private fun CalendarFiltersSheet(
             )
         }
         if (filters.activeCount > 0) {
-            PlayarrChoice(playarrString(PlayarrString.CalendarClearFilters), false, holder::clearFilters)
+            PlayarrChoice(playarrString(PlayarrString.CalendarClearFilters), false, onClick = holder::clearFilters)
         }
     }
     picking?.let { isFrom ->
@@ -1836,14 +1836,11 @@ private fun shareCalendarLink(context: android.content.Context, chooserTitle: St
  */
 @Composable
 internal fun PlayarrAvailabilityLagLine(lag: io.playarr.shared.data.model.AvailabilityLag, modifier: Modifier = Modifier, webTv: Boolean = false) {
+    // Web shows nothing until there is an average (row 3.9922: no "No availability data yet" text).
+    val average = lag.averageSeconds ?: return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        val average = lag.averageSeconds
         Text(
-            if (average != null) {
-                playarrString(PlayarrString.AvailabilityLagUsually, "duration" to calendarLagText(average))
-            } else {
-                playarrString(PlayarrString.AvailabilityLagNone)
-            },
+            playarrString(PlayarrString.AvailabilityLagUsually, "duration" to calendarLagText(average)),
             color = if (webTv) WebInk else WebInkSoft,
             fontSize = if (webTv) 19.2.sp else 13.sp,
             lineHeight = if (webTv) 28.8.sp else androidx.compose.ui.unit.TextUnit.Unspecified,

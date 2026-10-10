@@ -6,6 +6,7 @@ struct TVSettingsView: View {
     @State private var serverError: String?
     @State private var pairingTask: Task<Void, Never>?
     @State private var selectedSection = TVParityLaunch.liveSettingsSection ?? 0
+    @FocusState private var focusedSection: Int?
 
     private let sections: [(number: String, title: String, description: String, width: CGFloat)] = [
         ("01", "Appearance", "Choose this device's theme and home screen artwork.", 369.2),
@@ -28,25 +29,8 @@ struct TVSettingsView: View {
             // Web `.tv-library-grid-panel`: 65% frosted panel on the right.
             TVRailPanelGradient(width: 1248)
 
-            TVPageHeader(title: "Preferences", backFocused: true)
-
-            // Header detail for the selected option.
-            Text(sections[selectedSection].title.uppercased())
-                .font(TVTheme.font(size: 13.76, weight: .heavy))
-                .tracking(0.62)
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 226.6, y: 119.5, w: sections[selectedSection].width, h: 20.6)
-            Text(sections[selectedSection].description.uppercased())
-                .font(TVTheme.font(size: 12.16, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-                .placed(x: 226.6, y: 143.7, w: sections[selectedSection].width, h: 15.2)
-
-            // The hairline under the title spans the heading detail (web `.settings-heading-detail`).
-            Rectangle()
-                .fill(DesignTokens.Stage.rule)
-                .frame(width: sections[selectedSection].width, height: 1)
-                .placed(x: 226.6, y: 112, w: sections[selectedSection].width, h: 1)
+            // Web: the selected section is the page subtitle (shared small style), nothing else under the title.
+            TVPageHeader(title: "Preferences", detail: sections[selectedSection].title, backFocused: true)
 
             // `.settings-option` rows: x 153.6, y 162, 480.4 x 91.9, pitch 91.9.
             ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
@@ -75,12 +59,18 @@ struct TVSettingsView: View {
                             .placed(x: selected ? 432.6 : 427.6, y: 30.3, w: 20.8, h: 31.2)
                     }
                     .frame(width: 480.4, height: 91.9, alignment: .topLeading)
+                    .modifier(TVNavItemFocusFill(fill: DesignTokens.Color.backgroundRaised, cornerRadius: 0))
                 }
-                .buttonStyle(.plain)
+                // Web settings menu: the focused row gets the selected fill and opens its panel; no system platter.
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .focused($focusedSection, equals: index)
                 .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
-                .focusEffectDisabled(TVParityLaunch.frozen)
+                .focusEffectDisabled()
                 .placed(x: 153.6, y: top, w: 480.4, h: 91.9)
             }
+
+            Color.clear.frame(width: 0, height: 0)
+                .onChange(of: focusedSection) { _, index in if let index { selectedSection = index } }
 
             if selectedSection != 0, selectedSection != 4 || TVParityLaunch.frozen {
                 TVSettingsPanel(section: selectedSection)
