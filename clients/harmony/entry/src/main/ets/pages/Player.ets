@@ -1115,7 +1115,9 @@ struct Player {
         itemGap: (isTvMetrics() ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap),
         headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
         items: this.suggestions,
-        itemBuilder: this.suggestionItem,
+        itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+          this.suggestionItem(item, index, activeRailFactor);
+        },
       })
     }
   }

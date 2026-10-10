@@ -287,7 +287,9 @@ struct DesignGallery {
       railId: 'gallery-stage-rail',
       heading: 'More Like This',
       items: GALLERY_RAIL_ITEMS,
-      itemBuilder: this.tvRailItem,
+      itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+        this.tvRailItem(item, index, activeRailFactor);
+      },
     })
   }
 
@@ -540,7 +542,9 @@ struct DesignGallery {
           railId: 'gallery-media-rail-tv',
           heading: 'Continue Watching',
           items: GALLERY_RAIL_ITEMS,
-          itemBuilder: this.tvRailItem,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvRailItem(item, index, activeRailFactor);
+          },
         })
 
         this.sectionHeader('MediaRail -- Touch scale')
@@ -550,7 +554,9 @@ struct DesignGallery {
           items: GALLERY_RAIL_ITEMS,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchRailItem,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchRailItem(item, index, activeRailFactor);
+          },
         })
 
         // -- Stage + NavRail (TV canvas) ---------------------------------------
@@ -565,7 +571,9 @@ struct DesignGallery {
               'hero, clamped to five lines maximum on the TV profile so long copy ' +
               'never overruns the title panel.',
             onPlay: () => {},
-            railsSlot: this.stageRailsSlot,
+            railsSlot: (): void => {
+              this.stageRailsSlot();
+            },
           })
           NavRail({
             items: GALLERY_NAV_RAIL_ITEMS,
