@@ -1,1 +1,0 @@
-- Removed the tvOS live simulator workflow and its keepalive script: the live Apple TV simulator runs only on the MacBook over ssh (owner decision), and this public repository never runs a self-hosted or long-lived Apple runner job.
