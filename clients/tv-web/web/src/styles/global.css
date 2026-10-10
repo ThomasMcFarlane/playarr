@@ -279,8 +279,6 @@
   --danger: #722f34;
   --danger-soft: #f2dfe1;
   --success: #224c3a;
-  --focus-ring-color: var(--ink);
-  --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
   color: var(--ink);
 }
 

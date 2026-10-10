@@ -31,7 +31,8 @@
     "filters-panel-e2e",
     "artwork-size-setting-e2e",
     "download-flow-e2e",
-    "drawer-consistency-e2e"
+    "drawer-consistency-e2e",
+    "avatar-focus-circle-e2e"
   ],
   "args": {
     "tablet-layout": [
