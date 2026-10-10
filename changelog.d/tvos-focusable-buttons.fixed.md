@@ -1,0 +1,1 @@
+- Apple TV: the nav rail, library cards, settings, calendar and player buttons take remote focus again (Left from a rail reaches the nav, Select opens the page).

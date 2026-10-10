@@ -648,7 +648,7 @@ struct TVFloatingNav: View {
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         .focused(externalFocus, equals: .nav(tab))
-        .focusable(!suppressFocusChrome)
+        .disabled(suppressFocusChrome) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(suppressFocusChrome)
         .onMoveCommand { direction in
             // Right from any dock item jumps into the stage (first rail card).

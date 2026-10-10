@@ -1033,7 +1033,7 @@ struct TVSearchView: View {
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
-                    .focusable(!frozen)
+                    .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                     .focusEffectDisabled(frozen)
                 }
             }
@@ -1451,7 +1451,7 @@ struct TVLibraryKindView: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
-        .focusable(!parityMode)
+        .disabled(parityMode) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(parityMode)
         .onMoveCommand { direction in
             guard !parityMode, direction == .left else { return }
