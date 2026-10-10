@@ -212,6 +212,8 @@ function TodayPill({label, onPress, settled}: {label: string; onPress: () => voi
     if (settledOnce.current) return; // later reloads (a view or filter change) must not pull focus out of a drawer
     if (settled) settledOnce.current = true;
     focusNode(ref);
+    // Vega fires no onFocus for a programmatic focus, so draw the ring here; onBlur clears it as usual.
+    setFocused(true);
   }, [settled]);
   return (
     <Pressable
