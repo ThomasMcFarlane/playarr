@@ -375,6 +375,7 @@ private struct TVProductionShell<Stage: View>: View {
             }
         }
         .environment(\.openActions) { actionsWork = $0 }
+        .environment(\.actionsWorkID, actionsWork?.id)
         .ignoresSafeArea()
         .fullScreenCover(item: $playing) { request in
             TVPlayerView(mediaFileID: request.id, title: request.title, apiClient: environment.apiClient)

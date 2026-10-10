@@ -528,6 +528,18 @@ enum TVRoute: Hashable {
     case playlist(id: UUID, name: String)
 }
 
+/// The title whose actions drawer is open (nil when closed): its card takes focus back when the drawer closes.
+struct TVActionsWorkIDKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+extension EnvironmentValues {
+    var actionsWorkID: UUID? {
+        get { self[TVActionsWorkIDKey.self] }
+        set { self[TVActionsWorkIDKey.self] = newValue }
+    }
+}
+
 struct TVOpenRouteKey: EnvironmentKey {
     static let defaultValue: (TVRoute) -> Void = { _ in }
 }
@@ -547,7 +559,9 @@ struct TVCardButton<Label: View>: View {
     @ViewBuilder var label: () -> Label
     @Environment(\.openActions) private var openActions
     @Environment(\.openRoute) private var openRoute
+    @Environment(\.actionsWorkID) private var actionsWorkID
     @State private var longPressed = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         Button {
@@ -555,10 +569,15 @@ struct TVCardButton<Label: View>: View {
         } label: {
             label()
         }
+        .focused($focused)
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in
             longPressed = true
             openActions(work)
         })
+        // Web: closing the actions drawer returns focus to the card that opened it.
+        .onChange(of: actionsWorkID) { previous, current in
+            if previous == work.id, current == nil { focused = true }
+        }
     }
 }
 
