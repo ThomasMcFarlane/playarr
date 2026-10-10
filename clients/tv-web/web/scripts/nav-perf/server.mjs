@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, lagAverageSeconds = null }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, calendarPerDay = 4, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, lagAverageSeconds = null }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -156,7 +156,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       const entries = [];
       for (let day = new Date(`${start}T00:00:00Z`), n = 0; day <= new Date(`${end}T00:00:00Z`); day = new Date(day.getTime() + 86_400_000), n += 1) {
         const date = day.toISOString().slice(0, 10);
-        for (let i = 0; i < 1 + (n % 4); i += 1) {
+        for (let i = 0; i < 1 + (n % calendarPerDay); i += 1) {
           entries.push({ id: `e-${date}-${i}`, media_kind: "episode", release_type: "air", title: `Show ${(n + i) % 7}`, season_number: 1, episode_number: n + i, date, release_at: null, monitored: true, has_file: i % 2 === 0, work_id: null, sources: [{ source_instance_id: "s1", source_name: "Library source", source_kind: "sonarr", arr_id: n }] });
         }
       }

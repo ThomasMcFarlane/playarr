@@ -4,7 +4,7 @@ import type { AvailabilityLag, CalendarEntry, CalendarSourceStatus } from "@play
 import { describe, expect, it } from "vitest";
 import { availabilityLagLines } from "../components/AvailabilityLag";
 import { translations } from "../lib/i18n/translations";
-import { DaySections, MonthGrid, formatRangeLabel } from "./Calendar";
+import { DaySections, MonthGrid, formatRangeLabel, monthChipsThatFit } from "./Calendar";
 
 const en = translations.en;
 const t = (key: keyof typeof en, params?: Record<string, string | number>) =>
@@ -156,5 +156,21 @@ describe("calendar source labels", () => {
   it("uses the neutral display_label, never the admin-chosen name", () => {
     expect(page).toContain("source.display_label ?? source.name");
     expect(page).not.toMatch(/\{source\.source_name\}/);
+  });
+});
+
+describe("monthChipsThatFit", () => {
+  it("shows every chip when they all fit, with no room reserved for the more line", () => {
+    expect(monthChipsThatFit(44, 1)).toBe(1);
+    expect(monthChipsThatFit(90, 2)).toBe(2);
+    expect(monthChipsThatFit(500, 0)).toBe(0);
+  });
+
+  it("reserves one 44px more line when entries overflow, down to no chips at all", () => {
+    expect(monthChipsThatFit(89, 3)).toBe(0);
+    expect(monthChipsThatFit(90, 3)).toBe(1);
+    expect(monthChipsThatFit(136, 9)).toBe(2);
+    expect(monthChipsThatFit(135, 9)).toBe(1);
+    expect(monthChipsThatFit(30, 9)).toBe(0);
   });
 });

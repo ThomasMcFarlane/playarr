@@ -1,0 +1,1 @@
+- Calendar month view: the "+N more" line is no longer clipped in day cells at 1280x720 and other TV sizes. Each cell now works out how many 44px entries fit and reserves the line's height (showing no entries, only "+N more", where nothing else fits); `calendar-layout.mjs` asserts the line and every entry lie inside their cell at 1920, 1366 and 1280 in both themes.

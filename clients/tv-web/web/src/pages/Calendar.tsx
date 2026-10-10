@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   CalendarEntry,
@@ -440,11 +440,18 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
 }
 
 /**
- * Vertical space one month-cell chip and a cell's own chrome (padding, day number, "+N more") need, in rem so
- * they follow the root font size (a TV stage restates it), used to decide how many chips fit before "+N more".
+ * A month-cell chip and the "+N more" line are each one 44px target (AAA target size, `min-height` in Calendar.css)
+ * with a 2px gap between rows. The cell's remaining height decides how many chips fit beside a reserved "+N more".
  */
-const CHIP_ROW_REM = 1.625;
-const CELL_CHROME_REM = 3.25;
+const CELL_TARGET_PX = 44;
+const CELL_GAP_PX = 2;
+
+/** How many chips a cell of `room` px shows: all `count` when they fit, else as many as fit beside the "+N more" line. */
+export function monthChipsThatFit(room: number, count: number): number {
+  const row = CELL_TARGET_PX + CELL_GAP_PX;
+  if (count * row - CELL_GAP_PX <= room) return count;
+  return Math.max(0, Math.min(count, Math.floor((room - CELL_TARGET_PX) / row)));
+}
 
 export function MonthGrid({
   anchor,
@@ -470,19 +477,25 @@ export function MonthGrid({
   const weeks = buildMonthGrid(anchor, firstDay, groups, today);
   const weekdayFormat = utcFormatter(locale, { weekday: "short" });
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [chipLimit, setChipLimit] = useState(MONTH_CHIP_LIMIT);
+  const [cellRoom, setCellRoom] = useState(CELL_TARGET_PX * MONTH_CHIP_LIMIT);
 
-  // The grid always fills the space below the header (loading and loaded alike);
-  // cells share it equally and show as many chips as fit, then "+N more".
-  useEffect(() => {
+  // The grid always fills the space below the header (loading and loaded alike); cells share it equally. Each
+  // cell shows as many chips as fit in the room under its day number, keeping the "+N more" line's height
+  // reserved so that line is never clipped by the cell.
+  useLayoutEffect(() => {
     const element = bodyRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
     const update = () => {
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const cellHeight = element.clientHeight / weeks.length;
-      setChipLimit(
-        Math.max(1, Math.min(MONTH_CHIP_LIMIT + 2, Math.floor((cellHeight - CELL_CHROME_REM * rem) / (CHIP_ROW_REM * rem))))
-      );
+      const cell = element.querySelector<HTMLElement>(".calendar-month-cell");
+      const day = cell?.querySelector<HTMLElement>(".calendar-month-day");
+      if (!cell || !day) return;
+      const style = getComputedStyle(cell);
+      const dayStyle = getComputedStyle(day);
+      const room =
+        cell.clientHeight -
+        parseFloat(style.paddingBottom) -
+        (day.offsetTop + day.offsetHeight + parseFloat(dayStyle.marginBottom));
+      setCellRoom(Math.floor(room));
     };
     update();
     const observer = new ResizeObserver(update);
@@ -518,8 +531,7 @@ export function MonthGrid({
             <div key={week[0]!.day} className="calendar-month-row">
               {week.map((cell, cellIndex) => {
                 const items = groupSeriesEpisodes(cell.entries);
-                const overflow = items.length > chipLimit;
-                const shown = overflow ? items.slice(0, Math.max(1, chipLimit - 1)) : items;
+                const shown = items.slice(0, monthChipsThatFit(cellRoom, items.length));
                 const hidden = items.length - shown.length;
                 return (
                   <div
