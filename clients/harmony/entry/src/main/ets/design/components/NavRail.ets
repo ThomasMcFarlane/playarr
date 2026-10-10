@@ -223,11 +223,15 @@ export struct NavRail {
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
-  build() {
+  /** Web's next group (Playlists, Watchlist, Requests, Calendar), below the library group. Plain field,
+   * like `items`. */
+  secondaryItems: NavRailItem[] = [];
 
+  @Builder
+  private group(items: NavRailItem[]): void {
     Column({ space: tv(TvGeometry.navGroupItemGap) }) {
       ForEach(
-        this.items,
+        items,
         (item: NavRailItem) => {
           NavTile({ item: item, selected: item.id === this.selectedId, onSelect: this.onSelect })
         },
@@ -253,6 +257,16 @@ export struct NavRail {
       offsetY: tv(TvGeometry.navGroupShadowOffsetY),
       color: NAV_GROUP_SHADOW_COLOR,
     })
+  }
+
+  build() {
+    Column({ space: tv(TvGeometry.navGroupGap) }) {
+      this.group(this.items)
+      if (this.secondaryItems.length > 0) {
+        this.group(this.secondaryItems)
+      }
+    }
+    .alignItems(HorizontalAlign.Start)
     .position({ x: tv(TvGeometry.navStart), y: tv(TvGeometry.navGroupTop) })
   }
 }

@@ -307,6 +307,7 @@ export interface TvGeometryTokens {
   navTileLabelSize: number;
   navTileLabelWeight: number;
   navGroupTop: number;
+  navGroupGap: number;
   navGroupShadowOffsetY: number;
   playerControlBarPaddingH: number;
   playerControlBarTitleSize: number;
@@ -430,6 +431,8 @@ export const TvGeometry: TvGeometryTokens = {
   navTileLabelWeight: 700,
   // Web TV library group (Home, Series, Movies, Music) top edge; the Downloads/Search group sits above it on web.
   navGroupTop: 286,
+  // Web gap between nav groups (586 -> 600).
+  navGroupGap: 14,
   navGroupShadowOffsetY: 14,
   playerControlBarPaddingH: 48,
   playerControlBarTitleSize: 19,

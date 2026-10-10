@@ -66,6 +66,11 @@ export function catalogUrl(): string {
   return "/api/v1/catalog";
 }
 
+/** `GET /api/v1/calendar?start=&end=` (inclusive UTC days, at most 92 apart). */
+export function calendarUrl(start: string, end: string): string {
+  return `/api/v1/calendar?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+}
+
 /** `GET /api/v1/home/rails`: the server-curated Home rails web TV Home renders. */
 export function homeRailsUrl(): string {
   return "/api/v1/home/rails";

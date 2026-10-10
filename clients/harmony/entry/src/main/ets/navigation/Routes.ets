@@ -69,6 +69,9 @@ export const ROUTE_DETAIL: string = 'Detail';
  * file's own reservation discipline (see the file-header comment). */
 export const ROUTE_PLAYER: string = 'Player';
 
+/** `pages/Calendar.ets`. The release calendar (TV agenda). No navigation parameters. */
+export const ROUTE_CALENDAR: string = 'Calendar';
+
 /**
  * Every route name a page may push, replace or pop by, keyed the same way
  * `router_map.json` names them. Import this object rather than any of the
@@ -85,6 +88,7 @@ export class RouteNames {
   readonly Library: string = ROUTE_LIBRARY;
   readonly Detail: string = ROUTE_DETAIL;
   readonly Player: string = ROUTE_PLAYER;
+  readonly Calendar: string = ROUTE_CALENDAR;
 }
 
 export const ROUTES: RouteNames = new RouteNames();

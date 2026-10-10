@@ -146,6 +146,12 @@ export struct Stage {
   /** `false` when the slot scrolls itself (the library grid); the slot then gets the full column height. */
   @Prop scrollRails: boolean = true;
 
+  @Builder
+  private emptyHeroExtraSlot(): void {}
+
+  /** Shown under the hero copy (web details panel pills and actions). */
+  @BuilderParam heroExtraSlot: () => void = this.emptyHeroExtraSlot;
+
   aboutToAppear(): void {
     this.getUIContext().animateTo({ duration: ENTRY_KEY_ART_MS, curve: ENTRY_CURVE }, () => {
       this.keyArtEntry = 1;
@@ -286,6 +292,7 @@ export struct Stage {
         metaLines: this.metaLines,
         synopsis: this.synopsis,
       })
+      this.heroExtraSlot()
     }
     .width(tv(TvGeometry.titlePanelWidth))
     .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.titlePanelTop) })

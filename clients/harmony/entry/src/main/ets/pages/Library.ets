@@ -117,7 +117,7 @@ import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
 import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
-import { HOME_NAV_ID, buildNavRailItems } from '../navigation/NavItems';
+import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
 import { titleCountLabel } from '../core/CountFormat';
 import { AlphabetRail } from '../design/components/AlphabetRail';
 import { alphabetFor, firstIndexAtOrAfter, workLetter } from '../core/AlphabetIndex';
@@ -504,6 +504,10 @@ export struct Library {
       popRoute(getNavStack());
       return;
     }
+    if (id === CALENDAR_NAV_ID) {
+      replaceRoute(getNavStack(), ROUTES.Calendar);
+      return;
+    }
     const params: LibraryRouteParams = { kind: id };
     replaceRoute(getNavStack(), ROUTES.Library, params);
   }
@@ -860,6 +864,7 @@ export struct Library {
       if (this.navItems.length > 0) {
         NavRail({
           items: this.navItems,
+          secondaryItems: buildSecondaryNavItems(),
           selectedId: this.kind,
           onSelect: (id: string): void => {
             this.handleNavSelect(id);
