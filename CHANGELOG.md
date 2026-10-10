@@ -406,6 +406,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Apple TV: Home is the web TV Home: the hero follows the focused card, the server shelves sit on the right with the web card size, focus lift and glow, On deck leads with progress bars, and a skeleton replaces the "Loading your library" screen. Remote focus reaches the nav rail again, pages sit at the web positions under the floating nav, and the clock sits and ticks where the web shows it.
 - Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
 - Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.
 - Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
