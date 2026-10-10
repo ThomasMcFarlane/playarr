@@ -41,6 +41,7 @@ Steps only the repository owner can perform.
 | 9969 | Web: every right-side panel (incl. long-press actions and download view) uses the one shared Drawer and close button | in_progress | drawer worker | drawer-everywhere | | 2026-10-10 23:30 ICT | Owner request 2026-10-10; auditing all panels, migrating to shared Drawer, guard e2e drawer-consistency-e2e.mjs |
 | 9965 | Web calendar agenda: focused entry's glow/lift cropped by the scroller; gap under sticky heading | in_progress | agenda worker | agenda-focus-crop | | 2026-10-10 22:30 ICT | Owner bug on live: the agenda scroller crops the focused entry's lift and glow ring; the scroller gets inline and block padding for the glow extent. |
 | 9974 | Web: regenerate all web parity references after the 10 Oct batches | done | parity-refs worker | parity-refs-1010 | | | Done via #537 (96 PNGs + manifest regenerated from main de01ef61); renumbered from 9952/9971 clashes. |
+| 9975 | Web: Calendar Type/Source/Status filters as multi-selects; Monitored as a switch | in_progress | filters worker | calendar-filter-selects | 1.9962 | 2026-10-11 01:30 ICT | Owner request 2026-10-10: the Calendar Filters panel uses the shared MultiSelect for Type, Source and Status and the shared switch for Monitored only; ToggleChips is removed; any other multi-option filter still on chips or pills is migrated. Query params and behaviour unchanged. |
 
 ## 2. Server performance and security (2026-10-03)
 
