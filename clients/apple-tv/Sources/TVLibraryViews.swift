@@ -1503,14 +1503,15 @@ struct TVLibraryKindView: View {
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
+    /// Web `.tv-title-grid` at 1920x1080: columns of `--card-w` (327.2 at medium) from x 783.4, 25.92 apart, first row at
+    /// y 162, rows 240.4 apart at medium (27 between a card's caption and the next art).
     private func productionTitleGrid(size: CGSize) -> some View {
-        let gridWidth = size.width * DesignTokens.Shell.libraryGridWidthFraction
-        let padL = DesignTokens.Shell.libraryRailLeft
-        let padR = DesignTokens.Shell.libraryRailRight
+        let gridWidth = size.width - 783.4
+        let padL: CGFloat = 0
+        let padR: CGFloat = 0
         let cols = displayPreferences.cardColumns
-        let gap = DesignTokens.Shell.libraryGridColGap
-        let inner = max(0, gridWidth - padL - padR)
-        let cardW = (inner - gap * CGFloat(cols - 1)) / CGFloat(cols)
+        let gap: CGFloat = 25.92
+        let cardW = displayPreferences.cardWidth
         let artH = cardW * 9 / 16
 
         return ScrollView(.vertical, showsIndicators: false) {
@@ -1520,7 +1521,7 @@ struct TVLibraryKindView: View {
                     count: cols
                 ),
                 alignment: .leading,
-                spacing: DesignTokens.Shell.libraryGridRowGap
+                spacing: 27
             ) {
                 ForEach(items) { work in
                     libraryCard(work: work, width: cardW, artHeight: artH, showTitle: true, artIncludesDot: false)
