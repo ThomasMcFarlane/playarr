@@ -1,1 +1,0 @@
-- Web: a focused checkbox (Settings Your data and Remote, Calendar monitored-only switch) no longer traps keyboard and D-pad focus; arrow keys now move spatial focus away, Space still toggles.

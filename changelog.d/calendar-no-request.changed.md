@@ -1,1 +1,0 @@
-- Calendar: no Request button in any calendar view, and the "not in your catalogue" and "request provider" messages are gone from the calendar details. The request-unavailable reason shown elsewhere now reads "Requests are not available for this title yet".

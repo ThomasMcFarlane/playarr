@@ -1,2 +1,0 @@
-- Web: the shared multi-select is a plain checkbox list driven only by D-pad or arrow keys (no search box or on-screen keyboard); the Calendar Filters lose the duplicate Source filter and the date range (old links keep working). Rows 1.9984, 1.9985.
-- Web: Search Filters keep only Type; the duplicate Library filter is removed (old `?library=` links keep working). Row 1.9988.
