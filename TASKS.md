@@ -18,6 +18,7 @@ Steps only the repository owner can perform.
 | 9931 | CI: "Server image web stage" pulls the Dockerfile frontend and base images straight from Docker Hub (a 504 on auth.docker.io failed #462 once); route through the configured Docker Hub mirror | todo | unassigned | | | | Run 37995677939 failed on `resolve image config for docker.io/docker/dockerfile:1.7` with a 504 from auth.docker.io. Pin or mirror the `# syntax=` frontend and base images per the CI rules. |
 | 9938 | Web: intermittent `.tv-title-card` timeouts in live checks (seen once on Movies; cause unknown) | todo | | | 9912 | | Split from row 9912. |
 | 9939 | Web: verify cast caption has no box on live | todo | | | 9912 | | Split from row 9912. |
+| 9936 | Web calendar: month view '+N more' clipped at 1280 | in_progress | calendar-month worker | calendar-more-clip | | 2026-10-10 08:00 ICT | Owner-visible bug found in live verification at 1280x720: the '+N more' line in each month day cell is clipped to its top half. Fix the month cell layout so it is fully visible at 1920, 1366 and 1280 in both themes; adds a layout assertion to the calendar layout e2e. |
 
 ## Server performance and security (2026-10-03)
 
