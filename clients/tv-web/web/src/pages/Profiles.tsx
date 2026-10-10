@@ -560,7 +560,7 @@ export function ProfilesPage(
                 <button
                   id={`profile-${profile.id}`}
                   type="button"
-                  className="profile-avatar-button"
+                  className="profile-avatar-button circle-focus-host"
                   data-tv-focus-default={
                     profile.isCurrent || (!hasCurrentProfile && index === 0)
                       ? true
@@ -585,7 +585,7 @@ export function ProfilesPage(
                   onClick={() => requestProfileAction(profile, "select")}
                 >
                   <ProfileAvatar
-                    className="profile-avatar"
+                    className="profile-avatar circle-focus-target"
                     preference={
                       profile.id === currentUserId && currentAvatar
                         ? currentAvatar
@@ -650,7 +650,7 @@ export function ProfilesPage(
               style={profileStyle(profiles.length + index)}
               aria-hidden="true"
             >
-              <div className="profile-avatar-button">
+              <div className="profile-avatar-button circle-focus-host">
                 <SkeletonBlock className="profile-avatar" />
                 <SkeletonBlock className="profile-skeleton-name" />
                 <SkeletonBlock className="profile-skeleton-status" />
@@ -667,7 +667,7 @@ export function ProfilesPage(
             <button
               id="profile-add"
               type="button"
-              className="profile-avatar-button"
+              className="profile-avatar-button circle-focus-host"
               data-tv-focus-default={profiles.length === 0 ? true : undefined}
               data-navigation-focus-key="profiles:add"
               data-tv-edge-target-left={
@@ -679,7 +679,7 @@ export function ProfilesPage(
               onFocus={() => setSelectedId(ADD_PROFILE_ID)}
               onClick={() => continueToLogin(null, loginFrom)}
             >
-              <span className="profile-avatar" aria-hidden="true">
+              <span className="profile-avatar circle-focus-target" aria-hidden="true">
                 <span>+</span>
               </span>
               <strong>{t("pages.profiles.signIn")}</strong>
