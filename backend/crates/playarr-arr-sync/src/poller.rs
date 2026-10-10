@@ -269,6 +269,17 @@ impl ReconciliationPoller {
         self
     }
 
+    /// Opts this poller's [`MediaSync`] into syncing series cast (Sonarr
+    /// sources only), see [`crate::media_sync::MediaSync::with_series_cast`].
+    /// `base_url` overrides the default metadata service (for a mirror).
+    pub fn with_series_cast(mut self, base_url: Option<&str>) -> Self {
+        let client = playarr_arr_client::SeriesCastClient::new(
+            base_url.unwrap_or(playarr_arr_client::DEFAULT_SKYHOOK_URL),
+        );
+        self.media_sync = self.media_sync.with_series_cast(client);
+        self
+    }
+
     /// Opts this poller's [`MediaSync`] into indexing audio/subtitle
     /// languages from *arr `mediaInfo` (see
     /// [`crate::media_sync::MediaSync::with_language_repo`]).
@@ -505,6 +516,7 @@ impl ReconciliationPoller {
             Some(existing) => {
                 let merged = merge_work(&existing, work_kind, &remote);
                 if merged == existing {
+                    self.backfill_series_cast(existing.id).await;
                     let new_files = self
                         .files_imported(existing.id, id, remote.file_count)
                         .await;
@@ -628,6 +640,26 @@ impl ReconciliationPoller {
             .buffer_unordered(self.write_concurrency)
             .collect::<Vec<()>>()
             .await;
+    }
+
+    /// A Sonarr series that has no cast credits yet gets them on this pass
+    /// (a one-time backfill for series synced before cast existed, and for
+    /// new ones). A no-op for other sources and for series already looked up
+    /// this process. A failure is logged, never fatal.
+    async fn backfill_series_cast(&self, work_id: Uuid) {
+        if self.source_kind != SourceKind::Sonarr
+            || !self.media_sync.needs_series_cast(work_id).await
+        {
+            return;
+        }
+        if let Err(err) = self.media_sync.sync_series_cast(work_id).await {
+            tracing::warn!(
+                source_instance_id = %self.source_instance_id,
+                work_id = %work_id,
+                error = %err,
+                "could not sync series cast; will retry after a restart"
+            );
+        }
     }
 
     /// Runs [`MediaSync::sync_work`] for one work, logging (rather than
@@ -815,6 +847,7 @@ impl ReconciliationPoller {
         availability: Availability,
         remote_files: Option<u32>,
     ) {
+        self.backfill_series_cast(work_id).await;
         // A source that counts its files (Sonarr) tells us an import happened
         // even though the series row itself did not change.
         if self

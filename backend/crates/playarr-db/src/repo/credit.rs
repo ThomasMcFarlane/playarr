@@ -23,6 +23,14 @@ pub trait CreditRepo: Send + Sync {
     /// (see `Person::tmdb_id`'s doc comment).
     async fn find_person_by_tmdb_id(&self, tmdb_id: i64) -> Result<Option<Person>, DbError>;
 
+    /// Dedup lookup for a person with no TMDb id (a series cast member): an
+    /// exact name and headshot match among people that carry no TMDb id.
+    async fn find_person_without_tmdb_id(
+        &self,
+        name: &str,
+        headshot_url: Option<&str>,
+    ) -> Result<Option<Person>, DbError>;
+
     /// Insert-or-update by `Person::id`.
     async fn upsert_person(&self, person: &Person) -> Result<(), DbError>;
 
@@ -131,6 +139,23 @@ impl CreditRepo for SqlxCreditRepo {
             .fetch_optional(&self.pool)
             .await?;
         row.as_ref().map(Self::person_from_row).transpose()
+    }
+
+    async fn find_person_without_tmdb_id(
+        &self,
+        name: &str,
+        headshot_url: Option<&str>,
+    ) -> Result<Option<Person>, DbError> {
+        let sql = "SELECT id, name, tmdb_id, headshot_url FROM people \
+                 WHERE tmdb_id IS NULL AND name = ?";
+        let rows = sqlx::query(sql).bind(name).fetch_all(&self.pool).await?;
+        for row in &rows {
+            let person = Self::person_from_row(row)?;
+            if person.headshot_url.as_deref() == headshot_url {
+                return Ok(Some(person));
+            }
+        }
+        Ok(None)
     }
 
     async fn upsert_person(&self, person: &Person) -> Result<(), DbError> {
@@ -403,5 +428,36 @@ mod tests {
         let repo = SqlxCreditRepo::new(pool);
         let err = repo.get_person(Uuid::new_v4()).await.unwrap_err();
         assert!(matches!(err, DbError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn find_person_without_tmdb_id_matches_name_and_headshot_only() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxCreditRepo::new(pool);
+        let with_tmdb = sample_person("Sample Actor", 7);
+        repo.upsert_person(&with_tmdb).await.unwrap();
+        let untracked = Person {
+            id: Uuid::new_v4(),
+            name: "Sample Actor".to_string(),
+            tmdb_id: None,
+            headshot_url: Some("https://example.com/a.jpg".to_string()),
+        };
+        repo.upsert_person(&untracked).await.unwrap();
+
+        let found = repo
+            .find_person_without_tmdb_id("Sample Actor", Some("https://example.com/a.jpg"))
+            .await
+            .unwrap();
+        assert_eq!(found.map(|p| p.id), Some(untracked.id));
+        assert!(repo
+            .find_person_without_tmdb_id("Sample Actor", None)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(repo
+            .find_person_without_tmdb_id("Other", Some("https://example.com/a.jpg"))
+            .await
+            .unwrap()
+            .is_none());
     }
 }
