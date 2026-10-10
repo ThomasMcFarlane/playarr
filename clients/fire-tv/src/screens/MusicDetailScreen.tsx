@@ -133,7 +133,7 @@ export function MusicDetailScreen({route, navigation, onPlay}: MusicDetailScreen
 
   return (
     <Stage artUri={stageArtUrl(baseUrl, artist)} accessToken={accessToken}>
-      <PageHeader title={t('pages.musicDetail.music')} detail={artist.title} detailUpper={false} onBack={() => navigation.navigate('music' as RouteName)} />
+      <PageHeader title={t('pages.musicDetail.music')} detail={artist.title} onBack={() => navigation.navigate('music' as RouteName)} />
       <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} x={776} />
       {selectedAlbum ? (
         <Box x={153.6} y={259.2} w={540}>
