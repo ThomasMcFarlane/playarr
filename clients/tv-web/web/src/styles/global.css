@@ -5671,22 +5671,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   gap: clamp(26px, calc(3 * var(--viewport-unit)), 42px) var(--card-grid-gap-cover);
 }
 
-.tv-library-grid-panel.is-screen.artwork-small .tv-title-grid-content {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-screen.artwork-large .tv-title-grid-content {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-cover.artwork-small .tv-title-grid-content {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.tv-library-grid-panel.is-cover.artwork-large .tv-title-grid-content {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
 .tv-library-grid-panel.is-cover .tv-title-card-art {
   aspect-ratio: var(--card-art-ratio-cover);
 }

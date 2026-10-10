@@ -3,6 +3,8 @@ import { useTheme, type ThemePreference } from "../../lib/theme";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { useHomeView, type HomeViewPreference } from "../../lib/homeView";
+import { ARTWORK_SIZES, useArtworkSize } from "../../lib/artworkSize";
+import { SegmentedControl } from "../../components/ui";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
@@ -13,6 +15,7 @@ export function SettingsAppearancePage() {
   useDocumentTitle(t("settings.appearance.documentTitle"));
   const { preference, setPreference } = useTheme();
   const { preference: homeView, setPreference: setHomeView } = useHomeView();
+  const { size: artworkSize, setSize: setArtworkSize } = useArtworkSize();
   const { showToast } = useToast();
 
   return (
@@ -73,6 +76,32 @@ export function SettingsAppearancePage() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="appearance-setting">
+          <div className="appearance-setting-heading">
+            <h3>{t("settings.appearance.artworkSizeTitle")}</h3>
+            <p>{t("settings.appearance.artworkSizeDescription")}</p>
+          </div>
+          <SegmentedControl
+            className="artwork-size-choice"
+            ariaLabel={t("settings.appearance.artworkSizeAriaLabel")}
+            value={artworkSize}
+            options={ARTWORK_SIZES.map((option) => ({
+              value: option,
+              label:
+                option === "small"
+                  ? t("pages.library.sizeSmall")
+                  : option === "large"
+                    ? t("pages.library.sizeLarge")
+                    : t("pages.library.sizeMedium"),
+            }))}
+            onChange={(option) => {
+              if (option === artworkSize) return;
+              setArtworkSize(option);
+              showToast(t("settings.appearance.artworkSizeSaved"));
+            }}
+          />
         </div>
       </section>
     </SettingsSectionLayout>

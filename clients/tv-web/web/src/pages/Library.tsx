@@ -61,6 +61,7 @@ import { useFocusedDetailsController } from "../lib/useFocusedDetails";
 import { CrossfadeArt, LibraryPreview } from "../components/LibraryPreview";
 import {
   applyLibraryView,
+  LEGACY_SIZE_PARAM,
   parseLibraryView,
   rememberLibraryView,
   storedLibraryView,
@@ -70,12 +71,12 @@ import {
   type LibraryLoadedList,
   libraryImageKinds,
   libraryFirstPageParams,
-  type ArtworkSize,
   type LibraryKind,
   type LibrarySort,
   type LibraryView,
   type SortOrder,
 } from "../lib/libraryView";
+import { adoptLegacyArtworkSize, useArtworkSize } from "../lib/artworkSize";
 import { useCoverflowMotion } from "../lib/libraryCoverflow";
 import { usePanelParam } from "../lib/usePanelParam";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
@@ -242,17 +243,32 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
   // so they survive reloads and can be shared or bookmarked.
   const [searchParams, setSearchParams] = useSearchParams();
-  // View, card size and sort live in the URL too (`?view=list&size=large&sort=date_added&order=desc`);
+  // View and sort live in the URL too (`?view=list&sort=date_added&order=desc`);
   // localStorage only supplies the default for a fresh URL with none of them.
   const {
     view,
-    size: artworkSize,
     sort,
     order,
   } = useMemo(
     () => parseLibraryView(searchParams, kind, storedLibraryView(kind)),
     [kind, searchParams]
   );
+  // The artwork size is a global setting (Settings > Appearance). An old `?size=` link is adopted once
+  // when nothing is saved yet, then dropped from the URL.
+  const { size: artworkSize, setSize: setArtworkSize } = useArtworkSize();
+  const legacySize = searchParams.get(LEGACY_SIZE_PARAM);
+  useEffect(() => {
+    if (legacySize === null) return;
+    adoptLegacyArtworkSize(legacySize, setArtworkSize);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete(LEGACY_SIZE_PARAM);
+        return next;
+      },
+      { replace: true }
+    );
+  }, [legacySize, setArtworkSize, setSearchParams]);
   const audioKey = searchParams.get("audio") ?? "";
   const subtitleKey = searchParams.get("subs") ?? "";
   const audioLangs = useMemo(() => parseLanguageParam(audioKey), [audioKey]);
@@ -537,17 +553,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   }
 
   /** Each view/size/sort change is its own history entry, so back/forward step through them. */
-  function updateView(patch: Partial<{ view: LibraryView; size: ArtworkSize; sort: LibrarySort; order: SortOrder }>) {
+  function updateView(patch: Partial<{ view: LibraryView; sort: LibrarySort; order: SortOrder }>) {
     rememberLibraryView(kind, patch);
     setSearchParams((current) => applyLibraryView(current, patch));
   }
 
   function changeView(nextView: LibraryView) {
     updateView({ view: nextView });
-  }
-
-  function changeArtworkSize(nextSize: ArtworkSize) {
-    updateView({ size: nextSize });
   }
 
   function changeSort(nextSort: LibrarySort) {
@@ -1095,25 +1107,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               )}
             />
           </FilterSection>
-
-          <FilterSection title={t("pages.library.artworkSize")}>
-            <div className="tv-filter-choice-grid">
-              {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={artworkSize === size ? "is-active" : ""}
-                  onClick={() => changeArtworkSize(size)}
-                  aria-pressed={artworkSize === size}
-                >
-                  {size === "small"
-                    ? t("pages.library.sizeSmall")
-                    : size === "large"
-                      ? t("pages.library.sizeLarge")
-                      : t("pages.library.sizeMedium")}
-                </button>
-              ))}
-            </div>
           </FilterSection>
 
           <FilterSection title={t("pages.library.sortBy")}>

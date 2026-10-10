@@ -2,14 +2,13 @@ import type { FolderEntry, FolderEntryFilter, FolderOrder, FolderSort, WorkKind 
 
 /**
  * Folders view state and its URL (query string) representation:
- * `/folders?root=<id>&path=Season%20A&view=list&size=large&sort=modified&order=desc&q=clip&type=media`.
+ * `/folders?root=<id>&path=Season%20A&view=list&sort=modified&order=desc&q=clip&type=media`.
  *
  * The URL is the source of truth, so refresh, back/forward and deep links
  * restore the exact directory and view. The parameter names match the native
  * Android route state. Unknown or malformed values are ignored.
  */
 export type FolderViewMode = "list" | "cover";
-export type FolderSize = "small" | "medium" | "large";
 export type FolderKind = Extract<WorkKind, "movie" | "series" | "site" | "artist" | "author">;
 
 export interface FolderUrlState {
@@ -18,7 +17,6 @@ export interface FolderUrlState {
   path: string;
   kind: FolderKind | null;
   view: FolderViewMode;
-  size: FolderSize;
   sort: FolderSort;
   order: FolderOrder;
   q: string;
@@ -30,7 +28,6 @@ export const FOLDER_DEFAULTS: FolderUrlState = {
   path: "",
   kind: null,
   view: "cover",
-  size: "medium",
   sort: "name",
   order: "asc",
   q: "",
@@ -38,7 +35,6 @@ export const FOLDER_DEFAULTS: FolderUrlState = {
 };
 
 const VIEWS: readonly FolderViewMode[] = ["list", "cover"];
-const SIZES: readonly FolderSize[] = ["small", "medium", "large"];
 const SORTS: readonly FolderSort[] = ["name", "modified", "size", "duration"];
 const ORDERS: readonly FolderOrder[] = ["asc", "desc"];
 const TYPES: readonly FolderEntryFilter[] = ["all", "directories", "media"];
@@ -67,7 +63,6 @@ export function parseFolderUrl(params: URLSearchParams): FolderUrlState {
     path: normaliseFolderPath(params.get("path")),
     kind: pick(KINDS, params.get("kind")) ?? null,
     view: pick(VIEWS, params.get("view")) ?? FOLDER_DEFAULTS.view,
-    size: pick(SIZES, params.get("size")) ?? FOLDER_DEFAULTS.size,
     sort: pick(SORTS, params.get("sort")) ?? FOLDER_DEFAULTS.sort,
     order: pick(ORDERS, params.get("order")) ?? FOLDER_DEFAULTS.order,
     q: (params.get("q") ?? "").trim(),
@@ -78,7 +73,7 @@ export function parseFolderUrl(params: URLSearchParams): FolderUrlState {
 /**
  * A copy of `current` with `patch` applied. Navigation fields (`root`, `path`,
  * `kind`, `q`, `type`) are dropped at their default; view fields (`view`,
- * `size`, `sort`, `order`) are written explicitly. Other params (`panel`) are
+ * `sort`, `order`) are written explicitly. Other params (`panel`) are
  * left alone. Changing `root` resets `path`, and changing `path` clears the
  * search so a new directory never opens pre-filtered.
  */
@@ -98,7 +93,7 @@ export function applyFolderUrl(current: URLSearchParams, patch: Partial<FolderUr
   setOrDelete("kind", next.kind, null);
   setOrDelete("q", next.q === undefined ? undefined : next.q.trim(), "");
   setOrDelete("type", next.type, FOLDER_DEFAULTS.type);
-  for (const field of ["view", "size", "sort", "order"] as const) {
+  for (const field of ["view", "sort", "order"] as const) {
     const value = next[field];
     if (value !== undefined) out.set(field, value);
   }

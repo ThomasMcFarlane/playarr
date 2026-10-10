@@ -5,6 +5,7 @@ import { App } from "./App";
 import { ApiClientProvider } from "./lib/ApiClientProvider";
 import { DownloadsProvider } from "./lib/DownloadsProvider";
 import { HomeViewProvider } from "./lib/homeView";
+import { ArtworkSizeProvider } from "./lib/artworkSize";
 import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { LiveEventsRoot } from "./lib/liveEvents/LiveEventsRoot";
 import { ThemeProvider } from "./lib/theme";
@@ -99,6 +100,7 @@ createRoot(container).render(
             </Routes>
           ) : (
             <HomeViewProvider>
+              <ArtworkSizeProvider>
               <ApiClientProvider>
                 <ToastProvider>
                   <LiveEventsRoot>
@@ -108,6 +110,7 @@ createRoot(container).render(
                   </LiveEventsRoot>
                 </ToastProvider>
               </ApiClientProvider>
+              </ArtworkSizeProvider>
             </HomeViewProvider>
           )}
         </ThemeProvider>
