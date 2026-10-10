@@ -14,7 +14,7 @@ pub type DbPool = sqlx::AnyPool;
 
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// `PRAGMA optimize` mask run when a connection opens: 0x10000 checks every
+/// `PRAGMA optimize` mask run when the pool opens its first connection: 0x10000 checks every
 /// table (not only the ones this connection used) and 0x2 runs `ANALYZE` where
 /// a table has none or has changed a lot. Without `sqlite_stat1` the planner
 /// guesses row counts and picked the slow join order for the language reads.
@@ -53,15 +53,21 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
     // pooled connection, routine background writes can turn a short
     // collision into SQLITE_BUSY failures across unrelated reads.
     let read_only = database_url.contains("mode=ro");
+    // Only the pool's first connection runs the optimize: it can write (ANALYZE),
+    // and a connection opened later while a long write batch holds the lock would
+    // wait for it, which stalls reads that must not wait for writers.
+    let optimize_pending = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(!read_only));
     let options =
         AnyPoolOptions::new()
             .max_connections(10)
             .after_connect(move |connection, _metadata| {
                 let statement =
                     format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
+                let optimize_now =
+                    optimize_pending.swap(false, std::sync::atomic::Ordering::AcqRel);
                 Box::pin(async move {
                     sqlx::query(&statement).execute(&mut *connection).await?;
-                    if !read_only {
+                    if optimize_now {
                         // Statistics are an optimisation: a failure (a busy writer, a
                         // missing table on a fresh file) must not fail the connection.
                         if let Err(error) = sqlx::query(OPTIMIZE_ON_OPEN)
