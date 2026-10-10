@@ -347,7 +347,7 @@ export function SearchPage() {
   );
   // What the ready rows were fetched for: a re-run for the same request (playlists arriving) keeps them on screen.
   const shownRequestRef = useRef<string | null>(
-    seed ? `${requestedQuery}|${requestedMediaType}|` : null
+    seed ? `${requestedQuery}|${requestedMediaType}` : null
   );
   const [selectedId, setSelectedId] = useState<string | null>(
     requestedFocusId ?? (seed?.status === "ready" && seed.results[0] ? resultKey(seed.results[0]) : null)
