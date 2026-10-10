@@ -2867,13 +2867,25 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
     val lines = remember(title, density, webFontFamily) {
         // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
         val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
-        val result = measurer.measure(
+        fun measureAt(width: Int) = measurer.measure(
             text = title,
             style = style,
-            constraints = androidx.compose.ui.unit.Constraints(maxWidth = nineCh),
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = width),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        // CSS `text-wrap: balance`: the narrowest width that keeps the same line count without overflowing.
+        val greedy = measureAt(nineCh)
+        val result = if (greedy.lineCount < 2 || greedy.hasVisualOverflow) greedy else {
+            var low = nineCh / 2
+            var high = nineCh
+            while (high - low > 1) {
+                val mid = (low + high) / 2
+                val probe = measureAt(mid)
+                if (probe.lineCount == 2 && !probe.hasVisualOverflow) high = mid else low = mid
+            }
+            measureAt(high)
+        }
         (0 until result.lineCount).map { title.substring(result.getLineStart(it), result.getLineEnd(it, visibleEnd = true)).trimEnd() }
     }
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = title }) {
@@ -5914,7 +5926,7 @@ private fun VideoDetailCopy(
                 lineHeight = 20.325.sp,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 360.dp),
+                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 324.dp),
             )
         }
         return
@@ -6361,7 +6373,7 @@ internal fun SeriesEpisodeBrowser(
         modifier = modifier
             .then(
                 if (isTelevision) {
-                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 410.dp)
+                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 348.dp)
                 } else {
                     Modifier.glass(RoundedCornerShape(16.dp), WebGlass.Panel).padding(14.dp)
                 },
@@ -6548,8 +6560,22 @@ private fun WebEpisodeDetailCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Web `MediaThumbnailArtwork`: the episode's own still when it has one, else the frame thumbnail, over the
+                // series backdrop fallback; each shows through if the one above fails.
+                episode.mediaFileId?.let { mediaFileId ->
+                    AuthenticatedMediaThumbnail(
+                        mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
+                        AuthenticatedMediaThumbnail(
+                            mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                            modifier = Modifier.fillMaxSize(),
+                            artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
+                        )
+                    }
+                }
             }
-            // Web `WorkDetail` draws the series backdrop on every episode tile (`episodeArtwork = backdrop`): no frame thumbnail or still.
             Text(
                 episode.episode.episodeNumber.toString().padStart(2, '0'),
                 color = Color.White,
