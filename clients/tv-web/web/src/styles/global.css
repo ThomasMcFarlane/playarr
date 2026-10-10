@@ -6279,9 +6279,11 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 .tv-home-rail {
   display: flex;
   gap: clamp(14px, calc(1.3 * var(--vw)), 26px);
-  width: 100%;
+  /* The 8px left bleed keeps the first card's focus glow unclipped; the width grows by the same 8px so the clip box
+     still ends at the stage's true right edge (no hard cut short of the edge fade). */
+  width: calc(100% + 8px);
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
   padding: 18px clamp(22px, calc(2.4 * var(--vw)), 46px) 24px 8px;
   margin: 0 0 -24px -8px;
   overflow-x: auto;
@@ -6791,8 +6793,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   min-width: 0;
   max-width: 100%;
   padding: calc(18px + var(--tv-track-shadow-top)) var(--tv-track-shadow-end)
-    calc(24px + var(--tv-track-shadow-bottom)) calc(var(--tv-track-left-fade) + 8px);
-  margin: calc(-1 * var(--tv-track-shadow-top)) 0 calc(-24px - var(--tv-track-shadow-bottom)) -8px;
+    calc(24px + var(--tv-track-shadow-bottom)) var(--tv-track-left-fade);
+  margin: calc(-1 * var(--tv-track-shadow-top)) 0 calc(-24px - var(--tv-track-shadow-bottom));
   /* The left side is a clear gutter (transparent to opaque over the gutter width); the right is the shared soft fade. */
   --edge-fade-start-size: var(--tv-track-left-fade);
   --edge-fade-start-floor: 0;
@@ -6800,7 +6802,7 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
-  scroll-padding-inline: calc(var(--tv-track-left-fade) + 8px)
+  scroll-padding-inline: var(--tv-track-left-fade)
     clamp(22px, calc(2.4 * var(--vw)), 46px);
   scroll-behavior: smooth;
   scrollbar-width: none;
@@ -8882,15 +8884,22 @@ html.is-native-scroll-root .profile-auth-scroll {
     scroll-snap-type: x proximity;
   }
 
+  .tv-home-rail {
+    width: calc(100% + 5px);
+  }
+
+  .tv-media-track-scroll {
+    margin-left: 0;
+  }
+
   .tv-media-track-scroll {
     padding-top: calc(10px + var(--tv-track-shadow-top));
     padding-right: var(--mobile-page-gutter);
     padding-bottom: calc(18px + var(--tv-track-shadow-bottom));
     margin-top: calc(-1 * var(--tv-track-shadow-top));
     margin-bottom: calc(-18px - var(--tv-track-shadow-bottom));
-    padding-left: calc(var(--tv-track-left-fade) + 5px);
-    scroll-padding-inline: calc(var(--tv-track-left-fade) + 5px)
-      var(--mobile-page-gutter);
+    padding-left: var(--tv-track-left-fade);
+    scroll-padding-inline: var(--tv-track-left-fade) var(--mobile-page-gutter);
     overscroll-behavior-x: contain;
     overscroll-behavior-y: auto;
     touch-action: pan-x pan-y;
