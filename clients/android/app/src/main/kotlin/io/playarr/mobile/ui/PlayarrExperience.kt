@@ -567,6 +567,19 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     private data class SearchArgs(val query: String, val mediaType: PlayarrSearchMediaType, val libraryId: String?)
 
+    private val _runtimes = MutableStateFlow<Map<String, Long>>(emptyMap())
+    /** Runtime per work id, from its detail (web `useFocusedDetail` + `runtimeLabel`), fetched once per title. */
+    val runtimes: StateFlow<Map<String, Long>> = _runtimes.asStateFlow()
+    private val runtimeRequested = mutableSetOf<String>()
+
+    fun loadRuntime(workId: String) {
+        if (!runtimeRequested.add(workId)) return
+        viewModelScope.launch {
+            val ms = runCatching { api.getWork(workId).runtimeMs }.getOrNull()?.takeIf { it > 0 } ?: return@launch
+            _runtimes.value = _runtimes.value + (workId to ms)
+        }
+    }
+
     /** Start of the latest Home fetch (`0` before the first); lets live events skip data already fetched. */
     val homeFetchStartedMs: Long get() = homeStamp.startedMs
     val progressFetchStartedMs: Long get() = progressStamp.startedMs
@@ -2703,7 +2716,12 @@ private fun ExperienceHomeScreen(
                 accessToken = accessToken,
                 isTelevision = isTelevision,
                 feature = {
-                    FeatureCopy(selected, true, FeatureCopyStyle.Home)
+                    val runtimes by viewModel.runtimes.collectAsState()
+                    // Web fetches the focused title's detail after a short dwell; only films carry a runtime.
+                    LaunchedEffect(selected.id) {
+                        if (selected.kind == WorkKind.Movie) { kotlinx.coroutines.delay(250); viewModel.loadRuntime(selected.id) }
+                    }
+                    FeatureCopy(selected, true, FeatureCopyStyle.Home, runtimes[selected.id])
                 },
                 rails = {
                     val railsState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -2928,7 +2946,7 @@ internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines
 private enum class FeatureCopyStyle { Home, Library, Detail }
 
 @Composable
-private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: FeatureCopyStyle = FeatureCopyStyle.Detail) {
+private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: FeatureCopyStyle = FeatureCopyStyle.Detail, runtimeMs: Long? = null) {
     val language = LocalPlayarrLanguage.current
     val kind = work.kind.playarrSingularLabel()
     val genre = work.genres.firstOrNull() ?: playarrString(PlayarrString.HomeDefaultGenre)
@@ -2954,16 +2972,21 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: Featur
                 style = glow,
             )
             WebHeroTitle(work.title, Modifier.padding(top = 25.9.dp))
+            val runtime = runtimeMs?.let { formatPlayarrVideoRuntime(it, language) }
             if (library) {
                 Row(Modifier.padding(top = 27.dp), horizontalArrangement = Arrangement.spacedBy(12.8.dp)) {
-                    // The release year, never the library added date (ruling 2026-10-08).
+                    // The release year, never the library added date (ruling 2026-10-08); web adds the runtime last.
                     listOfNotNull(
                         playarrKindYear(work.releaseDate)?.toString(),
                         work.genres.take(2).joinToString(" \u00B7 ").ifBlank { kind },
+                        runtime,
                     ).forEach {
                         Text(it, color = soft, fontSize = 13.056.sp, lineHeight = 19.584.sp, fontWeight = FontWeight(600), style = glow)
                     }
                 }
+            } else if (runtime != null) {
+                // Web Home `DetailsPanel` meta: the runtime alone.
+                Text(runtime, color = soft, fontSize = 12.864.sp, lineHeight = 20.325.sp, fontWeight = FontWeight(600), style = glow, modifier = Modifier.padding(top = 21.6.dp))
             }
             Text(
                 work.overview?.takeIf(String::isNotBlank) ?: playarrString(PlayarrString.HomeNoSynopsis),
@@ -2974,7 +2997,8 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: Featur
                 style = glow,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 21.7.dp).widthIn(max = 360.dp),
+                // Web `max-width: 42ch` of the overview font: 324 dp on Home, 348 dp in the library.
+                modifier = Modifier.padding(top = 21.7.dp).widthIn(max = if (library) 348.dp else 324.dp),
             )
         }
         return
@@ -3772,7 +3796,13 @@ private fun ExperienceLibraryScreen(
                 }
         }
                 if (isTelevision) {
-                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true, FeatureCopyStyle.Library) }
+                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = playarrPageMetrics(true).start, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) {
+                        val runtimes by viewModel.runtimes.collectAsState()
+                        LaunchedEffect(selected.id) {
+                            if (selected.kind == WorkKind.Movie) { kotlinx.coroutines.delay(250); viewModel.loadRuntime(selected.id) }
+                        }
+                        FeatureCopy(selected, true, FeatureCopyStyle.Library, runtimes[selected.id])
+                    }
                 }
                 Column(
                     modifier = Modifier
