@@ -8100,7 +8100,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         stallJob?.cancel()
         retryJob?.cancel()
         val resumeAt = if (playbackReached) currentSourcePositionMs() else null
-        val launchSettings = activeRequest?.launchSettings
+        val launchSettings = playarrAutoRetryLaunchSettings(activeRequest?.launchSettings, decoderFallbackAttempted)
         _state.value = ExperienceLoad.Loading
         retryJob = viewModelScope.launch {
             delay(delayMs)
