@@ -1,1 +1,0 @@
-- Parity: the live web capture waits for skeleton loaders to clear before the screenshot.
