@@ -37,7 +37,6 @@ export const en = {
   "components.downloadQualityDrawer.scopeHeading": "Download what?",
   "components.downloadQualityDrawer.scope.episode": "This episode",
   "components.downloadQualityDrawer.scope.season": "Whole season",
-  "components.downloadQualityDrawer.scope.series": "Whole series",
   "components.downloadQualityDrawer.qualityHeading": "Quality",
   "components.downloadQualityDrawer.unitDays": "Days",
   "components.downloadQualityDrawer.unitWeeks": "Weeks",

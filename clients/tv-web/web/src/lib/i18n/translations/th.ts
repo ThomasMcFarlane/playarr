@@ -1189,7 +1189,6 @@ export const th: Translations = {
   "components.downloadQualityDrawer.scopeHeading": "ดาวน์โหลดอะไร",
   "components.downloadQualityDrawer.scope.episode": "ตอนนี้",
   "components.downloadQualityDrawer.scope.season": "ทั้งซีซัน",
-  "components.downloadQualityDrawer.scope.series": "ทั้งซีรีส์",
   "components.downloadQualityDrawer.qualityHeading": "คุณภาพ",
   "components.downloadQualityDrawer.perItemSize": "{{size}} ต่อรายการ · {{count}} รายการ",
   "components.downloadQualityDrawer.keepUntilHeading": "เก็บไว้จนถึง",

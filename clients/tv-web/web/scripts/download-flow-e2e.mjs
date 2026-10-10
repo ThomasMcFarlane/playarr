@@ -50,7 +50,7 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   await page.waitForTimeout(400);
 
   const seg = await page.locator(".download-quality-drawer .tv-segmented button").allTextContents();
-  check(`${tag}: scope choice offers episode, season and series`, seg.length === 3 && /episode/i.test(seg[0]) && /season/i.test(seg[1]) && /series/i.test(seg[2]), JSON.stringify(seg));
+  check(`${tag}: scope choice offers exactly episode and season`, seg.length === 2 && /episode/i.test(seg[0]) && /season/i.test(seg[1]), JSON.stringify(seg));
   check(`${tag}: quality is a closed select, not a list`, (await page.locator(".download-quality-drawer .ui-select-option").count()) === 0 && (await page.locator(".download-quality-drawer [role=radio]").count()) === 0);
   const m = await page.evaluate(() => {
     const t = document.querySelector(".ui-select-trigger");
@@ -84,6 +84,18 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   });
   check(`${tag}: select rows are at least 44px`, a.h >= 44, String(a.h));
   check(`${tag}: select text is the ink token at 7:1 or more on the page background`, a.color === a.ink && ratio(parse(a.ink), parse(a.bg)) >= 7, `${a.color} ${a.ink} on ${a.bg}`);
+  await page.waitForTimeout(500); // the segment colour transition (180ms) has finished
+  const seg2 = await page.evaluate(() => {
+    const probe = document.createElement("i");
+    document.body.appendChild(probe);
+    const token = (name) => { probe.style.color = `var(${name})`; return getComputedStyle(probe).color; };
+    const out = { ink: token("--ink"), bg: token("--bg"), segs: [...document.querySelectorAll(".download-quality-drawer .tv-segmented button")].map((b) => ({ pressed: b.getAttribute("aria-pressed"), cls: b.className, background: getComputedStyle(b).backgroundColor, color: getComputedStyle(b).color, opacity: getComputedStyle(b).opacity })) };
+    probe.remove();
+    return out;
+  });
+  const sel = seg2.segs[1];
+  const others = seg2.segs.filter((x) => x.pressed !== "true");
+  check(`${tag}: selected segment keeps the selected style while the Select is open`, sel.pressed === "true" && sel.cls.includes("is-active") && sel.background === seg2.ink && sel.color === seg2.bg && sel.opacity === "1" && others.every((x) => x.background !== seg2.ink), JSON.stringify(seg2));
   if (shots) await page.screenshot({ path: `${shots}/download-select-open-${tag}.png` });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);

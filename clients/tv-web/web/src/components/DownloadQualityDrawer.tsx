@@ -24,13 +24,13 @@ export interface DownloadQualitySelection {
   qualityId: string;
   qualityLabel: string;
   keepUntil: DownloadKeepUntilPolicy;
-  /** The leaves of the chosen scope (this episode, the season, the series). */
+  /** The leaves of the chosen scope (this episode, the season). */
   leaves: PlayableLeaf[];
 }
 
 /** One answer to "what should be downloaded?" -- shown as a segmented control when there is more than one. */
 export interface DownloadScope {
-  id: "episode" | "season" | "series";
+  id: "episode" | "season";
   leaves: PlayableLeaf[];
 }
 

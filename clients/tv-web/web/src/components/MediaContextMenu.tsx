@@ -98,8 +98,8 @@ export interface MediaContextItem {
   preferredEpisodeId?: string | null;
   /** Exact leaf or leaves represented by this UI item. */
   leaves?: PlayableLeaf[];
-  /** Wider download scopes for an episode: every leaf of its season and of its series. Adds the scope choice to the download view. */
-  downloadScopes?: { season?: PlayableLeaf[]; series?: PlayableLeaf[] };
+  /** Wider download scopes for an episode: every leaf of its season. Adds the scope choice to the download view. */
+  downloadScopes?: { season?: PlayableLeaf[] };
   /** A whole playlist represented by this UI item -- the Download action fans this out via `listPlaylistItems` + per-item detail resolution. */
   playlistId?: string;
   /** Preserve a surface's specialised short action, e.g. chapter offset or playlist selection. */
@@ -579,9 +579,6 @@ export function useMediaContextMenu({
       const scopes: DownloadScope[] = [{ id: "episode", leaves }];
       if (leaves.length === 1 && wider?.season && wider.season.length > 1) {
         scopes.push({ id: "season", leaves: wider.season });
-      }
-      if (leaves.length === 1 && wider?.series && wider.series.length > (wider.season?.length ?? 1)) {
-        scopes.push({ id: "series", leaves: wider.series });
       }
       setDownloadScopes(scopes.length > 1 ? scopes : undefined);
       setContextView("download");

@@ -17,9 +17,9 @@ describe("title detail Add to Playlist and season Download", () => {
     );
   });
 
-  it("has no Download button on the season tracks; an episode offers season and series scopes instead", () => {
+  it("has no Download button on the season tracks; an episode offers a whole-season scope instead", () => {
     expect(detail).not.toContain("downloads.canDownload === true && seasonLeaves.length > 0");
-    expect(detail).toContain("downloadScopes: { season: seasonLeaves, series: seriesLeaves }");
+    expect(detail).toContain("downloadScopes: { season: seasonLeaves }");
     expect(stage).toContain("headingAction");
   });
 

@@ -1185,7 +1185,6 @@ export const ja: Translations = {
   "components.downloadQualityDrawer.scopeHeading": "ダウンロード対象",
   "components.downloadQualityDrawer.scope.episode": "このエピソード",
   "components.downloadQualityDrawer.scope.season": "シーズン全体",
-  "components.downloadQualityDrawer.scope.series": "シリーズ全体",
   "components.downloadQualityDrawer.qualityHeading": "画質",
   "components.downloadQualityDrawer.perItemSize": "1件あたり {{size}} ・ {{count}} 件",
   "components.downloadQualityDrawer.keepUntilHeading": "保存期間",

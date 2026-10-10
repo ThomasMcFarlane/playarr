@@ -784,7 +784,7 @@ function SimilarTitlesTrack({
   );
 }
 
-/** Every downloadable episode of a season as playable leaves (the "Whole season" / "Whole series" download scopes). */
+/** Every downloadable episode of a season as playable leaves (the "Whole season" download scope). */
 function seasonDownloadLeaves(
   season: SeasonDetail,
   seriesTitle: string,
@@ -813,7 +813,6 @@ function seasonDownloadLeaves(
 
 function SeasonEpisodeTrack({
   season,
-  allSeasons,
   seriesTitle,
   workId,
   detailRoute,
@@ -832,7 +831,6 @@ function SeasonEpisodeTrack({
   defaultFocusReady,
 }: {
   season: SeasonDetail;
-  allSeasons: SeasonDetail[];
   seriesTitle: string;
   workId: string;
   detailRoute: string;
@@ -858,7 +856,6 @@ function SeasonEpisodeTrack({
     season.season.title ?? t("pages.workDetail.seasonNumber", { number: seasonNumber });
   const mediaContext = useMediaContextMenu({ onProgressChanged });
   const seasonLeaves = seasonDownloadLeaves(season, seriesTitle, t);
-  const seriesLeaves = allSeasons.flatMap((other) => seasonDownloadLeaves(other, seriesTitle, t));
 
   return (
     <TvMediaTrack
@@ -958,7 +955,7 @@ function SeasonEpisodeTrack({
                       workKind: "series",
                     },
                   ],
-                  downloadScopes: { season: seasonLeaves, series: seriesLeaves },
+                  downloadScopes: { season: seasonLeaves },
                   activateOrigin: true,
                 })}
               >
@@ -2145,7 +2142,6 @@ export function WorkDetailPage() {
             <SeasonEpisodeTrack
               key={season.season.id}
               season={season}
-              allSeasons={seasons}
               seriesTitle={work.title}
               workId={work.id}
               detailRoute={detailRoute}
