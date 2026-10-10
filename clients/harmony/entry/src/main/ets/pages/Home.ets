@@ -124,6 +124,7 @@ import {
   getContinueWatching,
   getCatalog,
   getCatalogKinds,
+  getHomeRails,
 } from '../data/CatalogRepository';
 import type { ContinueWatchingEntry } from '../data/CatalogRepository';
 import {
@@ -320,6 +321,13 @@ function catalogKindNavLabel(kind: WorkKind): string {
   return 'Books';
 }
 
+/** One server-curated Home rail (`GET /api/v1/home/rails`), as web TV Home renders it. */
+interface HomeServerRail {
+  id: string;
+  title: string;
+  items: HomeCardItem[];
+}
+
 /** Builds one rail's card list from a plain catalogue `Work[]` (the new/more
  * movies/series rails). `isTopRail` is decided once, by the caller, for the
  * WHOLE rail -- see `HomeCardItem.applyTopRailFocus`'s own doc comment. */
@@ -459,6 +467,9 @@ export struct Home {
   @State private newSeriesItems: HomeCardItem[] = [];
   @State private moreMovieItems: HomeCardItem[] = [];
   @State private moreSeriesItems: HomeCardItem[] = [];
+  /** Server rails for the TV Home (web's rails); empty when the call failed, and the TV Home then shows
+   * the catalogue rails above instead. */
+  @State private serverRails: HomeServerRail[] = [];
 
   @State private hero: HomeCardItem | undefined = undefined;
   /** Only non-null when `this.hero` came from continue-watching -- see this
@@ -501,6 +512,7 @@ export struct Home {
     const moreMoviesPromise = getCatalog({ kind: 'movie', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const moreSeriesPromise = getCatalog({ kind: 'series', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const kindsPromise = getCatalogKinds();
+    const homeRailsPromise = getHomeRails();
 
     const continueWatchingResult = await continueWatchingPromise;
     const newMoviesResult = await newMoviesPromise;
@@ -508,6 +520,7 @@ export struct Home {
     const moreMoviesResult = await moreMoviesPromise;
     const moreSeriesResult = await moreSeriesPromise;
     const kindsResult = await kindsPromise;
+    const homeRailsResult = await homeRailsPromise;
 
     // A genuine connectivity failure across every rail-shaped call -- see
     // this file's header comment on why this is a distinct, deliberate
@@ -591,6 +604,17 @@ export struct Home {
     this.newSeriesItems = buildCardItems(newSeriesWorks, topRailKey === TOP_RAIL_NEW_SERIES);
     this.moreMovieItems = buildCardItems(moreMovieWorks, topRailKey === TOP_RAIL_MORE_MOVIES);
     this.moreSeriesItems = buildCardItems(moreSeriesWorks, topRailKey === TOP_RAIL_MORE_SERIES);
+    const serverRails: HomeServerRail[] = [];
+    if (homeRailsResult.kind === 'ok') {
+      for (const rail of homeRailsResult.value.rails) {
+        if (rail.items.length > 0) {
+          // The first server rail carries the up-focus wiring when there is no On deck rail above it.
+          const isTopRail = continueWatchingEntries.length === 0 && serverRails.length === 0;
+          serverRails.push({ id: rail.id, title: rail.title, items: buildCardItems(rail.items, isTopRail) });
+        }
+      }
+    }
+    this.serverRails = serverRails;
 
     this.hero =
       this.continueWatchingItems[0] ??
@@ -627,6 +651,16 @@ export struct Home {
     const hero = this.hero;
     if (hero !== undefined) {
       this.loadHeroArtwork(hero.id);
+    }
+    for (const rail of this.serverRails) {
+      const railId = rail.id;
+      this.loadRailArtwork(
+        (): HomeCardItem[] => this.serverRailItems(railId),
+        (items: HomeCardItem[]): void => {
+          this.serverRails = this.serverRails.map((current: HomeServerRail): HomeServerRail =>
+            current.id === railId ? { id: current.id, title: current.title, items: items } : current);
+        }
+      );
     }
     this.loadRailArtwork(
       (): HomeCardItem[] => this.continueWatchingItems,
@@ -665,6 +699,11 @@ export struct Home {
    * resolves -- never a stale snapshot, since `getOneCardArtwork` re-reads
    * `getItems()` fresh inside its own (single, synchronous-until-`await`)
    * continuation. */
+  private serverRailItems(railId: string): HomeCardItem[] {
+    const rail = this.serverRails.find((candidate: HomeServerRail): boolean => candidate.id === railId);
+    return rail !== undefined ? rail.items : [];
+  }
+
   private loadRailArtwork(getItems: () => HomeCardItem[], setItems: (items: HomeCardItem[]) => void): void {
     const items = getItems();
     for (const item of items) {
@@ -789,14 +828,26 @@ export struct Home {
           railId: 'home-continue-watching-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
           listHeight: tv(TvGeometry.homeRailsListHeight),
-          heading: 'Continue Watching',
+          heading: 'On deck',
           items: this.continueWatchingItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
             this.tvCardItemBuilder(item, index, activeRailFactor);
           },
         })
       }
-      if (this.newMovieItems.length > 0) {
+      ForEach(this.serverRails, (rail: HomeServerRail) => {
+        MediaRail({
+          railId: `home-${rail.id}-tv`,
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
+          heading: rail.title,
+          items: rail.items,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
+        })
+      }, (rail: HomeServerRail): string => rail.id)
+      if (this.serverRails.length === 0 && this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -808,7 +859,7 @@ export struct Home {
           },
         })
       }
-      if (this.newSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -820,7 +871,7 @@ export struct Home {
           },
         })
       }
-      if (this.moreMovieItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -832,7 +883,7 @@ export struct Home {
           },
         })
       }
-      if (this.moreSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),

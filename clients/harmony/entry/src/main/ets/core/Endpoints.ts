@@ -66,6 +66,11 @@ export function catalogUrl(): string {
   return "/api/v1/catalog";
 }
 
+/** `GET /api/v1/home/rails`: the server-curated Home rails web TV Home renders. */
+export function homeRailsUrl(): string {
+  return "/api/v1/home/rails";
+}
+
 export function catalogKindsUrl(): string {
   return "/api/v1/catalog/kinds";
 }

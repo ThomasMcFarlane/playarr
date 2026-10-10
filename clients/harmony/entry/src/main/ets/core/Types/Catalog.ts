@@ -76,6 +76,20 @@ export interface CatalogPage {
  * `GET /api/v1/catalog/search` response (brief 4.8). Deliberately NOT a
  * `CatalogPage` -- no `total`, no `available_on`.
  */
+/** One rail of `GET /api/v1/home/rails` (the fields Home uses). */
+export interface HomeRail {
+  id: string;
+  kind: string;
+  library: string | null;
+  title: string;
+  items: Work[];
+}
+
+/** `GET /api/v1/home/rails` response. */
+export interface HomeRailsResponse {
+  rails: HomeRail[];
+}
+
 export interface SearchResult {
   items: Work[];
   remote_only: RemoteOnlyWork[];
