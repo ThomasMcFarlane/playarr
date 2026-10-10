@@ -866,7 +866,7 @@ private fun CalendarFiltersSheet(
             )
         }
         if (filters.activeCount > 0) {
-            PlayarrChoice(playarrString(PlayarrString.CalendarClearFilters), false, holder::clearFilters)
+            PlayarrChoice(playarrString(PlayarrString.CalendarClearFilters), false, onClick = holder::clearFilters)
         }
     }
     picking?.let { isFrom ->

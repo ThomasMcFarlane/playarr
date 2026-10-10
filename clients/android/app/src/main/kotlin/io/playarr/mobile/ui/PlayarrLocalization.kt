@@ -470,6 +470,8 @@ internal enum class PlayarrString(
     HomeCustomiseReset("Reset", "รีเซ็ต", "リセット"),
 
     LibraryCollectionArtists("artists", "ศิลปิน", "アーティスト"),
+    LibraryControls("Library controls", "ตัวควบคุมไลบรารี", "ライブラリの操作"),
+    ContextTitleActions("Title actions", "การดำเนินการของเรื่อง", "タイトルの操作"),
     LibraryCollectionTitles("titles", "เรื่อง", "タイトル"),
     LibraryCollectionCount(
         "{{count}} {{collection}}",
