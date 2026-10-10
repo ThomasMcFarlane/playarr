@@ -42,6 +42,7 @@ import {
   SpinnerIcon,
 } from "./PlayerIcons";
 import { Button } from "../ui";
+import { Drawer } from "../shell";
 import { isBackKey } from "../../lib/backKey";
 
 const SEEK_STEP_SECONDS = 10;
@@ -116,7 +117,7 @@ function isPlayerControlTarget(target: EventTarget | null): boolean {
     target instanceof Element &&
     Boolean(
       target.closest(
-        ".player-controls, .player-close, .player-minimise, .mini-player-hit-target, .player-overlay-status, .player-playlist-panel, .media-context-drawer"
+        ".player-controls, .player-close, .player-minimise, .mini-player-hit-target, .player-overlay-status, .player-playlist-drawer, .media-context-drawer"
       )
     )
   );
@@ -667,7 +668,7 @@ export function PlayerSurface({
   useEffect(() => {
     if (!playlistOpen) return;
     const frame = window.requestAnimationFrame(() => {
-      const panel = shellRef.current?.querySelector<HTMLElement>(".player-playlist-panel");
+      const panel = shellRef.current?.querySelector<HTMLElement>(".player-playlist-drawer");
       const active =
         panel?.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
         panel?.querySelector<HTMLButtonElement>(".player-playlist-item");
@@ -1341,10 +1342,31 @@ export function PlayerSurface({
       )}
 
       {!minimised && playlistOpen && (
-        <aside
-          className="player-playlist-panel"
-          aria-label={t("components.player.surface.playlistAriaLabel")}
-          onClick={(event) => event.stopPropagation()}
+        <Drawer
+          className="player-playlist-drawer"
+          ariaLabel={t("components.player.surface.playlistAriaLabel")}
+          kicker={t("components.player.surface.upNext")}
+          title={
+            <>
+              {playlistItems.length}{" "}
+              {musicContext
+                ? playlistItems.length === 1
+                  ? t("components.player.surface.unitTrack")
+                  : t("components.player.surface.unitTracks")
+                : playlistItems.length === 1
+                  ? t("components.player.surface.unitItem")
+                  : t("components.player.surface.unitEpisodes")}
+            </>
+          }
+          closeLabel={t("components.player.surface.closePlaylistAriaLabel")}
+          onClose={() => closePlaylist()}
+          initialFocus="none"
+          modal={false}
+          containerProps={{
+            onClick: (event) => event.stopPropagation(),
+            "data-tv-scroll-container": "",
+            "data-tv-scroll-axis": "vertical",
+          }}
           onKeyDown={(event) => {
             const target = event.target;
             if (!(target instanceof HTMLButtonElement)) return;
@@ -1376,29 +1398,7 @@ export function PlayerSurface({
             }
           }}
         >
-          <header>
-            <div>
-              <p>{t("components.player.surface.upNext")}</p>
-              <span>
-                {playlistItems.length}{" "}
-                {musicContext
-                  ? playlistItems.length === 1
-                    ? t("components.player.surface.unitTrack")
-                    : t("components.player.surface.unitTracks")
-                  : playlistItems.length === 1
-                    ? t("components.player.surface.unitItem")
-                    : t("components.player.surface.unitEpisodes")}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => closePlaylist()}
-              aria-label={t("components.player.surface.closePlaylistAriaLabel")}
-            >
-              ×
-            </button>
-          </header>
-          <div className="player-playlist-scroll" data-tv-scroll-container data-tv-scroll-axis="vertical">
+          <div className="player-playlist-scroll">
             {playlistItems.map((item, index) => {
               const active = index === activePlaylistIndex;
               const previousItem = playlistItems[index - 1];
@@ -1488,7 +1488,7 @@ export function PlayerSurface({
               );
             })}
           </div>
-        </aside>
+        </Drawer>
       )}
       {!minimised && playlistContext.contextMenu}
 

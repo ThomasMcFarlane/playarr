@@ -154,8 +154,6 @@
 /* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */
 .player-page,
 .end-screen,
-.playback-health-panel,
-.media-context-drawer,
 .profile-pin-dialog {
   --focus-ring-color: #ffffff;
   --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
