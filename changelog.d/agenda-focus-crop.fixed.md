@@ -1,1 +1,0 @@
-- Web calendar agenda: the focused entry's lift and glow are no longer cropped by the list or hidden under the pinned day heading, and the fade under the heading starts exactly at its bottom edge with no gap.

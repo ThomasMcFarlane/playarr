@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web calendar agenda: the focused entry's lift and glow are no longer cropped by the list or hidden under the pinned day heading, and the fade under the heading starts exactly at its bottom edge with no gap.
+- Arr sync: a restart no longer re-imports every series that has multi-episode files (the first check compared the source count of episodes with files against file rows). A work whose runtime, file or language backfill does not complete is retried with a growing gap (up to about a day) instead of on every five-minute pass.
 - Web: list rows (Watchlist, Requests, Downloads) keep their natural height and stack from the top; one item no longer stretches to the panel height (1.9967).
 - Web: on a first visit with nothing cached (for example a cold load of the Watchlist) the left nav no longer sits empty while the library-kinds read is in flight. It shows its full tile set at once, with skeleton tiles for Series, Movies and Music (not focusable, hidden from assistive technology), and the other tiles stay in place when the answer arrives (1.9970).
 - Web: the profile group and the version label sit at the bottom of the left nav (version below the group), and the nav starts below the Playarr logo instead of overlapping it.
@@ -246,6 +248,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).
 - Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.
 - Shared profile avatar presets: `clients/shared/profile-avatars` holds the six preset avatars as one source of truth (SVG and PNG plates), and CI checks they still match the web client.
 - A music album whose tracks have no cover art shows a basic initials placeholder (neutral tile, theme tokens) instead of an empty gap.
@@ -1910,6 +1913,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Peer sync: a peer's availability snapshot that has not changed no longer reads its 50,000 stored fingerprints (1.3 to 3.8 s on a loaded server). Each peer's stored snapshot carries a marker (row count and digest, migration 0084) that is checked with two index lookups, and is forgotten before a replacement starts writing and recorded in its last chunk.
+- Peer sync push: the sender leaves its unchanged inventory (about 26 MB for 50,000 files) out of the minute-by-minute push once the receiver has said it holds it, and repeats it in full every ten minutes. Older peers keep receiving the rows; the new fields are optional on the wire.
+- Language index: the indexer stores each pass's results with one batched write per 200 files (and the arr sync and indexer writes go through the shared write queue) instead of one transaction and commit sync per file.
 - Home and Library no longer scan the whole catalogue on every cold request: the works, their file counts and their sources are read once into a shared in-memory snapshot, rebuilt after a library change (or at most every 30 s) and warmed at start. A cold Home dropped from 18-22 statements to 5 and a cold Library page from 8-9 to 3 on the generated fixture; the Home rails cache is also keyed on the snapshot so it follows imports.
 - Resume plans load a series' episodes and files in two queries instead of two per episode (803 statements for 20 series dropped to 163), and the Home On Deck rail asks for its title details as soon as watch progress arrives instead of after the resume plans.
 - The catalogue snapshot keeps its version while nothing changed, notices writes made by another process through a cheap database probe, rebuilds in its own task with a backoff after failures, and keys the Library and search page caches on its version; a sync update that moves a file to another work now publishes a library event.

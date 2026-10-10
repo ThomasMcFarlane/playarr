@@ -1,1 +1,0 @@
-- Arr sync: a restart no longer re-imports every series that has multi-episode files (the first check compared the source count of episodes with files against file rows). A work whose runtime, file or language backfill does not complete is retried with a growing gap (up to about a day) instead of on every five-minute pass.
