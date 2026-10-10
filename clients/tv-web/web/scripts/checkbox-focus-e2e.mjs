@@ -45,7 +45,18 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
       if (key === "ArrowLeft" && route.startsWith("/settings")) {
         check(`${tag} ${route}: ArrowLeft reaches the Settings menu`, moved, JSON.stringify(now));
       }
+      // Neighbours: Remote has controls below; Your data has selects above (its Preview button below is disabled until a file is chosen).
+      if ((route.endsWith("remote") && key === "ArrowDown") || (route.endsWith("your-data") && key === "ArrowUp")) {
+        check(`${tag} ${route}: ${key} reaches the neighbouring control`, moved, JSON.stringify(now));
+      }
       left = left || moved;
+    }
+    if (route.startsWith("/settings")) {
+      await box.focus();
+      const url = page.url();
+      await page.keyboard.press("Escape");
+      await settle(page, 700);
+      check(`${tag} ${route}: Back leaves the page from the checkbox`, page.url() !== url, page.url());
     }
     check(`${tag} ${route}: an arrow key leaves the checkbox (not trapped)`, left);
   }
