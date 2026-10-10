@@ -302,6 +302,17 @@ final class TVPlayerViewModel {
         }
     }
 
+    /// Polls the stream URL until it answers (at most about 20 s); any non-404 answer ends the wait.
+    private static func waitForPlaylist(_ url: URL, headers: [String: String]) async {
+        var request = URLRequest(url: url)
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        for _ in 0..<40 {
+            guard let (_, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 404 else { return }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+    }
+
     /// Restarts the finished item from the start (end card "Replay").
     func replay() async {
         guard let mediaFileID = lastMediaFileID else { return }
@@ -335,6 +346,9 @@ final class TVPlayerViewModel {
             } ?? 0
             // The stream needs the session like every API call (AVPlayer does not send it on its own).
             let headers = try await apiClient.playbackRequestHeaders()
+            // A transcode session writes its playlist a moment after the server answers (404 until then); AVPlayer
+            // gives up on the first 404, so wait for it like the web player does.
+            await Self.waitForPlaylist(streamURL, headers: headers)
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title,
                                                startPositionSeconds: resumeSeconds, httpHeaders: headers))
             engine.play()
