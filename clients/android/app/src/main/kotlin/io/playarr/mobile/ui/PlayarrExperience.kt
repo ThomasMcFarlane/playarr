@@ -3488,12 +3488,12 @@ private fun LibraryFiltersDialog(
     }
     PlayarrFiltersSheet(
         title = playarrString(PlayarrString.LibraryFilters),
-        kicker = null,
+        kicker = if (playarrTvDrawer()) playarrString(PlayarrString.LibraryControls) else null,
         closeLabel = playarrString(PlayarrString.LibraryCloseFilters),
         onClose = onDismiss,
     ) {
         run {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(if (playarrTvDrawer()) 30.dp else 14.dp)) {
                 LibraryFilterChoices(
                     playarrString(PlayarrString.LibraryView),
                     availableViewModes,
@@ -3576,10 +3576,12 @@ private fun LibraryLanguageChoices(
     // A selected language whose count dropped to zero must stay visible so it can be unticked.
     val entries = facets + selected.filter { code -> facets.none { it.code == code } }
         .map { LanguageFacetEntry(code = it, count = -1) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    val tv = playarrTvDrawer()
+    Column(verticalArrangement = Arrangement.spacedBy(if (tv) 13.dp else 6.dp)) {
+        if (tv) PlayarrTvDrawerHeading(title) else Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         if (entries.isEmpty()) {
-            Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
+            if (tv) Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInk, fontSize = 19.2.sp, lineHeight = 28.8.sp)
+            else Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(entries, key = { it.code }) { entry ->
@@ -3602,6 +3604,16 @@ private fun <T> LibraryFilterChoices(
     label: @Composable (T) -> String,
 ) {
     val language = LocalPlayarrLanguage.current
+    if (playarrTvDrawer()) {
+        // Web drawer segmented control: the segments share the row equally.
+        Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            PlayarrTvDrawerHeading(title)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                values.forEach { value -> PlayarrChoice(label(value), value == selected, Modifier.weight(1f)) { onSelected(value) } }
+            }
+        }
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -4599,7 +4611,34 @@ private fun MediaContextDialog(
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
     var resolvingDownload by remember(work.id) { mutableStateOf(false) }
     var downloadCandidates by remember(work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
-    PlayarrPanel(
+    val download = {
+        resolvingDownload = true
+        viewModel.resolveDownloadCandidates(work, language) { candidates ->
+            resolvingDownload = false
+            downloadCandidates = candidates
+        }
+    }
+    if (playarrTvDrawer()) {
+        // Web `MediaContextMenu` drawer: "Title actions", the title, then 68 dp rows with a crimson glyph.
+        PlayarrFiltersSheet(
+            title = work.title,
+            kicker = playarrString(PlayarrString.ContextTitleActions),
+            closeLabel = playarrString(PlayarrString.CommonClose),
+            onClose = onDismiss,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // shortcut: Open stands in for web's Play (a bare Work has no media file to start); add Play when the
+                // context menu can start playback from the work.
+                TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
+                if (canDownload) {
+                    TvDrawerActionRow("\u21E9", playarrString(if (resolvingDownload) PlayarrString.ContextResolving else PlayarrString.ContextDownload), download, enabled = !resolvingDownload)
+                }
+                TvDrawerActionRow("\uFF0B", playarrString(PlayarrString.ContextAddToPlaylist), { addToPlaylist = true })
+                TvDrawerActionRow("\u2713", playarrString(PlayarrString.ContextMarkWatched), { onMark(true) })
+                TvDrawerActionRow("\u25CB", playarrString(PlayarrString.ContextMarkUnwatched), { onMark(false) })
+            }
+        }
+    } else PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(work.title) },
         text = {
@@ -4612,13 +4651,7 @@ private fun MediaContextDialog(
                 }
                 if (canDownload) {
                     PlayarrButton(
-                        onClick = {
-                            resolvingDownload = true
-                            viewModel.resolveDownloadCandidates(work, language) { candidates ->
-                                resolvingDownload = false
-                                downloadCandidates = candidates
-                            }
-                        },
+                        onClick = download,
                         enabled = !resolvingDownload,
                         modifier = Modifier.fillMaxWidth(),
                         variant = PlayarrButtonVariant.Secondary,
@@ -4650,6 +4683,25 @@ private fun MediaContextDialog(
     }
     downloadCandidates?.let { candidates ->
         DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
+    }
+}
+
+/** Web drawer action row: 68 dp, 14 dp radius, `--surface-soft`, a 19.52 px crimson glyph in a 42 dp slot, a bold 19.2 px label; focus is the ring. */
+@Composable
+private fun TvDrawerActionRow(glyph: String, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(14.dp),
+        color = WebSurfaceSoft,
+        contentColor = WebInk,
+        modifier = Modifier.fillMaxWidth().height(68.dp).webFocusRing(focused, radius = 14.dp, offset = 0.dp).onFocusChanged { focused = it.isFocused },
+    ) {
+        Row(Modifier.padding(start = 18.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(glyph, color = WebKicker, fontSize = 19.52.sp, lineHeight = 29.28.sp, modifier = Modifier.width(42.dp))
+            Text(label, fontSize = 19.2.sp, lineHeight = 28.8.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
