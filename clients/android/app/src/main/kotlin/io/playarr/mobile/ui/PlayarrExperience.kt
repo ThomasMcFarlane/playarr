@@ -6210,7 +6210,13 @@ private fun VideoDetailActions(
         }
         Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (episode == null && work.kind == WorkKind.Movie) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Web `.tv-detail-actions` is `width: max-content`: the pills overflow the 455 column rather than squeezing
+                // (and clipping "Resume from m:ss" to "Resume").
+                Row(
+                    Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     if (canDownload) downloadPill()
                     onPlaybackSettings?.let { openSettings ->
                         WebDetailPill(label = playarrString(PlayarrString.DetailPlayback), glyph = "\u2637", onClick = openSettings)
