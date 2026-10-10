@@ -2813,6 +2813,8 @@ private fun ExperienceHomeScreen(
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
+                    preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
         }
@@ -3915,6 +3917,8 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
+                    preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
         }
@@ -4119,6 +4123,8 @@ private fun ExperienceSearchScreen(
             onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
             onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
             canDownload = canDownload,
+            preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+            onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
         )
     }
 }
@@ -4670,6 +4676,8 @@ private fun MediaContextDialog(
     onOpen: () -> Unit,
     onMark: (Boolean) -> Unit,
     canDownload: Boolean,
+    preferredMediaFileId: String? = null,
+    onPlay: ((String) -> Unit)? = null,
     viewModel: MediaContextDownloadViewModel = hiltViewModel(),
 ) {
     val language = LocalPlayarrLanguage.current
@@ -4692,9 +4700,19 @@ private fun MediaContextDialog(
             onClose = onDismiss,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // shortcut: Open stands in for web's Play (a bare Work has no media file to start); add Play when the
-                // context menu can start playback from the work.
-                TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
+                // Web `play`: resolve the title's playable leaves, prefer the one with progress, else the first.
+                if (onPlay != null) {
+                    var resolvingPlay by remember(work.id) { mutableStateOf(false) }
+                    TvDrawerActionRow("\u25B6", playarrString(if (resolvingPlay) PlayarrString.ContextResolving else PlayarrString.DetailPlay), {
+                        resolvingPlay = true
+                        viewModel.resolveDownloadCandidates(work, language) { leaves ->
+                            resolvingPlay = false
+                            (leaves.firstOrNull { it.mediaFileId == preferredMediaFileId } ?: leaves.firstOrNull())?.let { onPlay(it.mediaFileId) }
+                        }
+                    }, enabled = !resolvingPlay)
+                }
+                // Web lists no Open row (OK on the card opens the title); kept only when there is nothing to play.
+                if (onPlay == null) TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
                 if (canDownload) {
                     TvDrawerActionRow("\u21E9", playarrString(if (resolvingDownload) PlayarrString.ContextResolving else PlayarrString.ContextDownload), download, enabled = !resolvingDownload)
                 }
