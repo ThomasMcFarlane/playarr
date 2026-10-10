@@ -494,13 +494,27 @@ impl LiveEventPublisher {
         watched: bool,
         min_gap: Duration,
     ) -> bool {
+        self.should_publish_progress_at(Instant::now(), user_id, media_file_id, watched, min_gap)
+    }
+
+    /// [`Self::should_publish_progress`] with the clock passed in, so the
+    /// throttle can be tested without sleeping.
+    fn should_publish_progress_at(
+        &self,
+        now: Instant,
+        user_id: Uuid,
+        media_file_id: Uuid,
+        watched: bool,
+        min_gap: Duration,
+    ) -> bool {
         let mut map = self.throttle.lock().unwrap_or_else(|e| e.into_inner());
         if map.len() > 4096 {
-            map.retain(|_, (at, _)| at.elapsed() < min_gap);
+            map.retain(|_, (at, _)| now.saturating_duration_since(*at) < min_gap);
         }
-        let now = Instant::now();
         match map.get(&(user_id, media_file_id)) {
-            Some((at, was)) if *was == watched && at.elapsed() < min_gap => false,
+            Some((at, was)) if *was == watched && now.saturating_duration_since(*at) < min_gap => {
+                false
+            }
             _ => {
                 map.insert((user_id, media_file_id), (now, watched));
                 true
@@ -607,12 +621,18 @@ mod tests {
     fn progress_throttle_publishes_on_state_change_and_after_the_gap() {
         let (user, file) = (Uuid::new_v4(), Uuid::new_v4());
         let p = LiveEventPublisher::new(Arc::new(NoopRepo));
-        let gap = Duration::from_millis(40);
-        assert!(p.should_publish_progress(user, file, false, gap));
-        assert!(!p.should_publish_progress(user, file, false, gap));
-        assert!(p.should_publish_progress(user, file, true, gap));
-        std::thread::sleep(Duration::from_millis(60));
-        assert!(p.should_publish_progress(user, file, true, gap));
+        // A synthetic clock: no sleeping, so load cannot change the outcome.
+        let gap = Duration::from_secs(5);
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let publish = |now, watched| p.should_publish_progress_at(now, user, file, watched, gap);
+        assert!(publish(at(0), false));
+        assert!(!publish(at(0), false));
+        assert!(!publish(at(4_999), false));
+        assert!(publish(at(4_999), true));
+        // The state change restarted the gap from 4.999 s.
+        assert!(!publish(at(9_998), true));
+        assert!(publish(at(9_999), true));
     }
 
     struct NoopRepo;

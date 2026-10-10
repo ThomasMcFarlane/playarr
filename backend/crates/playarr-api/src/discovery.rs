@@ -1338,8 +1338,9 @@ pub async fn request_title_handler(
         tracing::warn!(%err, "discovery: request add failed");
         ApiError::bad_gateway("the request provider did not accept the request")
     })?;
-    // The title now exists in the provider: cached search hits are out of date.
-    SEARCH_LOOKUPS.clear();
+    // The title now exists in this provider instance: its cached search hits
+    // are out of date. Other instances' entries stay valid.
+    SEARCH_LOOKUPS.clear_where(|(id, _)| *id == instance.id);
     let row = state
         .request_sync
         .record_direct(&new_title, instance.id)
