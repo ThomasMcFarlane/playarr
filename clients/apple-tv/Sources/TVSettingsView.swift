@@ -29,25 +29,8 @@ struct TVSettingsView: View {
             // Web `.tv-library-grid-panel`: 65% frosted panel on the right.
             TVRailPanelGradient(width: 1248)
 
-            TVPageHeader(title: "Preferences", backFocused: true)
-
-            // Header detail for the selected option.
-            Text(sections[selectedSection].title.uppercased())
-                .font(TVTheme.font(size: 13.76, weight: .heavy))
-                .tracking(0.62)
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 226.6, y: 119.5, w: sections[selectedSection].width, h: 20.6)
-            Text(sections[selectedSection].description.uppercased())
-                .font(TVTheme.font(size: 12.16, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-                .placed(x: 226.6, y: 143.7, w: sections[selectedSection].width, h: 15.2)
-
-            // The hairline under the title spans the heading detail (web `.settings-heading-detail`).
-            Rectangle()
-                .fill(DesignTokens.Stage.rule)
-                .frame(width: sections[selectedSection].width, height: 1)
-                .placed(x: 226.6, y: 112, w: sections[selectedSection].width, h: 1)
+            // Web: the selected section is the page subtitle (shared small style), nothing else under the title.
+            TVPageHeader(title: "Preferences", detail: sections[selectedSection].title, backFocused: true)
 
             // `.settings-option` rows: x 153.6, y 162, 480.4 x 91.9, pitch 91.9.
             ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
