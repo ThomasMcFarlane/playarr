@@ -49,7 +49,8 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   await page.waitForSelector(".download-quality-drawer .ui-select-trigger");
   await page.waitForTimeout(400);
 
-  const seg = await page.locator(".download-quality-drawer .tv-segmented button").allTextContents();
+  // The scope choice is the drawer's first segmented control; Keep until is a second one since 1.9987.
+  const seg = await page.locator(".download-quality-drawer .tv-segmented").first().locator("button").allTextContents();
   check(`${tag}: scope choice offers exactly episode and season`, seg.length === 2 && /episode/i.test(seg[0]) && /season/i.test(seg[1]), JSON.stringify(seg));
   check(`${tag}: quality is a closed select, not a list`, (await page.locator(".download-quality-drawer .ui-select-option").count()) === 0 && (await page.locator(".download-quality-drawer [role=radio]").count()) === 0);
   const m = await page.evaluate(() => {
@@ -61,10 +62,10 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   if (shots) await page.screenshot({ path: `${shots}/download-scope-${tag}.png` });
 
   // Scope: Whole season (keyboard: Tab from the close button until a segment, then Right).
-  await page.locator(".download-quality-drawer .tv-segmented button").first().focus();
+  await page.locator(".download-quality-drawer .tv-segmented").first().locator("button").first().focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
-  const pressed = await page.locator(".download-quality-drawer .tv-segmented button[aria-pressed=true]").textContent();
+  const pressed = await page.locator(".download-quality-drawer .tv-segmented").first().locator("button[aria-pressed=true]").textContent();
   check(`${tag}: Whole season chosen with the keyboard`, /season/i.test(pressed ?? ""), pressed);
 
   // Quality select.
@@ -90,7 +91,7 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     const probe = document.createElement("i");
     document.body.appendChild(probe);
     const token = (name) => { probe.style.color = `var(${name})`; return getComputedStyle(probe).color; };
-    const out = { ink: token("--ink"), bg: token("--bg"), segs: [...document.querySelectorAll(".download-quality-drawer .tv-segmented button")].map((b) => ({ pressed: b.getAttribute("aria-pressed"), cls: b.className, background: getComputedStyle(b).backgroundColor, color: getComputedStyle(b).color, opacity: getComputedStyle(b).opacity })) };
+    const out = { ink: token("--ink"), bg: token("--bg"), segs: [...document.querySelector(".download-quality-drawer .tv-segmented").querySelectorAll("button")].map((b) => ({ pressed: b.getAttribute("aria-pressed"), cls: b.className, background: getComputedStyle(b).backgroundColor, color: getComputedStyle(b).color, opacity: getComputedStyle(b).opacity })) };
     probe.remove();
     return out;
   });
