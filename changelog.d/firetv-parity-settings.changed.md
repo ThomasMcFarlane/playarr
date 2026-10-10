@@ -1,1 +1,0 @@
-- Fire TV: Settings shows the open section as the shared page subtitle, uses web's full-width segmented tiles, and lists Request latency for admins only, as web (18.462).
