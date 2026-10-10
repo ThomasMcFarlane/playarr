@@ -498,6 +498,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   useEffect(() => {
     if (!filtersOpen) return;
     let cancelled = false;
+    // A retry after a failed load shows the skeleton again, not the error.
+    setLanguageFacets((current) => (current === "error" ? null : current));
     client
       .catalogLanguages({ kind, available_only: true, ...languageParams })
       .then((facets) => {

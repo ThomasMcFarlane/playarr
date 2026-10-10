@@ -740,7 +740,10 @@ impl CatalogService {
             watch_progress_repo,
             embedding_repo: None,
             language_repo: None,
-            language_pairs: language_cache::WorkLanguageCache::new(language_cache::FRESH_FOR),
+            language_pairs: language_cache::WorkLanguageCache::new(
+                language_cache::FRESH_FOR,
+                language_cache::MAX_AGE,
+            ),
             peer_availability: None,
             snapshots,
         }
@@ -768,6 +771,7 @@ impl CatalogService {
     /// that publish a live library event need not call this.
     pub fn invalidate_snapshot(&self) {
         self.snapshots.invalidate();
+        self.language_pairs.invalidate();
     }
 
     /// How often a read re-checks the database for writes this process did not
@@ -1106,9 +1110,11 @@ impl CatalogService {
         let owned = kind.to_string();
         Ok(self
             .language_pairs
-            .get(kind, move || async move {
-                repo.list_work_languages(&owned).await
-            })
+            .get(
+                kind,
+                playarr_db::repo::language_write_tick(),
+                move || async move { repo.list_work_languages(&owned).await },
+            )
             .await?)
     }
 

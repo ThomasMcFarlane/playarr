@@ -1879,6 +1879,23 @@ async fn boot_api(
     );
     tokio::spawn(analytics_flusher.run());
 
+    // Keep the query planner's table statistics current (`PRAGMA optimize` is
+    // cheap when nothing changed); a new connection already analyses tables
+    // that have none.
+    {
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+            tick.tick().await;
+            loop {
+                tick.tick().await;
+                if let Err(error) = playarr_db::optimize(&pool).await {
+                    tracing::warn!(%error, "PRAGMA optimize failed");
+                }
+            }
+        });
+    }
+
     // Audio/subtitle language index backfill (task 180): ffprobe for files
     // the *arr app could not describe, plus periodic sidecar subtitle scans.
     // Runs where the media is readable (the API role); idempotent, so

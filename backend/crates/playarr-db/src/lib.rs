@@ -18,7 +18,7 @@ pub use repo::remote_wake;
 pub use repo::seed_default_rails;
 
 pub use error::DbError;
-pub use pool::{connect, run_migrations, DbPool, SQLITE_MIGRATIONS};
+pub use pool::{connect, optimize, run_migrations, DbPool, SQLITE_MIGRATIONS};
 pub use repo::{
     ApprovalRepo, CreditRepo, DeviceRepo, DiscoveredRoot, DownloadTicketRepo, EmbeddingRepo,
     FolderRepo, GroupLibraryRepo, HomeRailRepo, HouseholdUsageRepo, InMemoryRefreshTokenStore,
