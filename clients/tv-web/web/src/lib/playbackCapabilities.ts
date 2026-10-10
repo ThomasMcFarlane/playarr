@@ -17,22 +17,33 @@ function browserPlaybackCapabilities(hevc: boolean): PlaybackCapabilities {
   };
 }
 
-/** Whether this browser's MSE decodes 10-bit 4K HEVC, the usual shape of an HEVC library file. */
-function browserDecodesHevc(): boolean {
+const HEVC_PROBE = 'video/mp4; codecs="hvc1.2.4.L153.B0"';
+
+/**
+ * Whether this browser decodes 10-bit 4K HEVC, the usual shape of an HEVC library file. MSE first;
+ * iPhone Safari has only ManagedMediaSource, and a browser with neither plays HLS natively, so the
+ * `<video>` element answers last.
+ */
+export function browserDecodesHevc(): boolean {
   try {
-    return (
-      typeof MediaSource !== "undefined" &&
-      MediaSource.isTypeSupported('video/mp4; codecs="hvc1.2.4.L153.B0"')
-    );
+    if (typeof MediaSource !== "undefined") return MediaSource.isTypeSupported(HEVC_PROBE);
+    const managed = (globalThis as { ManagedMediaSource?: { isTypeSupported(type: string): boolean } })
+      .ManagedMediaSource;
+    if (managed) return managed.isTypeSupported(HEVC_PROBE);
+    if (typeof document === "undefined") return false;
+    return document.createElement("video").canPlayType(HEVC_PROBE) !== "";
   } catch {
     return false;
   }
 }
 
+// HEVC is not claimed on the vendor TV shells until fragmented-MP4 HEVC HLS
+// (the server's video-copy path) is verified on each one (TASKS 20.260 review);
+// until then HEVC sources reach them as an H.264 transcode.
 /** Conservative common subset for VIDAA's embedded browser and media pipeline. */
 const VIDAA_PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
   containers: "mp4,webm,mp3,m4a",
-  videoCodecs: "h264,h265,vp9",
+  videoCodecs: "h264,vp9",
   audioCodecs: "aac,opus,mp3",
 };
 
@@ -58,14 +69,14 @@ const XBOX_PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
 /** Conservative direct-play subset common to current LG webOS TV models. */
 const WEBOS_PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
   containers: "mp4,mp3,m4a",
-  videoCodecs: "h264,h265",
+  videoCodecs: "h264",
   audioCodecs: "aac,mp3",
 };
 
 /** Conservative direct-play subset for Samsung AVPlay across supported Tizen generations. */
 const TIZEN_PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
   containers: "mp4,mp3,m4a",
-  videoCodecs: "h264,h265",
+  videoCodecs: "h264",
   audioCodecs: "aac,mp3",
 };
 
