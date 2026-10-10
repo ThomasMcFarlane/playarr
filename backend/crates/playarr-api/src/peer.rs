@@ -1363,6 +1363,41 @@ fn must_send_availability(
     }
 }
 
+/// Updates what is known about a peer's copy of our inventory after a push.
+/// `response` is `None` when no address accepted the push: the acknowledgement
+/// is dropped, so the next push carries the rows again.
+fn record_push_outcome(
+    acknowledged: &mut HashMap<Uuid, AvailabilityAck>,
+    peer_id: Uuid,
+    sent_digest: Option<&str>,
+    sent_rows: bool,
+    response: Option<&playarr_peer_sync::PushSyncResponse>,
+    now: std::time::Instant,
+) {
+    match (
+        sent_digest,
+        response.and_then(|r| r.availability_digest.as_deref()),
+    ) {
+        (Some(sent), Some(held)) if sent == held => {
+            let rows_sent_at = match (sent_rows, acknowledged.get(&peer_id)) {
+                (false, Some(previous)) => previous.rows_sent_at,
+                _ => now,
+            };
+            acknowledged.insert(
+                peer_id,
+                AvailabilityAck {
+                    digest: held.to_string(),
+                    rows_sent_at,
+                },
+            );
+        }
+        // The peer holds something else, is too old to say, or never got it.
+        _ => {
+            acknowledged.remove(&peer_id);
+        }
+    }
+}
+
 /// Continuously publishes this node's local changes to every reachable peer.
 /// Pull remains active independently, so one successful outbound direction is
 /// enough for two-way convergence when the remote node cannot dial back.
@@ -1438,27 +1473,14 @@ pub async fn run_push_sync_loop(
                 {
                     Ok(response) => {
                         delivered = true;
-                        match (&request.availability_digest, &response.availability_digest) {
-                            (Some(sent), Some(held)) if sent == held => {
-                                let rows_sent_at =
-                                    match (send_availability, acknowledged.get(&peer.id)) {
-                                        (false, Some(previous)) => previous.rows_sent_at,
-                                        _ => std::time::Instant::now(),
-                                    };
-                                acknowledged.insert(
-                                    peer.id,
-                                    AvailabilityAck {
-                                        digest: held.clone(),
-                                        rows_sent_at,
-                                    },
-                                );
-                            }
-                            // The peer holds something else (or is too old to
-                            // say): send the rows again next time.
-                            _ => {
-                                acknowledged.remove(&peer.id);
-                            }
-                        }
+                        record_push_outcome(
+                            &mut acknowledged,
+                            peer.id,
+                            request.availability_digest.as_deref(),
+                            send_availability,
+                            Some(&response),
+                            std::time::Instant::now(),
+                        );
                         break;
                     }
                     Err(err) => tracing::warn!(
@@ -1468,6 +1490,18 @@ pub async fn run_push_sync_loop(
                         "peer push failed at this address; trying the next one"
                     ),
                 }
+            }
+            if !delivered {
+                // The peer may have applied part of it, or none: do not trust
+                // what it last acknowledged.
+                record_push_outcome(
+                    &mut acknowledged,
+                    peer.id,
+                    None,
+                    send_availability,
+                    None,
+                    std::time::Instant::now(),
+                );
             }
             if delivered {
                 if let Err(err) = state
@@ -2204,13 +2238,34 @@ mod sync_endpoint_tests {
         assert_eq!(body["availability_digest"], digest.as_str());
         assert_eq!(stored().await, 2);
 
+        // A pull of the same rows in between (the poller path) keeps the
+        // held digest instead of wiping it.
+        playarr_peer_sync::availability_sync::apply_availability_response(
+            playarr_peer_sync::availability_sync::AvailabilityResponse {
+                rows: rows.clone(),
+                server_time: "cursor".to_string(),
+            },
+            peer_id,
+            &state.app.work_repo,
+            &state.app.peer_leaf_availability_repo,
+            &state.app.peer_sync_state_repo,
+        )
+        .await
+        .unwrap();
+        let body = send(empty_push(&state, None, Some(&digest)).await).await;
+        assert_eq!(body["availability_digest"], digest.as_str());
+        assert_eq!(stored().await, 2);
+
         // A sender that predates the digest sends rows and none: applied, and
-        // the receiver holds no digest for it afterwards.
-        let body = send(empty_push(&state, Some(vec![pushed_row("c")]), None).await).await;
-        assert!(body.get("availability_digest").is_none(), "{body}");
+        // the digest held is the one computed from those rows, so a later
+        // "unchanged" for the old inventory is answered with the new digest.
+        let other = vec![pushed_row("c")];
+        let other_digest = wire_digest(&other);
+        let body = send(empty_push(&state, Some(other), None).await).await;
+        assert_eq!(body["availability_digest"], other_digest.as_str());
         assert_eq!(stored().await, 1);
         let body = send(empty_push(&state, None, Some(&digest)).await).await;
-        assert!(body.get("availability_digest").is_none(), "{body}");
+        assert_eq!(body["availability_digest"], other_digest.as_str());
         assert_eq!(stored().await, 1);
     }
 
@@ -2241,6 +2296,73 @@ mod sync_endpoint_tests {
             serde_json::from_value(serde_json::json!({"accepted_at": "2026-10-10T00:00:00Z"}))
                 .unwrap();
         assert!(response.availability_digest.is_none());
+    }
+
+    #[test]
+    fn a_failed_or_mismatched_push_drops_the_acknowledgement() {
+        use std::time::Instant;
+        let now = Instant::now();
+        let peer = Uuid::new_v4();
+        let reply = |digest: Option<&str>| playarr_peer_sync::PushSyncResponse {
+            accepted_at: Utc::now(),
+            availability_digest: digest.map(str::to_string),
+        };
+        let mut acks = HashMap::new();
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            now,
+        );
+        assert!(!must_send_availability(acks.get(&peer), "a", now));
+        // Rows left out and acknowledged again keep the time they last went out.
+        let later = now + std::time::Duration::from_secs(300);
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            false,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        assert!(must_send_availability(
+            acks.get(&peer),
+            "a",
+            now + std::time::Duration::from_secs(601)
+        ));
+        // No address accepted the push (a rejected request, an error): forget.
+        record_push_outcome(&mut acks, peer, Some("a"), false, None, later);
+        assert!(must_send_availability(acks.get(&peer), "a", later));
+        // A reply naming another digest, or none (an older peer), also forgets.
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            false,
+            Some(&reply(Some("b"))),
+            later,
+        );
+        assert!(acks.is_empty());
+        record_push_outcome(
+            &mut acks,
+            peer,
+            Some("a"),
+            true,
+            Some(&reply(Some("a"))),
+            later,
+        );
+        record_push_outcome(&mut acks, peer, Some("a"), false, Some(&reply(None)), later);
+        assert!(acks.is_empty());
     }
 
     #[test]

@@ -90,10 +90,6 @@ pub struct AvailabilityResponse {
     pub server_time: String,
 }
 
-/// Sync-state entity under which a receiver remembers the [`wire_digest`] of
-/// the snapshot it currently holds for a peer.
-pub const WIRE_DIGEST_ENTITY: &str = "availability_digest";
-
 /// A short fingerprint of a whole availability snapshot as it travels: the row
 /// count and an order-independent combination of one hash per row. Every field
 /// counts except `updated_at`, which records when the sender derived the
@@ -108,23 +104,44 @@ pub const WIRE_DIGEST_ENTITY: &str = "availability_digest";
 pub fn wire_digest(rows: &[AvailabilityRow]) -> String {
     use sha2::{Digest, Sha256};
     let sum = rows.iter().fold(0u128, |acc, row| {
+        // Exhaustive on purpose: a field added to the wire row must be either
+        // hashed or explicitly left out here, never silently ignored.
+        let AvailabilityRow {
+            media_file_id,
+            source_instance_id,
+            path,
+            provider,
+            external_id,
+            leaf_selector,
+            group_library_id,
+            availability,
+            container,
+            codec,
+            bitrate,
+            size_bytes,
+            duration_ms,
+            updated_at: _,
+            title,
+            kind,
+            release_date,
+        } = row;
         let encoded = serde_json::to_vec(&(
-            &row.media_file_id,
-            &row.source_instance_id,
-            &row.path,
-            &row.provider,
-            &row.external_id,
-            &row.leaf_selector,
-            &row.group_library_id,
-            &row.availability,
-            &row.container,
-            &row.codec,
-            &row.bitrate,
-            &row.size_bytes,
-            &row.duration_ms,
-            &row.title,
-            &row.kind,
-            &row.release_date,
+            media_file_id,
+            source_instance_id,
+            path,
+            provider,
+            external_id,
+            leaf_selector,
+            group_library_id,
+            availability,
+            container,
+            codec,
+            bitrate,
+            size_bytes,
+            duration_ms,
+            title,
+            kind,
+            release_date,
         ))
         .unwrap_or_default();
         let digest = Sha256::digest(&encoded);
@@ -282,7 +299,11 @@ pub async fn sync_availability(
     .await
 }
 
-/// Applies an availability snapshot delivered by either pull or push transport.
+/// Applies an availability snapshot delivered by either pull or push
+/// transport. The [`wire_digest`] of the rows is computed here, whatever the
+/// transport or the sender declared, and recorded by the repository together
+/// with the rows, so the digest a push is answered with always describes what
+/// is stored.
 pub async fn apply_availability_response(
     response: AvailabilityResponse,
     peer_node_id: Uuid,
@@ -290,42 +311,9 @@ pub async fn apply_availability_response(
     availability_repo: &Arc<dyn PeerLeafAvailabilityRepo>,
     sync_state_repo: &Arc<dyn playarr_db::PeerSyncStateRepo>,
 ) -> Result<usize, AvailabilitySyncError> {
-    apply_availability_snapshot(
-        response,
-        None,
-        peer_node_id,
-        work_repo,
-        availability_repo,
-        sync_state_repo,
-    )
-    .await
-}
-
-/// The [`wire_digest`] of the snapshot this node holds for `peer_node_id`, if
-/// the peer declared one with the snapshot it last sent.
-pub async fn held_wire_digest(
-    sync_state_repo: &Arc<dyn playarr_db::PeerSyncStateRepo>,
-    peer_node_id: Uuid,
-) -> Result<Option<String>, playarr_db::DbError> {
-    Ok(sync_state_repo
-        .get(peer_node_id, WIRE_DIGEST_ENTITY)
-        .await?
-        .and_then(|state| state.cursor))
-}
-
-/// [`apply_availability_response`] that also remembers the [`wire_digest`] the
-/// sender declared for the snapshot (`None`: it declared none, as a pull does,
-/// so nothing is held and the sender must send rows next time).
-pub async fn apply_availability_snapshot(
-    response: AvailabilityResponse,
-    declared_digest: Option<String>,
-    peer_node_id: Uuid,
-    work_repo: &Arc<dyn WorkRepo>,
-    availability_repo: &Arc<dyn PeerLeafAvailabilityRepo>,
-    sync_state_repo: &Arc<dyn playarr_db::PeerSyncStateRepo>,
-) -> Result<usize, AvailabilitySyncError> {
     const ENTITY: &str = "availability";
     let started = std::time::Instant::now();
+    let wire = wire_digest(&response.rows);
     let matches = resolve_local_works(work_repo, &response.rows).await?;
     let resolved: Vec<_> = response.rows.iter().zip(matches).collect();
     // The endpoint deliberately returns a complete live inventory even when
@@ -358,7 +346,7 @@ pub async fn apply_availability_snapshot(
     }
     let resolved_in = started.elapsed();
     availability_repo
-        .replace_for_peer(peer_node_id, &snapshot)
+        .replace_for_peer_with_wire_digest(peer_node_id, &snapshot, &wire)
         .await?;
     tracing::debug!(
         %peer_node_id,
@@ -368,16 +356,6 @@ pub async fn apply_availability_snapshot(
         "availability snapshot applied"
     );
 
-    if held_wire_digest(sync_state_repo, peer_node_id).await? != declared_digest {
-        sync_state_repo
-            .upsert(&playarr_db::PeerSyncState {
-                peer_node_id,
-                entity: WIRE_DIGEST_ENTITY.to_string(),
-                cursor: declared_digest,
-                last_synced_at: Some(Utc::now()),
-            })
-            .await?;
-    }
     sync_state_repo
         .upsert(&playarr_db::PeerSyncState {
             peer_node_id,
@@ -865,8 +843,11 @@ mod tests {
         );
     }
 
+    /// Row 9952 review: the digest a receiver holds is computed from the rows
+    /// it stored, whichever transport delivered them, so a pull never wipes
+    /// it and a push never trusts a declared one.
     #[tokio::test]
-    async fn applying_a_snapshot_remembers_the_declared_digest_and_a_pull_forgets_it() {
+    async fn the_held_digest_follows_the_stored_rows_on_every_transport() {
         sqlx::any::install_default_drivers();
         let pool = sqlx::any::AnyPoolOptions::new()
             .max_connections(1)
@@ -882,36 +863,42 @@ mod tests {
         let state: Arc<dyn playarr_db::PeerSyncStateRepo> =
             Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool));
         let peer = Uuid::new_v4();
-        let rows = vec![availability_row(
+        let mut rows = vec![availability_row(
             ExternalProvider::Tmdb,
             "1",
             WorkKind::Movie,
             "Sample",
         )];
-        let response = || AvailabilityResponse {
+        let response = |rows: &Vec<AvailabilityRow>| AvailabilityResponse {
             rows: rows.clone(),
             server_time: "cursor".to_string(),
         };
-        assert_eq!(held_wire_digest(&state, peer).await.unwrap(), None);
-        apply_availability_snapshot(
-            response(),
-            Some(wire_digest(&rows)),
-            peer,
-            &work_repo,
-            &availability,
-            &state,
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            held_wire_digest(&state, peer).await.unwrap(),
-            Some(wire_digest(&rows))
-        );
-        // A pull declares none, so nothing is held afterwards.
-        apply_availability_response(response(), peer, &work_repo, &availability, &state)
+        assert_eq!(availability.held_wire_digest(peer).await.unwrap(), None);
+        // Alternate pull-style and push-style applications of the same rows
+        // (both go through the one function): the digest stays put.
+        for _ in 0..3 {
+            apply_availability_response(response(&rows), peer, &work_repo, &availability, &state)
+                .await
+                .unwrap();
+            assert_eq!(
+                availability.held_wire_digest(peer).await.unwrap(),
+                Some(wire_digest(&rows))
+            );
+        }
+        // New content moves it with the rows.
+        rows.push(availability_row(
+            ExternalProvider::Tmdb,
+            "2",
+            WorkKind::Movie,
+            "Other",
+        ));
+        apply_availability_response(response(&rows), peer, &work_repo, &availability, &state)
             .await
             .unwrap();
-        assert_eq!(held_wire_digest(&state, peer).await.unwrap(), None);
+        assert_eq!(
+            availability.held_wire_digest(peer).await.unwrap(),
+            Some(wire_digest(&rows))
+        );
     }
 
     /// Timing evidence (run with `--release --ignored --nocapture`): what one
@@ -1021,9 +1008,9 @@ mod tests {
         );
         // A push that leaves the rows out only reads the held digest.
         let t = std::time::Instant::now();
-        let held = held_wire_digest(&state, peer).await.unwrap();
+        let held = availability.held_wire_digest(peer).await.unwrap();
         println!(
-            "unchanged push, rows left out: {:?} (a pull declares no digest: held {held:?}; sent {digest})",
+            "unchanged push, rows left out: {:?} (held {held:?}; sender digest {digest})",
             t.elapsed()
         );
         let _ = std::fs::remove_file(&path);

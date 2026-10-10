@@ -113,25 +113,23 @@ pub async fn apply_push(
         conflict_log_repo,
     )
     .await?;
-    let held_digest = match request.availability {
-        Some(availability) => {
-            availability_sync::apply_availability_snapshot(
-                availability,
-                request.availability_digest.clone(),
-                source_peer_id,
-                work_repo,
-                availability_repo,
-                sync_state_repo,
-            )
-            .await?;
-            request.availability_digest.clone()
-        }
-        // "Unchanged": nothing to apply. The answer says which snapshot is
-        // held, so a sender whose digest differs sends the rows next time.
-        None => availability_sync::held_wire_digest(sync_state_repo, source_peer_id)
-            .await
-            .map_err(availability_sync::AvailabilitySyncError::from)?,
-    };
+    // "Unchanged" (no rows) applies nothing. Either way the answer names the
+    // digest recorded with the stored rows, which a sender whose own digest
+    // differs takes as "send the rows next time".
+    if let Some(availability) = request.availability {
+        availability_sync::apply_availability_response(
+            availability,
+            source_peer_id,
+            work_repo,
+            availability_repo,
+            sync_state_repo,
+        )
+        .await?;
+    }
+    let held_digest = availability_repo
+        .held_wire_digest(source_peer_id)
+        .await
+        .map_err(availability_sync::AvailabilitySyncError::from)?;
     routing_sync::apply_routing_rules_response(
         request.routing_rules,
         source_peer_id,

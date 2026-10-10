@@ -165,8 +165,16 @@ async fn store(repo: &Arc<dyn MediaLanguageRepo>, updates: Vec<LanguageUpdate>, 
     if updates.is_empty() {
         return;
     }
-    if let Err(error) = repo.replace_many(&updates).await {
-        tracing::warn!(%error, files = updates.len(), "could not store {what} languages");
+    let Err(error) = repo.replace_many(&updates).await else {
+        return;
+    };
+    // One bad row must not cost the other results of the batch: they are
+    // written one file at a time instead.
+    tracing::warn!(%error, files = updates.len(), "could not store {what} languages as a batch; storing them one by one");
+    for update in updates {
+        if let Err(error) = repo.replace_many(std::slice::from_ref(&update)).await {
+            tracing::warn!(media_file_id = %update.media_file_id, %error, "could not store {what} languages");
+        }
     }
 }
 
@@ -360,5 +368,93 @@ mod tests {
             && u.audio.is_none()
             && u.subtitles == Some(vec![])));
         assert_eq!(*fake.singles.lock().unwrap(), 0);
+    }
+
+    /// A batch that fails as a whole is retried file by file, so one bad file
+    /// does not drop the others' results.
+    #[tokio::test]
+    async fn a_failed_batch_falls_back_to_one_file_at_a_time() {
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+        use std::sync::Mutex;
+
+        use async_trait::async_trait;
+        use playarr_db::repo::FileLanguages;
+        use playarr_db::DbError;
+
+        struct Flaky {
+            bad: Uuid,
+            stored: Mutex<Vec<Uuid>>,
+        }
+        #[async_trait]
+        impl MediaLanguageRepo for Flaky {
+            async fn replace(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: Option<&[String]>,
+                _: Option<&[String]>,
+                _: i64,
+            ) -> Result<(), DbError> {
+                unreachable!()
+            }
+            async fn replace_many(&self, updates: &[LanguageUpdate]) -> Result<(), DbError> {
+                if updates.iter().any(|u| u.media_file_id == self.bad) {
+                    return Err(DbError::NotFound);
+                }
+                self.stored
+                    .lock()
+                    .unwrap()
+                    .extend(updates.iter().map(|u| u.media_file_id));
+                Ok(())
+            }
+            async fn languages_for_file(&self, _: Uuid) -> Result<FileLanguages, DbError> {
+                unreachable!()
+            }
+            async fn has_state(&self, _: Uuid, _: &str) -> Result<bool, DbError> {
+                unreachable!()
+            }
+            async fn list_work_languages(&self, _: &str) -> Result<Vec<(Uuid, String)>, DbError> {
+                unreachable!()
+            }
+            async fn list_work_language_file_counts(
+                &self,
+                _: &str,
+            ) -> Result<(HashMap<Uuid, i64>, HashMap<(Uuid, String), i64>), DbError> {
+                unreachable!()
+            }
+            async fn files_needing_probe(&self, _: i64) -> Result<Vec<(Uuid, PathBuf)>, DbError> {
+                unreachable!()
+            }
+            async fn files_needing_sidecar_scan(
+                &self,
+                _: i64,
+                _: i64,
+            ) -> Result<Vec<(Uuid, PathBuf)>, DbError> {
+                unreachable!()
+            }
+        }
+        let ids: Vec<Uuid> = (0..5).map(|_| Uuid::new_v4()).collect();
+        let flaky = Arc::new(Flaky {
+            bad: ids[2],
+            stored: Mutex::new(vec![]),
+        });
+        let repo: Arc<dyn MediaLanguageRepo> = flaky.clone();
+        let updates = ids
+            .iter()
+            .map(|id| LanguageUpdate {
+                media_file_id: *id,
+                source: SOURCE_SIDECAR.to_string(),
+                audio: None,
+                subtitles: Some(vec![]),
+                scanned_ms: 1,
+            })
+            .collect();
+        store(&repo, updates, "sidecar").await;
+        let mut stored = flaky.stored.lock().unwrap().clone();
+        stored.sort();
+        let mut expected: Vec<Uuid> = ids.iter().copied().filter(|id| *id != ids[2]).collect();
+        expected.sort();
+        assert_eq!(stored, expected);
     }
 }

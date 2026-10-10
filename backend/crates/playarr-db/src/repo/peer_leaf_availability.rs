@@ -119,6 +119,27 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
     /// availability endpoint always returns a complete current inventory.
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError>;
 
+    /// [`Self::replace_for_peer`] that also records `wire_digest`, the digest
+    /// of the snapshot as it was sent, as part of the same replacement: it is
+    /// forgotten before the first row changes and recorded with the last, so
+    /// [`Self::held_wire_digest`] never names a snapshot the rows are not.
+    async fn replace_for_peer_with_wire_digest(
+        &self,
+        peer_node_id: Uuid,
+        rows: &[PeerLeafAvailability],
+        wire_digest: &str,
+    ) -> Result<(), DbError> {
+        let _ = wire_digest;
+        self.replace_for_peer(peer_node_id, rows).await
+    }
+
+    /// The wire digest recorded with the peer's complete stored snapshot, if
+    /// the snapshot is complete and one was recorded.
+    async fn held_wire_digest(&self, peer_node_id: Uuid) -> Result<Option<String>, DbError> {
+        let _ = peer_node_id;
+        Ok(None)
+    }
+
     /// Replaces one peer's whole snapshot with `rows`. The SQL repo does it in
     /// a single transaction (one commit instead of one per row); the default
     /// deletes and upserts row by row.
@@ -268,7 +289,7 @@ impl SnapshotDigest {
 
 /// The stored marker of one peer, if any: `(row_count, digest)`.
 const SNAPSHOT_MARKER_SQL: &str =
-    "SELECT row_count, digest FROM peer_leaf_snapshot WHERE peer_node_id = ?";
+    "SELECT row_count, digest, wire_digest FROM peer_leaf_snapshot WHERE peer_node_id = ?";
 
 /// How many rows the peer has stored, answered from the covering index
 /// without materialising a row.
@@ -278,10 +299,11 @@ const STORED_ROW_COUNT_SQL: &str =
 const FORGET_SNAPSHOT_SQL: &str = "DELETE FROM peer_leaf_snapshot WHERE peer_node_id = ?";
 
 const RECORD_SNAPSHOT_SQL: &str =
-    "INSERT INTO peer_leaf_snapshot (peer_node_id, row_count, digest) \
-     VALUES (?, ?, ?) \
+    "INSERT INTO peer_leaf_snapshot (peer_node_id, row_count, digest, wire_digest) \
+     VALUES (?, ?, ?, ?) \
      ON CONFLICT (peer_node_id) DO UPDATE SET \
-     row_count = excluded.row_count, digest = excluded.digest";
+     row_count = excluded.row_count, digest = excluded.digest, \
+     wire_digest = excluded.wire_digest";
 
 /// `(media_file_id, content_hash)` of every stored row of one peer. The query
 /// is answered from `idx_peer_leaf_availability_diff` alone (see the plan test
@@ -402,42 +424,46 @@ impl SqlxPeerLeafAvailabilityRepo {
         &self,
         peer_node_id: Uuid,
         digest: &SnapshotDigest,
-    ) -> Result<bool, DbError> {
+    ) -> Result<Option<Option<String>>, DbError> {
         let Some(marker) = sqlx::query(SNAPSHOT_MARKER_SQL)
             .bind(peer_node_id.to_string())
             .fetch_optional(&self.pool)
             .await?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         let rows: i64 = marker.try_get("row_count")?;
         let sum: String = marker.try_get("digest")?;
         if rows != digest.rows || sum != digest.sum {
-            return Ok(false);
+            return Ok(None);
         }
         let stored: i64 = sqlx::query(STORED_ROW_COUNT_SQL)
             .bind(peer_node_id.to_string())
             .fetch_one(&self.pool)
             .await?
             .try_get("n")?;
-        Ok(stored == digest.rows)
+        if stored != digest.rows {
+            return Ok(None);
+        }
+        Ok(Some(marker.try_get("wire_digest")?))
     }
 
     /// Queues a write that forgets the peer's marker (`None`) or records it.
     async fn set_snapshot_marker(
         &self,
         peer_node_id: Uuid,
-        digest: Option<SnapshotDigest>,
+        digest: Option<(SnapshotDigest, Option<String>)>,
     ) -> Result<(), DbError> {
         write(self.queue.as_ref(), &self.pool, move |conn| {
             let digest = digest.clone();
             Box::pin(async move {
                 match digest {
-                    Some(digest) => {
+                    Some((digest, wire)) => {
                         sqlx::query(RECORD_SNAPSHOT_SQL)
                             .bind(peer_node_id.to_string())
                             .bind(digest.rows)
                             .bind(digest.sum)
+                            .bind(wire)
                             .execute(&mut *conn)
                             .await?;
                     }
@@ -458,6 +484,135 @@ impl SqlxPeerLeafAvailabilityRepo {
     pub fn with_write_queue(mut self, queue: WriteQueue) -> Self {
         self.queue = Some(queue);
         self
+    }
+
+    /// Shared body of the two public replacements.
+    ///
+    /// Concurrency: replacements of one peer are serialised by [`peer_lock`],
+    /// which lives in this process. A second process on the same SQLite file
+    /// (API and worker roles split) is not a supported deployment (one
+    /// process owns the database file; see the deployment docs), so the lock
+    /// and the marker are not guarded against it.
+    async fn replace_inner(
+        &self,
+        peer_node_id: Uuid,
+        rows: &[PeerLeafAvailability],
+        wire_digest: Option<String>,
+    ) -> Result<(), DbError> {
+        // The peer's snapshot arrives complete every minute and mostly does
+        // not change. Compare it with what is stored first, and write only the
+        // rows that differ, so an unchanged snapshot takes no write lock and
+        // no commit sync.
+        //
+        // The comparison reads `(media_file_id, content_hash)` from a covering
+        // index on a pooled read connection, never inside the write
+        // transaction: the write queue's single transaction is shared by every
+        // writer, so nothing slow runs in it. The changes are then applied in
+        // chunks of [`WRITE_CHUNK_ROWS`], one queue operation each, so other
+        // queued writes commit between chunks. Each chunk is atomic; a reader
+        // can see a snapshot part-way applied, which is harmless because the
+        // table is a routing hint refreshed every minute. Upserts go first and
+        // deletions last, so a file never disappears before its replacement
+        // arrives.
+        let lock = peer_lock(peer_node_id);
+        let _one_replacement_at_a_time = lock.lock().await;
+
+        let prepared = Arc::new(prepare(rows)?);
+        let digest = SnapshotDigest::of(&prepared);
+        // The common case by far: the peer sent what it sent last time and
+        // the rows were not touched since. One marker row and a row count
+        // answer that; no fingerprint is read.
+        if let Some(stored_wire) = self.snapshot_is_stored(peer_node_id, &digest).await? {
+            // The rows are right. Only the recorded wire digest may be behind.
+            if wire_digest.is_some() && stored_wire != wire_digest {
+                self.set_snapshot_marker(peer_node_id, Some((digest, wire_digest)))
+                    .await?;
+            }
+            return Ok(());
+        }
+        self.fingerprint_reads
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let stored = load_fingerprints(&self.pool, peer_node_id).await?;
+        let diff = SnapshotDiff::between(&stored, &prepared);
+        if diff.is_empty() {
+            // Same rows as before, but no marker yet (stored before the
+            // marker existed, or an earlier replacement was interrupted).
+            return self
+                .set_snapshot_marker(peer_node_id, Some((digest, wire_digest)))
+                .await;
+        }
+        // The rows stop matching any marker with the first chunk and match the
+        // new one with the last, so the old marker is forgotten in the first
+        // chunk's operation and the new one recorded in the last chunk's: an
+        // interrupted replacement leaves "unknown" (compare row by row next
+        // time), never a stale claim, and no extra queue operation is needed.
+        let mut chunks: Vec<Chunk> = diff
+            .changed
+            .chunks(WRITE_CHUNK_ROWS)
+            .map(|chunk| Chunk::Upsert(Arc::new(chunk.to_vec())))
+            .collect();
+        chunks.extend(
+            diff.removed
+                .chunks(WRITE_CHUNK_ROWS)
+                .map(|chunk| Chunk::Delete(Arc::new(chunk.to_vec()))),
+        );
+        let last = chunks.len() - 1;
+        for (position, chunk) in chunks.into_iter().enumerate() {
+            let prepared = prepared.clone();
+            let marker = (position == last).then(|| (digest.clone(), wire_digest.clone()));
+            let first = position == 0;
+            write(self.queue.as_ref(), &self.pool, move |conn| {
+                let chunk = chunk.clone();
+                let prepared = prepared.clone();
+                let marker = marker.clone();
+                Box::pin(async move {
+                    if first {
+                        sqlx::query(FORGET_SNAPSHOT_SQL)
+                            .bind(peer_node_id.to_string())
+                            .execute(&mut *conn)
+                            .await?;
+                    }
+                    match &chunk {
+                        Chunk::Upsert(indexes) => {
+                            for index in indexes.iter() {
+                                let item = &prepared[*index];
+                                bind_upsert(
+                                    &item.row,
+                                    item.leaf_selector.clone(),
+                                    item.content_hash.clone(),
+                                )
+                                .execute(&mut *conn)
+                                .await?;
+                            }
+                        }
+                        Chunk::Delete(media_file_ids) => {
+                            for media_file_id in media_file_ids.iter() {
+                                sqlx::query(
+                                    "DELETE FROM peer_leaf_availability \
+                                     WHERE peer_node_id = ? AND media_file_id = ?",
+                                )
+                                .bind(peer_node_id.to_string())
+                                .bind(media_file_id.as_str())
+                                .execute(&mut *conn)
+                                .await?;
+                            }
+                        }
+                    }
+                    if let Some((digest, wire)) = marker {
+                        sqlx::query(RECORD_SNAPSHOT_SQL)
+                            .bind(peer_node_id.to_string())
+                            .bind(digest.rows)
+                            .bind(digest.sum)
+                            .bind(wire)
+                            .execute(&mut *conn)
+                            .await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await?;
+        }
+        Ok(())
     }
 }
 
@@ -540,112 +695,28 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         peer_node_id: Uuid,
         rows: &[PeerLeafAvailability],
     ) -> Result<(), DbError> {
-        // The peer's snapshot arrives complete every minute and mostly does
-        // not change. Compare it with what is stored first, and write only the
-        // rows that differ, so an unchanged snapshot takes no write lock and
-        // no commit sync.
-        //
-        // The comparison reads `(media_file_id, content_hash)` from a covering
-        // index on a pooled read connection, never inside the write
-        // transaction: the write queue's single transaction is shared by every
-        // writer, so nothing slow runs in it. The changes are then applied in
-        // chunks of [`WRITE_CHUNK_ROWS`], one queue operation each, so other
-        // queued writes commit between chunks. Each chunk is atomic; a reader
-        // can see a snapshot part-way applied, which is harmless because the
-        // table is a routing hint refreshed every minute. Upserts go first and
-        // deletions last, so a file never disappears before its replacement
-        // arrives.
-        let lock = peer_lock(peer_node_id);
-        let _one_replacement_at_a_time = lock.lock().await;
+        self.replace_inner(peer_node_id, rows, None).await
+    }
 
-        let prepared = Arc::new(prepare(rows)?);
-        let digest = SnapshotDigest::of(&prepared);
-        // The common case by far: the peer sent what it sent last time and
-        // the rows were not touched since. One marker row and a row count
-        // answer that; no fingerprint is read.
-        if self.snapshot_is_stored(peer_node_id, &digest).await? {
-            return Ok(());
-        }
-        self.fingerprint_reads
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let stored = load_fingerprints(&self.pool, peer_node_id).await?;
-        let diff = SnapshotDiff::between(&stored, &prepared);
-        if diff.is_empty() {
-            // Same rows as before, but no marker yet (stored before the
-            // marker existed, or an earlier replacement was interrupted).
-            return self.set_snapshot_marker(peer_node_id, Some(digest)).await;
-        }
-        // The rows stop matching any marker with the first chunk and match the
-        // new one with the last, so the old marker is forgotten in the first
-        // chunk's operation and the new one recorded in the last chunk's: an
-        // interrupted replacement leaves "unknown" (compare row by row next
-        // time), never a stale claim, and no extra queue operation is needed.
-        let mut chunks: Vec<Chunk> = diff
-            .changed
-            .chunks(WRITE_CHUNK_ROWS)
-            .map(|chunk| Chunk::Upsert(Arc::new(chunk.to_vec())))
-            .collect();
-        chunks.extend(
-            diff.removed
-                .chunks(WRITE_CHUNK_ROWS)
-                .map(|chunk| Chunk::Delete(Arc::new(chunk.to_vec()))),
-        );
-        let last = chunks.len() - 1;
-        for (position, chunk) in chunks.into_iter().enumerate() {
-            let prepared = prepared.clone();
-            let marker = (position == last).then(|| digest.clone());
-            let first = position == 0;
-            write(self.queue.as_ref(), &self.pool, move |conn| {
-                let chunk = chunk.clone();
-                let prepared = prepared.clone();
-                let marker = marker.clone();
-                Box::pin(async move {
-                    if first {
-                        sqlx::query(FORGET_SNAPSHOT_SQL)
-                            .bind(peer_node_id.to_string())
-                            .execute(&mut *conn)
-                            .await?;
-                    }
-                    match &chunk {
-                        Chunk::Upsert(indexes) => {
-                            for index in indexes.iter() {
-                                let item = &prepared[*index];
-                                bind_upsert(
-                                    &item.row,
-                                    item.leaf_selector.clone(),
-                                    item.content_hash.clone(),
-                                )
-                                .execute(&mut *conn)
-                                .await?;
-                            }
-                        }
-                        Chunk::Delete(media_file_ids) => {
-                            for media_file_id in media_file_ids.iter() {
-                                sqlx::query(
-                                    "DELETE FROM peer_leaf_availability \
-                                     WHERE peer_node_id = ? AND media_file_id = ?",
-                                )
-                                .bind(peer_node_id.to_string())
-                                .bind(media_file_id.as_str())
-                                .execute(&mut *conn)
-                                .await?;
-                            }
-                        }
-                    }
-                    if let Some(digest) = marker {
-                        sqlx::query(RECORD_SNAPSHOT_SQL)
-                            .bind(peer_node_id.to_string())
-                            .bind(digest.rows)
-                            .bind(digest.sum)
-                            .execute(&mut *conn)
-                            .await?;
-                    }
-                    Ok(())
-                })
-            })
-            .await?;
-        }
-        Ok(())
+    async fn replace_for_peer_with_wire_digest(
+        &self,
+        peer_node_id: Uuid,
+        rows: &[PeerLeafAvailability],
+        wire_digest: &str,
+    ) -> Result<(), DbError> {
+        self.replace_inner(peer_node_id, rows, Some(wire_digest.to_string()))
+            .await
+    }
+
+    async fn held_wire_digest(&self, peer_node_id: Uuid) -> Result<Option<String>, DbError> {
+        let Some(marker) = sqlx::query(SNAPSHOT_MARKER_SQL)
+            .bind(peer_node_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(marker.try_get("wire_digest")?)
     }
 
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError> {
@@ -1617,6 +1688,72 @@ mod tests {
             5,
             "only the other peer's first compare"
         );
+        pool.close().await;
+        remove_db(&path);
+    }
+
+    /// Review of row 9952: the held wire digest is recorded with the rows and
+    /// forgotten before they change, so a replacement that fails part-way
+    /// (here on its second chunk) leaves no digest claiming the old snapshot.
+    #[tokio::test]
+    async fn a_failed_replacement_leaves_no_held_digest() {
+        let (pool, path) = file_pool().await;
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let peer = Uuid::new_v4();
+        let rows = movies(peer, WRITE_CHUNK_ROWS + 10);
+        repo.replace_for_peer_with_wire_digest(peer, &rows, "old")
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.held_wire_digest(peer).await.unwrap().as_deref(),
+            Some("old")
+        );
+        // Identical rows with a new digest: recorded without touching rows.
+        repo.replace_for_peer_with_wire_digest(peer, &rows, "same-rows")
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.held_wire_digest(peer).await.unwrap().as_deref(),
+            Some("same-rows")
+        );
+        assert_eq!(repo.fingerprint_reads(), 1);
+
+        sqlx::query(
+            "CREATE TRIGGER boom BEFORE INSERT ON peer_leaf_availability \
+             WHEN NEW.external_id = 'boom' BEGIN SELECT RAISE(ABORT, 'injected'); END",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut next = movies(peer, WRITE_CHUNK_ROWS + 10);
+        for row in &mut next {
+            row.codec = Some("hevc".to_string());
+        }
+        next.push(sample(
+            peer,
+            playarr_model::ExternalProvider::Tmdb,
+            "boom",
+            LeafSelector::Movie,
+        ));
+        assert!(repo
+            .replace_for_peer_with_wire_digest(peer, &next, "new")
+            .await
+            .is_err());
+        assert_eq!(repo.held_wire_digest(peer).await.unwrap(), None);
+        // Writers outside a replacement forget it too.
+        sqlx::query("DROP TRIGGER boom")
+            .execute(&pool)
+            .await
+            .unwrap();
+        repo.replace_for_peer_with_wire_digest(peer, &next, "new")
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.held_wire_digest(peer).await.unwrap().as_deref(),
+            Some("new")
+        );
+        repo.upsert(&movies(peer, 1)[0]).await.unwrap();
+        assert_eq!(repo.held_wire_digest(peer).await.unwrap(), None);
         pool.close().await;
         remove_db(&path);
     }

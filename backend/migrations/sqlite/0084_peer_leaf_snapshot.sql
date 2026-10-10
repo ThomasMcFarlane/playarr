@@ -16,5 +16,8 @@
 CREATE TABLE peer_leaf_snapshot (
     peer_node_id TEXT PRIMARY KEY NOT NULL,
     row_count INTEGER NOT NULL,
-    digest TEXT NOT NULL
+    digest TEXT NOT NULL,
+    -- The sender's own digest of the snapshot as sent (`wire_digest`), when known.
+    -- Valid exactly while this row exists, so it is forgotten with the marker.
+    wire_digest TEXT
 );

@@ -46,6 +46,36 @@ pub struct LanguageUpdate {
 /// shared write queue's commit) per this many files.
 const REPLACE_BATCH: usize = 200;
 
+/// Collapses updates for the same `(file, source)` into one that has the same
+/// effect as applying them in order: a later kind overrides an earlier one, a
+/// kind it leaves out (`None`) keeps the earlier value, and the last scan time
+/// wins. One batch is planned against what is stored, so two entries for one
+/// file would otherwise each be compared with the stale rows. Order of first
+/// appearance is kept.
+fn merge_duplicates(updates: &[LanguageUpdate]) -> Vec<LanguageUpdate> {
+    let mut position: HashMap<(Uuid, &str), usize> = HashMap::new();
+    let mut merged: Vec<LanguageUpdate> = Vec::with_capacity(updates.len());
+    for update in updates {
+        match position.get(&(update.media_file_id, update.source.as_str())) {
+            Some(&index) => {
+                let earlier = &mut merged[index];
+                if update.audio.is_some() {
+                    earlier.audio = update.audio.clone();
+                }
+                if update.subtitles.is_some() {
+                    earlier.subtitles = update.subtitles.clone();
+                }
+                earlier.scanned_ms = update.scanned_ms;
+            }
+            None => {
+                position.insert((update.media_file_id, update.source.as_str()), merged.len());
+                merged.push(update.clone());
+            }
+        }
+    }
+    merged
+}
+
 /// Rows of `media_file_language_state` written by one statement.
 const STATE_ROWS_PER_STATEMENT: usize = 100;
 
@@ -307,6 +337,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
     }
 
     async fn replace_many(&self, updates: &[LanguageUpdate]) -> Result<(), DbError> {
+        let updates = merge_duplicates(updates);
         for batch in updates.chunks(REPLACE_BATCH) {
             let planned = self.plan(batch).await?;
             self.apply(planned).await?;
@@ -830,6 +861,47 @@ mod tests {
             .unwrap();
         assert_eq!(queue.stats().ops - before, 1);
         queue.shutdown().await;
+    }
+
+    /// Two entries for one file and source in a batch act as if applied in
+    /// order (the later one wins; a kind it leaves out keeps the earlier one).
+    #[tokio::test]
+    async fn replace_many_with_a_repeated_file_matches_applying_them_in_order() {
+        let (batched_pool, one_pool) = (pool().await, pool().await);
+        let (batched, one) = (
+            SqlxMediaLanguageRepo::new(batched_pool.clone()),
+            SqlxMediaLanguageRepo::new(one_pool.clone()),
+        );
+        let file = Uuid::new_v4();
+        let updates = vec![
+            update(file, SOURCE_PROBE, &["en"], &["fr"], 1),
+            LanguageUpdate {
+                audio: None,
+                ..update(file, SOURCE_PROBE, &[], &["de"], 2)
+            },
+            update(file, SOURCE_SIDECAR, &["ja"], &[], 3),
+        ];
+        batched.replace_many(&updates).await.unwrap();
+        for u in &updates {
+            one.replace(
+                u.media_file_id,
+                &u.source,
+                u.audio.as_deref(),
+                u.subtitles.as_deref(),
+                u.scanned_ms,
+            )
+            .await
+            .unwrap();
+        }
+        let (a, b) = (
+            batched.languages_for_file(file).await.unwrap(),
+            one.languages_for_file(file).await.unwrap(),
+        );
+        assert_eq!(a, b);
+        assert_eq!(a.audio, langs(&["en", "ja"]));
+        assert_eq!(a.subtitles, langs(&["de"]));
+        assert_eq!(state_scanned_ms(&batched_pool, file, SOURCE_PROBE).await, 2);
+        assert_eq!(state_scanned_ms(&one_pool, file, SOURCE_PROBE).await, 2);
     }
 
     /// The batch reads are index lookups on `media_file_id`, never scans.
