@@ -42,6 +42,8 @@ Steps only the repository owner can perform.
 | 9965 | Web calendar agenda: focused entry's glow/lift cropped by the scroller; gap under sticky heading | done | agenda worker | agenda-focus-crop | | | Owner bug on live: the agenda scroller crops the focused entry's lift and glow ring; the scroller gets inline and block padding for the glow extent. Landed via #548. |
 | 9974 | Web: regenerate all web parity references after the 10 Oct batches | done | parity-refs worker | parity-refs-1010 | | | Done via #537 (96 PNGs + manifest regenerated from main de01ef61); renumbered from 9952/9971 clashes. |
 | 9975 | Web: Calendar Type/Source/Status filters as multi-selects; Monitored as a switch | done | filters worker | calendar-filter-selects | 1.9962 | | Owner request 2026-10-10: the Calendar Filters panel uses the shared MultiSelect for Type, Source and Status and the shared switch for Monitored only; ToggleChips is removed; any other multi-option filter still on chips or pills is migrated. Query params and behaviour unchanged. Landed via #552. |
+| 9976 | Live verify batch 10: download flow, all drawers incl. player queue/health, rail centring | in_progress | final-live-2 worker | | | 2026-10-11 00:00 ICT | Live verification of main 4d0366c4 at 1920 and 1280, both themes, keyboard only, as the device test account. Evidence in the scratch folder 20261010-final-live/b10. |
+| 9977 | Live: Filters language multi-select shows 'No languages indexed yet' for the test account | in_progress | final-live-2 worker | language-index | | 2026-10-11 00:00 ICT | Investigating whether the language index is empty on live (API read-only, server logs, indexer and probe queue) or a data gap. |
 
 ## 2. Server performance and security (2026-10-03)
 
