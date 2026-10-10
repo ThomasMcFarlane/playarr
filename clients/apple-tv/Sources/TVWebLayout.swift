@@ -1,3 +1,4 @@
+import PlayarrKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
