@@ -99,7 +99,11 @@ struct TVHomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .defaultFocus($focusedCard, firstFocus)
-        .onAppear { if focusedCard == nil { focusedCard = firstFocus } }
+        // The lead rail can change after the first paint (On deck arrives): keep focus on a card that still exists.
+        .task(id: firstFocus) {
+            let ids = Set(rails.flatMap(\.works).map(\.id))
+            if focusedCard.map({ !ids.contains($0.workID) }) ?? true { focusedCard = firstFocus }
+        }
     }
 
     /// Web: an 8 px left bleed keeps the first card's focus glow unclipped.
