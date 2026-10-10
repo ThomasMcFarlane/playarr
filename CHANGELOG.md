@@ -398,6 +398,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
+- Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.
 - Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
 - Web: every poster or title card (Home and playlist rails, Search results, playlist grids, "more like this" on detail pages) is now exactly the size of the Library grid card at every stage size, from one shared token set (`--card-w` and friends in `page-layout.css`). A guard (`scripts/card-size-e2e.mjs`) checks width, height, art, caption size and spacing on every surface in both themes.
 - Web: the profile item in the left nav is a real link to the profiles page (it opens in a new tab with Ctrl/Cmd-click, middle-click or the context menu) and is now a square nav tile in its own group, with the first name beneath the avatar, that never overlaps other items or the page.

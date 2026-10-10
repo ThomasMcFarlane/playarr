@@ -1,1 +1,0 @@
-- Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
