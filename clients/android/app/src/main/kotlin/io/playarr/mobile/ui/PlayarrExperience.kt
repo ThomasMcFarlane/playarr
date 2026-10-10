@@ -599,9 +599,6 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     private val _libraries = MutableStateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>>(emptyMap())
     val libraries: StateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>> = _libraries.asStateFlow()
-    private val _libraryTotals = MutableStateFlow<Map<WorkKind, Long>>(emptyMap())
-    /** The server's catalogue `total` per library, known from the first page. */
-    val libraryTotals: StateFlow<Map<WorkKind, Long>> = _libraryTotals.asStateFlow()
 
     // Audio/subtitle language filters per library (task 183). The matching work
     // ids come from the server (`audio_lang`/`subtitle_lang`); the full library
@@ -947,7 +944,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             var offset = 0L
             var loaded = emptyList<Work>()
             while (true) {
-                val result = browseLibrary.page(
+                val result = browseLibrary(
                     kind = kind,
                     availableOnly = true,
                     sort = "title",
@@ -956,8 +953,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 )
                 when (result) {
                     is PlayarrResult.Success -> {
-                        result.value.total?.let { _libraryTotals.value = _libraryTotals.value + (kind to it) }
-                        val page = result.value.items
+                        val page = result.value
                         loaded = mergeLibraryPage(loaded, page)
                         _libraries.value = _libraries.value + (kind to ExperienceLoad.Ready(loaded))
                         offset += page.size
@@ -1705,7 +1701,7 @@ internal fun PlayarrExperience(
                         modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 60.dp),
                     )
                     // Web `.app-clock` is right-aligned to x = 710.4 (its left edge moves with the text width).
-                    Box(Modifier.align(Alignment.TopStart).padding(top = 68.2.dp).width(634.dp), contentAlignment = Alignment.TopEnd) { ExperienceClock() }
+                    Box(Modifier.align(Alignment.TopStart).padding(top = 68.2.dp).width(if (activeNavRoute == "home") 634.dp else 710.4.dp), contentAlignment = Alignment.TopEnd) { ExperienceClock() }
                 }
             }
 
@@ -3644,7 +3640,6 @@ private fun ExperienceLibraryScreen(
     val language = LocalPlayarrLanguage.current
     val plural = kind.playarrPluralLabel()
     val collection = kind.playarrCollectionNoun()
-    val libraryTotal = viewModel.libraryTotals.collectAsState().value[kind]
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
     LaunchedEffect(Unit) { viewModel.ensureProgressLoaded() }
     LiveRefreshEffect(
@@ -3699,7 +3694,7 @@ private fun ExperienceLibraryScreen(
                     (matchingIds == null || work.id in matchingIds) &&
                         (activeLetter == "#" || work.sortTitle.startsWith(activeLetter, ignoreCase = true))
                 }
-                val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedWith(compareBy(PlayarrTitleOrder) { it.sortTitle.ifBlank { it.title } })
+                val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedBy(Work::sortTitle)
                 if (descending) sorted.reversed() else sorted
             }
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
@@ -3708,7 +3703,7 @@ private fun ExperienceLibraryScreen(
                 header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }, // Web phone shows no detail line on library pages; television keeps the count.
                 subtitle = if (isTelevision) playarrString(
                     PlayarrString.LibraryCollectionCount,
-                    "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(libraryTotal ?: state.value.size.toLong()),
+                    "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(state.value.size),
                     "collection" to collection,
                 ).uppercase(language.locale) else null, filters = PlayarrFilterAction(
                     label = playarrString(PlayarrString.LibraryFilters),

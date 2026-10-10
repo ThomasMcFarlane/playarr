@@ -136,10 +136,10 @@ internal fun PlayarrPageHeaderRow(
             Text(
                 title,
                 color = palette.ink,
-                fontSize = if (tv) 33.6.sp else if (large) 21.6.sp else 17.6.sp,
+                fontSize = if (tv) 34.sp else if (large) 21.6.sp else 17.6.sp,
                 fontWeight = FontWeight(580),
-                letterSpacing = if (tv) (-1.512).sp else if (large) (-0.972).sp else (-0.792).sp,
-                lineHeight = if (tv) 50.sp else if (large) 32.4.sp else 26.4.sp,
+                letterSpacing = if (tv) (-1.5).sp else if (large) (-0.972).sp else (-0.792).sp,
+                lineHeight = if (tv) TextUnit.Unspecified else if (large) 32.4.sp else 26.4.sp,
                 style = if (tv) androidx.compose.material3.LocalTextStyle.current else webText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -148,12 +148,10 @@ internal fun PlayarrPageHeaderRow(
         }.first().measure(loose.copy(maxWidth = titleMax.coerceAtMost(constraints.maxWidth)))
         val separator = (if (tv) 47.04.dp else 10.dp).roundToPx()
         val titleEnd = backWidth + backGap + titleP.width
-        val probe = subtitle?.takeIf { !tv }?.let {
+        val probe = subtitle?.let {
             subcompose("probe") { PlayarrBreadcrumbText(it, phone = !tv) }.first().measure(loose)
         }
-        // Television: web stacks the subtitle under the title in the one shared small subtitle style (owner rule 2026-10-10).
-        val placement = if (tv && subtitle != null) PlayarrSubtitlePlacement.Wrapped
-        else decideSubtitlePlacement(subtitle != null, titleEnd, probe?.width ?: 0, separator, reservedStartPx)
+        val placement = decideSubtitlePlacement(subtitle != null, titleEnd, probe?.width ?: 0, separator, reservedStartPx)
         val inline = if (placement == PlayarrSubtitlePlacement.Inline) {
             subcompose("inline") {
                 if (tv) {
@@ -175,9 +173,7 @@ internal fun PlayarrPageHeaderRow(
         }
         val wrapped = if (placement == PlayarrSubtitlePlacement.Wrapped) {
             subcompose("wrapped") {
-                if (tv) {
-                    PlayarrPageSubtitleText(subtitle!!)
-                } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(palette.inkMuted.copy(alpha = 0.45f)))
                     PlayarrBreadcrumbText(subtitle!!, phone = !tv)
                 }
@@ -188,30 +184,14 @@ internal fun PlayarrPageHeaderRow(
         val backHeightPx = back?.height ?: 0
         val rowHeight = maxOf(backHeightPx, titleP.height)
         val width = maxOf(titleEnd + (inline?.width ?: 0), backWidth + backGap + (wrapped?.width ?: 0))
-        val subtitleGap = (if (tv) 5.6.dp else 6.dp).roundToPx()
-        val height = rowHeight + (wrapped?.let { it.height + subtitleGap } ?: 0)
+        val height = rowHeight + (wrapped?.let { it.height + 6.dp.roundToPx() } ?: 0)
         layout(width.coerceAtMost(constraints.maxWidth.coerceAtLeast(width)), height) {
             back?.placeRelative(0, (rowHeight - back.height) / 2)
             titleP.placeRelative(backWidth + backGap, (rowHeight - titleP.height) / 2)
             inline?.placeRelative(titleEnd, (rowHeight - inline.height) / 2)
-            wrapped?.placeRelative(backWidth + backGap, rowHeight + subtitleGap)
+            wrapped?.placeRelative(backWidth + backGap, rowHeight + 6.dp.roundToPx())
         }
     }
-}
-
-/** Web `.page-subtitle` (shared with the media kickers): `--brand-ink`, 12.288 px, weight 820, 0.08em, uppercase. */
-@Composable
-private fun PlayarrPageSubtitleText(text: String) {
-    Text(
-        text.uppercase(),
-        color = PlayarrWebTheme.palette.brandInk,
-        fontSize = 12.288.sp,
-        lineHeight = 18.432.sp,
-        fontWeight = FontWeight(820),
-        letterSpacing = 0.983.sp,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
 }
 
 @Composable
