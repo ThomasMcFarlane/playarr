@@ -28,7 +28,9 @@
     "relay-port-e2e",
     "card-size-e2e",
     "filters-panel-e2e",
-    "artwork-size-setting-e2e"
+    "artwork-size-setting-e2e",
+    "download-flow-e2e",
+    "drawer-consistency-e2e"
   ],
   "args": {
     "tablet-layout": [
@@ -76,7 +78,9 @@
     "nav-focus-e2e": 47,
     "relay-port-e2e": 15,
     "card-size-e2e": 120,
-    "filters-panel-e2e": 60,
-    "artwork-size-setting-e2e": 120
+    "filters-panel-e2e": 85,
+    "artwork-size-setting-e2e": 120,
+    "download-flow-e2e": 120,
+    "drawer-consistency-e2e": 180
   }
 }
