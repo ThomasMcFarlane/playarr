@@ -15,7 +15,7 @@ import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
-import {focusNode, getFocusedTag} from '../platform';
+import {focusNode, getFocusedTag, useDefaultFocus} from '../platform';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
 import {runtimeLabel} from '../lib/runtimeLabel';
 import {blend} from '../theme/color';
@@ -162,6 +162,7 @@ export function HomeScreen(): React.ReactElement {
   // A late On Deck answer rebuilds the rails and unmounts the focused card, which leaves nothing focused and the remote
   // dead. Put focus back on the selected card whenever the rails change and focus was lost (web keeps it in place).
   const selectedCardRef = useRef<View>(null);
+  useDefaultFocus(selectedCardRef);
   useEffect(() => {
     if (!getFocusedTag()) focusNode(selectedCardRef);
   }, [rails]);

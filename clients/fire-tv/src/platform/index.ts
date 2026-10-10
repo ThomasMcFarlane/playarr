@@ -23,7 +23,7 @@ export {useRemoteKey} from './remote';
 export type {RemoteKey, RemoteHardwareEvent} from './remote';
 
 // --- Focus (focus.ts) ----------------------------------------------------
-export {TvFocusScope, focusNode, blurNode, trapFocusWithin, getFocusedTag} from './focus';
+export {TvFocusScope, focusNode, blurNode, trapFocusWithin, getFocusedTag, useDefaultFocus, focusDefaultTarget} from './focus';
 export type {TvFocusScopeProps, FocusDirection} from './focus';
 
 // --- App lifecycle / de-duplicated back navigation (lifecycle.ts) -------

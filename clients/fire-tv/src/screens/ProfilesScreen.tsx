@@ -297,6 +297,8 @@ function ActionButton({
 
 const THEME_OPTIONS = ['system', 'light', 'dark'] as const;
 
+const PROFILE_RETRIES = 5;
+
 export function ProfilesScreen(): React.ReactElement {
   const client = useApiClient();
   const [apiBaseUrl] = useApiBaseUrl();
@@ -314,25 +316,36 @@ export function ProfilesScreen(): React.ReactElement {
   // derive-during-render rule (CLAUDE.md) carves out for useEffect.
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setLoadState({status: 'loading'});
-    client
-      .listAvailableProfiles()
-      .then((available) => {
-        if (cancelled) return;
-        setProfiles(available);
-        setLoadState({status: 'ready'});
-        const signedIn = available.find((profile) => profile.is_current);
-        if (signedIn) void syncAvatar(client, apiBaseUrl, signedIn.id).catch(() => undefined);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setLoadState({
-          status: 'error',
-          message: error instanceof Error ? error.message : 'Could not load profiles.',
+    // A network blip right after launch is common on Vega: retry silently with a 2 s doubling backoff (web and Android
+    // do the same), and only show the error once the retries are spent.
+    const attempt = (n: number): void => {
+      client
+        .listAvailableProfiles()
+        .then((available) => {
+          if (cancelled) return;
+          setProfiles(available);
+          setLoadState({status: 'ready'});
+          const signedIn = available.find((profile) => profile.is_current);
+          if (signedIn) void syncAvatar(client, apiBaseUrl, signedIn.id).catch(() => undefined);
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          if (n < PROFILE_RETRIES) {
+            timer = setTimeout(() => attempt(n + 1), Math.min(2000 * 2 ** n, 30000));
+            return;
+          }
+          setLoadState({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Could not load profiles.',
+          });
         });
-      });
+    };
+    attempt(0);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [client]);
 
