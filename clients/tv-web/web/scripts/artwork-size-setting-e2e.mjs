@@ -50,15 +50,17 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     }
     await page.goto(new URL("/folders", page.url()).href);
     await page.waitForTimeout(1000);
+    await page.addStyleTag({ content: '[class*="-card"] { transform: none !important; transition: none !important; }' });
     folders[size] = await cardWidth(page, ".folders-card");
     widths[size] = measured;
     const base = measured[1][1];
+    check(`${tag} ${size}: Folders card ${folders[size]?.toFixed(1)} = Library ${base?.toFixed(1)}`, folders[size] !== null && base !== null && Math.abs(folders[size] - base) <= 1);
     for (const [name, w] of measured) check(`${tag} ${size}: ${name} card ${w?.toFixed(1)} = Library ${base?.toFixed(1)}`, w !== null && base !== null && Math.abs(w - base) <= 1);
   }
   const lib = (s) => widths[s][1][1];
   check(`${tag}: small < medium < large (${lib("small")?.toFixed(0)} < ${lib("medium")?.toFixed(0)} < ${lib("large")?.toFixed(0)})`, lib("small") < lib("medium") && lib("medium") < lib("large"));
 
-  check(`${tag}: Folders cards follow the size (${folders.small?.toFixed(0)} < ${folders.medium?.toFixed(0)} < ${folders.large?.toFixed(0)})`, folders.small !== null && folders.small < folders.medium && folders.medium < folders.large);
+  check(`${tag}: Folders cards scale with the size (${folders.small?.toFixed(0)} < ${folders.medium?.toFixed(0)} < ${folders.large?.toFixed(0)})`, folders.small !== null && folders.small < folders.medium && folders.medium < folders.large);
 
   // Persists across reload (large was chosen last).
   await page.goto(new URL("/movies", page.url()).href);
