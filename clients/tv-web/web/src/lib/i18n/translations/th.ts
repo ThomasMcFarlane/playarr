@@ -858,6 +858,9 @@ export const th: Translations = {
   "settings.server.title": "การเชื่อมต่อเซิร์ฟเวอร์",
   "settings.server.description": "รวมไลบรารีจากหลายเซิร์ฟเวอร์ไว้ในอินเทอร์เฟซ Playarr เดียว",
   "settings.server.connectedServersLabel": "เซิร์ฟเวอร์ที่เชื่อมต่อ",
+  "settings.server.groupBadge": "กลุ่มเซิร์ฟเวอร์",
+  "settings.server.groupHint":
+    "เซิร์ฟเวอร์ในกลุ่มนี้ถูกเพิ่มโดยผู้ดูแลระบบโดยอัตโนมัติ และไม่สามารถเปลี่ยนแปลงที่นี่ได้",
   "settings.server.primaryBadge": "หลัก",
   "settings.server.disconnect": "ตัดการเชื่อมต่อ",
   "settings.server.forgetServer": "ลืมเซิร์ฟเวอร์นี้",

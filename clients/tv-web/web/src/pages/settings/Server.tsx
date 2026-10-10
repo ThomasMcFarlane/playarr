@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { ApiError, type VersionEnvelope } from "@playarr-tv/api-client";
-import { DEFAULT_API_BASE_URL, readKnownServers } from "@playarr-tv/domain";
+import { useEffect, useState } from "react";
+import { ApiError, type ServerGroupMembers, type VersionEnvelope } from "@playarr-tv/api-client";
+import { DEFAULT_API_BASE_URL } from "@playarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
+import { useLiveRevision } from "../../lib/liveEvents";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
@@ -23,21 +24,42 @@ export function SettingsServerPage() {
   useDocumentTitle(t("settings.server.pageTitle"));
   const [apiBaseUrl] = useApiBaseUrl();
   const client = usePrimaryApiClient();
-  const { connectedServers, connectServer, disconnectServer, currentUserName, forgetKnownServerGroup } =
-    useAuth();
+  const { connectedServers, connectServer, disconnectServer, currentUserName } = useAuth();
   const { showToast } = useToast();
   const [serverUrl, setServerUrl] = useState("");
   const [serverUsername, setServerUsername] = useState(currentUserName ?? "");
   const [serverPassword, setServerPassword] = useState("");
   const [addServerState, setAddServerState] = useState<AddServerState>({ status: "idle" });
   const [testState, setTestState] = useState<ConnectionTestState>({ status: "idle" });
-  // `docs/architecture/peer-groups.md` §7.1/§7.3: whether this browser has a
-  // remembered `KnownServerGroup` at all -- only then does "Forget this
-  // server" (the manual escape hatch, `forgetGroup()`) have anything to do.
-  // Read once at mount, same as `ApiClientProvider`'s own lazy-init reads --
-  // updated locally on click rather than re-read from storage, since this
-  // page is the only place that can change it.
-  const [hasKnownServerGroup, setHasKnownServerGroup] = useState(() => readKnownServers() !== undefined);
+  // The server group is configured by the admin and shown read-only: fetched
+  // when the page opens and again on every live account/admin change (or the
+  // fallback poll), so a member added or removed by the admin appears without a
+  // reload. The same group's addresses already feed failover through the
+  // login/refresh `peer_addresses`; this list only displays them.
+  const [group, setGroup] = useState<ServerGroupMembers | undefined>(undefined);
+  const groupRevision = useLiveRevision({ areas: ["account", "admin"] });
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getServerGroupMembers()
+      .then((next) => {
+        if (!cancelled) setGroup(next);
+      })
+      .catch(() => {
+        /* keep the last list; the primary server stays usable */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, groupRevision]);
+  const normaliseUrl = (url: string) => url.trim().replace(/\/+$/, "").toLowerCase();
+  const connectedUrls = new Set(connectedServers.map((server) => normaliseUrl(server.url)));
+  const groupOnlyMembers = (group?.members ?? []).filter(
+    (member) => !member.urls.some((url) => connectedUrls.has(normaliseUrl(url)))
+  );
+  const primaryInGroup = (group?.members ?? []).some((member) =>
+    member.urls.some((url) => connectedUrls.has(normaliseUrl(url)))
+  );
 
   async function handleAddServer(event: React.FormEvent) {
     event.preventDefault();
@@ -85,19 +107,10 @@ export function SettingsServerPage() {
               </div>
               {server.primary ? (
                 <div className="connected-server-primary">
-                  <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
-                  {hasKnownServerGroup && (
-                    <Button
-                      type="button" size="sm"
-                      onClick={() => {
-                        forgetKnownServerGroup();
-                        setHasKnownServerGroup(false);
-                        showToast(t("settings.server.serverGroupForgottenToast"));
-                      }}
-                    >
-                      {t("settings.server.forgetServer")}
-                    </Button>
+                  {primaryInGroup && (
+                    <span className="connected-server-badge">{t("settings.server.groupBadge")}</span>
                   )}
+                  <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
                 </div>
               ) : (
                 <Button
@@ -112,7 +125,21 @@ export function SettingsServerPage() {
               )}
             </div>
           ))}
+          {groupOnlyMembers.map((member) => (
+            <div className="connected-server" key={member.peer_node_id} data-server-group-member="">
+              <div>
+                <strong>{member.name}</strong>
+                {member.urls.map((url) => (
+                  <small key={url}>{url}</small>
+                ))}
+              </div>
+              <div className="connected-server-primary">
+                <span className="connected-server-badge">{t("settings.server.groupBadge")}</span>
+              </div>
+            </div>
+          ))}
         </div>
+        {groupOnlyMembers.length > 0 && <p className="hint">{t("settings.server.groupHint")}</p>}
 
         <form onSubmit={(event) => void handleAddServer(event)} className="connection-form">
           <label className="form-label" htmlFor="additional-server-url">
@@ -193,7 +220,6 @@ export function SettingsServerPage() {
         </div>
 
         <p className="hint">{t("settings.server.primaryServerHint", { apiBaseUrl })}</p>
-        {hasKnownServerGroup && <p className="hint">{t("settings.server.forgetServerHint")}</p>}
 
         {window.PlayarrAndroidMobile && (
           <div className="connection-actions">

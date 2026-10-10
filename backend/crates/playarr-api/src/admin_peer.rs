@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::AdminUser;
+use crate::auth_extractor::{AdminUser, AuthUser};
 use crate::error::ApiError;
 use crate::peer::EnrollResponse;
 use crate::AppState;
@@ -924,6 +924,96 @@ pub async fn address_bundle_handler(
     Ok(Json(peer_address_bundle(&state).await?))
 }
 
+/// One member of the signed-in user's server group, as an end user may see
+/// it: a display name and the addresses clients reach it at. Nothing else
+/// (no keys, sync state or internal addresses).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ServerGroupMember {
+    pub peer_node_id: Uuid,
+    pub name: String,
+    /// True for the node that answered this request.
+    pub is_self: bool,
+    /// Client-reachable addresses, priority-ordered (lower first).
+    pub urls: Vec<String>,
+}
+
+/// The server group the signed-in user's server belongs to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ServerGroupMembers {
+    /// `None` for a standalone deployment.
+    pub group_id: Option<Uuid>,
+    pub group_name: Option<String>,
+    /// Active members that have at least one client-reachable address.
+    /// Empty for a standalone deployment.
+    pub members: Vec<ServerGroupMember>,
+}
+
+/// Read-only list of the server group's members for any signed-in user.
+/// Group membership is admin-configured; end users cannot change it.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer-groups/self/members",
+    tag = "peer-groups",
+    responses(
+        (status = 200, description = "Members of this server's group, as visible to a signed-in user", body = ServerGroupMembers),
+        (status = 401, description = "Missing or invalid access token")
+    )
+)]
+pub async fn server_group_members_handler(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> Result<Json<ServerGroupMembers>, ApiError> {
+    let identity = state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?;
+    let Some(group_id) = identity.and_then(|identity| identity.group_id) else {
+        return Ok(Json(ServerGroupMembers {
+            group_id: None,
+            group_name: None,
+            members: Vec::new(),
+        }));
+    };
+    let group = state
+        .peer_group_repo
+        .get(group_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load peer group: {err}")))?;
+    let nodes = state
+        .peer_node_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
+    let mut members: Vec<ServerGroupMember> = nodes
+        .iter()
+        .filter(|node| node.status == PeerNodeStatus::Active)
+        .filter_map(|node| {
+            let urls: Vec<String> =
+                client_reachable_addresses(node.addresses.iter().map(|address| (node.id, address)))
+                    .into_iter()
+                    .map(|entry| entry.url)
+                    .collect();
+            (!urls.is_empty()).then(|| ServerGroupMember {
+                peer_node_id: node.id,
+                name: node.name.clone(),
+                is_self: node.is_self,
+                urls,
+            })
+        })
+        .collect();
+    members.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then(a.peer_node_id.cmp(&b.peer_node_id))
+    });
+    Ok(Json(ServerGroupMembers {
+        group_id: Some(group_id),
+        group_name: group.map(|group| group.name),
+        members,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -1551,6 +1641,114 @@ mod tests {
                 PeerAddressEntry {
                     peer_node_id: self_node.id,
                     url: "https://home.example.com".to_string(),
+                },
+            ]
+        );
+    }
+
+    fn members_request(token: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("GET")
+            .uri("/api/v1/peer-groups/self/members");
+        if let Some(token) = token {
+            builder = builder.header("Authorization", bearer_header(token));
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn group_members_standalone_user_gets_empty_and_anonymous_gets_401() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .clone()
+            .oneshot(members_request(Some(&token)))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: ServerGroupMembers = serde_json::from_slice(&bytes).unwrap();
+        assert!(body.group_id.is_none() && body.members.is_empty());
+
+        let response = router.oneshot(members_request(None)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn group_members_lists_only_active_reachable_members_to_a_normal_user() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+        router
+            .clone()
+            .oneshot(put_self_request(&admin_token, "home"))
+            .await
+            .unwrap();
+        let response = router
+            .clone()
+            .oneshot(found_group_request(&admin_token, "Home Group"))
+            .await
+            .unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let founded: FoundPeerGroupResponse = serde_json::from_slice(&bytes).unwrap();
+
+        let address = |url: &str, client_reachable: bool| PeerAddress {
+            url: url.to_string(),
+            priority: 0,
+            label: "wan".to_string(),
+            client_reachable,
+        };
+        let mut east = founded.self_node.clone();
+        east.id = Uuid::new_v4();
+        east.name = "east".to_string();
+        east.is_self = false;
+        east.status = PeerNodeStatus::Active;
+        east.addresses = vec![address("https://east.example.com", true)];
+        state.app.peer_node_repo.upsert(&east).await.unwrap();
+        let mut hidden = east.clone();
+        hidden.id = Uuid::new_v4();
+        hidden.name = "internal-only".to_string();
+        hidden.addresses = vec![address("https://lan.example.com", false)];
+        state.app.peer_node_repo.upsert(&hidden).await.unwrap();
+        let mut gone = east.clone();
+        gone.id = Uuid::new_v4();
+        gone.name = "gone".to_string();
+        gone.status = PeerNodeStatus::Left;
+        state.app.peer_node_repo.upsert(&gone).await.unwrap();
+
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router.oneshot(members_request(Some(&token))).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let raw = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(!raw.contains("public_key") && !raw.contains("lan.example.com"));
+        let body: ServerGroupMembers = serde_json::from_str(&raw).unwrap();
+        assert_eq!(body.group_name.as_deref(), Some("Home Group"));
+        assert_eq!(
+            body.members,
+            vec![
+                ServerGroupMember {
+                    peer_node_id: east.id,
+                    name: "east".to_string(),
+                    is_self: false,
+                    urls: vec!["https://east.example.com".to_string()],
+                },
+                ServerGroupMember {
+                    peer_node_id: founded.self_node.id,
+                    name: "home".to_string(),
+                    is_self: true,
+                    urls: vec!["https://home.example.com".to_string()],
                 },
             ]
         );

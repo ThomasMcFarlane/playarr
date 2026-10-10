@@ -855,6 +855,9 @@ export const ja: Translations = {
   "settings.server.title": "サーバー接続",
   "settings.server.description": "複数のサーバーのライブラリを1つのPlayarr画面にまとめます。",
   "settings.server.connectedServersLabel": "接続済みのサーバー",
+  "settings.server.groupBadge": "サーバーグループ",
+  "settings.server.groupHint":
+    "このグループのサーバーは管理者が自動で追加します。ここでは変更できません。",
   "settings.server.primaryBadge": "プライマリ",
   "settings.server.disconnect": "切断",
   "settings.server.forgetServer": "このサーバーを記憶から削除",

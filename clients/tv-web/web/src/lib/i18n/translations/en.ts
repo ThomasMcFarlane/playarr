@@ -924,6 +924,9 @@ export const en = {
   "settings.server.pageTitle": "Server connection - Settings",
   "settings.server.passwordAriaLabel": "Password for additional server",
   "settings.server.passwordPlaceholder": "Password",
+  "settings.server.groupBadge": "Server group",
+  "settings.server.groupHint":
+    "Servers in this group are added automatically by the server administrator and cannot be changed here.",
   "settings.server.primaryBadge": "Primary",
   "settings.server.primaryServerHint":
     "{{apiBaseUrl}} remains the primary server for profile and player preferences.",
