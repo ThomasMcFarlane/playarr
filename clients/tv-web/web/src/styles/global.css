@@ -1107,38 +1107,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   width: 100%;
 }
 
-.theme-choice {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
-  width: fit-content;
-  max-width: 100%;
-  background: var(--line);
-  border: 1px solid var(--line);
-}
-
-.theme-choice-button {
-  min-height: 48px;
-  padding: 0.7rem 1.15rem;
-  background: var(--bg);
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  font-weight: 720;
-  text-transform: capitalize;
-  cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    color 180ms ease,
-    transform 220ms ease;
-}
-
-.theme-choice-button:hover,
-.theme-choice-button.is-active {
-  background: var(--ink);
-  color: var(--bg);
-  transform: scale(1.04);
-}
-
 .appearance-setting {
   display: grid;
   gap: clamp(12px, calc(1.5 * var(--viewport-unit)), 20px);
@@ -1367,130 +1335,9 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   line-height: 1.55;
 }
 
-.player-default-choice {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(8px, calc(0.7 * var(--vw)), 12px);
-}
-
-.player-default-button {
-  min-width: 0;
-  min-height: clamp(54px, calc(4.4 * var(--vw)), 68px);
-  display: grid;
-  align-content: center;
-  gap: 0.25rem;
-  padding: 0.72rem 0.9rem;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.player-default-button span {
-  overflow: hidden;
-  font-size: clamp(0.7rem, calc(0.8 * var(--vw)), 0.88rem);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.player-default-button small {
-  color: var(--ink-muted);
-  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.68rem);
-}
-
-.player-default-button:hover {
-  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
-  background: var(--surface-strong);
-  color: var(--ink);
-  box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
-  transform: scale(1.035);
-}
-
-.player-default-button.is-active {
-  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  color: var(--ink);
-  box-shadow: inset 4px 0 var(--brand);
-}
-
-.player-subtitle-language-choice {
-  padding-top: 0.25rem;
-}
-
 .player-default-device-note {
   padding-top: clamp(22px, calc(2.8 * var(--viewport-unit)), 36px);
   border-top: 1px solid var(--line);
-}
-
-.player-language-choice {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(8px, calc(0.7 * var(--vw)), 12px);
-}
-
-.player-language-button {
-  min-width: 0;
-  min-height: clamp(48px, calc(4 * var(--vw)), 62px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.72rem 1rem;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.player-language-button span {
-  overflow: hidden;
-  font-size: clamp(0.72rem, calc(0.82 * var(--vw)), 0.92rem);
-  font-weight: 680;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.player-language-button small {
-  color: var(--ink-muted);
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  font-weight: 720;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.player-language-button:hover {
-  border-color: color-mix(in srgb, var(--brand) 62%, var(--line));
-  background: var(--surface-strong);
-  color: var(--ink);
-  box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
-  transform: scale(1.035);
-}
-
-.player-language-button.is-active {
-  border-color: color-mix(in srgb, var(--brand) 76%, transparent);
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  color: var(--ink);
-  box-shadow: inset 4px 0 var(--brand);
-}
-
-.player-language-button.is-active small {
-  color: var(--brand-ink);
 }
 
 .player-preference-status {
@@ -3880,11 +3727,6 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   .app-header {
     grid-template-columns: auto 1fr auto;
     gap: 12px;
-  }
-
-  .player-language-choice,
-  .player-default-choice {
-    grid-template-columns: 1fr;
   }
 
   .app-logo > span:last-child{
@@ -6568,42 +6410,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-playback-settings-drawer {
   z-index: var(--z-drawer);
-}
-
-.tv-playback-settings-options {
-  grid-template-columns: 1fr;
-}
-
-.tv-playback-settings-options button {
-  justify-content: space-between;
-  text-align: left;
-  text-transform: none;
-}
-
-.tv-playback-settings-options button > span {
-  min-width: 0;
-  display: grid;
-}
-
-.tv-playback-settings-options button strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tv-playback-settings-options button small {
-  margin-top: 0.12rem;
-  color: currentColor;
-  opacity: 1;
-  font-size: 0.82em;
-}
-
-.tv-playback-settings-options button > i {
-  width: 1.25rem;
-  flex: 0 0 auto;
-  color: var(--brand-ink);
-  font-style: normal;
-  text-align: center;
 }
 
 .tv-playback-settings-status {
@@ -9483,21 +9289,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     gap: 0.4rem;
   }
 
-  .theme-choice {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .home-view-choice {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .theme-choice-button {
-    min-width: 0;
-    padding-inline: 0.5rem;
-  }
-
   .language-dropdown {
     width: 100%;
   }
@@ -9530,8 +9321,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     max-width: min(320px, calc(84 * var(--vw)));
   }
 
-  .player-language-choice,
-  .player-default-choice,
   .connection-form-row {
     grid-template-columns: 1fr;
   }

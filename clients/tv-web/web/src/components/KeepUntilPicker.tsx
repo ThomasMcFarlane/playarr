@@ -1,3 +1,4 @@
+import { SegmentedControl } from "./ui";
 import type { DownloadKeepUntilPolicy } from "../lib/downloadsDb";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 
@@ -50,32 +51,16 @@ export function KeepUntilPicker({
   return (
     <section>
       <h3>{t("components.downloadQualityDrawer.keepUntilHeading")}</h3>
-      <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-        <button
-          type="button"
-          className={state.kind === "forever" ? "is-active" : ""}
-          aria-pressed={state.kind === "forever"}
-          onClick={() => onChange({ ...state, kind: "forever" })}
-        >
-          {t("components.downloadQualityDrawer.keepForever")}
-        </button>
-        <button
-          type="button"
-          className={state.kind === "date" ? "is-active" : ""}
-          aria-pressed={state.kind === "date"}
-          onClick={() => onChange({ ...state, kind: "date" })}
-        >
-          {t("components.downloadQualityDrawer.keepUntilDate")}
-        </button>
-        <button
-          type="button"
-          className={state.kind === "after-watched" ? "is-active" : ""}
-          aria-pressed={state.kind === "after-watched"}
-          onClick={() => onChange({ ...state, kind: "after-watched" })}
-        >
-          {t("components.downloadQualityDrawer.keepUntilAfterWatched")}
-        </button>
-      </div>
+      <SegmentedControl
+        ariaLabel={t("components.downloadQualityDrawer.keepUntilHeading")}
+        value={state.kind}
+        options={[
+          { value: "forever", label: t("components.downloadQualityDrawer.keepForever") },
+          { value: "date", label: t("components.downloadQualityDrawer.keepUntilDate") },
+          { value: "after-watched", label: t("components.downloadQualityDrawer.keepUntilAfterWatched") },
+        ]}
+        onChange={(kind) => onChange({ ...state, kind })}
+      />
 
       {state.kind === "date" ? (
         <label className="download-quality-drawer-field">
@@ -101,24 +86,15 @@ export function KeepUntilPicker({
               onChange={(event) => onChange({ ...state, amount: Number(event.target.value) || 1 })}
             />
           </label>
-          <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-            <button
-              type="button"
-              className={state.unit === "days" ? "is-active" : ""}
-              aria-pressed={state.unit === "days"}
-              onClick={() => onChange({ ...state, unit: "days" })}
-            >
-              {t("components.downloadQualityDrawer.unitDays")}
-            </button>
-            <button
-              type="button"
-              className={state.unit === "weeks" ? "is-active" : ""}
-              aria-pressed={state.unit === "weeks"}
-              onClick={() => onChange({ ...state, unit: "weeks" })}
-            >
-              {t("components.downloadQualityDrawer.unitWeeks")}
-            </button>
-          </div>
+          <SegmentedControl
+            ariaLabel={t("components.downloadQualityDrawer.amountLabel")}
+            value={state.unit}
+            options={[
+              { value: "days", label: t("components.downloadQualityDrawer.unitDays") },
+              { value: "weeks", label: t("components.downloadQualityDrawer.unitWeeks") },
+            ]}
+            onChange={(unit) => onChange({ ...state, unit })}
+          />
           <p className="download-quality-drawer-hint">
             {t("components.downloadQualityDrawer.afterWatchedHint")}
           </p>
