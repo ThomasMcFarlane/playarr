@@ -605,12 +605,40 @@ impl MediaFileRepo for EventingMediaFileRepo {
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError> {
         self.inner.mark_missing_durations_scanned(work_id).await
     }
+    async fn find_by_source(
+        &self,
+        source_instance_id: Uuid,
+        source_file_id: &str,
+    ) -> Result<Option<MediaFile>, DbError> {
+        self.inner
+            .find_by_source(source_instance_id, source_file_id)
+            .await
+    }
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError> {
+        // What the source's file id pointed at before: an update that moves the
+        // file to another work or leaf changes what is playable, so it is not
+        // silent.
+        let before = match media_file.source_file_id.as_deref() {
+            Some(source_file_id) => {
+                self.inner
+                    .find_by_source(media_file.source_instance_id, source_file_id)
+                    .await?
+            }
+            None => None,
+        };
         let persisted = self.inner.upsert_by_source(media_file).await?;
         // The pre-existing row keeps its original id on an update, so an
-        // unchanged id means the sync just inserted a brand new file. Updates
-        // run on every poll and are deliberately silent.
+        // unchanged id means the sync just inserted a brand new file. Other
+        // updates run on every poll and are silent unless the file moved.
         if persisted.id == media_file.id {
+            self.emit_files(&persisted).await;
+        } else if before
+            .as_ref()
+            .is_some_and(|b| b.work_id != persisted.work_id || b.leaf_ref != persisted.leaf_ref)
+        {
+            if let Some(old) = &before {
+                self.emit_files(old).await;
+            }
             self.emit_files(&persisted).await;
         }
         Ok(persisted)
@@ -689,5 +717,92 @@ mod work_repo_forwarding_tests {
             .is_empty());
         assert_eq!(inner.batched_ref_calls.load(Ordering::SeqCst), 1);
         assert_eq!(inner.identity_calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[cfg(test)]
+mod media_file_move_tests {
+    use super::*;
+    use crate::pool::test_sqlite_pool;
+    use crate::repo::SqlxMediaFileRepo;
+    use crate::{live_change_tick, live_changes_since};
+    use playarr_model::media::LeafRef;
+
+    async fn insert_work(pool: &crate::DbPool, id: Uuid) {
+        sqlx::query(
+            "INSERT INTO works (id, kind, title, sort_title, added_at, monitored, availability) \
+             VALUES (?, 'movie', 'Moved', 'moved', '2026-01-01T00:00:00Z', 1, 'available')",
+        )
+        .bind(id.to_string())
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    fn file(work_id: Uuid, source: Uuid, path: &str) -> MediaFile {
+        MediaFile {
+            id: Uuid::new_v4(),
+            work_id,
+            leaf_ref: LeafRef::Work,
+            path: std::path::PathBuf::from(path),
+            container: "mkv".into(),
+            codec: "h264".into(),
+            bitrate: None,
+            duration_ms: None,
+            size_bytes: 1,
+            source_instance_id: source,
+            source_file_id: Some("src-1".into()),
+        }
+    }
+
+    fn library_events_for(since: u64, work: Uuid) -> usize {
+        live_changes_since(since)
+            .unwrap_or_default()
+            .iter()
+            .filter(|c| {
+                c.kind == kind::LIBRARY && c.entity_id.as_deref() == Some(work.to_string().as_str())
+            })
+            .count()
+    }
+
+    /// A sync update that points an existing source file at another work changes
+    /// what is playable, so it publishes a library event; one that changes only
+    /// the path stays silent, as every poll does.
+    #[tokio::test]
+    async fn upsert_by_source_publishes_when_the_file_moves_to_another_work() {
+        let pool = test_sqlite_pool().await;
+        let (a, b, source) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        insert_work(&pool, a).await;
+        insert_work(&pool, b).await;
+        let repo = EventingMediaFileRepo::new(
+            Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+            LiveEventPublisher::from_pool(pool.clone()),
+        );
+        repo.upsert_by_source(&file(a, source, "/m/a.mkv"))
+            .await
+            .unwrap();
+
+        let tick = live_change_tick();
+        repo.upsert_by_source(&file(a, source, "/m/a2.mkv"))
+            .await
+            .unwrap();
+        assert_eq!(
+            library_events_for(tick, a),
+            0,
+            "an unchanged placement is silent"
+        );
+
+        let tick = live_change_tick();
+        repo.upsert_by_source(&file(b, source, "/m/a2.mkv"))
+            .await
+            .unwrap();
+        assert!(
+            library_events_for(tick, b) >= 1,
+            "the new work is announced"
+        );
+        assert!(
+            library_events_for(tick, a) >= 1,
+            "the old work is announced"
+        );
     }
 }

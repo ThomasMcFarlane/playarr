@@ -89,16 +89,21 @@ export async function loadOnDeck(client: OnDeckClient, sink: OnDeckSink): Promis
 
   const resolvedRows = await Promise.all(
     resumable.map(async (progress, index): Promise<OnDeckEntry | null> => {
-      const resolved = await detailRequests[index];
-      if (!resolved) return null;
-      const { detail } = resolved;
-      // A stacked series shows the plan's lead episode, not just the last one played.
-      const lead = plansByWork.get(progress.work_id)?.target;
-      const episode = isEpisodic(detail.work)
-        ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
-        : null;
-      if (isEpisodic(detail.work) && !episode) return null;
-      return { work: detail.work, progress, episode };
+      // One malformed detail drops only its own row.
+      try {
+        const resolved = await detailRequests[index];
+        if (!resolved) return null;
+        const { detail } = resolved;
+        // A stacked series shows the plan's lead episode, not just the last one played.
+        const lead = plansByWork.get(progress.work_id)?.target;
+        const episode = isEpisodic(detail.work)
+          ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
+          : null;
+        if (isEpisodic(detail.work) && !episode) return null;
+        return { work: detail.work, progress, episode };
+      } catch {
+        return null;
+      }
     })
   );
   // Series that need a choice but have no part-watched episode still belong here.

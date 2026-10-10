@@ -110,3 +110,18 @@ describe("loadOnDeck critical path", () => {
     expect(seen.plans?.get("w1")).toBeDefined();
   });
 });
+
+describe("loadOnDeck bad rows", () => {
+  it("drops only the row whose detail is malformed", async () => {
+    const second = { ...progress, work_id: "w2", media_file_id: "g1", updated_at: "2026-10-04T00:00:00Z" } as WatchProgress;
+    const client: OnDeckClient = {
+      listResumePlans: async () => [],
+      listWatchProgress: async () => [progress, second],
+      // The first title's detail has no usable `work`; reading it throws.
+      getWork: async (id) => (id === "w1" ? ({ work: null, children: {} } as never) : ({ work: { id: "w2", kind: "movie", title: "Test Movie A" }, children: {} } as never)),
+    };
+    const { seen, sink } = collect();
+    await loadOnDeck(client, sink);
+    expect(seen.entries?.map((e) => e.work.title)).toEqual(["Test Movie A"]);
+  });
+});

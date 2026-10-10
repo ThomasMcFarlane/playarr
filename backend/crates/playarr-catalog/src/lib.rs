@@ -538,9 +538,9 @@ const ALL_KINDS: [WorkKind; 5] = [
 /// group_library_ids`] for the identical reason applied to
 /// [`CatalogPage::remote_only`]: two different group-library grants must
 /// never share a cached page.
-fn browse_cache_key(query: &BrowseQuery) -> String {
+fn browse_cache_key(query: &BrowseQuery, catalog_version: u64) -> String {
     format!(
-        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}:{}:{:?}",
+        "catalog:browse:v{catalog_version}:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}:{}:{:?}",
         query.kind,
         query.available_only,
         query.source_instance_id,
@@ -563,8 +563,14 @@ fn browse_cache_key(query: &BrowseQuery) -> String {
 
 /// Includes `allowed` -- same cross-caller cache-leak reasoning as
 /// [`browse_cache_key`].
-fn search_cache_key(needle: &str, limit: i64, allowed: Option<&[Uuid]>, gate: &str) -> String {
-    format!("catalog:search:{needle}:{limit}:{allowed:?}:{gate}")
+fn search_cache_key(
+    needle: &str,
+    limit: i64,
+    allowed: Option<&[Uuid]>,
+    gate: &str,
+    catalog_version: u64,
+) -> String {
+    format!("catalog:search:v{catalog_version}:{needle}:{limit}:{allowed:?}:{gate}")
 }
 
 /// Below this [`strsim::jaro_winkler`] score (`[0.0, 1.0]`, `1.0` =
@@ -719,7 +725,8 @@ impl CatalogService {
         pool: DbPool,
         watch_progress_repo: Arc<dyn WatchProgressRepo>,
     ) -> Self {
-        let snapshots = SnapshotCache::new(work_repo.clone(), media_file_repo.clone());
+        let snapshots =
+            SnapshotCache::new(work_repo.clone(), media_file_repo.clone(), pool.clone());
         Self {
             work_repo,
             media_file_repo,
@@ -742,6 +749,12 @@ impl CatalogService {
     /// that publish a live library event need not call this.
     pub fn invalidate_snapshot(&self) {
         self.snapshots.invalidate();
+    }
+
+    /// How often a read re-checks the database for writes this process did not
+    /// publish an event for (default 5 s).
+    pub fn set_snapshot_probe_every(&self, every: Duration) {
+        self.snapshots.set_probe_every(every);
     }
 
     /// Identifies the in-memory catalogue copy; it changes whenever the copy is
@@ -1193,7 +1206,8 @@ impl CatalogService {
     /// candidate's files are only ever fetched once regardless of how many
     /// of the two filters are actually active.
     pub async fn browse(&self, query: BrowseQuery) -> Result<CatalogPage, CatalogError> {
-        let cache_key = browse_cache_key(&query);
+        // Keyed on the snapshot version: a rebuilt snapshot never answers from a page built on the old one.
+        let cache_key = browse_cache_key(&query, self.snapshots.get().await?.version);
         if let Some(cached) = self.cache.get(&cache_key).await? {
             if let Ok(page) = serde_json::from_slice::<CatalogPage>(&cached) {
                 return Ok(page);
@@ -1571,11 +1585,13 @@ impl CatalogService {
         }
         let needle = fold_locale(raw_needle);
 
+        let snapshot = self.snapshots.get().await?;
         let mut cache_key = search_cache_key(
             &needle,
             limit as i64,
             allowed_source_instance_ids,
             &access.gate_key(),
+            snapshot.version,
         );
         if !languages.is_empty() {
             cache_key.push_str(&format!(":lang={languages:?}"));
@@ -1589,7 +1605,6 @@ impl CatalogService {
             }
         }
 
-        let snapshot = self.snapshots.get().await?;
         let mut scored: Vec<(Arc<Work>, MatchTier, f64)> = Vec::new();
         for kind in ALL_KINDS {
             for work in snapshot.works(kind) {
@@ -4057,6 +4072,7 @@ mod tests {
 
         let first = svc.browse(BrowseQuery::default()).await.unwrap();
         assert_eq!(first.items.len(), 1);
+        let version = svc.snapshot_version().await.unwrap();
 
         // Delete straight through the repo (bypassing the service/cache) —
         // a cached `browse` should still see the now-stale result, proving
@@ -4064,11 +4080,16 @@ mod tests {
         repo.delete(first.items[0].id).await.unwrap();
 
         let second = svc.browse(BrowseQuery::default()).await.unwrap();
-        assert_eq!(
-            second.items.len(),
-            1,
-            "expected the cached page, not a fresh (now-empty) query"
-        );
+        // Live events published by tests running in parallel in this process
+        // can rebuild the snapshot, which rightly drops the cached page; the
+        // cache is only observable while the snapshot is the same.
+        if svc.snapshot_version().await.unwrap() == version {
+            assert_eq!(
+                second.items.len(),
+                1,
+                "expected the cached page, not a fresh (now-empty) query"
+            );
+        }
     }
 
     // ---- §4.3 peer availability hydration / RemoteOnlyWork union ----
@@ -4394,6 +4415,175 @@ mod tests {
 
         let results = svc.search_remote_only("anything", &[]).await.unwrap();
         assert!(results.is_empty());
+    }
+    // ---- snapshot freshness ----
+
+    /// With nothing written, repeated reads keep the snapshot version (so caches
+    /// keyed on it keep hitting) however often the database probe runs.
+    #[tokio::test]
+    async fn snapshot_version_is_kept_while_nothing_changes() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        repo.upsert(&movie("Steady Movie", "Steady Movie", &[], 0))
+            .await
+            .unwrap();
+        let svc = service(pool.clone(), repo);
+        svc.set_snapshot_probe_every(Duration::ZERO);
+        let first = svc.snapshot_version().await.unwrap();
+        for _ in 0..5 {
+            assert_eq!(svc.snapshot_version().await.unwrap(), first);
+        }
+    }
+
+    /// A write that publishes no event here (another process, or a repo used
+    /// without the eventing wrapper) is seen once the probe interval passes.
+    #[tokio::test]
+    async fn write_without_an_event_is_seen_after_the_probe_interval() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let a = movie("Probe A", "Probe A", &[], 0);
+        repo.upsert(&a).await.unwrap();
+        seed_media_file(&pool, a.id, LeafRef::Work).await;
+        let svc = service(pool.clone(), repo.clone());
+        svc.set_snapshot_probe_every(Duration::from_millis(200));
+        let query = |offset| BrowseQuery {
+            available_only: true,
+            offset,
+            ..BrowseQuery::default()
+        };
+        assert_eq!(svc.browse(query(0)).await.unwrap().items.len(), 1);
+
+        // Straight through the raw repos: no live event in this process.
+        let b = movie("Probe B", "Probe B", &[], 0);
+        repo.upsert(&b).await.unwrap();
+        let file = MediaFile {
+            id: Uuid::new_v4(),
+            work_id: b.id,
+            leaf_ref: LeafRef::Work,
+            path: PathBuf::from("/media/b.mkv"),
+            container: "mkv".to_string(),
+            codec: "h264".to_string(),
+            bitrate: None,
+            duration_ms: None,
+            size_bytes: 1,
+            source_instance_id: Uuid::new_v4(),
+            source_file_id: Some("probe-b".to_string()),
+        };
+        SqlxMediaFileRepo::new(pool.clone())
+            .create(&file)
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let page = svc.browse(query(0)).await.unwrap();
+        assert_eq!(
+            page.items.len(),
+            2,
+            "the probe should have seen the new work and file"
+        );
+    }
+
+    /// A work upserted through the eventing repo shows in the very next read,
+    /// including one served from the page cache before the change.
+    #[tokio::test]
+    async fn browse_sees_an_event_published_upsert_at_once() {
+        let pool = test_pool().await;
+        let raw = work_repo(pool.clone());
+        let repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
+            raw,
+            playarr_db::LiveEventPublisher::from_pool(pool.clone()),
+        ));
+        repo.upsert(&movie("Before", "Before", &[], 0))
+            .await
+            .unwrap();
+        let svc = service(pool.clone(), repo.clone());
+        assert_eq!(
+            svc.browse(BrowseQuery::default())
+                .await
+                .unwrap()
+                .items
+                .len(),
+            1
+        );
+        repo.upsert(&movie("After", "After", &[], 0)).await.unwrap();
+        let page = svc.browse(BrowseQuery::default()).await.unwrap();
+        assert!(
+            page.items.iter().any(|w| w.title == "After"),
+            "{:?}",
+            page.items.len()
+        );
+    }
+
+    struct FlakyRepo {
+        inner: Arc<dyn WorkRepo>,
+        fail: std::sync::atomic::AtomicBool,
+        lists: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait]
+    impl WorkRepo for FlakyRepo {
+        async fn get(&self, id: Uuid) -> Result<Work, DbError> {
+            self.inner.get(id).await
+        }
+        async fn list_by_kind(
+            &self,
+            kind: WorkKind,
+            limit: i64,
+            offset: i64,
+        ) -> Result<Vec<Work>, DbError> {
+            self.lists.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fail.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(DbError::NotFound);
+            }
+            self.inner.list_by_kind(kind, limit, offset).await
+        }
+        async fn upsert(&self, work: &Work) -> Result<(), DbError> {
+            self.inner.upsert(work).await
+        }
+        async fn delete(&self, id: Uuid) -> Result<(), DbError> {
+            self.inner.delete(id).await
+        }
+        async fn find_by_external_ref(
+            &self,
+            provider: &ExternalProvider,
+            external_id: &str,
+        ) -> Result<Option<Work>, DbError> {
+            self.inner.find_by_external_ref(provider, external_id).await
+        }
+    }
+
+    /// A failed rebuild keeps the previous snapshot in service and is not
+    /// retried on every read; a rebuild whose first waiter went away still
+    /// completes.
+    #[tokio::test]
+    async fn failed_rebuild_serves_the_previous_snapshot_and_backs_off() {
+        let pool = test_pool().await;
+        let flaky = Arc::new(FlakyRepo {
+            inner: work_repo(pool.clone()),
+            fail: std::sync::atomic::AtomicBool::new(false),
+            lists: std::sync::atomic::AtomicUsize::new(0),
+        });
+        flaky.upsert(&movie("Kept", "Kept", &[], 0)).await.unwrap();
+        let svc = service(pool.clone(), flaky.clone());
+
+        // A caller that gives up straight away does not stop the build.
+        let _ = tokio::time::timeout(Duration::ZERO, svc.snapshot_version()).await;
+        let version = svc.snapshot_version().await.unwrap();
+
+        flaky.fail.store(true, std::sync::atomic::Ordering::SeqCst);
+        svc.invalidate_snapshot();
+        let calls = flaky.lists.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(svc.snapshot_version().await.unwrap(), version);
+        let after_first = flaky.lists.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(after_first > calls, "the rebuild should have been tried");
+        // Still dirty, but inside the backoff: no second attempt.
+        assert_eq!(svc.snapshot_version().await.unwrap(), version);
+        assert_eq!(
+            flaky.lists.load(std::sync::atomic::Ordering::SeqCst),
+            after_first
+        );
+        let page = svc.browse(BrowseQuery::default()).await.unwrap();
+        assert_eq!(page.items.len(), 1);
     }
 }
 
