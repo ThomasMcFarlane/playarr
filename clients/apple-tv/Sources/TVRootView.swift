@@ -160,7 +160,16 @@ struct TVRootView: View {
                 suppressFocusChrome: true,
                 showSettings: false,
                 externalFocus: $shellFocus,
-                browseKinds: environment.catalogKinds
+                browseKinds: environment.catalogKinds,
+                // Live parity routes draw the production nav (profile tile at its foot), as the app does.
+                profile: TVParityLaunch.isLive ? TVNavProfile(
+                    name: environment.profileName ?? "Viewer",
+                    userID: environment.currentUserID,
+                    preset: environment.currentAvatarPreset,
+                    image: environment.currentAvatarImage,
+                    version: "v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")",
+                    open: {}
+                ) : nil
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)
@@ -172,8 +181,7 @@ struct TVRootView: View {
                 .zIndex(80)
 
             if TVParityLaunch.isLive {
-                TVWebProfileChip(name: environment.profileName ?? "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset, customAvatar: environment.currentAvatarImage)
-                    .zIndex(50)
+                EmptyView() // the profile is the nav's last tile (above)
             } else {
             VStack {
                 Spacer()

@@ -40,3 +40,16 @@ public extension PlayarrRequestTransport {
         return try await getJSON("/api/v1/catalog/languages", query: query)
     }
 }
+
+public extension PlayarrRequestTransport {
+    /// Web `getEpisodeArtwork`: an episode's still (`thumb`) at the given width.
+    func fetchEpisodeArtwork(seriesWorkID: UUID, episodeID: UUID, kind: String = "thumb", width: Int = 540) async throws -> Data {
+        try await requestData(
+            method: "GET",
+            path: "/api/v1/artwork/episode/\(seriesWorkID.uuidString)/\(episodeID.uuidString)/\(kind)",
+            query: [URLQueryItem(name: "width", value: String(width))],
+            body: nil,
+            expectedStatuses: [200]
+        )
+    }
+}
