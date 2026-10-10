@@ -47,10 +47,10 @@ public final class CalendarViewModel {
         self.zone = zone
         self.firstWeekday = firstWeekday
         self.nowProvider = now
-        self.anchor = CalendarDays.today(now: now())
+        self.anchor = CalendarDays.today(now: now(), zone: zone)
     }
 
-    public var today: String { CalendarDays.today(now: nowProvider()) }
+    public var today: String { CalendarDays.today(now: nowProvider(), zone: zone) }
     public var window: CalendarWindow { calendarWindow(mode: mode, anchor: anchor, firstWeekday: firstWeekday) }
     public var sources: [CalendarSourceStatus] { response?.sources ?? [] }
     public var unhealthySources: [CalendarSourceStatus] { sources.filter { !$0.isOK } }
