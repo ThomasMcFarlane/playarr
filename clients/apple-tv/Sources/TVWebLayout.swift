@@ -18,6 +18,21 @@ extension View {
     ) -> some View {
         frame(width: w, height: h, alignment: alignment).offset(x: x, y: y)
     }
+
+    /// `placed` with real layout (padding, not an offset): the focus engine sees the view where it is drawn. Use it for
+    /// focusable controls and the containers that hold them.
+    func pinned(
+        x: CGFloat,
+        y: CGFloat,
+        w: CGFloat? = nil,
+        h: CGFloat? = nil,
+        alignment: Alignment = .leading
+    ) -> some View {
+        frame(width: w, height: h, alignment: alignment)
+            .padding(.leading, x)
+            .padding(.top, y)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
 }
 
 /// Web `.tv-rail-panel` / `.tv-rail-surface`: frosted gradient across the right of the stage.

@@ -66,7 +66,7 @@ struct TVSettingsView: View {
                 .focused($focusedSection, equals: index)
                 .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
                 .focusEffectDisabled()
-                .placed(x: 153.6, y: top, w: 480.4, h: 91.9)
+                .pinned(x: 153.6, y: top, w: 480.4, h: 91.9)
             }
 
             Color.clear.frame(width: 0, height: 0)
@@ -83,7 +83,7 @@ struct TVSettingsView: View {
                 }
             }
             .frame(width: 995, alignment: .topLeading)
-            .placed(x: 773.8, y: selectedSection == 0 ? 0 : 210, w: 995, alignment: .topLeading)
+            .pinned(x: 773.8, y: selectedSection == 0 ? 0 : 210, w: 995, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -198,7 +198,7 @@ struct TVSettingsView: View {
             }
         }
         .overlay(Rectangle().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
-        .placed(x: 0, y: y, h: 50)
+        .pinned(x: 0, y: y, h: 50)
     }
 
     private func themeChip(_ label: String, selected: Bool) -> some View {
