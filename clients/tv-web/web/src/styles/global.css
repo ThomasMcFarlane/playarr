@@ -964,6 +964,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   scrollbar-width: none;
 }
 
+/* A focused option lifts with the shared card shadow and glow (up to 72px below, 48px to the left): the scroller keeps
+   that room as padding on the list, and a focused option settles clear of the fades. */
+.settings-options-scroll {
+  scroll-padding-block: var(--page-edge-fade-size);
+}
+
 .settings-options-scroll::-webkit-scrollbar,
 .settings-detail-scroll::-webkit-scrollbar {
   width: 0;
@@ -9951,9 +9957,15 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
  * sidebar split, so the padding it needs belongs back on the panel itself.
  */
 .tv-downloads-panel {
+  /* Room for a focused row's full glow (page-layout.css --card-shadow-focus: 48px to the left) inside the scroller's clip box.
+     The panel grows left by that room and the scroller takes it back as padding, so the rows keep the page gutter (padding,
+     never a negative margin). */
+  --list-glow-room: 48px;
+  --panel-pad: clamp(24px, calc(3 * var(--vw)), 58px);
   /* Home's column split, like every other library-style page (page-layout.css, --stage-rail-width). */
-  width: var(--stage-rail-width);
-  padding: clamp(24px, calc(3 * var(--vw)), 58px);
+  width: calc(var(--stage-rail-width) + var(--list-glow-room));
+  padding: var(--panel-pad);
+  padding-left: 0;
 }
 
 /* On a phone the Downloads panel and the state panels are the whole page (they keep Home's 62% column on larger
@@ -9966,12 +9978,16 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   .app-main .tv-downloads-panel {
     padding: var(--page-body-top) var(--mobile-page-gutter) calc(var(--mobile-nav-height) + 12px);
   }
+  .app-main .tv-downloads-content {
+    padding-left: 0;
+    scroll-padding-left: 0;
+  }
 }
 
 .tv-downloads-content {
   display: grid;
   gap: clamp(20px, calc(2.4 * var(--vw)), 36px);
-  padding: clamp(18px, calc(2 * var(--vw)), 32px) 0;
+  padding: clamp(18px, calc(2 * var(--vw)), 32px) 0 clamp(18px, calc(2 * var(--vw)), 32px) calc(var(--panel-pad, 0px) + var(--list-glow-room, 0px));
 }
 
 /* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel).
