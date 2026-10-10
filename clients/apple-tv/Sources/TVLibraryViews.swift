@@ -15,10 +15,7 @@ struct TVHomeView: View {
             if let viewModel {
                 homeContent(viewModel)
             } else {
-                ProgressView("Connecting to Playarr Server…")
-                    .tint(DesignTokens.Color.brandPrimary)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                TVHomeSkeleton()
             }
         }
         .task(id: environment.serverURL) {
@@ -38,14 +35,12 @@ struct TVHomeView: View {
     private func homeContent(_ viewModel: TVHomeViewModel) -> some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading your library…")
-                .tint(DesignTokens.Color.brandPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            TVHomeSkeleton()
         case .failed(let message):
             TVErrorView(title: "Couldn’t load your library", message: message) {
                 Task { await viewModel.load() }
             }
-        case .loaded where viewModel.works.isEmpty:
+        case .loaded where viewModel.works.isEmpty && viewModel.rails.isEmpty:
             ContentUnavailableView(
                 "Your library is empty",
                 systemImage: "rectangle.stack",
@@ -61,113 +56,99 @@ struct TVHomeView: View {
         }
     }
 
-    /// Focus-first production home: rails are real layout children (not buried
-    /// under GeometryReader absolute stacks), so the remote can land focus.
+    /// The web TV Home (`.tv-home`), interactive: the hero on the left follows the focused card; the server's shelves
+    /// stack on the right (`.tv-home-rails`, from x 881.6) and the focused rail scrolls up to the first rail's line.
+    /// Geometry is the web's at 1920x1080 in screen points; the stage starts after the nav column, hence `- nav`.
     private func productionHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
-        let (startWatching, newMovies) = Self.homeRailMembership(
-            works: viewModel.works,
-            interactive: true
-        )
-        let hero = heroWork(from: viewModel.works)
-        let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
-            HomeRailCardFocus(rail: "start", workID: $0.id)
-        } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
-        let leadingIDs = Set(
-            [startWatching.first?.id, newMovies.first?.id].compactMap { $0 }
-        )
-
-        return ZStack(alignment: .topLeading) {
-            GeometryReader { geo in
-                heroBackdrop(hero: hero, size: geo.size)
+        let rails = Self.productionRails(viewModel)
+        let firstFocus = rails.first?.works.first.map { HomeRailCardFocus(rail: "r0", workID: $0.id) }
+        let hero = focusedCard.flatMap { focus in rails.lazy.flatMap(\.works).first { $0.id == focus.workID } }
+            ?? rails.first?.works.first
+        return GeometryReader { geo in
+        // Screen coordinates: the stage's own origin (after the nav column) is subtracted once here.
+        let origin = geo.frame(in: .global).origin
+        ZStack(alignment: .topLeading) {
+            liveHeroBackdrop(hero)
+                .frame(width: 1920, height: 1080)
+                .offset(x: -origin.x, y: -origin.y)
+                .allowsHitTesting(false)
+            if let hero {
+                TVHomeHeroCopy(work: hero, apiClient: environment.apiClient)
+                    .offset(x: -origin.x, y: -origin.y)
                     .allowsHitTesting(false)
             }
-            .ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 28) {
-                if let hero {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(kindKicker(hero))
-                            .font(TVTheme.font(size: 12, weight: .heavy))
-                            .tracking(1.2)
-                            .foregroundStyle(DesignTokens.Color.brandPrimary)
-                            .textCase(.uppercase)
-                        Text(hero.title)
-                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                            .tracking(-4.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .lineLimit(2)
-                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
-                            .padding(.top, 10)
-                        if let overview = hero.overview, !overview.isEmpty {
-                            Text(overview)
-                                .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                                .lineLimit(3)
-                                .lineSpacing(4)
-                                .frame(maxWidth: DesignTokens.Shell.featureOverviewMaxWidth, alignment: .leading)
-                                .padding(.top, 16)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Self.railSpacing) {
+                        ForEach(Array(rails.enumerated()), id: \.offset) { index, rail in
+                            webRail(id: "r\(index)", title: rail.title, works: rail.works).id("r\(index)")
                         }
                     }
-                    .padding(.leading, 28)
-                    .padding(.top, 36)
-                    .allowsHitTesting(false)
+                    .padding(.bottom, 1080)
                 }
+                .scrollClipDisabled()
+                .onChange(of: focusedCard?.rail) { _, rail in
+                    guard let rail else { return }
+                    withAnimation(.smooth(duration: 0.26)) { proxy.scrollTo(rail, anchor: .top) }
+                }
+            }
+            // The first rail heading sits at y 402; rails above the focused one slide up past it, as on the web.
+            .padding(.top, 402 - origin.y)
+            .padding(.leading, 881.6 - origin.x - Self.cardBleed)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .defaultFocus($focusedCard, firstFocus)
+        // The lead rail can change after the first paint (On deck arrives): keep focus on a card that still exists.
+        .task(id: firstFocus) {
+            let ids = Set(rails.flatMap(\.works).map(\.id))
+            if focusedCard.map({ !ids.contains($0.workID) }) ?? true { focusedCard = firstFocus }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 36) {
-                    if !startWatching.isEmpty {
-                        interactiveRail(
-                            railID: "start",
-                            title: "Start watching",
-                            works: startWatching,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
-                    }
-                    if !newMovies.isEmpty {
-                        interactiveRail(
-                            railID: "movies",
-                            title: "New movies",
-                            works: newMovies,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
+    /// Web: an 8 px left bleed keeps the first card's focus glow unclipped.
+    private static let cardBleed: CGFloat = 8
+    /// Rail pitch 365.9 (heading 402 to 767.9) less one rail's height.
+    private static let railSpacing: CGFloat = 365.9 - railHeight
+    /// Heading (26.5) and the gap to the art (35.3), plus the card (art and caption) and the track's 18/24 padding.
+    private static let railHeight: CGFloat = 61.8 + TVWebHomeCard.height + 24
+
+    /// The server shelves with the web's primary rail first; older servers without shelves get the local rails.
+    private static func productionRails(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
+        if !viewModel.rails.isEmpty { return liveRailDefinitions(viewModel) }
+        let (start, movies) = homeRailMembership(works: viewModel.works, interactive: true)
+        return [("Start watching", start), ("New movies", movies)].filter { !$0.works.isEmpty }
+    }
+
+    private func webRail(id: String, title: String, works: [Work]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(TVTheme.font(size: 17.664, css: 610))
+                .tracking(-0.53)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .frame(height: 26.5)
+                .padding(.leading, Self.cardBleed)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 24.9) {
+                    ForEach(works) { work in
+                        let focus = HomeRailCardFocus(rail: id, workID: work.id)
+                        NavigationLink {
+                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                        } label: {
+                            TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus,
+                                          progress: id == "r0" ? viewModel?.progress[work.id] : nil)
+                        }
+                        .buttonStyle(TVFocusableCardButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedCard, equals: focus)
                     }
                 }
-                .padding(.leading, 28)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.leading, Self.cardBleed)
+                .padding(.trailing, 46)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultFocus($focusedCard, defaultFocus)
-        .onAppear {
-            leadingWorkIDs = leadingIDs
-            // Force a preferred focus target; without one, arrow keys do nothing.
-            if focusedCard == nil {
-                focusedCard = defaultFocus
-            }
-        }
-        .task(id: viewModel.works.map(\.id)) {
-            leadingWorkIDs = leadingIDs
-            // After async load, re-assert focus once rails exist.
-            if focusedCard == nil {
-                focusedCard = defaultFocus
-            }
-        }
-        .onMoveCommand { direction in
-            // ScrollView / card focus often keeps Left local. At a rail head,
-            // release card focus then ask the shell to land on the dock.
-            guard direction == .left else { return }
-            guard let focused = focusedCard, leadingWorkIDs.contains(focused.workID) else {
-                return
-            }
-            focusedCard = nil
-            requestNavFocus()
+            .padding(.top, 35.3 - 18)
         }
     }
 
@@ -456,8 +437,11 @@ struct TVHomeView: View {
             primary.append(work)
             if primary.count >= 8 { break }
         }
-        let definitions: [(title: String, works: [Work])] =
-            [("Start watching", primary)] + viewModel.rails.map { ($0.title, $0.items) }
+        // Web Home: "On deck" (part-watched, at most 10) when there is any, else "Start watching" (8 most recent).
+        let lead: (title: String, works: [Work]) = viewModel.onDeck.isEmpty
+            ? ("Start watching", primary)
+            : ("On deck", Array(viewModel.onDeck.prefix(10)))
+        let definitions: [(title: String, works: [Work])] = [lead] + viewModel.rails.map { ($0.title, $0.items) }
         return definitions.filter { !$0.works.isEmpty }
     }
 
@@ -783,6 +767,147 @@ struct TVHomeCard: View {
     }
 }
 
+/// Web `.tv-home-card` at 1920x1080: 327.2 x 184 art (radius 12.48), title 11.9/610 at +11.5, meta 8.8/400 at +2.5.
+/// Focus: the card rises 6, the art grows to 1.025 with the heavy shadow and the brand glow ring (owner 2026-10-09).
+struct TVWebHomeCard: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+    var focused = false
+    /// Web `.tv-watch-progress`: a 3 px bar along the art's foot on On deck cards (replaces the unseen dot).
+    var progress: Double? = nil
+
+    static let artWidth: CGFloat = 327.2
+    static let artHeight: CGFloat = 184
+    static let height: CGFloat = artHeight + 11.5 + 17.9 + 2.5 + 11.5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                TVWorkArt(work: work, apiClient: apiClient)
+                    .frame(width: Self.artWidth, height: Self.artHeight)
+                    .overlay(alignment: .bottomLeading) {
+                        if let progress {
+                            ZStack(alignment: .leading) {
+                                Color.white.opacity(0.2)
+                                DesignTokens.Color.brandPrimary.frame(width: max(3, Self.artWidth * min(1, progress)))
+                            }
+                            .frame(height: 3)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12.48, style: .continuous))
+                if progress == nil {
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 13, height: 13)
+                        .padding(10.6)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12.48, style: .continuous)
+                    .fill(DesignTokens.Stage.surfaceSoft)
+                    .shadow(color: Self.shadow.opacity(focused ? 0.32 : 0.16), radius: focused ? 26 : 11, y: focused ? 26 : 10)
+                    .shadow(color: Self.shadow.opacity(focused ? 0.22 : 0.10), radius: focused ? 11 : 4.5, y: focused ? 11 : 3)
+            )
+            .overlay {
+                if focused {
+                    RoundedRectangle(cornerRadius: 12.48 + 3, style: .continuous)
+                        .stroke(Self.glow, lineWidth: 3)
+                        .padding(-3)
+                        .shadow(color: Self.glow.opacity(0.45), radius: 12)
+                }
+            }
+            .scaleEffect(focused ? 1.025 : 1)
+            Text(work.title)
+                .font(TVTheme.font(size: 11.904, css: 610))
+                .tracking(-0.18)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .frame(width: Self.artWidth, height: 17.9, alignment: .leading)
+                .padding(.top, 11.5)
+            Text([work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 }.joined(separator: " \u{00B7} "))
+                .font(TVTheme.font(size: 8.832, css: 400))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .lineLimit(1)
+                .frame(width: Self.artWidth, height: 11.5, alignment: .leading)
+                .padding(.top, 2.5)
+        }
+        .offset(y: focused ? -6 : 0)
+        .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.22), value: focused)
+    }
+
+    private static let shadow = Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
+    private static let glow = DesignTokens.Stage.cardGlow
+}
+
+/// Web Home `.details-panel` for the focused card: kicker, title, runtime and overview (detail fetched on focus).
+struct TVHomeHeroCopy: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+    @State private var runtime: (id: UUID, text: String?)?
+
+    var body: some View {
+        let lines = TVTextWrap.lines(work.title, weight: 560, size: 69.12, kern: -4.98, width: 379.5)
+        let metaY = 303.5 + 62.2 * CGFloat(max(1, lines.count)) + 22.6
+        let meta = runtime?.id == work.id ? runtime?.text : nil
+        let overviewY = meta == nil ? metaY : metaY + 18 + 22.9
+        ZStack(alignment: .topLeading) {
+            Text([work.kind.rawValue, work.genres.first].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
+                .font(TVTheme.font(size: 12.29, css: 860))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
+                .placed(x: 153.6, y: 259.2, w: 455, h: 18.4)
+            TVHeroTitle(title: work.title)
+                .placed(x: 153.6, y: 303.5, w: 379.5, h: 62.2 * CGFloat(max(1, lines.count)), alignment: .topLeading)
+            if let meta {
+                Text(meta)
+                    .font(TVTheme.font(size: 12.864, css: 600))
+                    .foregroundStyle(DesignTokens.Color.textPrimary.opacity(0.86))
+                    .placed(x: 153.6, y: metaY, h: 18)
+            }
+            if let overview = work.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(TVTheme.font(size: 12.864, css: 600))
+                    .foregroundStyle(DesignTokens.Color.textPrimary.opacity(0.86))
+                    .lineLimit(5)
+                    .frame(width: 336, alignment: .topLeading)
+                    .placed(x: 153.6, y: overviewY, w: 336, h: 101.6, alignment: .topLeading)
+            }
+        }
+        .frame(width: 1920, height: 1080, alignment: .topLeading)
+        .task(id: work.id) {
+            let detail = try? await apiClient.fetchWork(id: work.id)
+            runtime = (work.id, TVWebFormat.runtime(ms: detail?.runtimeMs))
+        }
+    }
+}
+
+/// Web skeleton loading (owner 2026-10-08): the Home's final geometry with placeholder cards, never a spinner screen.
+struct TVHomeSkeleton: View {
+    var body: some View {
+        GeometryReader { geo in
+        let origin = geo.frame(in: .global).origin
+        let block = DesignTokens.Stage.surfaceSoft
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 4).fill(block).frame(width: 120, height: 14).placed(x: 153.6, y: 261, w: 120, h: 14)
+            RoundedRectangle(cornerRadius: 8).fill(block).frame(width: 330, height: 56).placed(x: 153.6, y: 306, w: 330, h: 56)
+            ForEach(0..<2, id: \.self) { rail in
+                let top = 402 + 365.9 * CGFloat(rail)
+                RoundedRectangle(cornerRadius: 4).fill(block).frame(width: 180, height: 18).placed(x: 881.6, y: top + 4, w: 180, h: 18)
+                ForEach(0..<4, id: \.self) { card in
+                    let x = 881.6 + 352.1 * CGFloat(card)
+                    RoundedRectangle(cornerRadius: 12.48, style: .continuous).fill(block)
+                        .placed(x: x, y: top + 61.8, w: TVWebHomeCard.artWidth, h: TVWebHomeCard.artHeight)
+                    RoundedRectangle(cornerRadius: 3).fill(block).placed(x: x, y: top + 61.8 + 195.3, w: 180, h: 12)
+                }
+            }
+        }
+        .frame(width: 1920, height: 1080, alignment: .topLeading)
+        .offset(x: -origin.x, y: -origin.y)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// Landscape artwork for a work (backdrop, then poster) with the web's text tile as the fallback.
 struct TVWorkArt: View {
     let work: Work
@@ -1033,7 +1158,7 @@ struct TVSearchView: View {
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
-                    .focusable(!frozen)
+                    .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                     .focusEffectDisabled(frozen)
                 }
             }
@@ -1452,7 +1577,7 @@ struct TVLibraryKindView: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
-        .focusable(!parityMode)
+        .disabled(parityMode) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(parityMode)
         .onMoveCommand { direction in
             guard !parityMode, direction == .left else { return }
@@ -1577,7 +1702,7 @@ struct TVLibraryKindView: View {
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
-            while !page.items.isEmpty, items.count < (total ?? Int.max) {
+            while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
                 let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
                 items += next.items

@@ -18,23 +18,23 @@ pub use repo::remote_wake;
 pub use repo::seed_default_rails;
 
 pub use error::DbError;
-pub use pool::{connect, run_migrations, DbPool, SQLITE_MIGRATIONS};
+pub use pool::{connect, optimize, run_migrations, DbPool, SQLITE_MIGRATIONS};
 pub use repo::{
     ApprovalRepo, CreditRepo, DeviceRepo, DiscoveredRoot, DownloadTicketRepo, EmbeddingRepo,
     FolderRepo, GroupLibraryRepo, HomeRailRepo, HouseholdUsageRepo, InMemoryRefreshTokenStore,
     LibraryViewRepo, MediaFileRepo, MediaLanguageRepo, NodeIdentityRepo, PeerGroupRepo,
     PeerJoinToken, PeerJoinTokenRepo, PeerLeafAvailabilityRepo, PeerNodeRepo,
     PeerSourceInstanceRepo, PeerSyncState, PeerSyncStateRepo, PinAttemptRepo, PinAttemptState,
-    PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RefreshTokenRepo, RemoteEvent,
-    RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget, RenditionRepo, RootConfigUpdate,
-    RoutingRuleRepo, ScanIndexRow, SourceInstanceRepo, SqlxCreditRepo, SqlxDownloadTicketRepo,
-    SqlxEmbeddingRepo, SqlxFolderRepo, SqlxHomeRailRepo, SqlxHouseholdRepo, SqlxLibraryViewRepo,
-    SqlxMediaLanguageRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-    SqlxRefreshTokenRepo, SqlxRemoteRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo,
-    SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SqlxWatchlistRepo,
-    SyncConflictLog, SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo,
-    UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo,
-    WorkIdentity, WorkRepo,
+    PlaylistRepo, PolicyRepo, ProfilePinRepo, PruneOutcome, PushRegistrationRepo, RefreshTokenRepo,
+    RemoteEvent, RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget, RenditionRepo,
+    RootConfigUpdate, RoutingRuleRepo, ScanIndexRow, SourceInstanceRepo, SqlxCreditRepo,
+    SqlxDownloadTicketRepo, SqlxEmbeddingRepo, SqlxFolderRepo, SqlxHomeRailRepo, SqlxHouseholdRepo,
+    SqlxLibraryViewRepo, SqlxMediaLanguageRepo, SqlxPlaylistRepo, SqlxProfilePinRepo,
+    SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRemoteRepo, SqlxSystemSettingsRepo,
+    SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxWatchProgressRepo,
+    SqlxWatchlistRepo, SyncConflictLog, SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo,
+    TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
+    WatchlistRepo, WorkIdentity, WorkRepo,
 };
 pub use write_queue::{
     write, write_latest, WriteFuture, WriteQueue, WriteQueueConfig, WriteQueueStats,

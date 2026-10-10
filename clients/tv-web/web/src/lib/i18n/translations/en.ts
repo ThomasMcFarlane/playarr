@@ -358,6 +358,8 @@ export const en = {
   "pages.library.subtitleLanguage": "Subtitle language",
   "pages.library.clearLanguages": "Clear language filters",
   "pages.library.noLanguages": "No languages indexed yet",
+  "pages.library.loadingLanguages": "Loading languages",
+  "pages.library.languagesUnavailable": "Languages could not be loaded. Close and reopen Filters to try again.",
   "pages.library.anyLanguage": "Any language",
   "pages.library.addLanguage": "Add language",
   "pages.library.removeLanguage": "Remove {{name}}",

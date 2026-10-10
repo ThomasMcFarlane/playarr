@@ -56,6 +56,8 @@ enum DesignTokens {
         static let success = adaptive(light: 0x224c3a, dark: 0x8ac5a5)
         /// `--brand-ink`: the shared small subtitle (page subtitle, media kicker, panel eyebrow).
         static let brandInk = adaptive(light: 0x821e36, dark: 0xeaa6b6)
+        /// `--card-glow-color`: the focused card's ring (`--brand-strong` in light, brand ink in dark).
+        static let cardGlow = adaptive(light: 0xa52745, dark: 0xeaa6b6)
     }
 
     /// *arr design-tokens package (ui-tv shells).

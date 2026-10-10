@@ -67,8 +67,116 @@ function insetSides(value) {
       : [top, second, third, fourth];
 }
 
+const CHANNELS = ["r", "g", "b", "a"];
+const MIX_SUPPORTS = "(color: color-mix(in srgb, red 50%, blue))";
+const round = (number) => Number(number.toFixed(4));
+
+/** Literal colour as [r, g, b, a] numbers, or undefined. */
+function literalChannels(value) {
+  const text = value.trim().toLowerCase();
+  if (text === "transparent") return [0, 0, 0, 0];
+  if (text === "white") return [255, 255, 255, 1];
+  if (text === "black") return [0, 0, 0, 1];
+  const hex = text.match(/^#([0-9a-f]{3,8})$/);
+  if (hex) {
+    let digits = hex[1];
+    if (digits.length === 3 || digits.length === 4) digits = [...digits].map((d) => d + d).join("");
+    if (digits.length !== 6 && digits.length !== 8) return undefined;
+    const bytes = digits.match(/../g).map((pair) => parseInt(pair, 16));
+    return [bytes[0], bytes[1], bytes[2], bytes.length === 4 ? round(bytes[3] / 255) : 1];
+  }
+  const rgb = text.match(/^rgba?\(([^)]*)\)$/);
+  if (rgb) {
+    const parts = rgb[1].split(/[\s,/]+/).filter(Boolean);
+    if (parts.length < 3 || parts.length > 4) return undefined;
+    const numbers = parts.map((part, index) =>
+      part.endsWith("%") ? (parseFloat(part) / 100) * (index < 3 ? 255 : 1) : parseFloat(part)
+    );
+    if (numbers.some((n) => !Number.isFinite(n))) return undefined;
+    return [numbers[0], numbers[1], numbers[2], numbers[3] ?? 1];
+  }
+  return undefined;
+}
+
+const channelName = (property, channel) => `--lc-${property.slice(2)}-${channel}`;
+
+/**
+ * Channels of one colour term as CSS number expressions (numbers or var() of the channel custom
+ * properties this plugin emits next to every colour token), or undefined when unsupported.
+ */
+function termChannels(value) {
+  const literal = literalChannels(value);
+  if (literal) return literal;
+  const token = value.trim().match(/^var\(\s*(--[\w-]+)\s*\)$/);
+  if (token) return CHANNELS.map((channel) => `var(${channelName(token[1], channel)})`);
+  const mix = value.trim().match(/^color-mix\(/i) ? mixChannels(value.trim().slice("color-mix(".length, -1)) : undefined;
+  return mix;
+}
+
+const isNumber = (expr) => typeof expr === "number";
+const times = (a, b) => (isNumber(a) && isNumber(b) ? round(a * b) : a === 1 ? b : b === 1 ? a : a === 0 || b === 0 ? 0 : `(${a} * ${b})`);
+const plus = (a, b) => (isNumber(a) && isNumber(b) ? round(a + b) : a === 0 ? b : b === 0 ? a : `(${a} + ${b})`);
+
+/** Premultiplied sRGB mix of two terms, as four channel expressions (CSS Color 5 color-mix). */
+function mixChannels(contents) {
+  const parts = topLevelParts(contents);
+  if (parts.length !== 3 || !/^in\s+srgb$/i.test(parts[0])) return undefined;
+  const terms = parts.slice(1).map((part) => {
+    const match = part.match(/^(.*?)(?:\s+([\d.]+)%)?$/s);
+    return { colour: termChannels(match[1]), weight: match[2] === undefined ? undefined : parseFloat(match[2]) / 100 };
+  });
+  if (terms.some((term) => !term.colour)) return undefined;
+  let [p, q] = terms.map((term) => term.weight);
+  if (p === undefined && q === undefined) p = q = 0.5;
+  else if (p === undefined) p = 1 - q;
+  else if (q === undefined) q = 1 - p;
+  const sum = p + q;
+  if (!(sum > 0)) return undefined;
+  const alphaScale = Math.min(sum, 1);
+  p /= sum;
+  q /= sum;
+  const [x, y] = terms.map((term) => term.colour);
+  const xWeight = times(x[3], p);
+  const yWeight = times(y[3], q);
+  const alpha = plus(xWeight, yWeight);
+  const colour = [0, 1, 2].map((index) => {
+    if (y[3] === 0) return x[index];
+    if (x[3] === 0) return y[index];
+    const premultiplied = plus(times(x[index], xWeight), times(y[index], yWeight));
+    if (isNumber(alpha)) return isNumber(premultiplied) ? round(premultiplied / alpha) : alpha === 1 ? premultiplied : `(${premultiplied} / ${alpha})`;
+    return `(${premultiplied} / max(${alpha}, 0.0001))`;
+  });
+  return [...colour, times(alpha, alphaScale)];
+}
+
+const cssNumber = (expr) => (isNumber(expr) ? String(expr) : `calc${expr.startsWith("(") ? expr : `(${expr})`}`);
+const rgbaOf = (channels) => `rgba(${channels.map(cssNumber).join(", ")})`;
+
+/**
+ * Replaces every color-mix() in a value with an equivalent rgba() built from channel custom
+ * properties, which the Chromium 94 vendor floor understands. Undefined when a term is unsupported.
+ */
+export function colorMixToChannels(value) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < value.length) {
+    const start = value.indexOf("color-mix(", cursor);
+    if (start < 0) return output + value.slice(cursor);
+    output += value.slice(cursor, start);
+    const open = start + "color-mix".length;
+    const close = matchingParen(value, open);
+    if (close < 0) return undefined;
+    const channels = mixChannels(value.slice(open + 1, close));
+    if (!channels) return undefined;
+    output += rgbaOf(channels);
+    cursor = close + 1;
+  }
+  return output;
+}
+
 export function addLegacyTvCssFallbacks(css, from = undefined) {
   const root = postcss.parse(css, { from });
+  const mixedRules = new Set();
   root.walkDecls((declaration) => {
     if (declaration.prop === "inset") {
       const sides = insetSides(declaration.value);
@@ -81,13 +189,47 @@ export function addLegacyTvCssFallbacks(css, from = undefined) {
       }
     }
 
+    // Every colour token also publishes its channels, so color-mix() over tokens can be
+    // rewritten as rgba(calc(...)) that follows the token wherever it is (re)defined.
+    if (declaration.prop.startsWith("--") && !declaration.prop.startsWith("--lc-")) {
+      const channels = termChannels(declaration.value);
+      if (channels) {
+        channels.forEach((expr, index) => {
+          declaration.cloneAfter({ prop: channelName(declaration.prop, CHANNELS[index]), value: cssNumber(expr) });
+        });
+      }
+    }
+
     if (declaration.value.includes("color-mix(")) {
+      const inKeyframes = declaration.parent?.parent?.type === "atrule" && /keyframes$/i.test(declaration.parent.parent.name);
+      const exact = inKeyframes ? undefined : colorMixToChannels(declaration.value);
+      if (exact) {
+        mixedRules.add(declaration.parent);
+        declaration.raws.legacyColorMix = declaration.value;
+        declaration.value = exact;
+        return;
+      }
       const fallback = replaceUnsupportedColorMix(declaration.value);
       if (fallback !== declaration.value && !fallback.includes("color-mix(")) {
         declaration.cloneBefore({ value: fallback });
       }
     }
   });
+
+  // A declaration that contains var() is never dropped at parse time, so a fallback placed before
+  // it cannot win on engines without color-mix(). Keep the rgba() form in the rule and give the
+  // original color-mix() declarations back to engines that support them, right after the rule so
+  // the cascade order is unchanged.
+  for (const rule of mixedRules) {
+    const modern = rule.clone({ nodes: [] });
+    rule.each((node) => {
+      if (node.type === "decl" && node.raws.legacyColorMix) {
+        modern.append(node.clone({ value: node.raws.legacyColorMix, raws: { ...node.raws, legacyColorMix: undefined } }));
+        delete node.raws.legacyColorMix;
+      }
+    });
+    rule.after(postcss.atRule({ name: "supports", params: MIX_SUPPORTS, nodes: [modern] }));
+  }
   return root.toString();
 }
 

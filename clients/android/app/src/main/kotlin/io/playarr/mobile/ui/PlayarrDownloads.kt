@@ -480,7 +480,7 @@ private fun DownloadEnrichedPreview(entry: DownloadEntity, preview: DownloadFocu
                         "E${episode.episodeNumber.toString().padStart(2, '0')}",
                 )
             }
-            add((work.releaseDate ?: work.addedAt).atZone(java.time.ZoneOffset.UTC).year.toString())
+            playarrKindYear(work.releaseDate)?.let { add(it.toString()) }
             add(work.genres.take(2).joinToString(" · ").ifBlank { kindLabel })
         }.joinToString(" · "),
         color = WebInkMuted,
