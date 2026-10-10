@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Series cast lookups send a User-Agent (the metadata service refused requests without one with HTTP 400), log one summary line per pass instead of one warning per series, and stop for the rest of the run after 5 consecutive rejections.
 - Web: the Library A to Z rail now runs to the bottom of the stage like the grid and fades out with the shared soft edge mask (the top fades to nothing, so no letter is cut by a straight clip edge); a focused letter settles clear of the fade. Owner request 2026-10-10.
 - Web calendar agenda: only the focused entry shows the pink ring and glow (a selected entry that lost focus keeps a firmer outline only), and each day heading now sticks under the page header while its entries scroll beneath it.
 - Calendar month view: the day number now sits on the cell's bottom row with "+N more" beside it (one 44px target), so "+N more" is no longer clipped at 1280x720 and other TV sizes and a day with several entries still shows at least one. `calendar-layout.mjs` asserts the row, the day number and every entry lie inside their cell at 1920, 1366 and 1280 in both themes.
@@ -391,6 +392,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: every poster or title card (Home and playlist rails, Search results, playlist grids, "more like this" on detail pages) is now exactly the size of the Library grid card at every stage size, from one shared token set (`--card-w` and friends in `page-layout.css`). A guard (`scripts/card-size-e2e.mjs`) checks width, height, art, caption size and spacing on every surface in both themes.
+- Web: the profile item in the left nav is a real link to the profiles page (it opens in a new tab with Ctrl/Cmd-click, middle-click or the context menu) and is now a square nav tile in its own group, with the first name beneath the avatar, that never overlaps other items or the page.
 - Web calendar: the date switcher button now sits at the top right in one group with Previous, Today and Next; the shell action column keeps only Filters and the Calendar link, and the month and year jump opens below the switcher.
 - Calendar month view: each entry is now a plain text line with a left status dot (the status pill's colour; the status is also in the accessible name), with no chip box. Focus is an underline plus the card glow colour. The month and week grids keep the shared page gap to the action column instead of touching it. The AAA 2.5.5 target size is relaxed for these compact lines by owner design.
 - Web: the page header subtitle always sits directly under the title, on every page including Settings and its sections; it no longer jumps beside the title on pages with a short title.

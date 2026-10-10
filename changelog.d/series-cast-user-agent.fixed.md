@@ -1,1 +1,0 @@
-- Series cast lookups send a User-Agent (the metadata service refused requests without one with HTTP 400), log one summary line per pass instead of one warning per series, and stop for the rest of the run after 5 consecutive rejections.
