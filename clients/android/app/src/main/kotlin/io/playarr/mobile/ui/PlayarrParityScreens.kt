@@ -30,6 +30,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -1953,9 +1955,19 @@ private fun TelevisionProfilesStage(
                 .height(420.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
+            // Web: the profile button holds the focus on entry (the selected profile, else the first).
+            val avatarFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            val focusId = profiles.firstOrNull { it.id == selectedId }?.id ?: profiles.firstOrNull()?.id
+            LaunchedEffect(focusId) {
+                if (focusId == null) return@LaunchedEffect
+                // After the first frame, so the requester is attached; it wins over the first focusable Android picks.
+                androidx.compose.runtime.withFrameNanos { }
+                runCatching { avatarFocus.requestFocus() }
+            }
             val track: @Composable () -> Unit = {
                 profiles.forEach { profile ->
                     ProfileChoice(
+                        avatarFocus = if (profile.id == focusId) avatarFocus else null,
                         profile = profile,
                         serverLabel = serverLabels[profile.id],
                         avatar = if (profile.id == currentUserId) {
@@ -2402,6 +2414,7 @@ private fun ProfileChoice(
     onClick: () -> Unit,
     onSettings: () -> Unit,
     onSignOut: (() -> Unit)?,
+    avatarFocus: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     // Web `.profile-choice` flex-basis clamp(160px, 13vw, 244px): 13vw is 249.6 at 1920, so 244.
     val cardWidth = if (isTelevision) 244.dp else 148.dp
@@ -2412,6 +2425,9 @@ private fun ProfileChoice(
     )
     // Draw-only lift: an offset would change the bounds focus search measures.
     val lift = if (selected) Modifier.graphicsLayer { translationY = -8.dp.toPx(); scaleX = 1.045f; scaleY = 1.045f } else Modifier
+    // Web `.circle-focus-host`: the focused profile shows the card glow (brand ring and glow) on the circle itself.
+    val avatarSource = remember { MutableInteractionSource() }
+    val avatarFocused by avatarSource.collectIsFocusedAsState()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -2421,10 +2437,12 @@ private fun ProfileChoice(
     ) {
         Surface(
             onClick = onClick,
+            interactionSource = avatarSource,
             enabled = enabled,
             shape = CircleShape,
             color = Color.Transparent,
             modifier = Modifier
+                .then(if (avatarFocus != null) Modifier.focusRequester(avatarFocus) else Modifier)
                 .size(avatarSize)
                 .semantics { contentDescription = avatarDescription }
                 // Order matters: the scale and the ring come before the shadow, which clips everything after it.
@@ -2442,6 +2460,8 @@ private fun ProfileChoice(
                         Modifier
                     },
                 )
+                // Over the selected rose ring: the focus glow wins while the avatar holds focus.
+                .circleCardGlow(isTelevision && avatarFocused)
                 .then(
                     if (selected) {
                         Modifier.shadow(
@@ -2571,17 +2591,19 @@ private fun AddProfileChoice(
     val avatarSize = if (isTelevision) 244.dp else 132.dp
     // Draw-only lift: an offset would change the bounds focus search measures.
     val lift = if (selected) Modifier.graphicsLayer { translationY = -8.dp.toPx(); scaleX = 1.045f; scaleY = 1.045f } else Modifier
+    var addFocused by remember { mutableStateOf(false) }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(cardWidth)
             .then(lift)
-            .onFocusChanged { if (it.isFocused) onFocus() },
+            .onFocusChanged { addFocused = it.hasFocus; if (it.hasFocus) onFocus() },
     ) {
         // Web `.profile-add .profile-avatar` dashed plate.
         Box(
             modifier = Modifier
                 .size(avatarSize)
+                .circleCardGlow(isTelevision && addFocused)
                 .clip(CircleShape)
                 .drawBehind {
                     // Web `.profile-avatar` plate: 145deg from surface-strong mixed 16% to #cf3157 towards #a82655,
@@ -4722,4 +4744,19 @@ private fun PlayarrCustomiseHomePanel(viewModel: ParitySettingsViewModel, isTele
             Text(playarrString(PlayarrString.HomeCustomiseReset))
         }
     }
+}
+
+/** Web `--card-glow` on a circle: the 3 dp brand-ink ring outside the edge and a soft brand glow around it (no fill). */
+private fun Modifier.circleCardGlow(focused: Boolean): Modifier = if (!focused) this else drawBehind {
+    val brand = io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.brandInk
+    val r = size.minDimension / 2f
+    val glow = 24.dp.toPx()
+    drawCircle(
+        Brush.radialGradient(
+            0f to Color.Transparent, (r - 2.dp.toPx()) / (r + glow) to brand.copy(alpha = 0.45f), 1f to Color.Transparent,
+            center = center, radius = r + glow,
+        ),
+        radius = r + glow,
+    )
+    drawCircle(brand, radius = r + 1.5.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
 }
