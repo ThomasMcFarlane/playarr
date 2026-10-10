@@ -87,7 +87,7 @@ for (const [vp, label] of [[{ width: 1920, height: 1080 }, "1920x1080"], [{ widt
       const page = await context.newPage();
       await page.goto(`${origin}/calendar?view=month&date=2026-10-07`);
       if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-      await page.waitForSelector(".calendar-month-cell .calendar-chip", { timeout: 15000 });
+      await page.waitForSelector(".calendar-month-cell .calendar-line", { timeout: 15000 });
       await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton"), null, { timeout: 15000 });
       await page.waitForTimeout(400);
       const result = await page.evaluate(() => {
@@ -103,7 +103,24 @@ for (const [vp, label] of [[{ width: 1920, height: 1080 }, "1920x1080"], [{ widt
             const r = btn.getBoundingClientRect();
             if (!inside(r)) bad.push({ day, what: "more", cell: [c.top, c.bottom].map(Math.round), box: [r.top, r.bottom].map(Math.round) });
           }
-          for (const chip of cell.querySelectorAll(".calendar-chip")) {
+          for (const chip of cell.querySelectorAll(".calendar-line")) {
+            const cs = getComputedStyle(chip);
+            const boxed = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.backgroundImage !== "none" || ["Top", "Right", "Bottom", "Left"].some((side) => parseFloat(cs[`border${side}Width`]) > 0) || cs.boxShadow !== "none";
+            if (boxed) bad.push({ day, what: "entry has a box (background, border or shadow)" });
+            if (!chip.querySelector(".calendar-dot")) bad.push({ day, what: "entry has no status dot" });
+            else {
+              // Non-text contrast of the dot (3:1) against the cell's effective background.
+              const rgb = (c) => (c.match(/[\d.]+/g) ?? []).slice(0, 4).map(Number);
+              const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+              let bg = null;
+              for (let el = cell; el && !bg; el = el.parentElement) { const c = rgb(getComputedStyle(el).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] === 1)) bg = c; }
+              const dot = rgb(getComputedStyle(chip.querySelector(".calendar-dot")).backgroundColor);
+              if (bg && dot.length >= 3) {
+                const [hi, lo] = [lum(dot), lum(bg)].sort((a, b) => b - a);
+                if ((hi + 0.05) / (lo + 0.05) < 3) bad.push({ day, what: "dot contrast below 3:1" });
+              }
+            }
+            if (!chip.getAttribute("aria-label")) bad.push({ day, what: "entry has no accessible name" });
             const r = chip.getBoundingClientRect();
             if (!inside(r)) bad.push({ day, what: "chip", cell: [c.top, c.bottom].map(Math.round), box: [r.top, r.bottom].map(Math.round) });
           }
@@ -117,15 +134,46 @@ for (const [vp, label] of [[{ width: 1920, height: 1080 }, "1920x1080"], [{ widt
         // Every day with 2+ entries shows at least one chip.
         let noChip = 0;
         for (const cell of document.querySelectorAll(".calendar-month-cell")) {
-          if (cell.querySelector(".calendar-more") && !cell.querySelector(".calendar-chip")) noChip += 1;
+          if (cell.querySelector(".calendar-more") && !cell.querySelector(".calendar-line")) noChip += 1;
         }
-        return { more, bad, noChip };
+        const lines = [...document.querySelectorAll(".calendar-month-cell")].map((cell) => cell.querySelectorAll(".calendar-line").length);
+        return { more, bad, noChip, maxLines: Math.max(...lines) };
       });
       await context.close();
-      const ok = result.bad.length === 0 && result.noChip === 0 && (density === "default" || result.more > 0);
-      console.log(`${ok ? "PASS" : "FAIL"}  ${label} month ${theme} ${density}: ${result.more} "+N more" lines and every chip and day number fully inside their cells, a chip beside every "+N more"`, ok ? "" : JSON.stringify({ noChip: result.noChip, bad: result.bad.slice(0, 3) }));
+      // At 1280x720 a busy day shows at least two entries.
+      const ok = result.bad.length === 0 && result.noChip === 0 && (vp.width > 1280 || density !== "dense" || result.maxLines >= 2) && (density === "default" || result.more > 0);
+      console.log(`${ok ? "PASS" : "FAIL"}  ${label} month ${theme} ${density}: ${result.more} "+N more" lines and every text entry (dot, no box) and day number fully inside their cells, an entry beside every "+N more", up to ${result.maxLines} entries a day`, ok ? "" : JSON.stringify({ noChip: result.noChip, bad: result.bad.slice(0, 3) }));
       failed ||= !ok;
     }
+  }
+}
+// Gap to the shell action column: the calendar's month, week and agenda keep the same gap between their content and
+// the column as the Movies grid (the shared page gutter), at 1920 and 1280.
+for (const [vp, label] of [[{ width: 1920, height: 1080 }, "1920x1080"], [{ width: 1280, height: 720 }, "1280x720"]]) {
+  const gaps = {};
+  for (const [name, route, selector] of [["movies", "/movies", ".tv-title-card"], ["month", "/calendar?view=month&date=2026-10-07", ".calendar-month-body"], ["week", "/calendar?view=week&date=2026-10-07", ".calendar-week-scroll"], ["agenda", "/calendar?view=agenda&date=2026-10-07", ".calendar-entry"]]) {
+    const context = await browser.newContext({ viewport: vp });
+    await context.addInitScript(({ base: apiBase, userId }) => {
+      localStorage.setItem("playarr:apiBaseUrl", apiBase);
+      const session = { accessToken: "t", refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
+      localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "p", apiBaseUrl: apiBase, userId, name: "P", deviceId: "d", session }]));
+      localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "p", apiBaseUrl: apiBase, userId }));
+    }, { base: denseBase, userId: USER_ID });
+    const page = await context.newPage();
+    await page.goto(`${denseBase}${route}`);
+    await page.waitForSelector(selector, { timeout: 15000 });
+    await page.waitForTimeout(1500);
+    gaps[name] = await page.evaluate((sel) => {
+      const column = document.querySelector(".shell-action-column")?.getBoundingClientRect();
+      const rights = [...document.querySelectorAll(sel)].map((el) => el.getBoundingClientRect().right).filter((x) => x <= innerWidth + 1);
+      return column && rights.length ? column.left - Math.max(...rights) : null;
+    }, selector);
+    await context.close();
+  }
+  for (const name of ["month", "week", "agenda"]) {
+    const ok = gaps.movies != null && gaps[name] != null && Math.abs(gaps[name] - gaps.movies) <= 1;
+    console.log(`${ok ? "PASS" : "FAIL"}  ${label} ${name}: gap to the action column ${gaps[name]?.toFixed(1)}px equals Movies ${gaps.movies?.toFixed(1)}px (+-1)`);
+    failed ||= !ok;
   }
 }
 await browser.close();

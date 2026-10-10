@@ -160,15 +160,15 @@ describe("calendar source labels", () => {
 });
 
 describe("monthChipsThatFit", () => {
-  it("reserves the 44px bottom row (day number and more line) under the chips", () => {
-    expect(monthChipsThatFit(89, 3)).toBe(0);
-    expect(monthChipsThatFit(90, 3)).toBe(1);
-    expect(monthChipsThatFit(135, 9)).toBe(1);
-    expect(monthChipsThatFit(136, 9)).toBe(2);
+  it("reserves the 44px bottom row and a 2px gap, then fits 22px text lines", () => {
+    expect(monthChipsThatFit(67, 5)).toBe(0);
+    expect(monthChipsThatFit(68, 5)).toBe(1);
+    expect(monthChipsThatFit(90, 5)).toBe(2);
+    expect(monthChipsThatFit(147, 9)).toBe(4);
     expect(monthChipsThatFit(30, 9)).toBe(0);
   });
 
-  it("never shows more chips than there are", () => {
+  it("never shows more lines than there are", () => {
     expect(monthChipsThatFit(500, 2)).toBe(2);
     expect(monthChipsThatFit(500, 0)).toBe(0);
   });
