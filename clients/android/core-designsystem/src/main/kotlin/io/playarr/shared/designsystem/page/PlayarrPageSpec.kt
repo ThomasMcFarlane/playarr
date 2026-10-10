@@ -90,7 +90,15 @@ data class PlayarrPageHeaderSpec(
 )
 
 @Immutable
-data class PlayarrEmptySpec(val message: String, val description: String? = null)
+data class PlayarrEmptySpec(
+    val message: String,
+    val description: String? = null,
+    /** Web `TvEmptyState` graphic: drawn beside the copy on television (search: the magnifier in a circle). */
+    val art: PlayarrEmptyArt? = null,
+)
+
+/** The web `TvEmptyState` graphics native pages use. */
+enum class PlayarrEmptyArt { Search }
 
 @Immutable
 data class PlayarrErrorSpec(val message: String, val retryLabel: String?)
