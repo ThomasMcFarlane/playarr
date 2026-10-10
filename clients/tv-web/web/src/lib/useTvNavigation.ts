@@ -1403,6 +1403,12 @@ function moveFocus(direction: Direction): void {
       const nextRect = next.getBoundingClientRect();
       const horizontalInset = Math.min(56, Math.max(24, scrollContainer.clientWidth * 0.05));
       const verticalInset = Math.min(64, Math.max(36, scrollContainer.clientHeight * 0.08));
+      // A list that needs more room than the default (the calendar agenda: a pinned heading above, the full focus glow
+      // below) opts in with data-tv-honour-scroll-padding and its scroll-padding wins.
+      const honourPadding = scrollContainer.hasAttribute("data-tv-honour-scroll-padding");
+      const paddingStyle = honourPadding ? window.getComputedStyle(scrollContainer) : null;
+      const topInset = Math.max(verticalInset, paddingStyle ? parsePixelValue(paddingStyle.scrollPaddingTop) : 0);
+      const bottomInset = Math.max(verticalInset, paddingStyle ? parsePixelValue(paddingStyle.scrollPaddingBottom) : 0);
       const settledX = settledScrollOffset(scrollContainer, "left");
       const settledY = settledScrollOffset(scrollContainer, "top");
       const shiftX = scrollContainer.scrollLeft - settledX;
@@ -1414,10 +1420,10 @@ function moveFocus(direction: Direction): void {
             ? nextRect.right + shiftX - (containerRect.right - horizontalInset)
             : 0;
       const verticalDelta =
-        nextRect.top + shiftY < containerRect.top + verticalInset
-          ? nextRect.top + shiftY - (containerRect.top + verticalInset)
-          : nextRect.bottom + shiftY > containerRect.bottom - verticalInset
-            ? nextRect.bottom + shiftY - (containerRect.bottom - verticalInset)
+        nextRect.top + shiftY < containerRect.top + topInset
+          ? nextRect.top + shiftY - (containerRect.top + topInset)
+          : nextRect.bottom + shiftY > containerRect.bottom - bottomInset
+            ? nextRect.bottom + shiftY - (containerRect.bottom - bottomInset)
             : 0;
       if (horizontalDelta !== 0 || verticalDelta !== 0) {
         // Directory rows should glide into their safe viewport area. Each

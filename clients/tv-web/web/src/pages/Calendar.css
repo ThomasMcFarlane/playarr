@@ -424,6 +424,8 @@
  */
 .tv-title-grid:has(> .calendar-agenda-content) {
   --agenda-heading-h: 2.75rem;
+  /* Room between the pinned heading and a focused entry: the focus lift (7px) plus the glow ring (about 24px). */
+  --agenda-glow-room: 2rem;
   --agenda-heading-base: var(--surface);
   --agenda-panel-frost: linear-gradient(
     90deg,
@@ -436,7 +438,9 @@
   /* Nothing shows above the pinned heading (the header area); no top ramp, so the heading itself is not faded. */
   --edge-fade-start-size: 0px;
   --edge-fade-start-floor: 0;
-  scroll-padding-top: calc(var(--library-rail-top) + var(--agenda-heading-h) + 12px);
+  scroll-padding-top: calc(var(--library-rail-top) + var(--agenda-heading-h) + var(--agenda-glow-room));
+  /* The focused entry rests far enough above the bottom edge for its full glow (72px) and lift (7px). */
+  scroll-padding-bottom: 88px;
 }
 
 /* Beats the header-clear inset (page-layout.css): everything above the pinned heading is fully masked. */
@@ -455,6 +459,16 @@
     color-mix(in srgb, var(--tv-rail-frost) 97%, transparent) 62%,
     var(--tv-rail-frost) 100%
   );
+}
+
+/*
+ * Clearance for the focused entry's full glow (page-layout.css --card-shadow-focus: a 48px blur dropped 24px, plus the 3px
+ * ring and 20px/4px glow) so the list's clip edge never cuts it: 48px left, 72px (plus the 7px lift) below. Padding, not margins; the right side
+ * is already wide (the controls column).
+ */
+.tv-title-grid-content.calendar-agenda-content {
+  padding-left: max(var(--library-rail-left), 48px);
+  padding-bottom: max(var(--library-rail-bottom), 80px);
 }
 
 .calendar-agenda-content .calendar-day > h3 {
@@ -476,7 +490,7 @@
 
 .calendar-agenda-content .calendar-day > h3 + ul,
 .calendar-agenda-content .calendar-day > h3 + .calendar-day-empty {
-  margin-top: 0.4rem;
+  margin-top: var(--agenda-glow-room);
 }
 
 .calendar-agenda-fade {
@@ -497,8 +511,8 @@
   /* A plain colour ramp (the shared mask is the only mask in the app): the panel's frost over the page background. */
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--tv-rail-frost) 80%, var(--agenda-heading-base)),
-    color-mix(in srgb, var(--tv-rail-frost) 80%, transparent) 40%,
+    color-mix(in srgb, var(--tv-rail-frost) 58%, transparent),
+    color-mix(in srgb, var(--tv-rail-frost) 22%, transparent) 45%,
     transparent
   );
   opacity: 0;
