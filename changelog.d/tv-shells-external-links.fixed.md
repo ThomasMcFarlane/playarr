@@ -1,0 +1,1 @@
+- Samsung Tizen and LG webOS: external links (for example the platform guides on the Clients page) open in the TV's browser instead of replacing Playarr with the web page and leaving no way back. Tizen asks for the `application.launch` privilege for this.

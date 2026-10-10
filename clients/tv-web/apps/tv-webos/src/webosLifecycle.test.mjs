@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  externalLinkUrl,
   installWebOsLifecycle,
   isWebOsRootLocation,
   loadWebOsRuntimeConfig,
@@ -209,4 +210,31 @@ test("ignores invalid or credential-bearing packaged server URLs", async () => {
     assert.equal(result, undefined);
     assert.equal(appWindow.PlayarrPackagedConfig, undefined);
   }
+});
+
+test("external links open in the webOS browser instead of replacing Playarr", () => {
+  const calls = [];
+  const appDocument = new FakeDocument([]);
+  const appWindow = new FakeWindow();
+  appWindow.location.href = "file:///media/developer/apps/com.playarr.tv/index.html#/clients";
+  appWindow.open = () => "original";
+  appWindow.PalmServiceBridge = class {
+    call(uri, payload) {
+      calls.push([uri, JSON.parse(payload)]);
+    }
+  };
+  const cleanup = installWebOsLifecycle(appDocument, appWindow);
+  const event = new Event("click", { cancelable: true });
+  Object.defineProperty(event, "target", { value: { closest: () => ({ href: "https://example.com/docs" }) } });
+  appDocument.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(appWindow.open("https://example.com/other"), null);
+  assert.equal(appWindow.open("#/movies"), "original");
+  assert.deepEqual(calls, [
+    ["luna://com.webos.applicationManager/launch", { id: "com.webos.app.browser", params: { target: "https://example.com/docs" } }],
+    ["luna://com.webos.applicationManager/launch", { id: "com.webos.app.browser", params: { target: "https://example.com/other" } }],
+  ]);
+  assert.equal(externalLinkUrl({ closest: () => ({ href: "file:///index.html#/home" }) }), undefined);
+  cleanup();
+  assert.equal(appWindow.open("https://example.com/x"), "original");
 });

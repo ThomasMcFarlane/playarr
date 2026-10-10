@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   TIZEN_REMOTE_KEYS,
   applyTizenAvplayObjectBounds,
+  externalLinkUrl,
   hasTizenBackBlockingSurface,
   installTizenPlatformRuntime,
   isTizenRootLocation,
@@ -319,4 +320,52 @@ test("publishes only an absolute HTTP(S) packaged API URL", async () => {
     );
     assert.equal(parameterWindow.PlayarrPackagedConfig, undefined);
   }
+});
+
+test("external links open in the TV browser instead of replacing Playarr", () => {
+  const anchor = (href) => ({ closest: () => ({ href }) });
+  assert.equal(externalLinkUrl(anchor("https://example.com/docs")), "https://example.com/docs");
+  assert.equal(externalLinkUrl(anchor("file:///opt/usr/apps/index.html#/movies")), undefined);
+  assert.equal(externalLinkUrl({ closest: () => null }), undefined);
+
+  const launched = [];
+  const tizenObject = {
+    ApplicationControl: function ApplicationControl(operation, uri) {
+      this.operation = operation;
+      this.uri = uri;
+    },
+    application: { launchAppControl: (control) => launched.push([control.operation, control.uri]) },
+  };
+  const listeners = new Map();
+  const windowObject = {
+    location: { hash: "#/clients", pathname: "/index.html", href: "file:///opt/usr/apps/index.html#/clients" },
+    innerWidth: 1920,
+    innerHeight: 1080,
+    open: () => "original",
+    addEventListener() {},
+    removeEventListener() {},
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame() {},
+  };
+  const documentObject = {
+    documentElement: { dataset: {} },
+    body: {},
+    querySelector: () => null,
+    getElementById: () => null,
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: (type) => listeners.delete(type),
+  };
+  const cleanup = installTizenPlatformRuntime({ windowObject, documentObject, tizenObject, webapisObject: {} });
+  let prevented = false;
+  listeners.get("click")({ target: anchor("https://example.com/docs"), preventDefault: () => (prevented = true) });
+  assert.equal(prevented, true);
+  assert.equal(windowObject.open("https://example.com/other"), null);
+  assert.equal(windowObject.open("#/movies"), "original");
+  assert.deepEqual(launched, [
+    ["http://tizen.org/appcontrol/operation/view", "https://example.com/docs"],
+    ["http://tizen.org/appcontrol/operation/view", "https://example.com/other"],
+  ]);
+  cleanup();
+  assert.equal(listeners.has("click"), false);
+  assert.equal(windowObject.open("https://example.com/x"), "original");
 });
