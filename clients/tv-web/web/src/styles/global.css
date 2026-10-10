@@ -4807,6 +4807,24 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
  */
 .app-nav-group-profile {
   align-items: center;
+  margin-top: auto;
+}
+
+.app-nav-group {
+  flex: 0 0 auto;
+}
+
+.app-nav-group-profile + .app-user-version {
+  margin-top: 0.35rem;
+}
+
+.app-nav > .app-nav-group.app-nav-group-profile {
+  margin-top: auto;
+}
+
+/* Keeps the usual section gap when the rail is full and there is no free space to push the profile group down. */
+.app-nav > .app-nav-group:has(+ .app-nav-group-profile) {
+  margin-bottom: clamp(0.25rem, calc(1.26 * var(--viewport-unit)), 0.85rem);
 }
 
 .app-user-avatar {
@@ -4867,14 +4885,25 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .app-nav {
-  top: 50%;
+  /* The rail runs from just below the Playarr logo to the bottom padding; the profile group and the version sit at its foot. */
+  top: calc(
+    clamp(34px, calc(5.2 * var(--viewport-unit)), 66px) + var(--page-control-height, 44px) +
+      clamp(0.4rem, calc(1.2 * var(--viewport-unit)), 0.9rem)
+  );
   right: auto;
-  bottom: auto;
+  bottom: clamp(22px, calc(3.2 * var(--viewport-unit)), 46px);
   left: var(--tv-nav-edge);
   flex-direction: column;
-  transform: translateY(-50%);
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  transform: none;
   gap: 0;
-  padding: 0;
+  /* Room inside the scroll box so the group shadows are not clipped to a visible edge; the margin cancels it. */
+  padding: 14px 30px;
+  margin: -14px -30px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -4914,6 +4943,17 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   margin-left: 0;
 }
 
+@media (max-height: 800px) {
+  /* Compact the rail so all entries, the profile group and the version still fit below the logo. */
+  .app-nav-group {
+    padding-block: 0.28rem;
+  }
+
+  .app-nav-group-profile + .app-user-version {
+    margin-top: 0.15rem;
+  }
+}
+
 .app-nav-link {
   width: 64px;
   min-width: 64px;
@@ -4951,6 +4991,23 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .app-nav-icon svg {
   width: 20px;
   height: 20px;
+}
+
+/* A nav entry that waits on the library-kinds answer (first visit, nothing cached): a skeleton tile with the real
+   tile's geometry (its label is rendered transparent so the height matches), never focusable or announced. */
+.app-nav-link-placeholder {
+  pointer-events: none;
+  user-select: none;
+}
+
+.app-nav-link-placeholder .app-nav-label {
+  color: transparent;
+}
+
+.app-nav-skeleton {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
 }
 
 .app-nav-link:focus-visible::after {
@@ -8447,6 +8504,19 @@ html.is-native-scroll-root .profile-auth-scroll {
     margin-left: 0.7rem;
   }
 
+  .app-nav > .app-nav-group:has(+ .app-nav-group-profile),
+  .app-nav > .app-nav-group.app-nav-group-profile {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .app-nav {
+    top: auto;
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
+
   .app-nav-link.is-active,
   .app-nav-link:focus-visible,
   .app-nav-link:hover {
@@ -9928,6 +9998,12 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   padding: clamp(18px, calc(2 * var(--vw)), 32px) 0;
 }
 
+/* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel).
+   Only when the panel holds rows: the empty, error and loading states keep the stretched, centred track. */
+.tv-downloads-content:has(.tv-watchlist-list, .tv-downloads-section) {
+  align-content: start;
+}
+
 .tv-downloads-section {
   display: grid;
   gap: 0.75rem;
@@ -9943,6 +10019,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 .tv-downloads-section ul {
   display: grid;
+  align-content: start;
   gap: 0.6rem;
 }
 
@@ -10421,6 +10498,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .tv-discovery-list,
 .tv-watchlist-list {
   display: grid;
+  align-content: start;
   gap: 0.6rem;
   margin: 0;
   padding: 0;

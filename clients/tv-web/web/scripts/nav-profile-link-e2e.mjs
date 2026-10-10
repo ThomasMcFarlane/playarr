@@ -44,8 +44,17 @@ for (const [width, height, tag] of sizes) {
         .filter((e) => !e.closest(".tv-key-art, [aria-hidden='true']") && e.children.length === 0 && visible(e) && (e.textContent.trim() || e.tagName === "IMG" || e.tagName === "BUTTON" || e.tagName === "A"))
         .map((e) => ({ tag: e.className || e.tagName, ...rect(e) }));
       const clock = [...document.querySelectorAll(".app-header *")].filter((e) => e.children.length === 0 && visible(e)).map((e) => ({ tag: "header", ...rect(e) }));
-      const row = (width, height) => ({ width, height });
+      const logoEl = document.querySelector(".app-logo-icon");
+      const verEl = document.querySelector(".app-user-version");
+      const navEl = document.querySelector(".app-nav");
+      const groupEl = el.closest(".app-nav-group-profile");
       return {
+        logo: logoEl && visible(logoEl) ? rect(logoEl) : null,
+        ver: verEl && visible(verEl) ? rect(verEl) : null,
+        verInGroup: Boolean(verEl && groupEl && groupEl.contains(verEl)),
+        nav: rect(navEl),
+        group: groupEl ? rect(groupEl) : null,
+        navPadBottom: parseFloat(getComputedStyle(navEl).paddingBottom),
         tagName: el.tagName,
         href: el.getAttribute("href"),
         el: rect(el),
@@ -74,6 +83,14 @@ for (const [width, height, tag] of sizes) {
     // inside that bar instead.
     const hitContent = phone ? [] : m.content.filter((c) => overlaps(m.el, c));
     check(`${label}: profile tile overlaps no page content, clock or panel`, hitContent.length === 0, JSON.stringify(hitContent.slice(0, 3)));
+    const logoHit = m.logo ? m.others.concat([{ label: "profile", ...m.el }]).filter((o) => overlaps(m.logo, o)) : [];
+    check(`${label}: the Playarr logo overlaps no nav item`, logoHit.length === 0, JSON.stringify({ logo: m.logo, hit: logoHit.map((o) => o.label) }));
+    if (phone) {
+      check(`${label}: profile tile is inside the nav bar`, m.el.left >= m.nav.left - 0.5 && m.el.right <= m.nav.right + 0.5 && m.el.top >= m.nav.top - 0.5 && m.el.bottom <= m.nav.bottom + 0.5, JSON.stringify({ el: m.el, nav: m.nav }));
+    } else {
+      check(`${label}: the version sits below the profile tile, outside its group`, m.ver && !m.verInGroup && m.ver.top >= m.group.bottom - 0.5 && m.ver.top >= m.el.bottom - 0.5, JSON.stringify({ ver: m.ver, group: m.group, inGroup: m.verInGroup }));
+      check(`${label}: profile group and version sit at the bottom of the nav`, m.ver && m.nav.bottom - m.ver.bottom <= m.navPadBottom + 6 && m.group.bottom <= m.ver.top + 0.5, JSON.stringify({ navBottom: m.nav.bottom, verBottom: m.ver?.bottom, pad: m.navPadBottom }));
+    }
     check(`${label}: profile tile is on screen`, m.el.top >= -0.5 && m.el.left >= -0.5 && m.el.bottom <= m.vh + 0.5 && m.el.right <= m.vw + 0.5, JSON.stringify(m.el));
     if (route === "/movies") {
       // A long name truncates with an ellipsis instead of wrapping or widening the tile.

@@ -1,0 +1,1 @@
+- Web: on a first visit with nothing cached (for example a cold load of the Watchlist) the left nav no longer sits empty while the library-kinds read is in flight. It shows its full tile set at once, with skeleton tiles for Series, Movies and Music (not focusable, hidden from assistive technology), and the other tiles stay in place when the answer arrives (1.9970).
