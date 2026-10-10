@@ -113,6 +113,7 @@ import { MediaRail } from '../design/components/MediaRail';
 import type { MediaRailItem } from '../design/components/MediaRail';
 import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
+import { HOME_NAV_ID, buildNavRailItems } from '../navigation/NavItems';
 import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
 import { NavPill } from '../design/components/NavPill';
@@ -161,10 +162,6 @@ const SORT_RECENT: string = 'recent';
  * `Library` route this page bounces to always has SOME `kind` to open on. */
 const DEFAULT_LIBRARY_FALLBACK_KIND: string = 'movie';
 
-/** The nav item id for "this page" -- also the `NavRailItem`/`NavPillItem`
- * always prepended ahead of every kind-derived tile, so a user can always
- * get back to Home from the nav even when the kinds fetch fails. */
-const HOME_NAV_ID: string = 'home';
 
 /** Discriminants for "which rail rendered first" -- see `topRailFocusUpId`'s
  * wiring below. Plain string constants rather than an enum: `HomeCardItem`
@@ -199,13 +196,6 @@ const TOUCH_RAIL_GAP: number = Spacing.xl;
  * tight bounding box. */
 const TOUCH_BOTTOM_NAV_CLEARANCE: number =
   TouchGeometry.navItemHeight + TouchGeometry.navPaddingV * 2 + Spacing.xxl;
-
-/** Only shipped icon asset today (`resources/base/media/playarr_logo.svg`)
- * -- the same documented placeholder choice `design/components/NavRail.ets`/
- * `NavPill.ets`'s own default items and `pages/DesignGallery.ets`'s gallery
- * nav demo already make, reused here for every real nav tile until per-kind
- * icon assets ship. */
-const PLACEHOLDER_NAV_ICON: ResourceStr = $r('app.media.playarr_logo');
 
 /**
  * This page's own local view-model shape for one rail/hero card (brief
@@ -259,7 +249,7 @@ function cardCaption(kind: WorkKind, releaseDate: string | null): string {
 }
 
 /** The hero kicker: the featured work's OWN kind, singular ("Movie",
- * "Series", ...) -- distinct from `catalogKindNavLabel` below, which names a
+ * "Series", ...) -- distinct from the nav label (navigation/NavItems.ets), which names a
  * whole LIBRARY SECTION rather than one work. */
 function workKindKicker(kind: WorkKind): string {
   if (kind === 'movie') {
@@ -275,57 +265,6 @@ function workKindKicker(kind: WorkKind): string {
     return 'Artist';
   }
   return 'Author';
-}
-
-/** Nav tile label for a `getCatalogKinds()` kind -- names the library
- * section it opens (brief 9: "Nav destinations are driven by GET
- * /api/v1/catalog/kinds"), plural, distinct from `workKindKicker` above. */
-/** Web's library nav order (`PRODUCT_NAV_GROUPS`): Series, Movies, Sites, Music; anything else after. */
-const NAV_KIND_ORDER: WorkKind[] = ['series', 'movie', 'site', 'artist'];
-
-function navKindRank(kind: WorkKind): number {
-  const rank = NAV_KIND_ORDER.indexOf(kind);
-  return rank < 0 ? NAV_KIND_ORDER.length : rank;
-}
-
-/** The web nav icon for a nav id (generated from web `NavIcons.tsx`); the logo only for kinds web has no icon for. */
-function navIconFor(id: string): ResourceStr {
-  if (id === HOME_NAV_ID) {
-    return $r('app.media.nav_home');
-  }
-  if (id === 'series') {
-    return $r('app.media.nav_series');
-  }
-  if (id === 'movie') {
-    return $r('app.media.nav_movies');
-  }
-  if (id === 'artist') {
-    return $r('app.media.nav_music');
-  }
-  return PLACEHOLDER_NAV_ICON;
-}
-
-function catalogKindNavLabel(kind: WorkKind): string {
-  if (kind === 'movie') {
-    return 'Movies';
-  }
-  if (kind === 'series') {
-    return 'Series';
-  }
-  if (kind === 'site') {
-    return 'Sites';
-  }
-  if (kind === 'artist') {
-    return 'Music';
-  }
-  return 'Books';
-}
-
-/** One server-curated Home rail (`GET /api/v1/home/rails`), as web TV Home renders it. */
-interface HomeServerRail {
-  id: string;
-  title: string;
-  items: HomeCardItem[];
 }
 
 /** Builds one rail's card list from a plain catalogue `Work[]` (the new/more
@@ -549,14 +488,7 @@ export struct Home {
     const moreMovieWorks: Work[] = moreMoviesResult.kind === 'ok' ? moreMoviesResult.value.items : [];
     const moreSeriesWorks: Work[] = moreSeriesResult.kind === 'ok' ? moreSeriesResult.value.items : [];
 
-    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: navIconFor(HOME_NAV_ID), label: 'Home' }];
-    if (kindsResult.kind === 'ok') {
-      const kinds: WorkKind[] = kindsResult.value.slice();
-      kinds.sort((a: WorkKind, b: WorkKind): number => navKindRank(a) - navKindRank(b));
-      for (const kind of kinds) {
-        navRailItems.push({ id: kind, icon: navIconFor(kind), label: catalogKindNavLabel(kind) });
-      }
-    }
+    const navRailItems: NavRailItem[] = buildNavRailItems(kindsResult.kind === 'ok' ? kindsResult.value : []);
     this.navItems = navRailItems;
     const firstNavItem = navRailItems[0];
     this.topRailFocusUpId = firstNavItem !== undefined ? `${firstNavItem.id}-nav-tile` : '';

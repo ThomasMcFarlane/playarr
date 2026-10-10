@@ -105,17 +105,24 @@
 
 import { image } from '@kit.ImageKit';
 
-import { activeColors, toResourceColor } from '../design/Theme';
+import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
 import type { ThemeModeSetting } from '../design/Theme';
 import { tv, isTvMetrics, TvGeometry, TouchGeometry } from '../design/Metrics';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../design/Motion';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from '../design/components/FocusLift';
 import { PosterCard } from '../design/components/PosterCard';
 import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
+import { Stage } from '../design/components/Stage';
+import { NavRail } from '../design/components/NavRail';
+import type { NavRailItem } from '../design/components/NavRail';
+import { PlayarrLogo } from '../design/components/PlayarrLogo';
+import { Clock } from '../design/components/Clock';
+import { HOME_NAV_ID, buildNavRailItems } from '../navigation/NavItems';
+import { titleCountLabel } from '../core/CountFormat';
 import { Spacing, Radii } from '../core/Tokens';
 
-import { getCatalog } from '../data/CatalogRepository';
-import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
+import { getCatalog, getCatalogKinds } from '../data/CatalogRepository';
+import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY, LANDSCAPE_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
 
 import { catalogPageSize } from '../core/AppConfig';
 import type { WorkKind } from '../core/Types/Catalog';
@@ -123,7 +130,7 @@ import type { Work } from '../core/Types/Work';
 
 import { ROUTES } from '../navigation/Routes';
 import type { LibraryRouteParams, DetailRouteParams } from '../navigation/Routes';
-import { getNavStack, pushRoute, popRoute } from '../navigation/NavStack';
+import { getNavStack, pushRoute, popRoute, replaceRoute } from '../navigation/NavStack';
 
 import { logWarn } from '../util/Log';
 
@@ -354,10 +361,14 @@ struct LibraryGridCell {
   cardWidth: number = 0;
   cardHeight: number = 0;
   cardRadius: number = 0;
+  /** TV: landscape art and a title-only caption, as web `.tv-title-card`. */
+  landscape: boolean = false;
 
   /** Plain (non-reactive) callback field, called with the activated card's
    * `Work.id`. */
   onSelect: (workId: string) => void = () => {};
+  /** Called with the card's work when it takes focus (the TV hero follows focus, as on web). */
+  onFocused: (work: Work) => void = () => {};
 
   @State private artwork: image.PixelMap | undefined = undefined;
 
@@ -367,7 +378,7 @@ struct LibraryGridCell {
 
   private async loadArtwork(): Promise<void> {
     const workId = this.work.id;
-    const result = await fetchWorkArtworkByPriority(workId, COVER_ARTWORK_PRIORITY);
+    const result = await fetchWorkArtworkByPriority(workId, this.landscape ? LANDSCAPE_ARTWORK_PRIORITY : COVER_ARTWORK_PRIORITY);
     if (result.kind === 'ok') {
       this.artwork = result.value;
     }
@@ -384,9 +395,12 @@ struct LibraryGridCell {
       cardHeight: this.cardHeight,
       artworkRadius: this.cardRadius,
       title: this.work.title,
-      subtitle: releaseYearOf(this.work),
+      subtitle: this.landscape ? '' : releaseYearOf(this.work),
       onSelect: () => {
         this.onSelect(this.work.id);
+      },
+      onFocused: () => {
+        this.onFocused(this.work);
       },
     })
   }
@@ -407,6 +421,11 @@ export struct Library {
   @State private sort: string = 'title';
   @State private order: string = 'asc';
   @State private measuredWidthVp: number = 0;
+  /** `total` from the first catalogue page, or -1 when the server did not send one. */
+  @State private total: number = -1;
+  /** The TV hero: the focused title, the first one until a card takes focus (web `.tv-library-preview`). */
+  @State private hero: Work | undefined = undefined;
+  @State private navItems: NavRailItem[] = [];
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
   // actual values always go through design/Theme.ets's resolvers and
@@ -419,6 +438,24 @@ export struct Library {
 
   aboutToAppear(): void {
     this.loadPage(0);
+    this.loadNav();
+  }
+
+  private async loadNav(): Promise<void> {
+    const kinds = await getCatalogKinds();
+    this.navItems = buildNavRailItems(kinds.kind === 'ok' ? kinds.value : []);
+  }
+
+  private handleNavSelect(id: string): void {
+    if (id === this.kind) {
+      return;
+    }
+    if (id === HOME_NAV_ID) {
+      popRoute(getNavStack());
+      return;
+    }
+    const params: LibraryRouteParams = { kind: id };
+    replaceRoute(getNavStack(), ROUTES.Library, params);
   }
 
   private availableGridWidthVp(): number {
@@ -538,6 +575,10 @@ export struct Library {
       const total = page.total;
       const reachedTotal = total !== null && nextItems.length >= total;
       this.items = nextItems;
+      if (offset === 0) {
+        this.total = total !== null ? total : -1;
+        this.hero = nextItems[0];
+      }
       this.hasMore = page.items.length >= catalogPageSize && !reachedTotal;
       this.errorMessage = '';
       this.loadMoreFailed = false;
@@ -570,6 +611,17 @@ export struct Library {
   build() {
 
     NavDestination() {
+      if (isTvMetrics()) {
+        this.tvLayout()
+      } else {
+        this.touchLayout()
+      }
+    }
+    .hideTitleBar(true)
+  }
+
+  @Builder
+  private touchLayout(): void {
       Column() {
         Row({ space: Spacing.sm }) {
           LibraryChip({
@@ -693,9 +745,146 @@ export struct Library {
       .height('100%')
       .alignItems(HorizontalAlign.Start)
       .backgroundColor(toResourceColor(activeColors().bg))
-    }
-    .hideTitleBar(true)
   }
+
+  @Builder
+  private tvGrid(): void {
+    Grid() {
+      ForEach(
+        this.items,
+        (work: Work) => {
+          GridItem() {
+            LibraryGridCell({
+              work: work,
+              cardWidth: tv(TvGeometry.libraryGridCardWidth),
+              cardHeight: tv(TvGeometry.libraryGridCardHeight),
+              cardRadius: tv(TvGeometry.libraryGridCardRadius),
+              landscape: true,
+              onSelect: (workId: string) => {
+                this.openDetail(workId);
+              },
+              onFocused: (focused: Work) => {
+                this.hero = focused;
+              },
+            })
+          }
+        },
+        (work: Work): string => work.id
+      )
+    }
+    .columnsTemplate(columnsTemplateFor(TvGeometry.libraryGridColumns))
+    .columnsGap(tv(TvGeometry.libraryGridColumnGap))
+    .rowsGap(tv(TvGeometry.libraryGridRowGap))
+    .width(tv(TvGeometry.libraryGridCardWidth * TvGeometry.libraryGridColumns +
+      TvGeometry.libraryGridColumnGap * (TvGeometry.libraryGridColumns - 1)))
+    .height('100%')
+    .padding({ top: tv(TvGeometry.libraryGridTop), bottom: tv(TvGeometry.libraryGridTop) })
+    .margin({ left: tv(TvGeometry.libraryGridInsetLeft) })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
+    .onScrollIndex((_first: number, last: number) => {
+      this.maybeLoadMore(last);
+    })
+    .onReachEnd(() => {
+      this.maybeLoadMore(this.items.length - 1);
+    })
+  }
+
+  /** Web TV library: shell rail, logo and clock, round Back with the title and count, the focused
+   * title's copy on the left and the landscape grid on the right. */
+  @Builder
+  private tvLayout(): void {
+    Stack() {
+      Stage({
+        keyArt: '',
+        kicker: this.hero !== undefined && this.hero.genres.length > 0 ? this.hero.genres[0] : '',
+        title: this.hero !== undefined ? this.hero.title : '',
+        metaLines: this.hero !== undefined ? heroMetaLines(this.hero) : [],
+        synopsis: this.hero !== undefined && this.hero.overview !== null ? this.hero.overview : '',
+        scrollRails: false,
+        railsSlot: (): void => {
+          this.tvGrid();
+        },
+      })
+      NavRail({
+        items: this.navItems,
+        selectedId: this.kind,
+        onSelect: (id: string): void => {
+          this.handleNavSelect(id);
+        },
+      })
+      PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+        .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Row() {
+        Clock()
+      }
+      .height(tv(TvGeometry.utilityRowHeight))
+      .alignItems(VerticalAlign.Center)
+      .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
+      Row({ space: tv(TV_HEADER_GAP) }) {
+        Text('←')
+          .fontSize(tv(TV_BACK_GLYPH_SIZE))
+          .fontWeight(FontWeight.Bold)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+          .textAlign(TextAlign.Center)
+          .width(tv(TV_BACK_SIZE))
+          .height(tv(TV_BACK_SIZE))
+          .borderRadius(tv(TV_BACK_SIZE / 2))
+          .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, TV_BACK_BG_ALPHA))
+          .focusable(true)
+          .onClick(() => {
+            popRoute(getNavStack());
+          })
+        Column({ space: tv(TV_TITLE_SUBTITLE_GAP) }) {
+          Text(libraryKindTitle(this.kind))
+            .fontSize(tv(TV_TITLE_SIZE))
+            .fontWeight(FontWeight.Medium)
+            .letterSpacing(tv(TV_TITLE_LETTER_SPACING))
+            .fontColor(toResourceColor(activeColors().ink))
+            .height(tv(TV_BACK_SIZE))
+          if (this.total >= 0) {
+            Text(titleCountLabel(this.total))
+              .fontSize(tv(TV_SUBTITLE_SIZE))
+              .fontWeight(FontWeight.Bolder)
+              .letterSpacing(tv(TV_SUBTITLE_LETTER_SPACING))
+              .textCase(TextCase.UpperCase)
+              .fontColor(TV_SUBTITLE_COLOR)
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+      }
+      .alignItems(VerticalAlign.Top)
+      .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.utilityRowTop) })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(toResourceColor(activeColors().bg))
+  }
+}
+
+// Web `.tv-library-heading`: round Back (50, surfaceStrong at 0.7), title 33.6/580, pink count 12.288/820.
+const TV_BACK_SIZE: number = 50;
+const TV_BACK_GLYPH_SIZE: number = 17.28;
+const TV_BACK_BG_ALPHA: number = 0.7;
+const TV_HEADER_GAP: number = 23;
+const TV_TITLE_SIZE: number = 33.6;
+const TV_TITLE_LETTER_SPACING: number = -1.512;
+const TV_TITLE_SUBTITLE_GAP: number = 6;
+const TV_SUBTITLE_SIZE: number = 12.288;
+const TV_SUBTITLE_LETTER_SPACING: number = 0.983;
+const TV_SUBTITLE_COLOR: string = 'rgba(234, 166, 182, 1)';
+
+/** Web library hero meta: "2003  Action · Crime" (year, then genres). */
+function heroMetaLines(work: Work): string[] {
+  const parts: string[] = [];
+  const year = releaseYearOf(work);
+  if (year.length > 0) {
+    parts.push(year);
+  }
+  if (work.genres.length > 0) {
+    parts.push(work.genres.slice(0, 2).join(' · '));
+  }
+  return parts.length > 0 ? [parts.join('    ')] : [];
 }
 
 /**
