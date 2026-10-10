@@ -167,8 +167,8 @@ private fun PlayarrNavButton(item: PlayarrNavItem) {
             color = palette.surface,
             contentColor = palette.inkSoft,
             border = BorderStroke(1.dp, palette.pillBorder),
-            // Label pills (Today, the calendar date range) size to their label from the 92 / 76 dp minimum (web `.ui-btn`).
-            modifier = (if (glyph != null) Modifier.size(height) else Modifier.widthIn(min = if (tv) 92.dp else 76.dp).height(height))
+            // Television label pills (Today, the calendar date range) size to their label from 92 dp (web `.ui-btn`); phone keeps 76 dp.
+            modifier = (if (glyph != null) Modifier.size(height) else if (tv) Modifier.widthIn(min = 92.dp).height(height) else Modifier.size(76.dp, height))
                 .then(item.modifier)
                 .then(if (item.primary) Modifier.graphicsLayer { scaleX = 1.055f; scaleY = 1.055f } else Modifier)
                 // The ring is the focus state (white in dark, ink in light), never alongside another ring and never a fill.
@@ -177,7 +177,7 @@ private fun PlayarrNavButton(item: PlayarrNavItem) {
         ) {
             Box(contentAlignment = Alignment.Center) {
                 if (glyph != null) Text(glyph, fontSize = 13.sp, fontWeight = FontWeight(720))
-                else Text(item.label, fontSize = 14.4.sp, fontWeight = FontWeight(720), maxLines = 1, modifier = Modifier.padding(horizontal = 20.dp))
+                else Text(item.label, fontSize = 14.4.sp, fontWeight = FontWeight(720), maxLines = 1, modifier = if (tv) Modifier.padding(horizontal = 20.dp) else Modifier)
             }
         }
     }
