@@ -47,6 +47,8 @@ namespace Playarr.Core.Networking
         /// <summary>Works similar to <paramref name="id"/> (<c>/api/v1/catalog/{id}/similar</c>), used for end-of-playback suggestions.</summary>
         Task<IList<Work>> GetSimilarWorksAsync(Guid id, int? limit = null, CancellationToken cancellationToken = default);
 
+        Task<HomeRailsResponse> GetHomeRailsAsync(CancellationToken cancellationToken = default);
+
         Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default);
 
         Task<IList<AvailableProfile>> ListProfilesAsync(CancellationToken cancellationToken = default);
