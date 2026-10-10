@@ -9924,6 +9924,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 .tv-downloads-content {
   display: grid;
+  /* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel). */
+  align-content: start;
   gap: clamp(20px, calc(2.4 * var(--vw)), 36px);
   padding: clamp(18px, calc(2 * var(--vw)), 32px) 0;
 }
@@ -9943,6 +9945,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 .tv-downloads-section ul {
   display: grid;
+  align-content: start;
   gap: 0.6rem;
 }
 
@@ -10421,6 +10424,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .tv-discovery-list,
 .tv-watchlist-list {
   display: grid;
+  align-content: start;
   gap: 0.6rem;
   margin: 0;
   padding: 0;
