@@ -241,7 +241,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
         let sql = format!(
             "SELECT DISTINCT m.work_id AS work_id, l.lang AS lang \
              FROM media_file_languages l JOIN media_files m ON m.id = l.media_file_id \
-             WHERE l.kind = {}",
+             WHERE l.kind = {} AND m.missing_since IS NULL",
             self.p(1)
         );
         let rows = sqlx::query(&sql).bind(kind).fetch_all(&self.pool).await?;
@@ -258,7 +258,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
         &self,
         kind: &str,
     ) -> Result<(HashMap<Uuid, i64>, HashMap<(Uuid, String), i64>), DbError> {
-        let totals = sqlx::query("SELECT work_id, COUNT(*) AS n FROM media_files GROUP BY work_id")
+        let totals = sqlx::query("SELECT work_id, COUNT(*) AS n FROM media_files WHERE missing_since IS NULL GROUP BY work_id")
             .fetch_all(&self.pool)
             .await?;
         let mut file_totals = HashMap::new();
@@ -270,7 +270,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
         let sql = format!(
             "SELECT m.work_id AS work_id, l.lang AS lang, COUNT(DISTINCT m.id) AS n \
              FROM media_file_languages l JOIN media_files m ON m.id = l.media_file_id \
-             WHERE l.kind = {} GROUP BY m.work_id, l.lang",
+             WHERE l.kind = {} AND m.missing_since IS NULL GROUP BY m.work_id, l.lang",
             self.p(1)
         );
         let rows = sqlx::query(&sql).bind(kind).fetch_all(&self.pool).await?;
@@ -287,7 +287,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
     async fn files_needing_probe(&self, limit: i64) -> Result<Vec<(Uuid, PathBuf)>, DbError> {
         let sql = format!(
             "SELECT m.id AS id, m.path AS path FROM media_files m \
-             WHERE NOT EXISTS (SELECT 1 FROM media_file_language_state s \
+             WHERE m.missing_since IS NULL AND NOT EXISTS (SELECT 1 FROM media_file_language_state s \
                  WHERE s.media_file_id = m.id AND s.source = '{SOURCE_PROBE}') \
              AND NOT EXISTS (SELECT 1 FROM media_file_languages l \
                  WHERE l.media_file_id = m.id AND l.source = '{SOURCE_ARR}' AND l.kind = '{KIND_AUDIO}') \
@@ -307,7 +307,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
             "SELECT m.id AS id, m.path AS path FROM media_files m \
              LEFT JOIN media_file_language_state s \
                  ON s.media_file_id = m.id AND s.source = '{SOURCE_SIDECAR}' \
-             WHERE s.media_file_id IS NULL OR s.scanned_ms < {} \
+             WHERE m.missing_since IS NULL AND (s.media_file_id IS NULL OR s.scanned_ms < {}) \
              ORDER BY COALESCE(s.scanned_ms, 0), m.id LIMIT {}",
             self.p(1),
             self.p(2)

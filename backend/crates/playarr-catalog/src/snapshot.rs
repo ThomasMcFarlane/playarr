@@ -145,7 +145,7 @@ async fn read_probe(pool: &DbPool) -> Probe {
     let row = sqlx::query(
         "SELECT (SELECT COALESCE(MAX(seq), 0) FROM live_events WHERE kind = 'library') AS events, \
                 (SELECT COUNT(*) FROM works) AS works, \
-                (SELECT COUNT(*) FROM media_files) AS files",
+                (SELECT COUNT(*) FROM media_files WHERE missing_since IS NULL) AS files",
     )
     .fetch_one(pool)
     .await

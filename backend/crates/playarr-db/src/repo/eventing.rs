@@ -610,23 +610,33 @@ impl MediaFileRepo for EventingMediaFileRepo {
         work_id: Uuid,
         source_instance_id: Uuid,
         keep_source_file_ids: &[String],
-    ) -> Result<usize, DbError> {
-        let removed = self
+    ) -> Result<crate::repo::PruneOutcome, DbError> {
+        let outcome = self
             .inner
             .prune_superseded_files(work_id, source_instance_id, keep_source_file_ids)
             .await?;
-        if removed > 0 {
-            self.events
-                .publish_all([NewLiveEvent::for_library(
-                    kind::LIBRARY,
+        if outcome.deleted + outcome.marked_missing + outcome.restored > 0 {
+            // A library event also makes the cached home rails stale, which are
+            // keyed to the catalogue snapshot that library events advance.
+            let mut events = vec![NewLiveEvent::for_library(
+                kind::LIBRARY,
+                "work",
+                work_id,
+                &["files"],
+                Some(source_instance_id),
+            )];
+            for user in &outcome.moved_users {
+                events.push(NewLiveEvent::for_user(
+                    *user,
+                    kind::WATCH,
                     "work",
                     work_id,
-                    &["files"],
-                    Some(source_instance_id),
-                )])
-                .await;
+                    &["progress"],
+                ));
+            }
+            self.events.publish_all(events).await;
         }
-        Ok(removed)
+        Ok(outcome)
     }
     async fn find_by_source(
         &self,

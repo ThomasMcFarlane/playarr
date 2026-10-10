@@ -3897,6 +3897,29 @@ mod tests {
         assert_eq!(put_response.status(), StatusCode::FORBIDDEN);
     }
 
+    /// A player still holding the id of a file the sync has since replaced
+    /// gets a clean 404 (its progress moved to the replacement), never a 500.
+    #[tokio::test]
+    async fn watch_progress_write_for_a_removed_file_is_404() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![]).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/api/v1/playback/{}/progress", Uuid::new_v4()))
+                    .header("Authorization", bearer_header(&token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"position_ms":1000,"duration_ms":100000}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
     /// `list_watch_progress_handler` silently omits rows for media outside
     /// the caller's allowed libraries rather than 403ing the whole list --
     /// a caller can have legitimate progress in an allowed library and a

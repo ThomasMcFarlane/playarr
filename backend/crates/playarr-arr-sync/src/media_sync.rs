@@ -529,8 +529,9 @@ impl MediaSync {
         Ok(self.media_file_repo.list_by_work_id(work_id).await?.len())
     }
 
-    /// Drops this source's rows for `work_id` that the source no longer lists
-    /// (replaced by an upgrade, or deleted): see
+    /// Reconciles this source's rows for `work_id` with its file list
+    /// (replaced files are deleted after their progress moves, dropped ones are
+    /// marked missing, never deleted): see
     /// [`MediaFileRepo::prune_superseded_files`]. Skipped for an empty listing
     /// so a source hiccup cannot wipe a work's files.
     async fn prune_superseded(
@@ -539,12 +540,18 @@ impl MediaSync {
         source_instance_id: Uuid,
         listed_file_ids: Vec<String>,
     ) -> Result<(), MediaSyncError> {
-        let removed = self
+        let outcome = self
             .media_file_repo
             .prune_superseded_files(work_id, source_instance_id, &listed_file_ids)
             .await?;
-        if removed > 0 {
-            tracing::info!(%work_id, removed, "removed media file rows the source replaced or deleted");
+        if outcome.deleted + outcome.marked_missing + outcome.restored > 0 {
+            tracing::info!(
+                %work_id,
+                deleted = outcome.deleted,
+                marked_missing = outcome.marked_missing,
+                restored = outcome.restored,
+                "reconciled media file rows with the source's file list"
+            );
         }
         Ok(())
     }
@@ -1812,6 +1819,104 @@ mod tests {
             ])))
             .mount(server)
             .await;
+    }
+
+    /// Sonarr's `/episode` and `/episodefile` answers can disagree for a
+    /// moment during an upgrade: the episode still names file 10 while the
+    /// file list already holds only its replacement 11. The old row has no
+    /// survivor yet, so it must not be deleted: it is hidden, its watch
+    /// progress survives, and it returns when file 10 is listed again.
+    #[tokio::test]
+    async fn sync_sonarr_upgrade_race_keeps_progress_and_hides_the_row() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let sync = media_sync(pool.clone());
+        let instance_id = Uuid::new_v4();
+        let repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+        let sonarr = |episode_files: Vec<serde_json::Value>, episodes: Vec<serde_json::Value>| async move {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/api/v3/episode"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(episodes))
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/api/v3/episodefile"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(episode_files))
+                .mount(&server)
+                .await;
+            server
+        };
+        let episodes = vec![
+            sonarr_episode_json(10, 1, 1, "One", 10),
+            sonarr_episode_json(11, 1, 2, "Two", 12),
+        ];
+        let first = sonarr(
+            vec![
+                sonarr_episode_file_json(10, 1, "S01E01.mkv"),
+                sonarr_episode_file_json(12, 1, "S01E02.mkv"),
+            ],
+            episodes.clone(),
+        )
+        .await;
+        let client = ArrClient::Sonarr(SonarrClient::new(first.uri(), "test-key"));
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+        let old = repo
+            .find_by_source(instance_id, "10")
+            .await
+            .unwrap()
+            .expect("file 10 synced");
+
+        let user = Uuid::new_v4().to_string();
+        let policy = Uuid::new_v4().to_string();
+        for sql in [
+            format!("INSERT INTO policies (id, name) VALUES ('{policy}', 'p')"),
+            format!(
+                "INSERT INTO users (id, username, display_name, password_hash, policy_id, created_at, disabled) \
+                 VALUES ('{user}', 'u', 'U', 'x', '{policy}', '2024-01-01T00:00:00.000Z', 0)"
+            ),
+            format!(
+                "INSERT INTO watch_progress (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
+                 VALUES ('{user}', '{}', 5, 10, 'in_progress', '2024-01-01T00:00:00.000Z')",
+                old.id
+            ),
+        ] {
+            sqlx::query(&sql).execute(&pool).await.unwrap();
+        }
+
+        // The race: episodes still point at 10, files list only 11 and 12.
+        let second = sonarr(
+            vec![
+                sonarr_episode_file_json(11, 1, "S01E01-new.mkv"),
+                sonarr_episode_file_json(12, 1, "S01E02.mkv"),
+            ],
+            episodes,
+        )
+        .await;
+        let client = ArrClient::Sonarr(SonarrClient::new(second.uri(), "test-key"));
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+
+        let progress: (String,) =
+            sqlx::query_as("SELECT media_file_id FROM watch_progress WHERE user_id = ?")
+                .bind(&user)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(progress.0, old.id.to_string(), "watch progress was lost");
+        assert_eq!(repo.get_by_id(old.id).await.unwrap().id, old.id);
+        let visible = repo.list_by_work_id(work_id).await.unwrap();
+        assert!(
+            visible.iter().all(|f| f.id != old.id),
+            "stale row stays hidden"
+        );
+        assert!(
+            !sync.has_missing_duration(work_id).await.unwrap(),
+            "a hidden row must not keep the work in the backfill"
+        );
     }
 
     #[tokio::test]
