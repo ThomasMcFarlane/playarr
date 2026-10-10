@@ -9994,10 +9994,14 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 .tv-downloads-content {
   display: grid;
-  /* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel). */
-  align-content: start;
   gap: clamp(20px, calc(2.4 * var(--vw)), 36px);
   padding: clamp(18px, calc(2 * var(--vw)), 32px) 0;
+}
+
+/* Rows keep their natural height and stack from the top whatever the count (a stretched track made one row fill the panel).
+   Only when the panel holds rows: the empty, error and loading states keep the stretched, centred track. */
+.tv-downloads-content:has(.tv-watchlist-list, .tv-downloads-section) {
+  align-content: start;
 }
 
 .tv-downloads-section {
