@@ -79,11 +79,37 @@ namespace Playarr.Xbox.Views
             }
         }
 
+        private static Style? _gridCardContainerStyle;
+
+        /// <summary>Library grid container: the web grid's 25 px column gap and 56 px row gap, same focus ring as rails.</summary>
+        public static Style GridCardContainerStyle
+        {
+            get
+            {
+                if (_gridCardContainerStyle == null)
+                {
+                    var style = new Style(typeof(GridViewItem));
+                    foreach (var setter in CardContainerStyle.Setters)
+                    {
+                        if (setter is Setter { Property: var property } plain && property != FrameworkElement.MarginProperty)
+                        {
+                            style.Setters.Add(new Setter(property, plain.Value));
+                        }
+                    }
+
+                    style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 25, 24)));
+                    _gridCardContainerStyle = style;
+                }
+
+                return _gridCardContainerStyle;
+            }
+        }
+
         /// <summary>
         /// Web TV Home card: 328x184 landscape art (thumb, else backdrop; a titled placeholder without art),
         /// then the title and the "Kind · year" caption.
         /// </summary>
-        public static FrameworkElement CreateLandscapeCard(Work work)
+        public static FrameworkElement CreateLandscapeCard(Work work, bool caption = true)
         {
             var art = new Grid
             {
@@ -124,6 +150,11 @@ namespace Playarr.Xbox.Views
                 Margin = new Thickness(2, 12, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
+            if (!caption)
+            {
+                return root;
+            }
+
             root.Children.Add(new TextBlock
             {
                 Text = WorkLabels.KindWithYear(work),

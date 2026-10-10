@@ -44,6 +44,7 @@ namespace Playarr.Xbox.ViewModels
         private WorkKind? _selectedKind;
         private string? _selectedSort;
         private IReadOnlyList<Work> _works = Array.Empty<Work>();
+        private long? _total;
         private bool _isLoadingKinds;
         private bool _isLoadingWorks;
         private string? _errorMessage;
@@ -77,6 +78,13 @@ namespace Playarr.Xbox.ViewModels
         {
             get => _selectedSort;
             private set => SetProperty(ref _selectedSort, value);
+        }
+
+        /// <summary>Server total for the current kind (the web header's "N TITLES"), when the server reports it.</summary>
+        public long? Total
+        {
+            get => _total;
+            private set => SetProperty(ref _total, value);
         }
 
         public IReadOnlyList<Work> Works
@@ -168,6 +176,7 @@ namespace Playarr.Xbox.ViewModels
                     kind: SelectedKind,
                     sort: SelectedSort,
                     limit: PageLimit);
+                Total = page.Total;
                 Works = new List<Work>(page.Items);
             }
             catch (ApiException error)
