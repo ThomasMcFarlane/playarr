@@ -6410,7 +6410,8 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-home-card > strong {
   display: block;
-  padding: var(--card-copy-gap) var(--card-copy-inset) 0;
+  margin-top: var(--card-copy-gap);
+  padding-inline: var(--card-copy-inset);
   overflow: hidden;
   font-size: var(--card-title-size);
   font-weight: var(--card-title-weight);
