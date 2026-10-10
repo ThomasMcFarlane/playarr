@@ -266,3 +266,34 @@ test('Depends must be <epic>.<task> references that resolve; a bare ID folds int
   assert.equal(r.status, 0, r.stderr);
   assert.match(tasks, /^\| 3 \| Three \| todo \| \| \| 1\.1 \|/m);
 });
+
+test('--check fails when a fragment reuses an existing row number for a different title', () => {
+  const r = run({ '1.md': '| 1 | Totally unrelated work | todo | | | | | x |\n' }, ['--check']).r;
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /row 1 title mismatch: fragment 'Totally unrelated work' vs board 'One'\. Is this a different task reusing the number\?/);
+});
+
+test('a similar title (punctuation, case, extra word) is accepted', () => {
+  assert.equal(run({ '1.md': '| 1 | one! | todo | | | | | x |\n' }, ['--check']).r.status, 0);
+  assert.equal(run({ '1.md': '| 1 | One more | in_progress | a | | | 2026-10-10 14:00 ICT | x |\n' }, ['--check']).r.status, 0);
+});
+
+test('retitle: true allows a deliberate rename', () => {
+  const { r, tasks } = run({ '1.md': 'retitle: true\n| 1 | Totally unrelated work | todo | | | | | x |\n' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(tasks, /^\| 1 \| Totally unrelated work \|/m);
+  assert.equal(run({ '1.md': 'retitle: true\n| 1 | Totally unrelated work | todo | | | | | x |\n' }, ['--check']).r.status, 0);
+});
+
+test('remove fragments skip the title guard', () => {
+  assert.equal(run({ '1.md': 'remove: 1\n' }, ['--check']).r.status, 0);
+});
+
+test('two pending fragments for one new ID with different titles fail; same title passes', () => {
+  const a = 'section: Active\n| 7 | Alpha beta gamma | todo | | | | | x |\n';
+  const b = 'section: Active\n| 7 | Delta epsilon zeta | todo | | | | | y |\n';
+  const bad = run({ '7.md': a, '7b.md': b }, ['--check']).r;
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /row 7 title mismatch: .*pending fragment/);
+  assert.equal(run({ '7.md': a, '7b.md': a.replace('x', 'z') }, ['--check']).r.status, 0);
+});

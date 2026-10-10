@@ -160,6 +160,8 @@ on a personal account do not get.
   `tasks.d/<row-number>.md` (a `section:` line, the bare epic name or `N. Name`, plus the complete eight-column row; an existing row
   number replaces that row in place and keeps its epic; `section:` must name a current epic heading
   (old names are aliased, an unknown one fails `--check`); `section-new: <name>` creates an epic on purpose, numbered highest + 1). The merge train folds them into `TASKS.md` when the PR lands.
+  Use only the row number the coordinator gives you; never pick or reuse one. `--check` fails when a fragment's title
+  differs materially from the existing row with that number (a different task reusing it); `retitle: true` allows a deliberate rename.
   See `tasks.d/README.md`. Validate fragments and the board format with
   `node scripts/fold-fragments.mjs --check`.
 - A task's reference is `<epic>.<task>` (for example `3.9926`; the ID column keeps the bare ID). Agents name
