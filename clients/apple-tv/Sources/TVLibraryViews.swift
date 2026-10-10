@@ -1665,9 +1665,7 @@ struct TVLibraryKindView: View {
             selectedID = nil
             requestNavFocus()
         }
-        .onAppear {
-            if selectedID == nil { selectedID = work.id }
-        }
+
     }
 
     /// Web list view row (`.tv-list-card`): a 172.8 x 97.2 thumbnail, the title 14.98/610 and "Genres · Year" 9.6 beside
