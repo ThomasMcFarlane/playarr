@@ -4,6 +4,7 @@ import androidx.compose.ui.layout.layout
 import io.playarr.shared.designsystem.page.PlayarrCardShadows
 import io.playarr.shared.designsystem.page.PlayarrCardShadowLayer
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -159,9 +160,35 @@ internal fun WebShadowedBox(
     /** False sizes the box to its content (the shadow layers still follow it). */
     innerFill: Boolean = true,
     innerWidthFill: Boolean = false,
+    /**
+     * Owner ruling 2026-10-09 (WCAG 2.4.13): a focused media card keeps its lift and shadow and adds the brand ring drawn
+     * as a glow, following the card's shape (web: `0 0 0 3px var(--brand-ink), 0 0 20px 4px` brand-ink at 45%).
+     */
+    focusGlow: Boolean = false,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     Box(modifier) {
+        if (focusGlow) {
+            val brand = io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.brandInk
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                val grow = 24.dp
+                Box(
+                    Modifier.matchParentSize().layout { measurable, constraints ->
+                        val g = grow.roundToPx()
+                        val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth + 2 * g, constraints.maxHeight + 2 * g))
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            placeable.placeWithLayer(-g, -g) {
+                                val sigma = 20.dp.toPx() / 2f
+                                renderEffect = androidx.compose.ui.graphics.BlurEffect(sigma, sigma, androidx.compose.ui.graphics.TileMode.Decal)
+                            }
+                        }
+                    },
+                ) {
+                    // A 4 dp spread: the glow shape is the card grown by 4 dp on every side.
+                    Box(Modifier.fillMaxSize().padding(grow - 4.dp).background(brand.copy(alpha = 0.45f), shape))
+                }
+            }
+        }
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             shadows.forEach { shadow ->
                 // A blur is clipped to its layer, so the layer is grown by the blur radius on every side (the shape is
@@ -185,6 +212,17 @@ internal fun WebShadowedBox(
             }
         }
         Box((if (innerFill) Modifier.matchParentSize() else if (innerWidthFill) Modifier.fillMaxWidth() else Modifier).clip(shape).then(innerModifier), content = content)
+        if (focusGlow) {
+            // The 3 dp ring sits outside the card edge, as a zero-blur box-shadow spread.
+            val brand = io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.brandInk
+            Box(
+                Modifier.matchParentSize().layout { measurable, constraints ->
+                    val g = 3.dp.roundToPx()
+                    val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth + 2 * g, constraints.maxHeight + 2 * g))
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(-g, -g) }
+                }.border(3.dp, brand, shape),
+            )
+        }
     }
 }
 

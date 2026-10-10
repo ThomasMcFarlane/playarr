@@ -3179,6 +3179,7 @@ internal fun ExperienceLandscapeCard(
         WebShadowedBox(
             shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) (if (focused) webRemoteFocusShadows else webCardShadows(false, !webTvLibrary, false)) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
+            focusGlow = webTvStyle && focused,
             modifier = Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
                 .then(
@@ -3486,6 +3487,7 @@ private fun LibraryCoverCard(
             WebShadowedBox(
                 shadows = if (focused) webCardFocusShadows else webCardRestShadows,
                 shape = RoundedCornerShape(12.dp),
+                focusGlow = focused,
                 modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
             ) {
                 AuthenticatedArtwork(
@@ -4503,6 +4505,7 @@ private fun WebSearchResultCard(
         WebShadowedBox(
             shadows = if (focused) webSearchFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.48.dp),
+            focusGlow = focused,
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             innerModifier = Modifier.background(WebSurfaceStrong),
         ) {
@@ -6623,6 +6626,7 @@ private fun WebEpisodeDetailCard(
         WebShadowedBox(
             shadows = if (lift) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(13.44.dp),
+            focusGlow = focused,
             modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale),
             innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
@@ -6955,6 +6959,7 @@ private fun WebEpisodeCard(
         WebShadowedBox(
             shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(13.44.dp),
+            focusGlow = focused,
             modifier = Modifier.fillMaxWidth().height(150.8.dp),
             innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
@@ -7059,6 +7064,7 @@ private fun SimilarWorksRail(
                         WebShadowedBox(
                             shadows = if (tileFocused) webCardFocusShadows else webCardRestShadows,
                             shape = RoundedCornerShape(10.dp),
+                            focusGlow = tileFocused,
                             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                             innerModifier = Modifier.background(WebSurfaceSoft),
                         ) {
@@ -7360,6 +7366,7 @@ private fun MusicAlbumCard(
         WebShadowedBox(
             shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.dp),
+            focusGlow = focused,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                 .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
             innerModifier = Modifier.background(WebSurfaceStrong),
