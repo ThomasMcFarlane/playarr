@@ -5,6 +5,7 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes, formatEstimatedBytes } from "../lib/formatBytes";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { DownloadKeepUntilPolicy } from "../lib/downloadsDb";
+import { SegmentedControl, Select } from "./ui";
 import { TvEmptyState } from "./tv/TvEmptyState";
 import type { PlayableLeaf } from "../lib/playableLeaves";
 import {
@@ -23,6 +24,14 @@ export interface DownloadQualitySelection {
   qualityId: string;
   qualityLabel: string;
   keepUntil: DownloadKeepUntilPolicy;
+  /** The leaves of the chosen scope (this episode, the season). */
+  leaves: PlayableLeaf[];
+}
+
+/** One answer to "what should be downloaded?" -- shown as a segmented control when there is more than one. */
+export interface DownloadScope {
+  id: "episode" | "season";
+  leaves: PlayableLeaf[];
 }
 
 /**
@@ -43,7 +52,8 @@ export interface DownloadQualitySelection {
  */
 export function DownloadQualityDrawer({
   title,
-  leaves,
+  leaves: defaultLeaves,
+  scopes,
   onClose,
   onConfirm,
   confirmLabel,
@@ -51,6 +61,8 @@ export function DownloadQualityDrawer({
 }: {
   title: string;
   leaves: PlayableLeaf[];
+  /** Optional wider scopes for an episode; the first is the default. When omitted `leaves` is the only scope. */
+  scopes?: DownloadScope[];
   onClose: () => void;
   onConfirm: (selection: DownloadQualitySelection) => void;
   confirmLabel?: string;
@@ -67,7 +79,9 @@ export function DownloadQualityDrawer({
     unit: "days",
   });
 
-  const firstLeaf = leaves[0];
+  const [scopeId, setScopeId] = useState<DownloadScope["id"]>(scopes?.[0]?.id ?? "episode");
+  const leaves = scopes?.find((scope) => scope.id === scopeId)?.leaves ?? defaultLeaves;
+  const firstLeaf = defaultLeaves[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +115,7 @@ export function DownloadQualityDrawer({
       qualityId: selectedOption.id,
       qualityLabel: selectedOption.label,
       keepUntil: keepUntilPolicyFromState(keepUntil),
+      leaves,
     });
   }
 
@@ -129,39 +144,40 @@ export function DownloadQualityDrawer({
         />
       ) : (
         <>
+          {scopes && scopes.length > 1 ? (
+            <section>
+              <h3>{t("components.downloadQualityDrawer.scopeHeading")}</h3>
+              <SegmentedControl
+                ariaLabel={t("components.downloadQualityDrawer.scopeHeading")}
+                value={scopeId}
+                onChange={setScopeId}
+                options={scopes.map((scope) => ({
+                  value: scope.id,
+                  label: t(`components.downloadQualityDrawer.scope.${scope.id}`, { count: scope.leaves.length }),
+                }))}
+              />
+            </section>
+          ) : null}
+
           <section>
             <h3>{t("components.downloadQualityDrawer.qualityHeading")}</h3>
-            <div className="tv-filter-choice-grid tv-playback-settings-options">
-              {options.map((option) => {
-                const selected = option.id === qualityId;
+            <Select
+              ariaLabel={t("components.downloadQualityDrawer.qualityHeading")}
+              value={qualityId}
+              onChange={setQualityId}
+              options={options.map((option) => {
                 const sizeLabel = option.size_is_estimate
                   ? formatEstimatedBytes(option.estimated_size_bytes)
                   : formatBytes(option.estimated_size_bytes);
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    className={selected ? "is-active" : ""}
-                    onClick={() => setQualityId(option.id)}
-                  >
-                    <span>
-                      <strong>{option.label}</strong>
-                      <small>
-                        {isBatch
-                          ? t("components.downloadQualityDrawer.perItemSize", {
-                              size: sizeLabel,
-                              count: leaves.length,
-                            })
-                          : sizeLabel}
-                      </small>
-                    </span>
-                    <i aria-hidden="true">{selected ? "✓" : ""}</i>
-                  </button>
-                );
+                return {
+                  value: option.id,
+                  label: option.label,
+                  hint: isBatch
+                    ? t("components.downloadQualityDrawer.perItemSize", { size: sizeLabel, count: leaves.length })
+                    : sizeLabel,
+                };
               })}
-            </div>
+            />
           </section>
 
           <KeepUntilPicker state={keepUntil} onChange={setKeepUntil} />
@@ -178,7 +194,9 @@ export function DownloadQualityDrawer({
             >
               {busy
                 ? t("components.downloadQualityDrawer.downloading")
-                : (confirmLabel ?? t("components.downloadQualityDrawer.download"))}
+                : isBatch && scopes
+                  ? t("components.mediaContextMenu.downloadCount", { count: leaves.length })
+                  : (confirmLabel ?? t("components.downloadQualityDrawer.download"))}
             </button>
           </div>
         </>

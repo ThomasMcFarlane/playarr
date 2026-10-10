@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { MultiSelect, ViewToggle } from "../src/components/shell";
+import { SegmentedControl, Select } from "../src/components/ui";
 import { Caption } from "./fixtures";
 
 const OPTIONS = [
@@ -32,6 +33,8 @@ function SearchField({ value, disabled, error }: { value: string; disabled?: boo
 function Inputs({ disabled, value = "", error }: { disabled?: boolean; value?: string; error?: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(["drama"]));
   const [view, setView] = useState("cover");
+  const [quality, setQuality] = useState("1080p");
+  const [scope, setScope] = useState("episode");
   return (
     <div className="sb-pad sb-col" style={{ maxWidth: 760 }}>
       <div>
@@ -44,10 +47,29 @@ function Inputs({ disabled, value = "", error }: { disabled?: boolean; value?: s
       </div>
       <div>
         <Caption>Select</Caption>
-        <select aria-label="Sort order" disabled={disabled} defaultValue="title">
-          <option value="title">Title</option>
-          <option value="added">Recently added</option>
-        </select>
+        <Select
+          ariaLabel="Quality"
+          disabled={disabled}
+          value={quality}
+          onChange={setQuality}
+          options={[
+            { value: "original", label: "Original", hint: "1.4 GB" },
+            { value: "1080p", label: "1080p", hint: "~900 MB" },
+            { value: "720p", label: "720p", hint: "~450 MB" },
+          ]}
+        />
+      </div>
+      <div>
+        <Caption>Segmented control</Caption>
+        <SegmentedControl
+          ariaLabel="Download scope"
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: "episode", label: "This episode" },
+            { value: "season", label: "Whole season" },
+          ]}
+        />
       </div>
       <div>
         <Caption>Choice chips (multi-select)</Caption>

@@ -1107,7 +1107,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               )}
             />
           </FilterSection>
-          </FilterSection>
 
           <FilterSection title={t("pages.library.sortBy")}>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">

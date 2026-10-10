@@ -44,6 +44,8 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
   const jpegs = buildJpegs();
   const unknown = new Set();
+  /** Bodies of every `POST /api/v1/downloads` (download e2e assertions). */
+  const downloadRequests = [];
   const userId = "00000000-0000-4000-8000-000000000001";
 
   const handleApi = (url, req, res, delivered = false) => {
@@ -213,6 +215,28 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       })).filter((item) => !removedWatchlist.has(item.title.title_key)) });
     }
     if (p === "/api/v1/playlists" || p === "/api/v1/admin/playlists") return json(res, []);
+    const dlOptions = p.match(/^\/api\/v1\/media\/([^/]+)\/download-options$/);
+    if (dlOptions) {
+      return json(res, {
+        media_file_id: dlOptions[1], container: "mp4",
+        options: [
+          { id: "original", label: "Original", profile: null, height: null, estimated_size_bytes: 1_500_000_000, size_is_estimate: false },
+          { id: "1080p", label: "1080p", profile: "1080p", height: 1080, estimated_size_bytes: 900_000_000, size_is_estimate: true },
+          { id: "720p", label: "720p", profile: "720p", height: 720, estimated_size_bytes: 450_000_000, size_is_estimate: true },
+          { id: "480p", label: "480p", profile: "480p", height: 480, estimated_size_bytes: 200_000_000, size_is_estimate: true },
+        ],
+      });
+    }
+    if (p === "/api/v1/downloads" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      return void req.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+        downloadRequests.push(body);
+        json(res, { id: `dl-${downloadRequests.length}`, media_file_id: body.media_file_id, quality_id: body.quality_id, status: "queued", container: "mp4", size_bytes: null, requested_at: new Date().toISOString(), ready_at: null, expires_at: null, error_message: null });
+      });
+    }
+    if (p === "/api/v1/downloads") return json(res, []);
     if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: canDownload, can_request: false });
     unknown.add(`${req.method} ${p}`);
     return json(res, { error: "nav-perf mock: not implemented", path: p }, 404);
@@ -259,5 +283,5 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     }
   });
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
-  return { server, port: server.address().port, unknown, setDetailDelay: (ms) => { detailDelay = ms; }, close: () => new Promise((r) => server.close(r)) };
+  return { server, port: server.address().port, unknown, downloadRequests, setDetailDelay: (ms) => { detailDelay = ms; }, close: () => new Promise((r) => server.close(r)) };
 }
