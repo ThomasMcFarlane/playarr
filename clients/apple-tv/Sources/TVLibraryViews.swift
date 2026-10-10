@@ -143,6 +143,7 @@ struct TVHomeView: View {
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCard, equals: focus)
+                        .tvLongPressActions(work)
                     }
                 }
                 .padding(.leading, Self.cardBleed)
@@ -1158,6 +1159,7 @@ struct TVSearchView: View {
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
+                    .tvLongPressActions(work)
                     .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                     .focusEffectDisabled()
                 }
@@ -1620,6 +1622,7 @@ struct TVLibraryKindView: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
+        .tvLongPressActions(work)
         .disabled(parityMode) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(parityMode)
         .onMoveCommand { direction in
@@ -1841,5 +1844,98 @@ struct TVErrorView: View {
         }
         .padding(DesignTokens.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+
+/// Web `MediaContextMenu` "Title actions" in the shared drawer: Play, Add to Playlist, Mark as Watched / Unwatched.
+/// Download is left out: Apple TV keeps no offline copies (web hides it without download storage).
+struct TVActionsDrawer: View {
+    let work: Work
+    let onClose: () -> Void
+    let onPlay: (UUID, String) -> Void
+
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var playlists: [Playlist]?
+    @State private var message: String?
+    @State private var busy = false
+
+    var body: some View {
+        TVDrawer(kicker: playlists == nil ? "Title actions" : "Add to Playlist", title: work.title, onClose: onClose) {
+            VStack(alignment: .leading, spacing: 14) {
+                if let playlists {
+                    ForEach(playlists) { list in
+                        TVActionRow(glyph: "\u{FF0B}", label: list.name) { Task { await add(to: list) } }
+                    }
+                    if playlists.isEmpty {
+                        Text("No playlists yet.").font(TVTheme.font(size: 12.48, css: 400)).foregroundStyle(DesignTokens.Color.textDisabled)
+                    }
+                    TVActionRow(glyph: "\u{2190}", label: "Back") { self.playlists = nil }
+                } else {
+                    TVActionRow(glyph: "\u{25B6}", label: "Play") { Task { await play() } }
+                    TVActionRow(glyph: "\u{FF0B}", label: "Add to Playlist") {
+                        Task { playlists = (try? await environment.apiClient.listPlaylists()) ?? [] }
+                    }
+                    TVActionRow(glyph: "\u{2713}", label: "Mark as Watched") { Task { await setWatched(true) } }
+                    TVActionRow(glyph: "\u{25CB}", label: "Mark as Unwatched") { Task { await setWatched(false) } }
+                }
+                if let message {
+                    Text(message)
+                        .font(TVTheme.font(size: 12.48, css: 400))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 268, alignment: .leading)
+                }
+            }
+            .disabled(busy)
+        }
+    }
+
+    /// The playable leaves: the film itself, or every episode (in order) of a series.
+    private func leaves() async throws -> [(id: UUID, runtimeMs: Int64?, title: String)] {
+        let detail = try await environment.apiClient.fetchWork(id: work.id)
+        switch detail.children {
+        case .series(let seasons):
+            return seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+                .flatMap { $0.episodes.sorted { $0.episode.episodeNumber < $1.episode.episodeNumber } }
+                .compactMap { ep in ep.mediaFileID.map { ($0, ep.runtimeMs, ep.episode.title ?? work.title) } }
+        default:
+            return detail.mediaFileID.map { [($0, detail.runtimeMs, work.title)] } ?? []
+        }
+    }
+
+    private func play() async {
+        busy = true
+        defer { busy = false }
+        do {
+            guard let first = try await leaves().first else { message = "Nothing to play yet."; return }
+            onPlay(first.id, first.title)
+        } catch { message = "Playback could not be started." }
+    }
+
+    private func setWatched(_ watched: Bool) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let items = try await leaves()
+            guard !items.isEmpty else { message = "Nothing to mark yet."; return }
+            for item in items {
+                let duration = item.runtimeMs ?? 0
+                _ = try await environment.apiClient.updateWatchProgress(
+                    mediaFileID: item.id,
+                    body: UpdateWatchProgressRequest(positionMS: watched ? duration : 0, durationMS: duration, completed: watched)
+                )
+            }
+            onClose()
+        } catch { message = "The change could not be made." }
+    }
+
+    private func add(to list: Playlist) async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await environment.apiClient.addPlaylistItem(playlistID: list.id, body: AddPlaylistItemRequest(workID: work.id))
+            onClose()
+        } catch { message = "\(work.title) could not be added to \(list.name)." }
     }
 }

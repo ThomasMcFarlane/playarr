@@ -265,6 +265,14 @@ private struct TVProductionShell<Stage: View>: View {
     @State private var showProfiles = false
     /// A full-screen page (the player) is showing: no nav, no clock.
     @State private var chromeHidden = false
+    /// The media actions drawer (long press on a card) and the title it started playing.
+    @State private var actionsWork: Work?
+    @State private var playing: PlayRequest?
+
+    private struct PlayRequest: Identifiable {
+        let id: UUID
+        let title: String
+    }
     @Environment(\.resetFocus) private var resetFocus
 
     private var navColumn: CGFloat {
@@ -346,7 +354,19 @@ private struct TVProductionShell<Stage: View>: View {
                 .zIndex(80)
 
         }
+        .overlay {
+            if let actionsWork {
+                TVActionsDrawer(work: actionsWork, onClose: { self.actionsWork = nil }) { id, title in
+                    self.actionsWork = nil
+                    playing = PlayRequest(id: id, title: title)
+                }
+            }
+        }
+        .environment(\.openActions) { actionsWork = $0 }
         .ignoresSafeArea()
+        .fullScreenCover(item: $playing) { request in
+            TVPlayerView(mediaFileID: request.id, title: request.title, apiClient: environment.apiClient)
+        }
         .fullScreenCover(isPresented: $showProfiles) {
             TVProfilesView(
                 onLinkTV: { showProfiles = false },

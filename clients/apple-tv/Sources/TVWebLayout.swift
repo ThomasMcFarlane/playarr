@@ -439,7 +439,8 @@ struct TVDrawer<Content: View>: View {
                         .font(TVTheme.font(size: 38.4, css: 590))
                         .tracking(-2.1)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(height: 57.6)
+                        .lineLimit(2)
+                        .frame(width: 204, alignment: .leading)
                 }
                 Spacer(minLength: 0)
                 Button(action: onClose) {
@@ -504,5 +505,62 @@ struct TVChoiceSection<Value: Hashable>: View {
             }
         }
         .padding(.bottom, 30.3)
+    }
+}
+
+
+/// Web media actions (`MediaContextMenu`): a long press (650 ms) on a media card opens its actions in the shared drawer.
+struct TVOpenActionsKey: EnvironmentKey {
+    static let defaultValue: (Work) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openActions: (Work) -> Void {
+        get { self[TVOpenActionsKey.self] }
+        set { self[TVOpenActionsKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Select held for 650 ms opens the card's actions (web long press); a short press keeps the card's own action.
+    func tvLongPressActions(_ work: Work) -> some View {
+        modifier(TVLongPressActions(work: work))
+    }
+}
+
+private struct TVLongPressActions: ViewModifier {
+    let work: Work
+    @Environment(\.openActions) private var openActions
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in openActions(work) })
+    }
+}
+
+/// One action row (web `.media-context-actions` button): 268 x 68, brand glyph and a bold label, control focus ring.
+struct TVActionRow: View {
+    let glyph: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                Text(glyph)
+                    .font(TVTheme.font(size: 19.52, css: 400))
+                    .foregroundStyle(DesignTokens.Stage.brandPink)
+                    .frame(width: 42, alignment: .leading)
+                Text(label)
+                    .font(TVTheme.font(size: 19.2, css: 700))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 18)
+            .frame(width: 268, height: 68)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DesignTokens.Stage.surfaceSoft))
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
     }
 }
