@@ -271,6 +271,10 @@ export interface TvGeometryTokens {
   railHeadingSize: number;
   railHeadingWeight: number;
   libraryGridColumns: number;
+  libraryGridInsetLeft: number;
+  libraryGridTop: number;
+  libraryGridCardWidth: number;
+  libraryGridCardHeight: number;
   libraryGridRowGap: number;
   libraryGridColumnGap: number;
   libraryGridCardRadius: number;
@@ -385,9 +389,16 @@ export const TvGeometry: TvGeometryTokens = {
   // ArkUI takes weights in steps of 100; web uses 610.
   railHeadingWeight: 600,
   libraryGridColumns: 3,
-  libraryGridRowGap: 36,
-  libraryGridColumnGap: 28,
-  libraryGridCardRadius: 12,
+  // Web `.tv-title-grid`: 327x184 cards from x=783 (53 into the x=730 column), first row at y=162,
+  // columns 353.5 apart and rows 240.5 apart.
+  libraryGridInsetLeft: 53,
+  libraryGridTop: 162,
+  libraryGridCardWidth: 327,
+  libraryGridCardHeight: 184,
+  // Web row pitch is 240.5; its caption box sits 12 below the art where PosterCard's sits 5 below.
+  libraryGridRowGap: 38,
+  libraryGridColumnGap: 26.5,
+  libraryGridCardRadius: 12.48,
   azIndexRailRight: 22,
   azIndexRailHeightVhPct: 66,
   azIndexRailHeightMaxPx: 720,
