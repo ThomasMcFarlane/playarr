@@ -50,6 +50,7 @@ Steps only the repository owner can perform.
 | 9979 | Web: profile picker (and every circular avatar) focus ring follows the circle, not the square tile | in_progress | avatar-focus worker | avatar-focus-circle | | 2026-10-11 01:00 ICT | Owner request 2026-10-10: ring the circular avatar, not the square container; one shared circle-focus-host/circle-focus-target style |
 | 9986 | Web calendar: no Request button and no 'not in catalogue'/'request provider' messages | in_progress | agenda-synopsis worker | calendar-no-request | | 2026-10-11 01:30 ICT | Owner request 10 Oct 2026. Remove Request from every calendar view and the two hint texts from the calendar details (and any other user-facing place). |
 | 9981 | Web: Settings default audio/subtitle language (and other long choice lists) as shared dropdowns | in_progress | settings-select worker | settings-language-select | | 2026-10-11 01:30 ICT | Owner request 2026-10-10: Select/MultiSelect/SegmentedControl instead of toggle-button lists in Settings. |
+| 9988 | Web: remove duplicate Library filter from Search | in_progress | filters worker | multiselect-tv | | 2026-10-11 01:30 ICT | Owner ruling 2026-10-10: the Search Filters Library section lists views by admin-chosen name, duplicates Type and can expose provider-flavoured names. Section, state, matching and strings are removed; an old library param is dropped from the URL. |
 
 ## 2. Server performance and security (2026-10-03)
 
