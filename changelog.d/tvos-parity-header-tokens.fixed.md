@@ -1,0 +1,1 @@
+- Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.

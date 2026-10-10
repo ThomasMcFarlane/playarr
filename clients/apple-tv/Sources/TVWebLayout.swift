@@ -77,14 +77,10 @@ struct TVKeyArtFilter: ViewModifier {
 /// Web page header: round back button, h1 and an optional detail after a hairline divider.
 struct TVPageHeader: View {
     var title: String
+    /// The web `.page-subtitle`: the one small subtitle style, under the title (never beside it).
     var detail: String? = nil
     /// Settings shows the back button focused (white disc, dark arrow).
     var backFocused = false
-    /// Gap between the title and the detail text (23 on lists, 47 on detail pages).
-    var detailGap: CGFloat = 23
-    var showsDivider = true
-    /// List pages upper-case the count ("3 TITLES"); detail pages keep the title's case.
-    var uppercaseDetail = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -104,29 +100,21 @@ struct TVPageHeader: View {
                         .foregroundStyle(backFocused ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textSecondary)
                 )
                 .placed(x: origin, y: backFocused ? 54.8 : 56.2, w: size, h: size)
-            HStack(spacing: 0) {
-                Text(title)
-                    .font(TVTheme.font(size: 33.6, weight: .medium))
-                    .tracking(-1.5)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text(title)
+                .font(TVTheme.font(size: 33.6, css: 580))
+                .tracking(-1.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .fixedSize()
+                .placed(x: 226.6, y: 56.2, h: 50)
+            if let detail {
+                Text(detail.uppercased())
+                    .font(TVTheme.font(size: 12.29, css: 820))
+                    .tracking(0.98)
+                    .foregroundStyle(DesignTokens.Stage.brandInk)
+                    .lineLimit(1)
                     .fixedSize()
-                if let detail {
-                    if showsDivider {
-                        Rectangle()
-                            .fill(DesignTokens.Color.borderDefault.opacity(0.55))
-                            .frame(width: 1, height: 14)
-                            .padding(.horizontal, (detailGap - 1) / 2)
-                    } else {
-                        Spacer().frame(width: detailGap)
-                    }
-                    Text(uppercaseDetail ? detail.uppercased() : detail)
-                        .font(TVTheme.font(size: 11.1, weight: .semibold))
-                        .tracking(0.5)
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                        .fixedSize()
-                }
+                    .placed(x: 226.6, y: 111.8, h: 18.4)
             }
-            .placed(x: 226.6, y: 56.2, h: 50.4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
