@@ -333,7 +333,10 @@ final class TVPlayerViewModel {
             let resumeSeconds = saved.map {
                 Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000
             } ?? 0
-            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title, startPositionSeconds: resumeSeconds))
+            // The stream needs the session like every API call (AVPlayer does not send it on its own).
+            let headers = try await apiClient.playbackRequestHeaders()
+            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title,
+                                               startPositionSeconds: resumeSeconds, httpHeaders: headers))
             engine.play()
             state = .ready
             activeMediaFileID = mediaFileID
@@ -447,7 +450,7 @@ final class TVPlayerViewModel {
     func loadInfo(mediaFileID: UUID) async {
         if let info = try? await apiClient.playbackInfo(
             mediaFileID: mediaFileID,
-            containers: ["mp4", "mov", "m4v"], // AVPlayer cannot open Matroska: the server remuxes it
+            containers: ["mp4", "mov", "m4v", "mkv"], // parity route: info only, never played
             videoCodecs: ["h264", "hevc"],
             audioCodecs: ["aac", "ac3", "eac3"],
             maxBitrateBps: 40_000_000,
