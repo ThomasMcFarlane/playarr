@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: calendar week and month views, a focusable agenda whose details follow focus, the shared right-side drawer for Filters (library sort and order, calendar view) and the calendar link, search results in the web grid, a full-screen player that opens transcoded streams (session headers, waits for the playlist, no Matroska direct play) and no longer crashes before the duration is known, Play focused on film pages, and today on the calendar is your local day.
 - Web: a focused checkbox (Settings Your data and Remote, Calendar monitored-only switch) no longer traps keyboard and D-pad focus; arrow keys now move spatial focus away, Space still toggles.
 - Apple TV: library cards open the title on Select and show the card focus glow; the Playlists tab lists your playlists; Back on a top-level page returns Home and pops pushed pages first; Left into the nav lands on the active tab; the nav ends with the profile tile (Who's watching, Settings from the gear) instead of a Settings group; settings rows use the web focus look and the panel follows focus.
 - Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
@@ -261,6 +262,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Settings → Server lists the server group's members automatically and read-only, each with its first-priority client address, and updates live when a member joins, leaves or changes its client address. Users can no longer forget or edit the group; signing out clears the remembered group instead. New signed-in-only `GET /api/v1/peer-groups/self/members`.
 - Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
 - Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).
 - Board auto-sync: a merged PR flips the task rows that name it through a `board-sync/pr-<n>` fragment PR the merge train lands, and `fold-fragments.mjs --check` rejects a "PR open" fragment that names no PR and a new row without a section.

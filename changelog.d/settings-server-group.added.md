@@ -1,1 +1,0 @@
-- Settings → Server lists the server group's members automatically and read-only, each with its first-priority client address, and updates live when a member joins, leaves or changes its client address. Users can no longer forget or edit the group; signing out clears the remembered group instead. New signed-in-only `GET /api/v1/peer-groups/self/members`.
