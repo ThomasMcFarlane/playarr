@@ -683,6 +683,7 @@ internal fun PlaylistCard(
     WebShadowedBox(
         shadows = if (focused) webCardFocusShadows else webCardRestShadows,
         shape = RoundedCornerShape(18.dp),
+        focusGlow = focused,
         modifier = Modifier.fillMaxSize().mediaCardLift(focused),
         innerModifier = Modifier
             .background(WebSurfaceStrong)
