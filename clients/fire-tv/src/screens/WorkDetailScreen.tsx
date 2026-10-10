@@ -341,7 +341,7 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
       stageArt={artUri}
       token={token}
       dark={dark}
-      header={<PageHeader title={backLabel} detail={work.title} detailUpper={false} onBack={() => navigation.navigate(ROUTES.home)} />}
+      header={<PageHeader title={backLabel} detail={work.title} onBack={() => navigation.navigate(ROUTES.home)} />}
       copy={
         <CopyColumn
           kicker={kicker}
