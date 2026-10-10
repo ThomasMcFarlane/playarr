@@ -423,6 +423,8 @@ struct TVDrawer<Content: View>: View {
     let title: String
     let onClose: () -> Void
     @ViewBuilder var content: () -> Content
+    /// Focus moves into the drawer when it opens (web: the panel takes focus; Back closes it).
+    @FocusState private var closeFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -449,6 +451,7 @@ struct TVDrawer<Content: View>: View {
                 }
                 .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
                 .focusEffectDisabled()
+                .focused($closeFocused)
                 .accessibilityLabel("Close")
             }
             .padding(.top, 54)
@@ -462,6 +465,7 @@ struct TVDrawer<Content: View>: View {
         .background(DesignTokens.Stage.surfaceStrong.opacity(0.94))
         .focusSection()
         .onExitCommand(perform: onClose)
+        .task { closeFocused = true }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .ignoresSafeArea()
     }
