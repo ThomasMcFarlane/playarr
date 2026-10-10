@@ -29,7 +29,6 @@ import { knownWork } from "../lib/knownWorks";
 import { SkeletonBlock, SkeletonLines, SkeletonRails } from "../components/shell";
 import { CachedArtworkImage, PersonHeadshot, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
-import { DownloadsIcon } from "../components/NavIcons";
 import type { PlayableLeaf } from "../lib/playableLeaves";
 import type { PlaybackLaunchSettings } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -785,8 +784,36 @@ function SimilarTitlesTrack({
   );
 }
 
+/** Every downloadable episode of a season as playable leaves (the "Whole season" / "Whole series" download scopes). */
+function seasonDownloadLeaves(
+  season: SeasonDetail,
+  seriesTitle: string,
+  t: ReturnType<typeof useLanguage>["t"]
+): PlayableLeaf[] {
+  const seasonNumber = season.season.season_number;
+  return playableEpisodes(season).flatMap((episode) =>
+    episode.media_file_id
+      ? [
+          {
+            mediaFileId: episode.media_file_id,
+            runtimeMs: episode.runtime_ms ?? (episode.episode.runtime_minutes ?? 0) * 60_000,
+            episodeId: episode.episode.id,
+            title:
+              episode.episode.title ??
+              t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
+            seriesTitle,
+            seasonNumber,
+            episodeNumber: episode.episode.episode_number,
+            workKind: "series" as const,
+          },
+        ]
+      : []
+  );
+}
+
 function SeasonEpisodeTrack({
   season,
+  allSeasons,
   seriesTitle,
   workId,
   detailRoute,
@@ -805,6 +832,7 @@ function SeasonEpisodeTrack({
   defaultFocusReady,
 }: {
   season: SeasonDetail;
+  allSeasons: SeasonDetail[];
   seriesTitle: string;
   workId: string;
   detailRoute: string;
@@ -829,25 +857,8 @@ function SeasonEpisodeTrack({
   const seasonLabel =
     season.season.title ?? t("pages.workDetail.seasonNumber", { number: seasonNumber });
   const mediaContext = useMediaContextMenu({ onProgressChanged });
-  const downloads = useDownloads();
-  const seasonLeaves: PlayableLeaf[] = episodes.flatMap((episode) =>
-    episode.media_file_id
-      ? [
-          {
-            mediaFileId: episode.media_file_id,
-            runtimeMs: episode.runtime_ms ?? (episode.episode.runtime_minutes ?? 0) * 60_000,
-            episodeId: episode.episode.id,
-            title:
-              episode.episode.title ??
-              t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
-            seriesTitle,
-            seasonNumber,
-            episodeNumber: episode.episode.episode_number,
-            workKind: "series" as const,
-          },
-        ]
-      : []
-  );
+  const seasonLeaves = seasonDownloadLeaves(season, seriesTitle, t);
+  const seriesLeaves = allSeasons.flatMap((other) => seasonDownloadLeaves(other, seriesTitle, t));
 
   return (
     <TvMediaTrack
@@ -858,34 +869,6 @@ function SeasonEpisodeTrack({
       itemsKey={episodes.map((episode) => episode.episode.id).join(":")}
       dataTrackId={`season:${seasonNumber}`}
       overlay={mediaContext.contextMenu}
-      headingAction={
-        downloads.canDownload === true && seasonLeaves.length > 0 ? (
-          <button
-            type="button"
-            className="tv-track-action"
-            aria-haspopup="dialog"
-            aria-label={t("components.mediaContextMenu.downloadCount", {
-              count: seasonLeaves.length,
-            })}
-            data-navigation-focus-key={`detail:${workId}:season:${seasonNumber}:download`}
-            onClick={(event) =>
-              mediaContext.openAction(
-                "download",
-                {
-                  workId,
-                  title: seasonLabel,
-                  detailRoute,
-                  parentRoute: detailParentBackTo,
-                  leaves: seasonLeaves,
-                },
-                event.currentTarget
-              )
-            }
-          >
-            <DownloadsIcon />
-          </button>
-        ) : undefined
-      }
     >
       {episodes.map((episode) => {
             const mediaFileId = episode.media_file_id;
@@ -975,6 +958,7 @@ function SeasonEpisodeTrack({
                       workKind: "series",
                     },
                   ],
+                  downloadScopes: { season: seasonLeaves, series: seriesLeaves },
                   activateOrigin: true,
                 })}
               >
@@ -2161,6 +2145,7 @@ export function WorkDetailPage() {
             <SeasonEpisodeTrack
               key={season.season.id}
               season={season}
+              allSeasons={seasons}
               seriesTitle={work.title}
               workId={work.id}
               detailRoute={detailRoute}

@@ -11238,3 +11238,78 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-visible, [data-remote-active]) .tv-playlist-card-art.tv-title-card-art:not(.is-empty) {
   box-shadow: var(--card-glow) !important;
 }
+
+/* Shared Select (components/ui/Select.tsx): a field showing the chosen option that opens an inline list. 7:1 ink on
+   surface, 44px minimum rows, same focus treatment as the other panel choices. */
+.ui-select {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ui-select-trigger,
+.ui-select-option {
+  min-height: clamp(44px, calc(3.6 * var(--vw)), 56px);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 64%, transparent);
+  color: var(--ink);
+  font-size: clamp(0.6rem, calc(0.7 * var(--vw)), 0.85rem);
+  font-weight: 680;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-select-trigger {
+  width: 100%;
+}
+
+.ui-select-value,
+.ui-select-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-select-hint {
+  color: var(--ink);
+  font-weight: 560;
+  opacity: 0.85;
+}
+
+.ui-select-chevron,
+.ui-select-check {
+  flex: none;
+  min-width: 1em;
+  text-align: center;
+}
+
+.ui-select-trigger:hover,
+.ui-select-trigger:focus-visible,
+.ui-select-option:hover,
+.ui-select-option.is-active {
+  background: var(--ink);
+  color: var(--bg);
+  outline: none;
+}
+
+.ui-select-trigger:hover .ui-select-hint,
+.ui-select-trigger:focus-visible .ui-select-hint,
+.ui-select-option:hover .ui-select-hint,
+.ui-select-option.is-active .ui-select-hint {
+  color: var(--bg);
+}
+
+.ui-select-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: min(46vh, 22rem);
+  overflow-y: auto;
+  outline: none;
+}
+
+.ui-select-option.is-selected {
+  border-color: var(--ink);
+}

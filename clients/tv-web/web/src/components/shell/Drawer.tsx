@@ -102,6 +102,8 @@ function DrawerPanel({
     }
     const handleBack = (event: KeyboardEvent) => {
       if (!isBackKey(event)) return;
+      // An open Select list (or any control marked `data-nested-back`) takes Back itself and closes first.
+      if (event.target instanceof Element && event.target.closest("[data-nested-back]")) return;
       event.preventDefault();
       event.stopPropagation();
       onCloseRef.current();
