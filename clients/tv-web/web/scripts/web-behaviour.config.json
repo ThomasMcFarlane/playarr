@@ -32,7 +32,9 @@
     "filters-panel-e2e",
     "artwork-size-setting-e2e",
     "download-flow-e2e",
-    "drawer-consistency-e2e"
+    "drawer-consistency-e2e",
+    "checkbox-focus-e2e",
+    "settings-language-select-e2e"
   ],
   "args": {
     "tablet-layout": [
