@@ -314,8 +314,10 @@ struct TVStageWash: View {
         ZStack {
             LinearGradient(
                 stops: [
+                    // Web `.tv-stage-wash`: surface 94% at 0, 90% at 36%, clear at 52%.
                     .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.31),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.90), location: 0.36),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.52),
                 ],
                 startPoint: .leading,
                 endPoint: .trailing

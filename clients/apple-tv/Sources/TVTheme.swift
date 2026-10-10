@@ -633,16 +633,7 @@ struct TVFloatingNav: View {
                             : Color.clear
                     )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isFocused && !suppressFocusChrome
-                            ? DesignTokens.Color.brandPrimary.opacity(0.85)
-                            : Color.clear,
-                        lineWidth: 2
-                    )
-            )
-            .scaleEffect(isFocused && !suppressFocusChrome ? 1.05 : 1)
+            // Web TV nav: focus looks like the active tab (filled tile, ink text); no ring, no scale.
         }
         // Card-like style stays focusable; .plain can drop remote hand-off.
         .buttonStyle(TVFocusableCardButtonStyle())
