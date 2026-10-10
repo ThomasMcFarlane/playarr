@@ -22,6 +22,7 @@
 #![allow(clippy::double_must_use)]
 
 mod codec;
+mod language_cache;
 mod snapshot;
 
 pub use snapshot::{Snapshot, SnapshotCache};
@@ -689,6 +690,10 @@ pub struct CatalogService {
     /// [`Self::language_facets`]. `None` (the default) means no language
     /// data: a non-empty filter then matches nothing and facets are empty.
     language_repo: Option<Arc<dyn playarr_db::MediaLanguageRepo>>,
+    /// In-memory `(work, language)` pairs read from `language_repo` (see
+    /// [`language_cache`]), so the language filters and facets do not run the
+    /// slow distinct read on every request.
+    language_pairs: Arc<language_cache::WorkLanguageCache>,
     /// Backs [`Self::browse`]/[`Self::get_by_id`]'s [`AvailabilityBadge`]
     /// hydration and [`Self::browse`]/[`Self::search_remote_only`]'s
     /// [`RemoteOnlyWork`] union (§4.3). `None` by default (builder opt-in
@@ -735,6 +740,10 @@ impl CatalogService {
             watch_progress_repo,
             embedding_repo: None,
             language_repo: None,
+            language_pairs: language_cache::WorkLanguageCache::new(
+                language_cache::FRESH_FOR,
+                language_cache::MAX_AGE,
+            ),
             peer_availability: None,
             snapshots,
         }
@@ -745,10 +754,24 @@ impl CatalogService {
         self.snapshots.warm().await;
     }
 
+    /// Reads the language index into memory ahead of the first request, so the
+    /// Filters panel's language lists do not wait for the distinct read.
+    pub async fn warm_languages(&self) {
+        for kind in [
+            playarr_db::repo::KIND_AUDIO,
+            playarr_db::repo::KIND_SUBTITLE,
+        ] {
+            if let Err(error) = self.work_language_pairs(kind).await {
+                tracing::warn!(%error, kind, "could not warm the language index");
+            }
+        }
+    }
+
     /// Drops the in-memory catalogue copy so the next read rebuilds it. Writers
     /// that publish a live library event need not call this.
     pub fn invalidate_snapshot(&self) {
         self.snapshots.invalidate();
+        self.language_pairs.invalidate();
     }
 
     /// How often a read re-checks the database for writes this process did not
@@ -1078,6 +1101,23 @@ impl CatalogService {
         Ok(candidates)
     }
 
+    /// Distinct `(work, language)` pairs of `kind`, from memory when read
+    /// recently (see [`language_cache`]); empty without a language repo.
+    async fn work_language_pairs(&self, kind: &str) -> Result<language_cache::Pairs, CatalogError> {
+        let Some(repo) = self.language_repo.clone() else {
+            return Ok(Default::default());
+        };
+        let owned = kind.to_string();
+        Ok(self
+            .language_pairs
+            .get(
+                kind,
+                playarr_db::repo::language_write_tick(),
+                move || async move { repo.list_work_languages(&owned).await },
+            )
+            .await?)
+    }
+
     /// Loads the per-work language index for `kind`; `every_file` also loads
     /// per-file counts.
     async fn work_language_index(
@@ -1089,8 +1129,12 @@ impl CatalogService {
         let Some(repo) = &self.language_repo else {
             return Ok(index);
         };
-        for (work_id, lang) in repo.list_work_languages(kind).await? {
-            index.langs.entry(work_id).or_default().insert(lang);
+        for (work_id, lang) in self.work_language_pairs(kind).await?.iter() {
+            index
+                .langs
+                .entry(*work_id)
+                .or_default()
+                .insert(lang.clone());
         }
         if every_file {
             let (totals, with_lang) = repo.list_work_language_file_counts(kind).await?;
@@ -1155,11 +1199,9 @@ impl CatalogService {
             self.apply_language_filter(&mut scoped, &own_filter).await?;
             let scoped_ids: HashSet<Uuid> = scoped.iter().map(|work| work.id).collect();
             let mut counts: HashMap<String, i64> = HashMap::new();
-            if let Some(repo) = &self.language_repo {
-                for (work_id, lang) in repo.list_work_languages(kind).await? {
-                    if scoped_ids.contains(&work_id) {
-                        *counts.entry(lang).or_default() += 1;
-                    }
+            for (work_id, lang) in self.work_language_pairs(kind).await?.iter() {
+                if scoped_ids.contains(work_id) {
+                    *counts.entry(lang.clone()).or_default() += 1;
                 }
             }
             let mut list: Vec<LanguageFacet> = counts

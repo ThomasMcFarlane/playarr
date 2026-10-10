@@ -371,6 +371,8 @@ export const th: Translations = {
   "pages.library.subtitleLanguage": "ภาษาคำบรรยาย",
   "pages.library.clearLanguages": "ล้างตัวกรองภาษา",
   "pages.library.noLanguages": "ยังไม่มีข้อมูลภาษา",
+  "pages.library.loadingLanguages": "กำลังโหลดภาษา",
+  "pages.library.languagesUnavailable": "โหลดภาษาไม่ได้ ปิดแล้วเปิดตัวกรองอีกครั้งเพื่อลองใหม่",
   "pages.library.anyLanguage": "ทุกภาษา",
   "pages.library.addLanguage": "เพิ่มภาษา",
   "pages.library.searchLanguages": "ค้นหาภาษา",
