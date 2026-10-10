@@ -284,7 +284,9 @@ final class TVPlayerViewModel {
                 Task { @MainActor in
                     guard let self else { return }
                     self.position = seconds
-                    self.duration = self.engine.duration
+                    // A transcode playlist grows while it plays: keep the server's duration until the stream knows its own.
+                    let reported = self.engine.duration
+                    if self.duration <= 0, reported.isFinite, reported > 0 { self.duration = reported }
                 }
             }
     }
@@ -394,8 +396,8 @@ final class TVPlayerViewModel {
     /// teardown cannot change it. Nil when nothing should be written.
     private func progressSnapshot(completed: Bool) -> (UUID, UpdateWatchProgressRequest)? {
         guard let mediaFileID = activeMediaFileID else { return nil }
-        let durationMS = Int64(max(0, duration) * 1_000)
-        let positionMS = completed ? durationMS : Int64(max(0, position) * 1_000)
+        let durationMS = duration.isFinite ? Int64(max(0, duration) * 1_000) : 0
+        let positionMS = completed ? durationMS : (position.isFinite ? Int64(max(0, position) * 1_000) : 0)
         guard durationMS > 0, Self.shouldWriteProgress(positionMS: positionMS, completed: completed) else { return nil }
         return (mediaFileID, UpdateWatchProgressRequest(
             positionMS: positionMS,
