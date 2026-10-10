@@ -575,6 +575,9 @@ impl MediaFileRepo for EventingMediaFileRepo {
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError> {
         self.inner.get_by_id(id).await
     }
+    async fn get_playable(&self, id: Uuid) -> Result<MediaFile, DbError> {
+        self.inner.get_playable(id).await
+    }
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError> {
         self.inner.list_by_work_id(work_id).await
     }
@@ -605,6 +608,39 @@ impl MediaFileRepo for EventingMediaFileRepo {
     }
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError> {
         self.inner.mark_missing_durations_scanned(work_id).await
+    }
+    async fn prune_superseded_files(
+        &self,
+        work_id: Uuid,
+        source_instance_id: Uuid,
+        keep_source_file_ids: &[String],
+    ) -> Result<crate::repo::PruneOutcome, DbError> {
+        let outcome = self
+            .inner
+            .prune_superseded_files(work_id, source_instance_id, keep_source_file_ids)
+            .await?;
+        if outcome.deleted + outcome.marked_missing + outcome.restored > 0 {
+            // A library event also makes the cached home rails stale, which are
+            // keyed to the catalogue snapshot that library events advance.
+            let mut events = vec![NewLiveEvent::for_library(
+                kind::LIBRARY,
+                "work",
+                work_id,
+                &["files"],
+                Some(source_instance_id),
+            )];
+            for user in &outcome.moved_users {
+                events.push(NewLiveEvent::for_user(
+                    *user,
+                    kind::WATCH,
+                    "work",
+                    work_id,
+                    &["progress"],
+                ));
+            }
+            self.events.publish_all(events).await;
+        }
+        Ok(outcome)
     }
     async fn find_by_source(
         &self,

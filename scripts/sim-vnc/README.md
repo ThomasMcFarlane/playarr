@@ -1,7 +1,7 @@
 # Simulator VNC
 
 `sim_vnc.py` serves one Apple TV simulator over VNC (RFB 3.8, VNC password, Tight/JPEG), standard library only.
-It is used by `.github/workflows/tvos-live-sim.yml`, which binds it to the runner's tailnet address.
+It runs on the MacBook under the launchd agent `app.playarr.sim-live` (started over ssh; there is no repository workflow), bound to the Mac's tailnet address.
 
 - Frames: `idb video-stream` (MJPEG), falling back to `xcrun simctl io <udid> screenshot`. Never the runner desktop.
 - Keys: arrows move, Return selects, Escape or Backspace is Menu, Space is Play/Pause (sent with `idb ui key`).

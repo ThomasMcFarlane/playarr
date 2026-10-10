@@ -13,6 +13,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
+- LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
+- Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).
+- Arr sync: a file the source replaced is removed only when exactly one replacement exists for the same episode or movie, and viewers's resume positions and choices move to it first. A file the source drops with no replacement is hidden (marked missing) and keeps its progress; it returns if the source lists it again. A pass that would change over half of a work's files, or over 200, changes nothing.
+- Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
+- Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.
+- Server: the language reads now start from the media files and use the language primary key (16 to 26 s down to about a second in a reviewer repro), `PRAGMA optimize` runs on every new database connection and hourly so the query planner has table statistics, and the in-memory language cache is shared per kind, refreshed on language writes and library changes, and capped at ten minutes old.
+- Apple TV: the app stays signed in after it has been idle for more than 15 minutes; it refreshes the expired access token instead of showing the sign-in code.
 - Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.
 - Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
 - Web: player Up next and health drawers use the shared Drawer theme tokens and close button (1.9978)
@@ -401,6 +409,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Apple TV: Home is the web TV Home: the hero follows the focused card, the server shelves sit on the right with the web card size, focus lift and glow, On deck leads with progress bars, and a skeleton replaces the "Loading your library" screen. Remote focus reaches the nav rail again, pages sit at the web positions under the floating nav, and the clock sits and ticks where the web shows it.
 - Web: the Calendar Filters panel uses the shared multi-select for Type, Source and Status and a switch for "Monitored only"; the chip helper is removed. Row 1.9975.
 - Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.
 - Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
@@ -897,6 +906,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the tvOS live simulator workflow and its keepalive script: the live Apple TV simulator runs only on the MacBook over ssh (owner decision), and this public repository never runs a self-hosted or long-lived Apple runner job.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.
 - Web calendar: the unused `CALENDAR_KINDS` and `filterByKinds` helpers are gone; the calendar test now checks rendered markup and the effective scroll rules instead of stale CSS text.

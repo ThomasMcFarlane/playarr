@@ -369,6 +369,8 @@ export const ja: Translations = {
   "pages.library.subtitleLanguage": "字幕の言語",
   "pages.library.clearLanguages": "言語フィルターを解除",
   "pages.library.noLanguages": "言語はまだインデックスされていません",
+  "pages.library.loadingLanguages": "言語を読み込み中",
+  "pages.library.languagesUnavailable": "言語を読み込めませんでした。フィルターを閉じてもう一度開いてください。",
   "pages.library.anyLanguage": "すべての言語",
   "pages.library.addLanguage": "言語を追加",
   "pages.library.removeLanguage": "{{name}}を削除",

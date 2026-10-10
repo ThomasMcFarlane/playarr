@@ -356,7 +356,7 @@ struct TVCalendarView: View {
                 .overlay(Circle().stroke(DesignTokens.Stage.inkMuted.opacity(0.35), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .focusable(!TVParityLaunch.frozen)
+        .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(TVParityLaunch.frozen)
         .placed(x: x, y: y, w: size, h: size)
     }
@@ -372,7 +372,7 @@ struct TVCalendarView: View {
                 .overlay(Capsule().stroke(DesignTokens.Color.textPrimary, lineWidth: 2.5))
         }
         .buttonStyle(.plain)
-        .focusable(!TVParityLaunch.frozen)
+        .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(TVParityLaunch.frozen)
         .placed(x: x, y: y, w: 87.8, h: 52.8)
     }

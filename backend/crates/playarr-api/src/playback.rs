@@ -107,7 +107,7 @@ impl RepoBackedMediaFileLookup {
 #[async_trait]
 impl MediaFileLookup for RepoBackedMediaFileLookup {
     async fn get(&self, id: Uuid) -> Option<MediaFile> {
-        match self.repo.get_by_id(id).await {
+        match self.repo.get_playable(id).await {
             Ok(media_file) => Some(media_file),
             Err(playarr_db::DbError::NotFound) => None,
             Err(err) => {
@@ -444,10 +444,26 @@ pub async fn list_watch_progress_handler(
     streaming: StreamingUser,
 ) -> Result<Json<Vec<WatchProgress>>, ApiError> {
     let allowed = streaming.allowed_libraries();
-    let all_progress = state
+    let mut all_progress = state
         .watch_progress
         .list_for_user(streaming.user_id)
         .await?;
+    // Progress on a file the source dropped (hidden, not deleted) is not
+    // listed: the client could not play it.
+    let works: Vec<Uuid> = all_progress
+        .iter()
+        .map(|p| p.work_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let playable: std::collections::HashSet<Uuid> = state
+        .media_file_repo
+        .list_by_work_ids(&works)
+        .await?
+        .into_iter()
+        .map(|f| f.id)
+        .collect();
+    all_progress.retain(|p| playable.contains(&p.media_file_id));
 
     // Unrestricted (`None`) is the common case and needs no per-row
     // `MediaFile` resolution at all. A restricted caller's "continue
@@ -575,10 +591,20 @@ pub async fn update_watch_progress_handler(
         ),
         updated_at: Some(body.occurred_at.unwrap_or_else(chrono::Utc::now)),
     };
+    // The file can be removed between the lookup above and this write (a sync
+    // replaced it); the foreign key then rejects the row. That is "unknown
+    // file" to the client, not a server error.
     state
         .watch_progress
         .upsert(streaming.user_id, &progress)
-        .await?;
+        .await
+        .map_err(|err| {
+            if err.is_constraint_violation() {
+                ApiError::not_found(format!("unknown media file {media_file_id}"))
+            } else {
+                err.into()
+            }
+        })?;
     Ok(Json(progress))
 }
 
@@ -3895,6 +3921,60 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(put_response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// A player still holding the id of a file the sync has since replaced
+    /// gets a clean 404 (its progress moved to the replacement), never a 500.
+    #[tokio::test]
+    async fn watch_progress_write_for_a_removed_file_is_404() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![]).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/api/v1/playback/{}/progress", Uuid::new_v4()))
+                    .header("Authorization", bearer_header(&token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"position_ms":1000,"duration_ms":100000}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// The file vanishes between the lookup and the write (the lookup still
+    /// has it, the database no longer does): the foreign key rejects the row
+    /// and the client sees a 404, not a 500.
+    #[tokio::test]
+    async fn watch_progress_write_racing_a_prune_is_404_not_500() {
+        let (router, state) = test_state().await;
+        let work_id = seed_movie(&state, "Raced Movie").await;
+        let mut file = media_file();
+        file.work_id = work_id;
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        // Known to the lookup, absent from the database.
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/api/v1/playback/{id}/progress"))
+                    .header("Authorization", bearer_header(&token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"position_ms":1000,"duration_ms":100000}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     /// `list_watch_progress_handler` silently omits rows for media outside

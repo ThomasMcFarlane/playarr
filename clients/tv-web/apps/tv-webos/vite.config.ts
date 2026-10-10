@@ -21,6 +21,8 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
     __PLAYARR_PLATFORM__: JSON.stringify("tv-webos"),
+    // The web debug screen mirror is never part of a TV package.
+    __PLAYARR_DEBUG_MIRROR__: JSON.stringify(false),
   },
   build: {
     outDir: "dist",

@@ -76,6 +76,37 @@ fn merge_duplicates(updates: &[LanguageUpdate]) -> Vec<LanguageUpdate> {
     merged
 }
 
+/// Distinct `(work, language)` pairs of one kind. `media_files` drives the join
+/// (`CROSS JOIN` pins the order) so each file's language rows are found through
+/// the `(media_file_id, kind, ...)` primary key; letting the planner start from
+/// `media_file_languages` made it read the subtitle rows in random order and
+/// look every file up one by one (16 to 26 s on a 50 000-file library).
+fn work_languages_sql(kind_placeholder: &str) -> String {
+    format!(
+        "SELECT DISTINCT m.work_id AS work_id, l.lang AS lang \
+         FROM media_files m CROSS JOIN media_file_languages l \
+         WHERE l.media_file_id = m.id AND l.kind = {kind_placeholder} AND m.missing_since IS NULL"
+    )
+}
+
+/// Files per `(work, language)` of one kind, same join order as [`work_languages_sql`].
+fn work_language_file_counts_sql(kind_placeholder: &str) -> String {
+    format!(
+        "SELECT m.work_id AS work_id, l.lang AS lang, COUNT(DISTINCT m.id) AS n \
+         FROM media_files m CROSS JOIN media_file_languages l \
+         WHERE l.media_file_id = m.id AND l.kind = {kind_placeholder} AND m.missing_since IS NULL \
+         GROUP BY m.work_id, l.lang"
+    )
+}
+
+static LANGUAGE_WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Counts the writes in this process that changed which languages a file has;
+/// caches of the language index compare it with the value they were read at.
+pub fn language_write_tick() -> u64 {
+    LANGUAGE_WRITES.load(std::sync::atomic::Ordering::Acquire)
+}
+
 /// Rows of `media_file_language_state` written by one statement.
 const STATE_ROWS_PER_STATEMENT: usize = 100;
 
@@ -241,8 +272,9 @@ impl SqlxMediaLanguageRepo {
         if planned.is_empty() {
             return Ok(());
         }
+        let changes_languages = planned.iter().any(|update| !update.changed.is_empty());
         let planned = std::sync::Arc::new(planned);
-        write(self.queue.as_ref(), &self.pool, move |conn| {
+        let written = write(self.queue.as_ref(), &self.pool, move |conn| {
             let planned = planned.clone();
             Box::pin(async move {
                 for update in planned.iter() {
@@ -291,7 +323,11 @@ impl SqlxMediaLanguageRepo {
                 Ok(())
             })
         })
-        .await
+        .await;
+        if changes_languages && written.is_ok() {
+            LANGUAGE_WRITES.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
+        written
     }
 
     /// The placeholder for the n-th (1-based) bind parameter (`?` on SQLite).
@@ -382,12 +418,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
     }
 
     async fn list_work_languages(&self, kind: &str) -> Result<Vec<(Uuid, String)>, DbError> {
-        let sql = format!(
-            "SELECT DISTINCT m.work_id AS work_id, l.lang AS lang \
-             FROM media_file_languages l JOIN media_files m ON m.id = l.media_file_id \
-             WHERE l.kind = {}",
-            self.p(1)
-        );
+        let sql = work_languages_sql(&self.p(1));
         let rows = sqlx::query(&sql).bind(kind).fetch_all(&self.pool).await?;
         rows.iter()
             .map(|row| {
@@ -402,7 +433,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
         &self,
         kind: &str,
     ) -> Result<(HashMap<Uuid, i64>, HashMap<(Uuid, String), i64>), DbError> {
-        let totals = sqlx::query("SELECT work_id, COUNT(*) AS n FROM media_files GROUP BY work_id")
+        let totals = sqlx::query("SELECT work_id, COUNT(*) AS n FROM media_files WHERE missing_since IS NULL GROUP BY work_id")
             .fetch_all(&self.pool)
             .await?;
         let mut file_totals = HashMap::new();
@@ -411,12 +442,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
             let n: i64 = row.try_get("n")?;
             file_totals.insert(parse_uuid(&work_id)?, n);
         }
-        let sql = format!(
-            "SELECT m.work_id AS work_id, l.lang AS lang, COUNT(DISTINCT m.id) AS n \
-             FROM media_file_languages l JOIN media_files m ON m.id = l.media_file_id \
-             WHERE l.kind = {} GROUP BY m.work_id, l.lang",
-            self.p(1)
-        );
+        let sql = work_language_file_counts_sql(&self.p(1));
         let rows = sqlx::query(&sql).bind(kind).fetch_all(&self.pool).await?;
         let mut with_lang = HashMap::new();
         for row in rows {
@@ -431,7 +457,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
     async fn files_needing_probe(&self, limit: i64) -> Result<Vec<(Uuid, PathBuf)>, DbError> {
         let sql = format!(
             "SELECT m.id AS id, m.path AS path FROM media_files m \
-             WHERE NOT EXISTS (SELECT 1 FROM media_file_language_state s \
+             WHERE m.missing_since IS NULL AND NOT EXISTS (SELECT 1 FROM media_file_language_state s \
                  WHERE s.media_file_id = m.id AND s.source = '{SOURCE_PROBE}') \
              AND NOT EXISTS (SELECT 1 FROM media_file_languages l \
                  WHERE l.media_file_id = m.id AND l.source = '{SOURCE_ARR}' AND l.kind = '{KIND_AUDIO}') \
@@ -451,7 +477,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
             "SELECT m.id AS id, m.path AS path FROM media_files m \
              LEFT JOIN media_file_language_state s \
                  ON s.media_file_id = m.id AND s.source = '{SOURCE_SIDECAR}' \
-             WHERE s.media_file_id IS NULL OR s.scanned_ms < {} \
+             WHERE m.missing_since IS NULL AND (s.media_file_id IS NULL OR s.scanned_ms < {}) \
              ORDER BY COALESCE(s.scanned_ms, 0), m.id LIMIT {}",
             self.p(1),
             self.p(2)
@@ -616,6 +642,76 @@ mod tests {
         );
         // Non-arr sources keep bumping their scan time (the sidecar queue ages on it).
         assert_eq!(state_scanned_ms(&pool, file, SOURCE_PROBE).await, 7);
+    }
+
+    #[tokio::test]
+    async fn pair_reads_drive_from_media_files_through_the_primary_key() {
+        let pool = pool().await;
+        for sql in [work_languages_sql("?"), work_language_file_counts_sql("?")] {
+            let plan: Vec<(i64, i64, i64, String)> =
+                sqlx::query_as(&format!("EXPLAIN QUERY PLAN {sql}"))
+                    .bind("audio")
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+            let detail = plan
+                .iter()
+                .map(|r| r.3.clone())
+                .collect::<Vec<_>>()
+                .join("; ");
+            assert!(
+                detail.contains(
+                    "SEARCH l USING COVERING INDEX sqlite_autoindex_media_file_languages_1"
+                ),
+                "plan: {detail}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_write_tick_moves_only_when_languages_change() {
+        let pool = pool().await;
+        let repo = SqlxMediaLanguageRepo::new(pool.clone());
+        let file = Uuid::new_v4();
+        let before = language_write_tick();
+        repo.replace(file, SOURCE_ARR, Some(&langs(&["en"])), Some(&[]), 1)
+            .await
+            .unwrap();
+        let after_change = language_write_tick();
+        assert!(after_change > before);
+        // Same languages again: only the state row is written, so the tick stays.
+        repo.replace(file, SOURCE_ARR, Some(&langs(&["en"])), Some(&[]), 2)
+            .await
+            .unwrap();
+        assert_eq!(language_write_tick(), after_change);
+    }
+
+    #[tokio::test]
+    async fn pair_reads_return_distinct_pairs_and_file_counts() {
+        let pool = pool().await;
+        let repo = SqlxMediaLanguageRepo::new(pool.clone());
+        let (work, a, b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        insert_file(&pool, a, work, "/a.mkv").await;
+        insert_file(&pool, b, work, "/b.mkv").await;
+        repo.replace(a, SOURCE_ARR, Some(&langs(&["en"])), Some(&[]), 1)
+            .await
+            .unwrap();
+        repo.replace(b, SOURCE_ARR, Some(&langs(&["en", "ja"])), Some(&[]), 1)
+            .await
+            .unwrap();
+        let mut pairs = repo.list_work_languages(KIND_AUDIO).await.unwrap();
+        pairs.sort();
+        assert_eq!(
+            pairs,
+            vec![(work, "en".to_string()), (work, "ja".to_string())]
+        );
+        let (totals, with) = repo
+            .list_work_language_file_counts(KIND_AUDIO)
+            .await
+            .unwrap();
+        assert_eq!(totals[&work], 2);
+        assert_eq!(with[&(work, "en".to_string())], 2);
+        assert_eq!(with[&(work, "ja".to_string())], 1);
     }
 
     #[tokio::test]
