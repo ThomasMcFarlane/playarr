@@ -36,7 +36,7 @@ export function mockRuntimeMinutes(id) {
 
 const removedWatchlist = new Set();
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, lagAverageSeconds = null }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, resumePlanDelayMs = -1, railsDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false, playlists = 0, playlistItems = 0, nestedPlaylists = false, folders = false, watchlist = 0, listDelayMs = 0, latencyMs = 0, resyncAfterMs = -1, lagAverageSeconds = null }) {
   /** Detail answer delay in ms; a test can change it while the server runs (`setDetailDelay`). */
   let detailDelay = detailDelayMs;
   const catalogue = buildCatalogue({ movies, series, artists });
@@ -216,7 +216,23 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     if (url.pathname.startsWith("/api/") || /^\/(healthz|readyz)$/.test(url.pathname)) {
-      if (url.pathname.startsWith("/api/")) return handleApi(url, req, res);
+      // The live event stream: `ready`, then (optionally) one `resync` frame `resyncAfterMs` later, which makes the
+      // client drop every stored copy and everything in flight, as a reconnect does on a real server.
+      if (url.pathname === "/api/v1/events" && resyncAfterMs >= 0) {
+        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store" });
+        res.write(`event: ready\ndata: ${JSON.stringify({ retention_ms: 600000, heartbeat_ms: 15000, server_time_ms: Date.now() })}\n\n`);
+        const beat = setInterval(() => res.write(": hb\n\n"), 5000);
+        const resync = setTimeout(() => res.write("event: resync\ndata: {}\n\n"), resyncAfterMs);
+        req.on("close", () => { clearInterval(beat); clearTimeout(resync); });
+        return;
+      }
+      // A slow link: every other API answer takes `latencyMs` on top, like a round trip to a remote server. Artwork is
+      // left out: a real server answers over HTTP/2, where images never queue the data reads, and this mock is HTTP/1.1
+      // (six connections), where a dozen delayed images would.
+      if (url.pathname.startsWith("/api/")) {
+        if (latencyMs > 0 && !/^\/api\/v1\/(remote|artwork)\b/.test(url.pathname)) return void setTimeout(() => handleApi(url, req, res), latencyMs);
+        return handleApi(url, req, res);
+      }
       return json(res, { status: "ok" });
     }
     if (url.pathname === "/__floor.html") {
