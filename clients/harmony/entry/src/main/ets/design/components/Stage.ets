@@ -294,6 +294,7 @@ export struct Stage {
       })
       this.heroExtraSlot()
     }
+    .alignItems(HorizontalAlign.Start)
     .width(tv(TvGeometry.titlePanelWidth))
     .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.titlePanelTop) })
     .opacity(this.copyEntry)

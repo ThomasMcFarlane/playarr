@@ -49,6 +49,7 @@ import { getNavStack, popRoute, pushRoute, replaceRoute } from '../navigation/Na
 const LIST_INSET_LEFT: number = 53;
 const LIST_TOP: number = 162;
 const LIST_WIDTH: number = 1033;
+const LIST_BOTTOM: number = 40;
 // Day heading 18.4/640 on a 44 high band; 32 from the band to the first card; 32 between days; 14 between cards.
 const DAY_HEADING_SIZE: number = 18.4;
 const DAY_HEADING_HEIGHT: number = 44;
@@ -311,7 +312,7 @@ export struct ReleaseCalendar {
       }
       .width(tv(LIST_WIDTH))
       .height('100%')
-      .padding({ top: tv(LIST_TOP), bottom: tv(LIST_TOP) })
+      .padding({ top: tv(LIST_TOP), bottom: tv(LIST_BOTTOM) })
       .margin({ left: tv(LIST_INSET_LEFT) })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
