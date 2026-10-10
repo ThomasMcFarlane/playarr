@@ -334,6 +334,8 @@ final class TVPlayerViewModel {
                 Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000
             } ?? 0
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title, startPositionSeconds: resumeSeconds))
+            // `-PlayarrMuted` (shared test simulators, e.g. the device wall Mac): the player never makes a sound.
+            if ProcessInfo.processInfo.arguments.contains("-PlayarrMuted") { engine.isMuted = true }
             engine.play()
             state = .ready
             activeMediaFileID = mediaFileID
