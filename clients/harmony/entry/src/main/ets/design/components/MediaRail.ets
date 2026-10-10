@@ -191,6 +191,11 @@ export struct MediaRail {
    * it to `FontWeight.Medium` the way brief 5.4's general guidance
    * describes doing when only the enum is available. */
   @Prop headingWeight: number = TvGeometry.railHeadingWeight;
+  /** Gap between the heading and the cards. */
+  @Prop headingGap: number = Spacing.sm;
+  /** The card row's height. A horizontal `List` with no height fills its parent, so a column of rails
+   * needs it set; `0` leaves the List unsized (a rail that is the only child of a sized box). */
+  @Prop listHeight: number = 0;
 
   /** The rail-wide lift factor applied while this rail holds NO focus at
    * all -- see `DEFAULT_UNFOCUSED_RAIL_FACTOR`'s comment. */
@@ -255,7 +260,7 @@ export struct MediaRail {
 
   build() {
 
-    Column({ space: Spacing.sm }) {
+    Column({ space: this.headingGap }) {
       if (this.heading.length > 0) {
         Text(this.heading)
           .fontSize(this.headingSize)
@@ -280,6 +285,7 @@ export struct MediaRail {
         )
       }
       .listDirection(Axis.Horizontal)
+      .height(this.listHeight > 0 ? this.listHeight : '100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
       .padding({ left: RAIL_CLIP_INSET_START, bottom: RAIL_CLIP_INSET_BOTTOM })

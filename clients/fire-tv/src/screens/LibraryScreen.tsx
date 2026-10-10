@@ -46,6 +46,7 @@ import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
+import {yearRangeLabel} from '../lib/workYear';
 import {Icon} from '../shell/icons';
 import {ActionTile} from '../tv/ActionTile';
 import {Button} from '../tv/forms';
@@ -554,10 +555,9 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   }
 }
 
-/** The year the web's library shows beside a title: the year it was added to the library, as `Library.tsx` does. */
-function releaseYearOf(work: Pick<Work, 'added_at'>): string | undefined {
-  const year = new Date(work.added_at).getFullYear();
-  return Number.isNaN(year) ? undefined : String(year);
+/** The release year (or "2011–2019" for an ended series), never the added date: web's `yearRangeLabel`. */
+function releaseYearOf(work: Work): string | undefined {
+  return yearRangeLabel(work) ?? undefined;
 }
 
 interface CardProps {

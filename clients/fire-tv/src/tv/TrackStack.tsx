@@ -8,6 +8,7 @@ import {Animated, Easing, Pressable, View} from 'react-native';
 import LinearGradient from '@amazon-devices/react-linear-gradient';
 import type {WatchProgress} from '@playarr-tv/api-client';
 import {ArtworkImage} from '../components/ArtworkImage';
+import {focusNode} from '../platform';
 import {useTheme} from '../theme/ThemeProvider';
 import {EdgeFade, TRACK_GUTTER} from './EdgeFade';
 import {Box, T, u} from './kit';
@@ -21,8 +22,14 @@ const CARD_W = 268;
 const CARD_H = 150.8;
 const CARD_PITCH = 293;
 const TRACK_PITCH = 314.8;
+// Cast and crew (web .tv-person-card at 1920): a 103.7 px circle centred in a 152 px cell, cells 176.9 px apart.
+const PERSON_CELL = 152;
+const PERSON_SIZE = 103.7;
+const PERSON_PITCH = 176.9;
+const isPersonTrack = (track: Track): boolean => track.items[0]?.person === true;
 /** Where the focused track's heading sits. */
-const FOCUS_Y = 410;
+// Web: the focused track's heading sits at 358 px (series page, Season 1 with an episode focused).
+const FOCUS_Y = 358;
 
 export interface TrackItem {
   id: string;
@@ -35,7 +42,7 @@ export interface TrackItem {
   title: string;
   /** People tracks put the role under the name instead of before it. */
   stacked?: boolean;
-  /** A headshot: cropped at 20% from the top, as the web does (`.tv-person-art img`). */
+  /** A cast or crew headshot: drawn as web's circular person card. */
   person?: boolean;
   initials?: string;
   progress?: WatchProgress;
@@ -83,9 +90,11 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
     if (!track) return;
     props.onFocus({track: trackIndex, item: itemIndex});
     const visible = 1920 - TRACK_X;
-    const left = itemIndex * CARD_PITCH;
+    const person = isPersonTrack(track);
+    const left = itemIndex * (person ? PERSON_PITCH : CARD_PITCH);
+    const width = person ? PERSON_CELL : CARD_W;
     let target = scrollTargets.current[track.id] ?? 0;
-    if (left + CARD_W + 46 > target + visible) target = left + CARD_W + 46 - visible;
+    if (left + width + 46 > target + visible) target = left + width + 46 - visible;
     if (left < target + 8) target = Math.max(0, left - 8);
     scrollTargets.current[track.id] = target;
     setOffsets((current) => ({...current, [track.id]: target}));
@@ -98,8 +107,9 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
           {tracks.map((track, trackIndex) => {
             const y = restY + trackIndex * TRACK_PITCH;
             const offset = offsets[track.id] ?? 0;
-            const first = Math.max(0, Math.floor(offset / CARD_PITCH) - 1);
-            const last = Math.min(track.items.length, Math.ceil((offset + 1038) / CARD_PITCH) + 1);
+            const pitch = isPersonTrack(track) ? PERSON_PITCH : CARD_PITCH;
+            const first = Math.max(0, Math.floor(offset / pitch) - 1);
+            const last = Math.min(track.items.length, Math.ceil((offset + 1038) / pitch) + 1);
             const active = focus?.track === trackIndex;
             return (
               <View key={track.id} pointerEvents="box-none">
@@ -120,7 +130,7 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
                       <TrackCard
                         key={item.id}
                         item={item}
-                        x={itemIndex * CARD_PITCH}
+                        x={itemIndex * pitch}
                         token={props.token}
                         selected={active && focus?.item === itemIndex}
                         preferred={props.initial?.track === trackIndex && props.initial.item === itemIndex}
@@ -133,7 +143,7 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
                   })}
                 </Animated.View>
                 <EdgeFade kind="gutter" tint side="left" active={offset > 0} x={0} y={y + 60} w={TRACK_VIEW_W} h={230} size={TRACK_GUTTER} />
-                <EdgeFade side="right" active={track.items.length * CARD_PITCH - offset > 1920 - TRACK_X + 8} x={0} y={y + 60} w={TRACK_VIEW_W} h={230} />
+                <EdgeFade side="right" active={track.items.length * pitch - offset > 1920 - TRACK_X + 8} x={0} y={y + 60} w={TRACK_VIEW_W} h={230} />
               </View>
             );
           })}
@@ -144,8 +154,52 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
 
 function TrackCard({item, x, token, selected, preferred, onFocus}: {item: TrackItem; x: number; token: string | undefined; selected: boolean; preferred: boolean; onFocus: () => void}): React.ReactElement {
   const {colour} = useTheme();
+  // hasTVPreferredFocus only wins while nothing else holds focus; the detail page mounts its buttons first, so the
+  // next-up episode takes focus explicitly once it exists (owner rule: a series page opens on the next item to play).
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    if (preferred) focusNode(ref);
+  }, [preferred]);
+  if (item.person) {
+    return (
+      <Pressable
+        ref={ref}
+        accessibilityRole="button"
+        accessibilityLabel={item.title}
+        hasTVPreferredFocus={preferred}
+        onFocus={onFocus}
+        onPress={item.onPress}
+        style={{position: 'absolute', left: u(x), top: 0, width: u(PERSON_CELL), alignItems: 'center'}}
+      >
+        <MediaFocus focused={selected} width={PERSON_SIZE} height={PERSON_SIZE} radius={PERSON_SIZE / 2}>
+          <View style={{width: '100%', height: '100%', borderRadius: u(PERSON_SIZE / 2), overflow: 'hidden', backgroundColor: colour.surfaceSoft, alignItems: 'center', justifyContent: 'center'}}>
+            {item.art ? (
+              <ArtworkImage uri={item.art} accessToken={token} style={{position: 'absolute', left: 0, top: 0, width: '100%', height: '100%'}} resizeMode="cover" />
+            ) : item.initials ? (
+              <T size={26} weight={640} color={colour.inkSoft}>
+                {item.initials}
+              </T>
+            ) : null}
+          </View>
+        </MediaFocus>
+        <View style={{marginTop: u(11.4), width: u(PERSON_CELL), alignItems: 'center'}}>
+          <T size={11.52} weight={610} ls={-0.1728} lh={17.3} color={colour.ink} lines={2} style={{textAlign: 'center'}}>
+            {item.title}
+          </T>
+          {item.small ? (
+            <View style={{marginTop: u(3.8)}}>
+              <T size={8.832} weight={700} lh={13.2} color={colour.inkMuted} lines={2} style={{textAlign: 'center'}}>
+                {item.small}
+              </T>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
+      ref={ref}
       accessibilityRole="button"
       accessibilityLabel={item.title}
       hasTVPreferredFocus={preferred}

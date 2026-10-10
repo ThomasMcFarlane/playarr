@@ -70,6 +70,7 @@ import type { ThemeModeSetting } from '../Theme';
 import { tv } from '../Metrics';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
 import { TvGeometry } from '../../core/Tokens';
+import type { RgbaColor } from '../../core/Tokens';
 import { FOCUS_LIFT } from './FocusLift';
 
 /** Brief 5.8, "TV nav tile" row: `bg ink@0.14 / ink@0.09`. Not a
@@ -79,8 +80,20 @@ const NAV_TILE_SELECTED_BG_ALPHA: number = 0.09;
 
 /** `navGroupShadow` (16) reasoned approximation -- see this file's header
  * comment. */
-const NAV_GROUP_SHADOW_OFFSET_RATIO: number = 0.5;
-const NAV_GROUP_SHADOW_ALPHA: number = 0.09;
+// Web `.app-nav-group` shadow: 0 14px 42px rgba(56, 38, 33, 0.10), the same warm ink in both themes.
+const NAV_GROUP_SHADOW_COLOR: string = 'rgba(56, 38, 33, 0.1)';
+// Web `.app-nav-label` letter spacing (0.035em of 8.832px).
+const NAV_TILE_LABEL_LETTER_SPACING: number = 0.31;
+
+/** Tints the white nav SVGs (generated from web `NavIcons.tsx`) to `color`, like web's `currentColor`. */
+function tintFilter(color: RgbaColor): ColorFilter {
+  return new ColorFilter([
+    color.r / 255, 0, 0, 0, 0,
+    0, color.g / 255, 0, 0, 0,
+    0, 0, color.b / 255, 0, 0,
+    0, 0, 0, color.a, 0,
+  ]);
+}
 
 /** Vertical gap between a tile's icon and its label. Not in the brief at
  * all (5.10 gives the tile's own outer size/radius/icon/label sizes, but
@@ -125,6 +138,10 @@ struct NavTile {
     });
   }
 
+  private contentColor(): RgbaColor {
+    return this.selected || this.focusPercent > 0 ? activeColors().ink : activeColors().inkSoft;
+  }
+
   private targetScale(): number {
     if (this.focusPercent > 0) {
       return 1 + (FOCUS_LIFT.tvNavTileFocused.scale - 1) * this.focusPercent;
@@ -152,13 +169,15 @@ struct NavTile {
         .width(tv(TvGeometry.navTileIconSize))
         .height(tv(TvGeometry.navTileIconSize))
         .objectFit(ImageFit.Contain)
-        .fillColor(toResourceColor(activeColors().ink))
+        .colorFilter(tintFilter(this.contentColor()))
         .draggable(false)
         .focusable(false)
 
       Text(this.item.label)
         .fontSize(tv(TvGeometry.navTileLabelSize))
-        .fontColor(toResourceColor(activeColors().ink))
+        .fontWeight(TvGeometry.navTileLabelWeight)
+        .letterSpacing(NAV_TILE_LABEL_LETTER_SPACING)
+        .fontColor(toResourceColor(this.contentColor()))
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -226,15 +245,14 @@ export struct NavRail {
     .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, TvGeometry.navGroupBackgroundOpacity))
     .border({
       width: tv(TvGeometry.navGroupBorderWidth),
-      color: toResourceColorWithAlpha(activeColors().inkMuted, TvGeometry.navGroupBorderOpacity),
+      color: toResourceColorWithAlpha(activeColors().ink, TvGeometry.navGroupBorderOpacity),
     })
     .shadow({
       radius: tv(TvGeometry.navGroupShadow),
       offsetX: 0,
-      offsetY: tv(TvGeometry.navGroupShadow) * NAV_GROUP_SHADOW_OFFSET_RATIO,
-      color: toResourceColorWithAlpha(activeColors().ink, NAV_GROUP_SHADOW_ALPHA),
+      offsetY: tv(TvGeometry.navGroupShadowOffsetY),
+      color: NAV_GROUP_SHADOW_COLOR,
     })
-    .position({ x: tv(TvGeometry.navStart), y: '50%' })
-    .markAnchor({ x: 0, y: '50%' })
+    .position({ x: tv(TvGeometry.navStart), y: tv(TvGeometry.navGroupTop) })
   }
 }

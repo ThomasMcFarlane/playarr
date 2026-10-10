@@ -224,6 +224,7 @@ export interface TvGeometryTokens {
   // Title panel.
   titlePanelTopPct: number;
   titlePanelLeft: number;
+  titlePanelTop: number;
   titlePanelWidth: number;
 
   // Primary action.
@@ -243,6 +244,13 @@ export interface TvGeometryTokens {
   homeRailsColumnLeftPct: number;
   homeRailsColumnVerticalPaddingVhPct: number;
   homeRailsColumnRowGap: number;
+  homeRailsLeft: number;
+  homeRailsWidth: number;
+  homeRailsInsetLeft: number;
+  homeRailsTop: number;
+  homeRailsHeadingGap: number;
+  homeRailsListHeight: number;
+  homeRailsRowGap: number;
 
   // Utility/clock row.
   utilityRowTop: number;
@@ -292,6 +300,9 @@ export interface TvGeometryTokens {
   navTileRadius: number;
   navTileIconSize: number;
   navTileLabelSize: number;
+  navTileLabelWeight: number;
+  navGroupTop: number;
+  navGroupShadowOffsetY: number;
   playerControlBarPaddingH: number;
   playerControlBarTitleSize: number;
   playerControlBarPlayIconSize: number;
@@ -324,8 +335,10 @@ export const TvGeometry: TvGeometryTokens = {
   stageWashRightFadePct: 34,
 
   titlePanelTopPct: 31,
-  titlePanelLeft: 144,
-  titlePanelWidth: 518,
+  titlePanelLeft: 154,
+  titlePanelWidth: 455,
+  // Web TV Home `.tv-home-feature` top edge (live DOM, 1920x1080).
+  titlePanelTop: 259,
 
   primaryActionTopPct: 47,
   primaryActionLeftPct: 47.5,
@@ -341,6 +354,17 @@ export const TvGeometry: TvGeometryTokens = {
   homeRailsColumnLeftPct: 38,
   homeRailsColumnVerticalPaddingVhPct: 50,
   homeRailsColumnRowGap: 48,
+  // Web `.tv-home-rails`: a full-height column from x=730; headings and cards start 152 in (x=882);
+  // the active rail's heading sits at y=402.
+  homeRailsLeft: 730,
+  homeRailsWidth: 1190,
+  homeRailsInsetLeft: 152,
+  homeRailsTop: 402,
+  // Web rail pitch is 366 (heading 26, gap 30, card 213, 97 to the next heading); the list height
+  // includes room for the focus lift and caption, so the gap between rails is smaller here.
+  homeRailsHeadingGap: 30,
+  homeRailsListHeight: 250,
+  homeRailsRowGap: 79,
 
   utilityRowTop: 56,
   utilityRowHeight: 50,
@@ -349,13 +373,14 @@ export const TvGeometry: TvGeometryTokens = {
   logoLeft: 59,
   logoTop: 34,
 
-  homeRailCardWidthLandscape: 219,
+  homeRailCardWidthLandscape: 327,
   homeRailCardWidthCover: 172,
   railPanelCardWidth: 230,
   railItemGapHome: 25,
   railItemGapTitle: 23,
-  railHeadingSize: 18,
-  railHeadingWeight: 610,
+  railHeadingSize: 17.664,
+  // ArkUI takes weights in steps of 100; web uses 610.
+  railHeadingWeight: 600,
   libraryGridColumns: 3,
   libraryGridRowGap: 36,
   libraryGridColumnGap: 28,
@@ -376,17 +401,22 @@ export const TvGeometry: TvGeometryTokens = {
   libraryResultsBackgroundOpacity: 0.93,
   navStart: 42,
   navGroupRadius: 22,
-  navGroupBackgroundOpacity: 0.72,
+  navGroupBackgroundOpacity: 0.56,
   navGroupBorderWidth: 1,
-  navGroupBorderOpacity: 0.18,
-  navGroupShadow: 16,
-  navGroupPaddingH: 6,
-  navGroupPaddingV: 7,
-  navGroupItemGap: 5,
+  navGroupBorderOpacity: 0.053,
+  navGroupShadow: 42,
+  navGroupPaddingH: 7,
+  navGroupPaddingV: 8,
+  navGroupItemGap: 9,
   navTileSize: 64,
   navTileRadius: 16,
   navTileIconSize: 20,
-  navTileLabelSize: 7,
+  navTileLabelSize: 8.832,
+  // ArkUI takes weights in steps of 100; web uses 680.
+  navTileLabelWeight: 700,
+  // Web TV library group (Home, Series, Movies, Music) top edge; the Downloads/Search group sits above it on web.
+  navGroupTop: 286,
+  navGroupShadowOffsetY: 14,
   playerControlBarPaddingH: 48,
   playerControlBarTitleSize: 19,
   playerControlBarPlayIconSize: 34,

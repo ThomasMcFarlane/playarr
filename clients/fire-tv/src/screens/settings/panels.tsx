@@ -44,7 +44,7 @@ export function AppearancePanel(): React.ReactElement {
   const label = (id: ThemePreference): string =>
     id === 'light' ? t('components.themeDropdown.optionLight') : id === 'dark' ? t('components.themeDropdown.optionDark') : t('components.themeDropdown.optionSystem');
   return (
-    <PanelBox>
+    <PanelBox w={1042.3}>
       <SectionTitle>{t('settings.appearance.colourThemeLabel')}</SectionTitle>
       <Gap h={16.2} />
       <Segmented
@@ -54,7 +54,7 @@ export function AppearancePanel(): React.ReactElement {
         onChange={setPreference}
       />
       <Gap h={30.2} />
-      <Divider />
+      <Divider w={1042.3} />
       <Gap h={30.2} />
       <SectionTitle>{t('settings.appearance.homeViewTitle')}</SectionTitle>
       <Gap h={5.6} />

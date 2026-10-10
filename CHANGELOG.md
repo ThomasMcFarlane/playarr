@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fire TV: LEFT from Home reaches the nav rail on the first try, and a late On Deck answer no longer leaves Home with nothing focused (18.462).
 - Apple TV: libraries list playable titles in the web order (numbers by value, so 2 comes before 10) and open with the first title focused.
 - Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
 - Tizen and webOS: web rules that use `:has()` (nav group spacing, search field focus ring, calendar agenda panel, downloads layout) now apply, through a build-time rewrite plus a small runtime that keeps a matching attribute up to date.
@@ -418,6 +419,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV: page subtitles sit under the title in the web's one subtitle style; Search uses the web's field, details panel and bigger result cards; balanced titles never break inside a word; a direction key with nothing focused lands on the nav rail (18.462).
+- Fire TV: Home uses the web's bigger cards (327 px art on a 352 px pitch), its rail geometry and profile tile, and its stage wash, so Home matches the web TV layout (18.462).
 - Calendar: no Request button in any calendar view, and the "not in your catalogue" and "request provider" messages are gone from the calendar details. The request-unavailable reason shown elsewhere now reads "Requests are not available for this title yet".
 - Web: the shared multi-select is a plain checkbox list driven only by D-pad or arrow keys (no search box or on-screen keyboard); the Calendar Filters lose the duplicate Source filter and the date range (old links keep working). Rows 1.9984, 1.9985.
 - Web: Search Filters keep only Type; the duplicate Library filter is removed (old `?library=` links keep working). Row 1.9988.
@@ -2685,6 +2688,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Parity: the live web capture waits for skeleton loaders to clear before the screenshot.
 - Web: `nav-list-rows-e2e` checks row heights with 1, 2 and 10 watchlist items at 1920 and 1280 (1.9967).
 - Web: `nav-cold-start-e2e` loads Watchlist cold against a server that answers every read after 1 s and checks the nav is never blank, its skeleton tiles are inert, and no tile moves (1.9970).
 - Unit tests for the relay address normaliser and the 443 then 8484 probe order, plus `relay-port-e2e.mjs`, which signs in through a relay name served only on 8484.

@@ -115,6 +115,8 @@ data class WorkDetail(
     val work: Work,
     val children: WorkChildren,
     val mediaFileId: String? = null,
+    /** The film's runtime when the server knows it (web shows it under the Home and Library hero titles). */
+    val runtimeMs: Long? = null,
 )
 
 /**

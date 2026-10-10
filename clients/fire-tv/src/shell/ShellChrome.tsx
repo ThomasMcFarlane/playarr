@@ -3,7 +3,7 @@
  * web client's DOM): the logo, the clock, the three-group left rail and the profile chip with the app version.
  */
 import React, {useEffect, useMemo, useState} from 'react';
-import {TvFocusScope} from '../platform';
+import {focusNode, getFocusedTag, TvFocusScope, useRemoteKey} from '../platform';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {WorkKind} from '@playarr-tv/api-client';
 import {ProfileAvatar} from '../components/ProfileAvatar';
@@ -151,6 +151,12 @@ function Rail({
   // so LEFT from the content found no rail item until something else re-rendered the rail.
   const [activeNode, setActiveNode] = useState<unknown>(null);
   const activeRef = useMemo(() => ({current: activeNode}), [activeNode]);
+  // Vega drops focus when the focused view unmounts (a list re-rendered by late data), and then the D-pad does nothing.
+  // The web never loses focus, so a direction key with nothing focused lands on the rail's own item.
+  useRemoteKey((key, raw) => {
+    if (raw.eventKeyAction !== 0 || !['up', 'down', 'left', 'right'].includes(key)) return;
+    if (!getFocusedTag()) focusNode(activeRef);
+  });
   return (
     <TvFocusScope trap={['up', 'down']} destinations={[activeRef]} style={{position: 'absolute', left: 0, top: 0, width: sw(128), height: sw(1080)}}>
       {groups.map((group) => {

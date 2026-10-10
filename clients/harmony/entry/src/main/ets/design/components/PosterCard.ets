@@ -139,8 +139,10 @@ const TITLE_EPISODE_SHADOW_FOCUSED: ShadowLayerSpec[] = [
 /** Brief 5.4, TV column, "card title" / "card subtitle" row -- see this
  * file's header comment for why these are named constants rather than a
  * `core/Tokens.ts` field. */
-const CARD_TITLE_FONT_SIZE_TV: number = 11;
-const CARD_SUBTITLE_FONT_SIZE_TV: number = 9;
+// Web TV card caption (`.tv-home-card strong` 11.904/610, `small` 8.832/400, both full ink).
+const CARD_TITLE_FONT_SIZE_TV: number = 11.904;
+const CARD_SUBTITLE_FONT_SIZE_TV: number = 8.832;
+const CARD_TITLE_FONT_WEIGHT: number = 600;
 
 /** Not in the brief at all -- see this file's header comment. */
 const PROGRESS_BAR_HEIGHT: number = 3;
@@ -317,7 +319,7 @@ export struct PosterCard {
       Text(this.title)
         .width(this.cardWidth)
         .fontSize(this.titleFontSize)
-        .fontWeight(FontWeight.Medium)
+        .fontWeight(CARD_TITLE_FONT_WEIGHT)
         .fontColor(toResourceColor(activeColors().ink))
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -327,7 +329,7 @@ export struct PosterCard {
           .width(this.cardWidth)
           .fontSize(this.subtitleFontSize)
           .fontWeight(FontWeight.Normal)
-          .fontColor(toResourceColor(activeColors().inkSoft))
+          .fontColor(toResourceColor(activeColors().ink))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
