@@ -2781,6 +2781,9 @@ internal class ParitySettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<SettingsSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
+    private val _isAdmin = MutableStateFlow(false)
+    /** Web `useIsAdmin` (self capabilities): admin-only sections are hidden from everyone else. */
+    val isAdmin = _isAdmin.asStateFlow()
     private val _message = MutableStateFlow<SettingsNotice?>(null)
     private val _homeRails = MutableStateFlow<List<RailPreferenceEntry>?>(null)
     /** The signed-in user's Home rails in order, with hidden flags (null until loaded). */
@@ -2831,6 +2834,7 @@ internal class ParitySettingsViewModel @Inject constructor(
     init {
         load()
         observeConnectedServers()
+        viewModelScope.launch { _isAdmin.value = runCatching { api.getSelfCapabilities().isAdmin }.getOrDefault(false) }
     }
 
     fun load() = viewModelScope.launch {
@@ -4174,11 +4178,15 @@ private fun TvSettingsBody(
             fontSize = 12.288.sp, fontWeight = FontWeight(820), letterSpacing = 0.983.sp, lineHeight = 18.432.sp, style = cssLine(),
             modifier = Modifier.offset(x = 226.6.dp, y = 111.8.dp),
         )
+        val isAdmin by viewModel.isAdmin.collectAsState()
         LazyColumn(
             // Padding, not offset: the list must end at the screen edge so rows past it (11 sections) scroll into view.
             Modifier.padding(start = playarrPageMetrics(true).start, top = 162.dp).width(480.dp).fillMaxHeight(),
         ) {
-            itemsIndexed(entries.map { it.first }) { index, candidate ->
+            // Web lists the admin-only sections (request latency) only for administrators and keeps every section's number.
+            val rows = entries.mapIndexed { number, row -> number to row.first }
+                .filter { (_, candidate) -> isAdmin || candidate != SettingsSection.RequestLatency }
+            itemsIndexed(rows) { index, (number, candidate) ->
                 var focused by remember { mutableStateOf(false) }
                 val selected = candidate == section
                 Box(
@@ -4192,7 +4200,7 @@ private fun TvSettingsBody(
                         .clickable { onPick(candidate) },
                 ) {
                     Text(
-                        settingsSectionNumber(index),
+                        settingsSectionNumber(number),
                         color = WebInkMuted, fontSize = 9.92.sp, fontWeight = FontWeight(760), lineHeight = 11.sp, style = cssLine(),
                         modifier = Modifier.offset(x = 32.dp, y = 27.dp),
                     )

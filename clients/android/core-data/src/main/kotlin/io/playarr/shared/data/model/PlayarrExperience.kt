@@ -52,6 +52,8 @@ data class UpdateWatchProgressRequest(
 @Serializable
 data class SelfCapabilitiesResponse(
     @SerialName("can_download") val canDownload: Boolean,
+    /** Admin-only views (request latency) are listed only for administrators, as on web. */
+    @SerialName("is_admin") val isAdmin: Boolean = false,
 )
 
 @Serializable
