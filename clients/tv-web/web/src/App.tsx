@@ -107,6 +107,7 @@ import {
   shouldStartTvLink,
 } from "./lib/clientPlatform";
 import { ShellActionColumnProvider } from "./components/shell/ShellActionColumn";
+import { ProfileNavLink } from "./components/shell/ProfileNavLink";
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import { localeTagFor } from "./lib/i18n/languages";
@@ -214,6 +215,7 @@ function AppShell() {
     currentUserName,
     savedProfiles,
   } = useAuth();
+  const userDisplayName = currentUserName ?? t("shell.user.viewerFallback");
   const currentAvatarScope = currentUserId
     ? profileAvatarScope(apiBaseUrl, currentUserId)
     : undefined;
@@ -520,9 +522,9 @@ function AppShell() {
         />
       )}
 
-      {!isPlayerRoute && availableWorkKinds !== null && (
+      {!isPlayerRoute && (
         <nav className="app-nav" aria-label={t("shell.nav.ariaLabel")}>
-          {NAV_GROUPS.map((group) => (
+          {availableWorkKinds !== null && NAV_GROUPS.map((group) => (
             <div
               className={`app-nav-group app-nav-group-${group.id}`}
               key={group.id}
@@ -568,49 +570,27 @@ function AppShell() {
               ) : null}
             </div>
           ))}
-        </nav>
-      )}
-
-      {!isPlayerRoute && (
-        <div className="app-user-identity-cluster">
-          <HouseholdRemainingChip status={householdStatus} now={now} />
-          <button
-            type="button"
-            className="app-user-identity"
-            aria-label={t("shell.user.ariaLabel", {
-              name: currentUserName ?? t("shell.user.viewerFallback"),
-            })}
-            data-navigation-focus-key="shell:user"
-            onClick={(event) => {
-              const origin = captureNavigationLayer(
-                location.pathname,
-                location.key,
-                event.currentTarget
-              );
-              navigate("/profiles", {
-                state: {
-                  backTo: `${location.pathname}${location.search}`,
-                  navigationOrigin: origin,
-                },
-              });
-            }}
-          >
-            {currentAvatar ? (
-              <ProfileAvatar
-                className="app-user-avatar"
-                preference={currentAvatar}
-              />
-            ) : (
-              <span className="app-user-avatar" aria-hidden="true" />
-            )}
-            <span className="app-user-name">
-              {currentUserName ?? t("shell.user.viewerFallback")}
+          <div className="app-nav-group app-nav-group-profile app-user-identity-cluster">
+            <HouseholdRemainingChip status={householdStatus} now={now} />
+            <ProfileNavLink
+              displayName={userDisplayName}
+              ariaLabel={t("shell.user.ariaLabel", { name: userDisplayName })}
+              avatar={
+                currentAvatar ? (
+                  <ProfileAvatar className="app-user-avatar" preference={currentAvatar} />
+                ) : (
+                  <span className="app-user-avatar" aria-hidden="true" />
+                )
+              }
+              backTo={`${location.pathname}${location.search}`}
+              route={location.pathname}
+              entryKey={location.key}
+            />
+            <span className="app-user-version" aria-hidden="true">
+              v{__APP_VERSION__}
             </span>
-          </button>
-          <span className="app-user-version" aria-hidden="true">
-            v{__APP_VERSION__}
-          </span>
-        </div>
+          </div>
+        </nav>
       )}
       </ShellActionColumnProvider>
     </div>

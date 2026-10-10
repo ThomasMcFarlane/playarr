@@ -9,10 +9,10 @@ describe("Playarr version label", () => {
     expect(app).toContain('className="app-user-version"');
     expect(app).toContain("v{__APP_VERSION__}");
     expect(app).toMatch(
-      /<div className="app-user-identity-cluster">[\s\S]*<\/button>\s*<span className="app-user-version"/
+      /<div className="app-nav-group app-nav-group-profile app-user-identity-cluster">[\s\S]*<ProfileNavLink[\s\S]*\/>\s*<span className="app-user-version"/
     );
     expect(css).toMatch(
-      /\.app-user-version\s*\{[^}]*position:\s*absolute;[^}]*top:\s*calc\(100% \+ 5px\);/s
+      /\.app-user-version\s*\{[^}]*display:\s*block;/s
     );
   });
 });

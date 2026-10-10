@@ -13,3 +13,4 @@ export { ViewToggle, type ViewOption } from "./ViewToggle";
 export { ChoiceGroup, DateRangeField, FilterSection, FiltersDrawer, MultiSelect } from "./FiltersDrawer";
 export { PeriodPicker } from "./PeriodPicker";
 export { ShellActionColumnProvider, ShellActionColumnSlot } from "./ShellActionColumn";
+export { ProfileNavLink, shortProfileName, type ProfileNavLinkProps } from "./ProfileNavLink";
