@@ -262,6 +262,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV: holding Select on a media card opens its actions (Play, Add to Playlist, Mark as Watched or Unwatched) in the shared drawer and returns focus to the card; title pages show the cast; episode tiles show their own frame; Settings has the Artwork size choice (small, medium, large) and the colour theme choice works; Right from a settings row enters its panel.
 - Settings → Server lists the server group's members automatically and read-only, each with its first-priority client address, and updates live when a member joins, leaves or changes its client address. Users can no longer forget or edit the group; signing out clears the remembered group instead. New signed-in-only `GET /api/v1/peer-groups/self/members`.
 - Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
 - Calendar agenda: the left details panel shows the focused episode's or movie's synopsis when the source has one (calendar entries gain an optional `overview`, read from the cached source data with no extra queries).
