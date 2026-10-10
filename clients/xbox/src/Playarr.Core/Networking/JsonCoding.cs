@@ -92,6 +92,13 @@ namespace Playarr.Core.Networking
             object? existingValue,
             JsonSerializer serializer)
         {
+            // Direct construction for the wrapped types in use: Activator needs constructor metadata that the
+            // .NET Native release build strips.
+            if (objectType == typeof(Sensitive<string>))
+            {
+                return new Sensitive<string>(serializer.Deserialize<string>(reader)!);
+            }
+
             var wrapped = objectType.GetGenericArguments()[0];
             var value = serializer.Deserialize(reader, wrapped);
             return Activator.CreateInstance(objectType, value);
@@ -105,8 +112,7 @@ namespace Playarr.Core.Networking
                 return;
             }
 
-            var expose = value.GetType().GetMethod(nameof(Sensitive<object>.ExposeSecret));
-            serializer.Serialize(writer, expose!.Invoke(value, null));
+            serializer.Serialize(writer, ((ISensitive)value).ExposeBoxed());
         }
     }
 

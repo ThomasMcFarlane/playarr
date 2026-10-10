@@ -28,7 +28,7 @@ namespace Playarr.Core.Models
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The wrapped secret's type.</typeparam>
-    public readonly struct Sensitive<T> : IEquatable<Sensitive<T>>
+    public readonly struct Sensitive<T> : IEquatable<Sensitive<T>>, ISensitive
     {
         private readonly T _value;
 
@@ -45,6 +45,8 @@ namespace Playarr.Core.Models
         /// </summary>
         public T ExposeSecret() => _value;
 
+        object? ISensitive.ExposeBoxed() => _value;
+
         /// <summary>Always <c>"REDACTED"</c>. See the type remarks.</summary>
         public override string ToString() => "REDACTED";
 
@@ -60,5 +62,14 @@ namespace Playarr.Core.Models
         public static bool operator ==(Sensitive<T> left, Sensitive<T> right) => left.Equals(right);
 
         public static bool operator !=(Sensitive<T> left, Sensitive<T> right) => !left.Equals(right);
+    }
+
+    /// <summary>
+    /// Non-generic access to a <see cref="Sensitive{T}"/>'s value for serialization, so the JSON converter needs no
+    /// reflection (the .NET Native release build strips the metadata <c>GetMethod</c> would need).
+    /// </summary>
+    public interface ISensitive
+    {
+        object? ExposeBoxed();
     }
 }
