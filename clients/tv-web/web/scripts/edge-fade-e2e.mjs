@@ -260,6 +260,56 @@ for (const theme of THEMES) {
       }
     }
   }
+  // 6. Rails run to the true right edge. The scroller's clip box ends at the stage's right edge (no negative margin
+  //    pulling it short), and the rightmost 24px of the row has no hard luminance step (cards fade out under the mask).
+  for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+    await page.setViewportSize(size);
+    let seriesHref = null;
+    for (const url of ["/", "series"]) {
+      const label = `${theme} ${size.width}: ${url === "/" ? "Home" : "Series detail"}`;
+      if (url === "/") await page.goto(`${base}/`);
+      else {
+        await page.goto(`${base}/series`);
+        await page.waitForSelector("a[href*='/series/']");
+        seriesHref = await page.evaluate(() => document.querySelector("a[href*='/series/']").getAttribute("href"));
+        await page.goto(`${base}${seriesHref}`);
+      }
+      await page.waitForSelector("[data-tv-scroll-axis=horizontal] a, [data-tv-scroll-axis=horizontal] button");
+      await page.waitForTimeout(1800);
+      const rails = await page.evaluate(() => [...document.querySelectorAll("[data-tv-scroll-axis=horizontal]")]
+        .filter((r) => r.scrollWidth > r.clientWidth + 8 && r.getBoundingClientRect().width > 200)
+        .map((r, i) => { r.dataset.probeRail = String(i); const b = r.getBoundingClientRect(); return { i, left: b.left, right: b.right, top: b.top, bottom: b.bottom }; }));
+      check(`${label}: has overflowing rails to test`, rails.length > 0, "none");
+      for (const rail of rails.slice(0, 2)) {
+        const stageRight = await page.evaluate(() => document.documentElement.clientWidth);
+        check(`${label}: rail ${rail.i} clip box ends at the stage's right edge`, Math.abs(rail.right - stageRight) <= 1, `right=${rail.right} stage=${stageRight}`);
+        // Pixel strip across the card row, rightmost 24px of the rail.
+        const { y, cards } = await page.evaluate((i) => {
+          const r = document.querySelector(`[data-probe-rail="${i}"]`);
+          const all = [...r.querySelectorAll("a,button")].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 40);
+          const b = all[0];
+          return { y: Math.round(b.top + b.height * 0.4), cards: all.map((c) => [c.left, c.right]) };
+        }, rail.i);
+        const shot = await page.screenshot({ clip: { x: stageRight - 24, y, width: 24, height: 6 } });
+        const px = await pixels(page, shot);
+        const lum = [];
+        for (let x = 0; x < px.w; x += 1) {
+          let sum = 0;
+          for (let row = 0; row < px.h; row += 1) { const o = (row * px.w + x) * 4; sum += 0.2126 * px.data[o] + 0.7152 * px.data[o + 1] + 0.0722 * px.data[o + 2]; }
+          lum.push(sum / px.h);
+        }
+        let step = 0;
+        // Steps across the gap between two cards are layout, not an edge: only count steps inside one card.
+        const x0 = stageRight - 24;
+        for (let x = 1; x < lum.length; x += 1) {
+          if (!cards.some(([l, r]) => x0 + x - 1 > l + 1 && x0 + x < r - 1)) continue;
+          step = Math.max(step, Math.abs(lum[x] - lum[x - 1]));
+        }
+        check(`${label}: rail ${rail.i} has no hard edge in the last 24px`, step <= 0.09 * 255, `max step ${step.toFixed(1)} lum=${lum.map((v) => v.toFixed(0)).join(",")}`);
+        if (OUT) await page.screenshot({ path: join(OUT, `${theme}-${size.width}-${url === "/" ? "home" : "series"}-rail${rail.i}-right.png`), clip: { x: stageRight - 400, y: rail.top, width: 400, height: Math.min(300, rail.bottom - rail.top) } });
+      }
+    }
+  }
   await context.close();
 }
 
