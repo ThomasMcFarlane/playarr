@@ -131,7 +131,8 @@ struct TVHomeView: View {
                         NavigationLink {
                             TVWorkDetailView(work: work, apiClient: environment.apiClient)
                         } label: {
-                            TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus)
+                            TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus,
+                                          progress: id == "r0" ? viewModel?.progress[work.id] : nil)
                         }
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
@@ -432,8 +433,11 @@ struct TVHomeView: View {
             primary.append(work)
             if primary.count >= 8 { break }
         }
-        let definitions: [(title: String, works: [Work])] =
-            [("Start watching", primary)] + viewModel.rails.map { ($0.title, $0.items) }
+        // Web Home: "On deck" (part-watched, at most 10) when there is any, else "Start watching" (8 most recent).
+        let lead: (title: String, works: [Work]) = viewModel.onDeck.isEmpty
+            ? ("Start watching", primary)
+            : ("On deck", Array(viewModel.onDeck.prefix(10)))
+        let definitions: [(title: String, works: [Work])] = [lead] + viewModel.rails.map { ($0.title, $0.items) }
         return definitions.filter { !$0.works.isEmpty }
     }
 
@@ -765,6 +769,8 @@ struct TVWebHomeCard: View {
     let work: Work
     let apiClient: PlayarrAPIClient
     var focused = false
+    /// Web `.tv-watch-progress`: a 3 px bar along the art's foot on On deck cards (replaces the unseen dot).
+    var progress: Double? = nil
 
     static let artWidth: CGFloat = 327.2
     static let artHeight: CGFloat = 184
@@ -775,11 +781,22 @@ struct TVWebHomeCard: View {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: apiClient)
                     .frame(width: Self.artWidth, height: Self.artHeight)
+                    .overlay(alignment: .bottomLeading) {
+                        if let progress {
+                            ZStack(alignment: .leading) {
+                                Color.white.opacity(0.2)
+                                DesignTokens.Color.brandPrimary.frame(width: max(3, Self.artWidth * min(1, progress)))
+                            }
+                            .frame(height: 3)
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 12.48, style: .continuous))
-                Circle()
-                    .fill(DesignTokens.Color.brandPrimary)
-                    .frame(width: 13, height: 13)
-                    .padding(10.6)
+                if progress == nil {
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 13, height: 13)
+                        .padding(10.6)
+                }
             }
             .background(
                 RoundedRectangle(cornerRadius: 12.48, style: .continuous)
