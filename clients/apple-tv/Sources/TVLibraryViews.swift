@@ -126,7 +126,7 @@ struct TVHomeView: View {
                 .padding(.leading, Self.cardBleed)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 24.9) {
-                    ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
+                    ForEach(works) { work in
                         let focus = HomeRailCardFocus(rail: id, workID: work.id)
                         NavigationLink {
                             TVWorkDetailView(work: work, apiClient: environment.apiClient)
@@ -136,12 +136,6 @@ struct TVHomeView: View {
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCard, equals: focus)
-                        .onMoveCommand { direction in
-                            if direction == .left, index == 0 {
-                                focusedCard = nil
-                                requestNavFocus()
-                            }
-                        }
                     }
                 }
                 .padding(.leading, Self.cardBleed)
