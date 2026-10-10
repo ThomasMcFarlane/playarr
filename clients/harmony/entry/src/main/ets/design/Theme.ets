@@ -149,3 +149,13 @@ export function toResourceColor(color: RgbaColor): string {
 export function toResourceColorWithAlpha(color: RgbaColor, alpha: number): string {
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
 }
+
+/** Tints a white SVG icon (generated from web's inline SVGs) to `color`, like web's `currentColor`. */
+export function tintFilter(color: RgbaColor): ColorFilter {
+  return new ColorFilter([
+    color.r / 255, 0, 0, 0, 0,
+    0, color.g / 255, 0, 0, 0,
+    0, 0, color.b / 255, 0, 0,
+    0, 0, 0, color.a, 0,
+  ]);
+}

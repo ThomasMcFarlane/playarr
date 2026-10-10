@@ -65,7 +65,7 @@
  * on the topmost rail's own item content to target it explicitly.
  */
 
-import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../Theme';
+import { activeColors, toResourceColor, toResourceColorWithAlpha, tintFilter } from '../Theme';
 import type { ThemeModeSetting } from '../Theme';
 import { tv } from '../Metrics';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
@@ -85,15 +85,6 @@ const NAV_GROUP_SHADOW_COLOR: string = 'rgba(56, 38, 33, 0.1)';
 // Web `.app-nav-label` letter spacing (0.035em of 8.832px).
 const NAV_TILE_LABEL_LETTER_SPACING: number = 0.31;
 
-/** Tints the white nav SVGs (generated from web `NavIcons.tsx`) to `color`, like web's `currentColor`. */
-function tintFilter(color: RgbaColor): ColorFilter {
-  return new ColorFilter([
-    color.r / 255, 0, 0, 0, 0,
-    0, color.g / 255, 0, 0, 0,
-    0, 0, color.b / 255, 0, 0,
-    0, 0, 0, color.a, 0,
-  ]);
-}
 
 /** Vertical gap between a tile's icon and its label. Not in the brief at
  * all (5.10 gives the tile's own outer size/radius/icon/label sizes, but
