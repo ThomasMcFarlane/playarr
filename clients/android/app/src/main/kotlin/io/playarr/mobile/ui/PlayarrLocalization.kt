@@ -369,6 +369,8 @@ internal enum class PlayarrString(
     CalendarFilterRange("Date range", "ช่วงวันที่", "期間"),
     CalendarFilterMonitoring("Monitoring", "การติดตาม", "監視"),
     CalendarStatusAired("Aired", "ออกอากาศแล้ว", "公開済み"),
+    CalendarPillAvailable("Available", "พร้อมใช้งาน", "利用可能"),
+    CalendarPillNotTracked("Not tracked", "ไม่ได้ติดตาม", "対象外"),
     CalendarStatusUpcoming("Upcoming", "กำลังจะมาถึง", "公開予定"),
     CalendarStatusDownloaded("Downloaded", "ดาวน์โหลดแล้ว", "ダウンロード済み"),
     CalendarStatusMissing("Missing", "ขาดหาย", "未取得"),

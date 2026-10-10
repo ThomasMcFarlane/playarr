@@ -193,6 +193,7 @@ private fun ExperienceCalendarScreen(
             PlayarrNavItem("next", playarrString(PlayarrString.CalendarNext), PlayarrActionIcon.Next, onClick = holder::next),
         ),
     )
+    Box(Modifier.fillMaxSize()) {
     PlayarrPageLayout(
         pageId = PlayarrPageId.Calendar,
         header = playarrPageHeader(title = playarrString(PlayarrString.CalendarTitle), onBack = onBack, filters = PlayarrFilterAction(
@@ -205,8 +206,6 @@ private fun ExperienceCalendarScreen(
     ) {
         if (!isTelevision) {
             PhoneCalendarHeader(state, language.locale, holder) { jumpOpen = true }
-        } else if (state.mode != CalendarViewMode.Agenda) {
-            CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         }
         when (val load = state.load) {
             is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth()) { PlayarrErrorState(load.message, holder::load) }
@@ -231,7 +230,7 @@ private fun ExperienceCalendarScreen(
                             groups = groups, loading = loading, selected = detailItem, today = today, zone = zone, locale = language.locale,
                             onSelect = { holder.select(it.key) }, onOpenWork = onOpenWork, onPlay = onPlay, actions = viewModel.actions, modifier = body,
                         ) else TvCalendarAgenda(
-                            state = state, groups = groups, loading = loading, selected = detailItem, zone = zone, locale = language.locale,
+                            state = state, groups = groups, loading = loading, selected = detailItem, zone = zone, locale = language.locale, today = today,
                             onSelect = { holder.select(it.key) }, onOpenWork = onOpenWork, onPlay = onPlay, actions = viewModel.actions,
                             onJump = { jumpOpen = true },
                         )
@@ -250,6 +249,15 @@ private fun ExperienceCalendarScreen(
                 }
             }
         }
+    }
+    if (isTelevision) {
+        // Web: the date range button opens the jump picker and sits first in the Previous / Today / Next group (its
+        // right edge at x 1609, level with the title). Drawn here because the shared navigation pill has a fixed width.
+        CalendarRangeButton(
+            remember(state.window, state.mode, state.anchor, language.locale) { calendarRangeButtonLabel(state.mode, state.anchor, state.window, language.locale) },
+            Modifier.align(Alignment.TopEnd).padding(end = 311.dp, top = 56.2.dp),
+        ) { jumpOpen = true }
+    }
     }
     if (jumpOpen) {
         CalendarJumpDialog(
@@ -302,7 +310,7 @@ internal val PhoneCalendarMetrics = CalendarMetrics(
 /** Web TV `.calendar` agenda at 1920 x 1080, read off the committed references. */
 internal val TvCalendarMetrics = CalendarMetrics(
     11.7f, 18f, 2.1f, 17f, 38.7f, 46f, 14f, 19.4f, 28f, 15f, 11.6f, 17f, 1.16f, 10.5f,
-    19.4f, 23f, 8f, 15f, 58f, 15f, 22f, 19f, 10f, 100f, 20f, 28f, 13f, 19f, 40f to 60f, 14f, 18.7f, 28f,
+    19.4f, 23f, 8f, 15f, 58f, 15f, 22f, 19f, 10f, 108f, 20f, 28f, 13f, 19f, 40f to 60f, 14f, 18.7f, 28f,
 )
 
 internal val LocalCalendarMetrics = androidx.compose.runtime.compositionLocalOf { PhoneCalendarMetrics }
@@ -444,7 +452,6 @@ private fun PhoneCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneI
         }
         is CalendarItem.Single -> entry.libraryState()
     }
-    val sources = (item as? CalendarItem.Series)?.entries?.flatMap { it.sources } ?: entry.sources
     val workId = entry.openWorkId
     val m = LocalCalendarMetrics.current
     Column(Modifier.padding(top = 4.dp)) {
@@ -467,58 +474,9 @@ private fun PhoneCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneI
         PhoneCalendarFact(playarrString(PlayarrString.CalendarSheetState)) {
             PhoneCalendarBadge(calendarStateLabel(state), m.body.sp, m.bodyLine.sp)
         }
-        if (sources.isNotEmpty()) {
-            Spacer(Modifier.height(m.factGap.dp))
-            PhoneCalendarFact(playarrString(PlayarrString.CalendarSheetSources)) {
-                Text(
-                    androidx.compose.ui.text.buildAnnotatedString {
-                        sources.distinctBy { it.sourceInstanceId to it.arrId }.forEachIndexed { index, source ->
-                            if (index > 0) append(", ")
-                            append(source.sourceName)
-                            append(" ")
-                            withStyle(androidx.compose.ui.text.SpanStyle(color = WebInkMuted)) { append("(${source.sourceKind})") }
-                        }
-                    },
-                    color = WebInk, fontSize = m.body.sp, lineHeight = m.bodyLine.sp, style = WebTextStyle, modifier = if (m === TvCalendarMetrics) Modifier else Modifier.offset(y = 1.33.dp),
-                )
-            }
-        }
+        // No "Reported by" line: users never see source-provider names (owner rule 2026-10-09).
         Spacer(Modifier.height(m.beforeActions.dp))
-        val holderState by actions.state.collectAsState()
-        val snapshot = entry.snapshot
-        val request = entry.action(io.playarr.shared.data.model.CalendarAction.REQUEST)
-        val watchlist = entry.action(io.playarr.shared.data.model.CalendarAction.WATCHLIST)?.takeIf { it.enabled }
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(m.pillGap.dp), verticalArrangement = Arrangement.spacedBy(m.pillGap.dp)) {
-            // Web `planCalendarActions`: resume, else play, when the server enabled it and named a file.
-            val playable = listOf(entry.action(io.playarr.shared.data.model.CalendarAction.RESUME), entry.action(io.playarr.shared.data.model.CalendarAction.PLAY))
-                .firstOrNull { it?.enabled == true && !it.mediaFileId.isNullOrBlank() }
-            if (playable != null) {
-                PhoneCalendarPill(
-                    playarrString(if (playable.action == io.playarr.shared.data.model.CalendarAction.RESUME) PlayarrString.DiscoveryActionResume else PlayarrString.DiscoveryActionPlay),
-                    primary = true,
-                ) { onPlay(playable.mediaFileId.orEmpty()) }
-            }
-            if (workId != null) {
-                val openSeries = item is CalendarItem.Series || kind == CalendarMediaKind.Episode
-                PhoneCalendarPill(playarrString(if (openSeries) PlayarrString.CalendarOpenSeries else PlayarrString.CalendarOpen)) { onOpenWork(workId) }
-            }
-            if (snapshot != null && request != null) {
-                val requested = request.active || snapshot in holderState.requested
-                PhoneCalendarPill(
-                    playarrString(if (requested) PlayarrString.DiscoveryRequested else PlayarrString.DiscoveryActionRequest),
-                    enabled = request.enabled && !requested && snapshot !in holderState.busy,
-                ) { actions.request(snapshot) }
-            }
-            if (snapshot != null && watchlist != null) {
-                val listed = holderState.listed[snapshot] ?: watchlist.active
-                PhoneCalendarPill(
-                    playarrString(if (listed) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd),
-                    glyph = if (listed) "✓" else "+",
-                    enabled = snapshot !in holderState.busy,
-                ) { actions.toggleWatchlist(snapshot, listed) }
-            }
-        }
-        holderState.error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        CalendarDetailActions(item, onOpenWork, onPlay, actions)
     }
 }
 
@@ -629,7 +587,8 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
                         if (kind == CalendarMediaKind.Episode) playarrString(PlayarrString.CalendarDetailKindEpisode) else kind?.let { calendarKindLabel(it) } ?: entry.mediaKind,
                         color = WebInkMuted, fontSize = m.entryMeta.sp, lineHeight = m.entryMetaLine.sp, style = WebTextStyle,
                     )
-                    PhoneCalendarBadge(calendarStateLabel(state), m.entryMeta.sp, m.entryMetaLine.sp)
+                    if (m === TvCalendarMetrics) CalendarTonePill(calendarItemTone(item, LocalCalendarToday.current, zone))
+                    else PhoneCalendarBadge(calendarStateLabel(state), m.entryMeta.sp, m.entryMetaLine.sp)
                 }
             }
         }
@@ -645,32 +604,19 @@ internal fun TvCalendarAgenda(
     selected: CalendarItem?,
     zone: ZoneId,
     locale: Locale,
+    today: LocalDate,
     onSelect: (CalendarItem) -> Unit,
     onOpenWork: (String) -> Unit,
     onPlay: (String) -> Unit,
     actions: CalendarActionsHolder,
     onJump: () -> Unit,
 ) {
-    androidx.compose.runtime.CompositionLocalProvider(LocalCalendarMetrics provides TvCalendarMetrics) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalCalendarMetrics provides TvCalendarMetrics, LocalCalendarToday provides today) {
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-            // Both panes end at the bottom of the screen; the offsets must not push them past it.
-            val detailsTop = 236.dp
-            val listTop = 240.dp
-            val title = remember(state.window, state.mode, state.anchor, locale) { phoneCalendarRangeTitle(state.mode, state.anchor, state.window, locale) }
-            Row(
-                Modifier.offset(x = playarrPageMetrics(true).start, y = 165.dp).height(56.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    title, color = WebInk, fontSize = 24.sp, lineHeight = 36.sp, fontWeight = FontWeight(560), style = WebTextStyle, maxLines = 1,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-                val ink = WebInk
-                androidx.compose.foundation.Canvas(Modifier.size(width = 9.dp, height = 8.dp)) {
-                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close() }
-                    drawPath(path, ink)
-                }
-            }
+            // Web: the date range lives in the header group; the details panel takes the library stage (eyebrow at y 259)
+            // and the day list starts under the header. Both panes end at the bottom of the screen.
+            val detailsTop = 259.dp
+            val listTop = 168.dp
             val detailScroll = rememberScrollState()
             Column(
                 Modifier.offset(x = playarrPageMetrics(true).start, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))
@@ -680,7 +626,7 @@ internal fun TvCalendarAgenda(
             ) {
                 when {
                     loading -> CalendarDetailSkeleton()
-                    selected != null -> PhoneCalendarDetails(selected, locale, zone, onOpenWork, onPlay, actions)
+                    selected != null -> TvCalendarDetails(selected, locale, zone, today, onOpenWork, onPlay, actions)
                     else -> Text(playarrString(PlayarrString.CalendarSelectPrompt), color = WebInkMuted)
                 }
             }
@@ -713,10 +659,13 @@ internal fun TvCalendarAgenda(
                     rows.forEachIndexed { index, (day, item) ->
                         if (day != null) {
                             item(key = "day-$day") {
-                                Text(
-                                    phoneCalendarDayHeading(day, locale), color = WebInk, fontSize = 18.7.sp, lineHeight = 28.sp, fontWeight = FontWeight(560),
-                                    style = WebTextStyle, modifier = Modifier.padding(bottom = 6.dp).semantics { heading() },
-                                )
+                                Row(Modifier.padding(top = if (index > 0) 25.dp else 0.dp, bottom = 37.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        phoneCalendarDayHeading(day, locale), color = WebInk, fontSize = 18.7.sp, lineHeight = 28.sp, fontWeight = FontWeight(560),
+                                        style = WebTextStyle, modifier = Modifier.semantics { heading() },
+                                    )
+                                    if (day == today) CalendarTodayBadge()
+                                }
                             }
                         } else if (item != null) {
                             item(key = "entry-$index-${item.key}") {
@@ -725,7 +674,7 @@ internal fun TvCalendarAgenda(
                                     // The details panel follows focus: UP/DOWN selects, SELECT is not needed.
                                     modifier = Modifier.calendarListRow(focus, "agenda-${item.key}", onFocused = { onSelect(item) }),
                                 )
-                                Spacer(Modifier.height(10.dp))
+                                Spacer(Modifier.height(13.dp))
                             }
                         }
                     }
@@ -1231,13 +1180,7 @@ internal fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneI
                 fontSize = 12.sp,
             )
         }
-        val sources = (item as? CalendarItem.Series)?.entries?.flatMap { it.sources } ?: entry.sources
-        if (sources.isNotEmpty()) {
-            Text(playarrString(PlayarrString.CalendarSourcesHeading), color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
-            sources.distinctBy { it.sourceInstanceId to it.arrId }.forEach {
-                Text("${it.sourceName} · ${it.sourceKind}", color = WebInkSoft, fontSize = 13.sp)
-            }
-        }
+        // No source list: users never see source-provider names (owner rule 2026-10-09).
         if (workId != null) {
             PlayarrButton(onClick = { onOpenWork(workId) }) {
                 Text(playarrString(if (item is CalendarItem.Series) PlayarrString.CalendarOpenSeries else PlayarrString.CalendarOpen))
@@ -1854,6 +1797,170 @@ internal fun PlayarrAvailabilityLagLine(lag: io.playarr.shared.data.model.Availa
         }
         if (lag.unknownCount > 0) {
             Text(playarrString(PlayarrString.AvailabilityLagUnknown, "count" to lag.unknownCount), color = WebInkMuted, fontSize = 11.sp)
+        }
+    }
+}
+
+/** Web `EntryPillTone`. */
+internal enum class CalendarPillTone { Available, Upcoming, Missing, Neutral }
+
+/** Web `entryPillTone`: a file means available, a later local day upcoming, otherwise missing when monitored. */
+internal fun calendarEntryTone(entry: CalendarEntry, today: LocalDate, zone: ZoneId): CalendarPillTone = when {
+    entry.hasFile -> CalendarPillTone.Available
+    (entry.releaseAt?.atZone(zone)?.toLocalDate() ?: entry.date) > today -> CalendarPillTone.Upcoming
+    entry.monitored -> CalendarPillTone.Missing
+    else -> CalendarPillTone.Neutral
+}
+
+/** Web `itemPillTone`: a series group reports its worst state (missing, upcoming, neutral, then available). */
+internal fun calendarItemTone(item: CalendarItem, today: LocalDate, zone: ZoneId): CalendarPillTone {
+    val tones = when (item) {
+        is CalendarItem.Series -> item.entries
+        is CalendarItem.Single -> listOf(item.first)
+    }.map { calendarEntryTone(it, today, zone) }
+    return listOf(CalendarPillTone.Missing, CalendarPillTone.Upcoming, CalendarPillTone.Neutral).firstOrNull { it in tones } ?: CalendarPillTone.Available
+}
+
+internal val LocalCalendarToday = androidx.compose.runtime.compositionLocalOf { LocalDate.now() }
+
+/** Web `.status-pill`: the tone at 60% as the border and 14% over the surface as the fill, ink text at weight 750. */
+@Composable
+private fun CalendarTonePill(tone: CalendarPillTone) {
+    val dark = webIsDark
+    val toneColour = when (tone) {
+        CalendarPillTone.Available -> if (dark) Color(0xFF8AC5A5) else Color(0xFF224C3A)
+        CalendarPillTone.Upcoming -> Color(0xFFCF3157)
+        CalendarPillTone.Missing -> if (dark) Color(0xFFF1A4A8) else Color(0xFF722F34)
+        CalendarPillTone.Neutral -> WebInkSoft
+    }
+    val label = playarrString(
+        when (tone) {
+            CalendarPillTone.Available -> PlayarrString.CalendarPillAvailable
+            CalendarPillTone.Upcoming -> PlayarrString.CalendarStatusUpcoming
+            CalendarPillTone.Missing -> PlayarrString.CalendarStatusMissing
+            CalendarPillTone.Neutral -> PlayarrString.CalendarPillNotTracked
+        },
+    )
+    Box(
+        Modifier.background(androidx.compose.ui.graphics.lerp(WebSurface, toneColour, 0.14f), CircleShape)
+            .border(1.dp, toneColour.copy(alpha = 0.6f), CircleShape)
+            .padding(horizontal = 10.4.dp, vertical = 2.9.dp),
+    ) {
+        Text(label, color = WebInk, fontSize = 13.44.sp, lineHeight = 18.8.sp, fontWeight = FontWeight(750), style = WebTextStyle, maxLines = 1)
+    }
+}
+
+/** Web `.calendar-today-badge`: the small outlined TODAY tag beside today's heading. */
+@Composable
+private fun CalendarTodayBadge() {
+    Box(Modifier.border(1.dp, WebInkSoft.copy(alpha = 0.6f), CircleShape).padding(horizontal = 7.dp, vertical = 1.dp)) {
+        Text(playarrString(PlayarrString.CalendarToday).uppercase(), color = WebInkSoft, fontSize = 9.6.sp, lineHeight = 14.sp, fontWeight = FontWeight(800), letterSpacing = 0.6.sp, style = WebTextStyle)
+    }
+}
+
+/**
+ * Web agenda `CalendarDetails` on the stage (`DetailsPanel`): the eyebrow in `--brand-ink`, the balanced 9ch title, the
+ * subtitle and date in `--dp-soft`, the tone pill, the overview of a single release, then the actions.
+ */
+@Composable
+private fun TvCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneId, today: LocalDate, onOpenWork: (String) -> Unit, onPlay: (String) -> Unit, actions: CalendarActionsHolder) {
+    val entry = item.first
+    val kind = CalendarMediaKind.fromWire(entry.mediaKind)
+    val kindLabel = if (kind == CalendarMediaKind.Episode) playarrString(PlayarrString.CalendarDetailKindEpisode) else kind?.let { calendarKindLabel(it) } ?: entry.mediaKind
+    val allDay = playarrString(PlayarrString.CalendarAllDay)
+    val whenText = remember(entry.releaseAt, locale, zone, allDay) {
+        entry.releaseAt?.let { playarrFullDateTime(it, zone, locale) } ?: "${formatCalendarDay(entry.date, locale)} · $allDay"
+    }
+    val palette = io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette
+    Column(Modifier.width(455.dp)) {
+        Text(
+            "$kindLabel · ${calendarReleaseTypeLabel(entry.releaseType)}".uppercase(locale), color = palette.brandInk,
+            fontSize = 12.288.sp, lineHeight = 18.432.sp, fontWeight = FontWeight(860), letterSpacing = 0.983.sp, style = WebTextStyle,
+        )
+        WebHeroTitle(item.title, Modifier.padding(top = 25.9.dp), maxLines = 3)
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 27.dp), horizontalArrangement = Arrangement.spacedBy(12.8.dp)) {
+            listOf(calendarItemSubtitle(item), whenText).filter(String::isNotBlank).forEach {
+                Text(it, color = palette.detailsSoft, fontSize = 13.056.sp, lineHeight = 19.584.sp, fontWeight = FontWeight(600), style = WebTextStyle)
+            }
+        }
+        Row(Modifier.padding(top = 17.dp)) { CalendarTonePill(calendarItemTone(item, today, zone)) }
+        Spacer(Modifier.height(24.dp))
+        CalendarDetailActions(item, onOpenWork, onPlay, actions)
+    }
+}
+
+/** The agenda details' actions in web order: Play or Resume, Open, Request, Watchlist (server-computed). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CalendarDetailActions(item: CalendarItem, onOpenWork: (String) -> Unit, onPlay: (String) -> Unit, actions: CalendarActionsHolder) {
+    val entry = item.first
+    val kind = CalendarMediaKind.fromWire(entry.mediaKind)
+    val workId = entry.openWorkId
+    val m = LocalCalendarMetrics.current
+    Column {
+            val holderState by actions.state.collectAsState()
+            val snapshot = entry.snapshot
+            val request = entry.action(io.playarr.shared.data.model.CalendarAction.REQUEST)
+            val watchlist = entry.action(io.playarr.shared.data.model.CalendarAction.WATCHLIST)?.takeIf { it.enabled }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(m.pillGap.dp), verticalArrangement = Arrangement.spacedBy(m.pillGap.dp)) {
+                // Web `planCalendarActions`: resume, else play, when the server enabled it and named a file.
+                val playable = listOf(entry.action(io.playarr.shared.data.model.CalendarAction.RESUME), entry.action(io.playarr.shared.data.model.CalendarAction.PLAY))
+                    .firstOrNull { it?.enabled == true && !it.mediaFileId.isNullOrBlank() }
+                if (playable != null) {
+                    PhoneCalendarPill(
+                        playarrString(if (playable.action == io.playarr.shared.data.model.CalendarAction.RESUME) PlayarrString.DiscoveryActionResume else PlayarrString.DiscoveryActionPlay),
+                        primary = true,
+                    ) { onPlay(playable.mediaFileId.orEmpty()) }
+                }
+                if (workId != null) {
+                    val openSeries = item is CalendarItem.Series || kind == CalendarMediaKind.Episode
+                    // Web: Open is the primary button unless Play is offered.
+                PhoneCalendarPill(playarrString(if (openSeries) PlayarrString.CalendarOpenSeries else PlayarrString.CalendarOpen), primary = playable == null) { onOpenWork(workId) }
+                }
+                if (snapshot != null && request != null) {
+                    val requested = request.active || snapshot in holderState.requested
+                    PhoneCalendarPill(
+                        playarrString(if (requested) PlayarrString.DiscoveryRequested else PlayarrString.DiscoveryActionRequest),
+                        enabled = request.enabled && !requested && snapshot !in holderState.busy,
+                    ) { actions.request(snapshot) }
+                }
+                if (snapshot != null && watchlist != null) {
+                    val listed = holderState.listed[snapshot] ?: watchlist.active
+                    PhoneCalendarPill(
+                        playarrString(if (listed) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd),
+                        glyph = if (listed) "✓" else "+",
+                        enabled = snapshot !in holderState.busy,
+                    ) { actions.toggleWatchlist(snapshot, listed) }
+                }
+            }
+            holderState.error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+    }
+}
+
+/** Web `formatRangeButtonLabel`: "11 Oct – 9 Nov" for a span, "Oct 2026" for a month. */
+internal fun calendarRangeButtonLabel(mode: CalendarViewMode, anchor: LocalDate, window: CalendarWindow, locale: Locale): String {
+    if (mode == CalendarViewMode.Month) return PlayarrDateFormat("yMMM", locale).format(anchor)
+    val end = if (mode == CalendarViewMode.Agenda) window.end.minusDays(1) else window.end
+    val day = PlayarrDateFormat("MMMd", locale)
+    return "${day.format(window.start)} \u2013 ${day.format(end)}"
+}
+
+/** The web header range button: an outlined 50 dp pill sized to its label. */
+@Composable
+private fun CalendarRangeButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Surface(
+        onClick = onClick,
+        interactionSource = source,
+        shape = CircleShape,
+        color = WebSurface,
+        contentColor = WebInkSoft,
+        border = BorderStroke(1.dp, WebPillBorder),
+        modifier = modifier.height(50.dp).webFocusRing(focused, offset = 2.dp).semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Box(Modifier.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 14.4.sp, fontWeight = FontWeight(720), maxLines = 1)
         }
     }
 }

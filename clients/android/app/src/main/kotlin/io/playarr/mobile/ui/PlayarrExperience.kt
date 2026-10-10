@@ -2853,7 +2853,7 @@ internal fun webRailSurfaceBrush(): Brush {
  * 62.208 dp box with the glyphs centred, which is where CSS puts them.
  */
 @Composable
-private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
+internal fun WebHeroTitle(title: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = LocalDensity.current
     val style = androidx.compose.ui.text.TextStyle(
@@ -2864,25 +2864,28 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
         fontFamily = webFontFamily,
         textMotion = if (webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
     )
-    val lines = remember(title, density, webFontFamily) {
+    val lines = remember(title, density, webFontFamily, maxLines) {
         // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
         val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
         fun measureAt(width: Int) = measurer.measure(
             text = title,
             style = style,
             constraints = androidx.compose.ui.unit.Constraints(maxWidth = width),
-            maxLines = 2,
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
         // CSS `text-wrap: balance`: the narrowest width that keeps the same line count without overflowing.
         val greedy = measureAt(nineCh)
-        val result = if (greedy.lineCount < 2 || greedy.hasVisualOverflow) greedy else {
+        val lineCount = greedy.lineCount
+        val result = if (lineCount < 2 || greedy.hasVisualOverflow) greedy else {
             var low = nineCh / 2
             var high = nineCh
             while (high - low > 1) {
                 val mid = (low + high) / 2
                 val probe = measureAt(mid)
-                if (probe.lineCount == 2 && !probe.hasVisualOverflow) high = mid else low = mid
+                // Never narrower than a word: every line must end at a space, as CSS breaks only at soft wrap opportunities.
+                val wordBreaks = (0 until probe.lineCount - 1).all { probe.getLineEnd(it).let { end -> end <= 0 || end >= title.length || title[end - 1].isWhitespace() || title[end].isWhitespace() } }
+                if (probe.lineCount == lineCount && !probe.hasVisualOverflow && wordBreaks) high = mid else low = mid
             }
             measureAt(high)
         }
