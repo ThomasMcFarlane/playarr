@@ -653,11 +653,32 @@ impl ReconciliationPoller {
             return;
         }
         if let Err(err) = self.media_sync.sync_series_cast(work_id).await {
-            tracing::warn!(
+            // Per item only at debug; `log_series_cast_summary` reports counts.
+            tracing::debug!(
                 source_instance_id = %self.source_instance_id,
                 work_id = %work_id,
                 error = %err,
                 "could not sync series cast; will retry after a restart"
+            );
+        }
+    }
+
+    /// One log line per pass for the series cast lookups made since the last
+    /// pass: WARN when any failed, INFO when all succeeded, nothing when idle.
+    fn log_series_cast_summary(&self) {
+        let (ok, failed) = self.media_sync.take_series_cast_summary();
+        if failed > 0 {
+            tracing::warn!(
+                source_instance_id = %self.source_instance_id,
+                ok,
+                failed,
+                "series cast lookups finished with failures"
+            );
+        } else if ok > 0 {
+            tracing::info!(
+                source_instance_id = %self.source_instance_id,
+                ok,
+                "series cast synced"
             );
         }
     }
@@ -833,6 +854,7 @@ impl ReconciliationPoller {
             total,
             "missing-media-file backfill pass complete"
         );
+        self.log_series_cast_summary();
     }
 
     /// One backfill candidate: checks (a local DB read) whether `work_id`
