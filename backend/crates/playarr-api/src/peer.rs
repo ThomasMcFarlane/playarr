@@ -892,13 +892,21 @@ pub(crate) fn leaf_selectors_for(
 
 /// This node's own availability rows, from the shared snapshot when it is
 /// fresh (see [`crate::own_availability`]) and derived otherwise.
+///
+/// A snapshot past its TTL is served at once while one background task
+/// derives the next (up to [`crate::own_availability::DEFAULT_MAX_STALE`]), so
+/// a derivation that takes minutes on a large library never holds a peer's
+/// pull or push waiting.
 async fn derive_own_availability(
     state: &AppState,
-    now: DateTime<Utc>,
 ) -> Result<Arc<Vec<PeerAvailabilityRow>>, ApiError> {
+    let owned = state.clone();
     state
         .own_availability
-        .get_or_derive(|| derive_own_availability_uncached(state, now))
+        .get_or_refresh(
+            crate::own_availability::DEFAULT_MAX_STALE,
+            move || async move { derive_own_availability_uncached(&owned, Utc::now()).await },
+        )
         .await
 }
 
@@ -952,14 +960,27 @@ async fn derive_own_availability_uncached(
         };
 
         let leaves = leaf_selectors_for(&detail);
+        if leaves.is_empty() {
+            continue;
+        }
+
+        // One query per work for all of its files, instead of one per leaf.
+        let files: HashMap<Uuid, playarr_model::MediaFile> = match state
+            .media_file_repo
+            .list_by_work_id(work_id)
+            .await
+        {
+            Ok(files) => files.into_iter().map(|file| (file.id, file)).collect(),
+            Err(err) => {
+                tracing::warn!(%work_id, error = %err, "skipping work while deriving live peer availability");
+                continue;
+            }
+        };
 
         for (media_file_id, leaf_selector) in leaves {
-            let media_file = match state.media_file_repo.get_by_id(media_file_id).await {
-                Ok(file) => file,
-                Err(err) => {
-                    tracing::warn!(%media_file_id, error = %err, "skipping leaf while deriving live peer availability");
-                    continue;
-                }
+            let Some(media_file) = files.get(&media_file_id).cloned() else {
+                tracing::warn!(%media_file_id, "skipping leaf while deriving live peer availability: file not found");
+                continue;
             };
             let Some(source) = sources.get(&media_file.source_instance_id) else {
                 continue;
@@ -1022,7 +1043,7 @@ pub async fn availability_handler(
     _peer: PeerSignedRequest,
 ) -> Result<Json<AvailabilityResponse>, ApiError> {
     let now = Utc::now();
-    let rows = derive_own_availability(&state, now).await?;
+    let rows = derive_own_availability(&state).await?;
     Ok(Json(AvailabilityResponse {
         rows: rows.as_ref().clone(),
         server_time: cursor(now),
@@ -1240,7 +1261,7 @@ async fn build_push_request(
         server_time: server_time.clone(),
     };
     let availability = availability_sync::AvailabilityResponse {
-        rows: derive_own_availability(state, now)
+        rows: derive_own_availability(state)
             .await?
             .iter()
             .cloned()
