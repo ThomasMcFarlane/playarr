@@ -2867,13 +2867,25 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
     val lines = remember(title, density, webFontFamily) {
         // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
         val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
-        val result = measurer.measure(
+        fun measureAt(width: Int) = measurer.measure(
             text = title,
             style = style,
-            constraints = androidx.compose.ui.unit.Constraints(maxWidth = nineCh),
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = width),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        // CSS `text-wrap: balance`: the narrowest width that keeps the same line count without overflowing.
+        val greedy = measureAt(nineCh)
+        val result = if (greedy.lineCount < 2 || greedy.hasVisualOverflow) greedy else {
+            var low = nineCh / 2
+            var high = nineCh
+            while (high - low > 1) {
+                val mid = (low + high) / 2
+                val probe = measureAt(mid)
+                if (probe.lineCount == 2 && !probe.hasVisualOverflow) high = mid else low = mid
+            }
+            measureAt(high)
+        }
         (0 until result.lineCount).map { title.substring(result.getLineStart(it), result.getLineEnd(it, visibleEnd = true)).trimEnd() }
     }
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = title }) {
@@ -5870,7 +5882,7 @@ private fun VideoDetailCopy(
                 } else {
                     (work.genres.firstOrNull() ?: work.kind.playarrSingularLabel()).uppercase(language.locale)
                 },
-                color = WebKicker,
+                color = PlayarrWebTheme.palette.brandInk,
                 fontSize = 12.288.sp,
                 fontWeight = FontWeight(820),
                 letterSpacing = 0.983.sp,
@@ -5895,7 +5907,7 @@ private fun VideoDetailCopy(
                 chips.forEachIndexed { index, item ->
                     Text(
                         item,
-                        color = if (index == 0) WebInkSoft else WebInkMuted,
+                        color = WebInkSoft,
                         fontSize = 10.56.sp,
                         lineHeight = 15.84.sp,
                         fontWeight = if (index == 0) FontWeight(680) else FontWeight.Normal,
@@ -5909,12 +5921,12 @@ private fun VideoDetailCopy(
                     ?: playarrString(
                         if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
                     ),
-                color = WebInkMuted,
+                color = WebInkSoft,
                 fontSize = 12.864.sp,
                 lineHeight = 20.325.sp,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 360.dp),
+                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 324.dp),
             )
         }
         return
@@ -6077,7 +6089,8 @@ private fun VideoDetailActions(
         )
     }
     if (television) {
-        val playLabel = if (smartPlan != null) {
+        // Web `movieActionLabel`: a film says "Resume from m:ss" or "Play"; only series use the smart plan's label.
+        val playLabel = if (smartPlan != null && work.kind != WorkKind.Movie) {
             playarrString(smartPlan.buttonLabel())
         } else if (progress?.state == WatchState.PartWatched) {
             playarrString(PlayarrString.DetailResumeFrom, "position" to formatPlayarrPlayerTime(progress.positionMs))
@@ -6089,7 +6102,8 @@ private fun VideoDetailActions(
                 label = playLabel,
                 glyph = "\u25B6",
                 primary = true,
-                ink = episode != null || work.kind != WorkKind.Movie,
+                // Web `.tv-detail-play`: the ink pill for films and series alike.
+                ink = true,
                 onClick = {
                     val target = smartPlan?.target
                     when {
@@ -6359,7 +6373,7 @@ internal fun SeriesEpisodeBrowser(
         modifier = modifier
             .then(
                 if (isTelevision) {
-                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 410.dp)
+                    Modifier.background(webRailSurfaceBrush()).padding(start = 152.dp, top = 348.dp)
                 } else {
                     Modifier.glass(RoundedCornerShape(16.dp), WebGlass.Panel).padding(14.dp)
                 },
@@ -6546,8 +6560,22 @@ private fun WebEpisodeDetailCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Web `MediaThumbnailArtwork`: the episode's own still when it has one, else the frame thumbnail, over the
+                // series backdrop fallback; each shows through if the one above fails.
+                episode.mediaFileId?.let { mediaFileId ->
+                    AuthenticatedMediaThumbnail(
+                        mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
+                        AuthenticatedMediaThumbnail(
+                            mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                            modifier = Modifier.fillMaxSize(),
+                            artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
+                        )
+                    }
+                }
             }
-            // Web `WorkDetail` draws the series backdrop on every episode tile (`episodeArtwork = backdrop`): no frame thumbnail or still.
             Text(
                 episode.episode.episodeNumber.toString().padStart(2, '0'),
                 color = Color.White,
@@ -6681,7 +6709,7 @@ internal fun MovieDetailBrowser(
             if (chapters.isNotEmpty()) {
                 WebMediaTrack(
                     title = playarrString(PlayarrString.DetailChapters),
-                    count = playarrString(PlayarrString.DetailSceneMarkersCount, "count" to chapters.size),
+                    count = playarrString(PlayarrString.DetailChaptersCount, "count" to chapters.size),
                     state = tvRails.rowState(chaptersRail),
                 ) {
                     itemsIndexed(chapters, key = { _, it -> it.index }) { chapterIndex, chapter ->
