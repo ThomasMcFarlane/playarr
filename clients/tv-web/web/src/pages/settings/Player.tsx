@@ -9,6 +9,7 @@ import {
   writePlayerDefaults,
   type PlayerDefaults,
 } from "../../lib/playerDefaults";
+import { Select, SegmentedControl } from "../../components/ui";
 import { QualityMatrix } from "../../components/QualityMatrix";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
@@ -156,53 +157,24 @@ export function SettingsPlayerPage() {
             <h3>{t("settings.playerPreferences.subtitlesTitle")}</h3>
             <p>{t("settings.playerPreferences.subtitlesDescription")}</p>
           </div>
-          <div
-            className="player-default-choice"
-            role="radiogroup"
-            aria-label={t("settings.playerPreferences.subtitlesAriaLabel")}
-          >
-            {([
-              ["off", t("settings.playerPreferences.subtitlesOff")],
-              ["forced", t("settings.playerPreferences.subtitlesForced")],
-              ["always", t("settings.playerPreferences.subtitlesAlways")],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                className={`player-default-button${
-                  playerDefaults.subtitleMode === value ? " is-active" : ""
-                }`}
-                aria-checked={playerDefaults.subtitleMode === value}
-                onClick={() => updatePlayerDefaults({ subtitleMode: value })}
-              >
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel={t("settings.playerPreferences.subtitlesAriaLabel")}
+            value={playerDefaults.subtitleMode}
+            options={[
+              { value: "off", label: t("settings.playerPreferences.subtitlesOff") },
+              { value: "forced", label: t("settings.playerPreferences.subtitlesForced") },
+              { value: "always", label: t("settings.playerPreferences.subtitlesAlways") },
+            ]}
+            onChange={(value) => updatePlayerDefaults({ subtitleMode: value })}
+          />
 
           {playerDefaults.subtitleMode !== "off" && (
-            <div
-              className="player-language-choice player-subtitle-language-choice"
-              role="radiogroup"
-              aria-label={t("settings.playerPreferences.subtitleLanguageAriaLabel")}
-            >
-              {AUDIO_LANGUAGE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  className={`player-language-button${
-                    playerDefaults.subtitleLanguage === option.value ? " is-active" : ""
-                  }`}
-                  aria-checked={playerDefaults.subtitleLanguage === option.value}
-                  onClick={() => updatePlayerDefaults({ subtitleLanguage: option.value })}
-                >
-                  <span>{option.label}</span>
-                  <small>{option.value}</small>
-                </button>
-              ))}
-            </div>
+            <Select
+              ariaLabel={t("settings.playerPreferences.subtitleLanguageAriaLabel")}
+              options={AUDIO_LANGUAGE_OPTIONS.map((option) => ({ value: option.value, label: option.label, hint: option.value }))}
+              value={playerDefaults.subtitleLanguage}
+              onChange={(value) => updatePlayerDefaults({ subtitleLanguage: value as AudioLanguage })}
+            />
           )}
         </div>
 
@@ -211,31 +183,13 @@ export function SettingsPlayerPage() {
             <h3>{t("settings.playerPreferences.audioTitle")}</h3>
             <p>{t("settings.playerPreferences.audioDescription")}</p>
           </div>
-          <div
-            className="player-language-choice"
-            role="radiogroup"
-            aria-label={t("settings.playerPreferences.audioLanguageAriaLabel")}
-            aria-busy={
-              playerPreferenceState.status === "loading" ||
-              playerPreferenceState.status === "saving"
-            }
-          >
-            {AUDIO_LANGUAGE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                className={`player-language-button${
-                  audioLanguage === option.value ? " is-active" : ""
-                }`}
-                aria-checked={audioLanguage === option.value}
-                onClick={() => void handleAudioLanguageChange(option.value)}
-              >
-                <span>{option.label}</span>
-                <small>{option.value}</small>
-              </button>
-            ))}
-          </div>
+          <Select
+            ariaLabel={t("settings.playerPreferences.audioLanguageAriaLabel")}
+            options={AUDIO_LANGUAGE_OPTIONS.map((option) => ({ value: option.value, label: option.label, hint: option.value }))}
+            value={audioLanguage}
+            disabled={playerPreferenceState.status === "loading" || playerPreferenceState.status === "saving"}
+            onChange={(value) => void handleAudioLanguageChange(value as AudioLanguage)}
+          />
 
           <p
             className={`player-preference-status${
