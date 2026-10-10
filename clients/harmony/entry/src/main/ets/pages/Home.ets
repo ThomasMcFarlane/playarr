@@ -267,6 +267,13 @@ function workKindKicker(kind: WorkKind): string {
   return 'Author';
 }
 
+/** One server-curated Home rail (`GET /api/v1/home/rails`), as web TV Home renders it. */
+interface HomeServerRail {
+  id: string;
+  title: string;
+  items: HomeCardItem[];
+}
+
 /** Builds one rail's card list from a plain catalogue `Work[]` (the new/more
  * movies/series rails). `isTopRail` is decided once, by the caller, for the
  * WHOLE rail -- see `HomeCardItem.applyTopRailFocus`'s own doc comment. */
