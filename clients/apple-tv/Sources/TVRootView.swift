@@ -282,7 +282,10 @@ private struct TVProductionShell<Stage: View>: View {
                 )
                 .frame(width: navColumn)
                 .focusSection()
+                .zIndex(1)
 
+                // The stage spans the whole screen under the floating nav, as on the web: pages place their content
+                // in screen coordinates (back button at 153.6, rails at 881.6) and backdrops run to the left edge.
                 NavigationStack {
                     stageContent()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -291,6 +294,7 @@ private struct TVProductionShell<Stage: View>: View {
                         .focusSection()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.leading, -navColumn)
                 .focusSection()
                 .focused(shellFocus, equals: .stage)
             }
