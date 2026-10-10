@@ -295,7 +295,7 @@ internal enum class PlayarrString(
     ErrorSubjectAvailableServers("available servers", "เซิร์ฟเวอร์ที่พร้อมใช้งาน", "利用可能なサーバー"),
     ErrorSubjectCalendar("calendar", "ปฏิทิน", "カレンダー"),
     ErrorSubjectFolders("folders", "โฟลเดอร์", "フォルダ"),
-    CalendarTitle("Release Calendar", "ปฏิทินการเผยแพร่", "公開カレンダー"),
+    CalendarTitle("Calendar", "ปฏิทิน", "カレンダー"),
     CalendarViewAgenda("Agenda", "กำหนดการ", "予定表"),
     CalendarViewWeek("Week", "สัปดาห์", "週"),
     CalendarViewMonth("Month", "เดือน", "月"),
