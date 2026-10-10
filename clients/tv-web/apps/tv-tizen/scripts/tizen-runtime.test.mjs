@@ -368,6 +368,7 @@ test("external links open in the TV browser instead of replacing Playarr", () =>
   cleanup();
   assert.equal(listeners.has("click"), false);
   assert.equal(windowObject.open("https://example.com/x"), "original");
+});
 
 test("registers remote keys with a writable copy of the key list", () => {
   // Samsung's argument validator writes into the array it is given (seen on the Tizen 10 TV emulator:
