@@ -21,10 +21,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use playarr_model::PeerLeafAvailability;
+use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
-use sqlx::AnyConnection;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -35,6 +35,13 @@ use crate::codec::{
 use crate::error::DbError;
 use crate::pool::DbPool;
 use crate::write_queue::{write, WriteQueue};
+
+/// Rows written per write-queue operation (and so per savepoint) when a
+/// snapshot is applied. A real inventory is tens of thousands of rows; one
+/// operation per chunk keeps each stretch that holds the database's write lock
+/// short, so other queued writes (watch progress, pollers) interleave between
+/// chunks instead of waiting for the whole replacement.
+const WRITE_CHUNK_ROWS: usize = 2_000;
 
 // `leaf_selector` round-trips through its own serde-derived JSON form
 // (`LeafSelector`'s `#[serde(rename_all = "snake_case")]`) directly via
@@ -171,64 +178,125 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
     ) -> Result<Vec<PeerLeafAvailability>, DbError>;
 }
 
-/// Rows as the database stores them (timestamps at millisecond precision), so
-/// a stored row and the same row freshly received compare equal.
-fn normalised_rows(rows: &[PeerLeafAvailability]) -> Result<Vec<PeerLeafAvailability>, DbError> {
-    let round = |at: DateTime<Utc>| parse_datetime(&format_datetime(at));
+/// One incoming row, ready to write: its serialised leaf selector and its
+/// content fingerprint.
+struct PreparedRow {
+    row: PeerLeafAvailability,
+    leaf_selector: String,
+    content_hash: String,
+}
+
+/// The fingerprint of a row's content: everything except `peer_node_id` (the
+/// key being replaced) and `updated_at`. `updated_at` is when the sender
+/// derived the snapshot, not a property of the file, so a row that differs only
+/// in `updated_at` is unchanged. Uses the stored text forms, so the same row
+/// read back from the database hashes the same.
+fn content_hash(row: &PeerLeafAvailability, leaf_selector: &str) -> String {
+    let mut hasher = Sha256::new();
+    let mut field = |value: &str| {
+        hasher.update(value.as_bytes());
+        hasher.update([0x1f]);
+    };
+    field(&row.media_file_id.to_string());
+    field(&row.source_instance_id.to_string());
+    field(&row.path);
+    field(&provider_to_str(&row.provider));
+    field(&row.external_id);
+    field(leaf_selector);
+    field(
+        &row.group_library_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
+    );
+    field(availability_to_str(row.availability));
+    field(row.container.as_deref().unwrap_or("\u{0}"));
+    field(row.codec.as_deref().unwrap_or("\u{0}"));
+    field(&row.bitrate.map(|v| v.to_string()).unwrap_or_default());
+    field(&row.size_bytes.map(|v| v.to_string()).unwrap_or_default());
+    field(&row.duration_ms.map(|v| v.to_string()).unwrap_or_default());
+    field(
+        &row.local_work_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
+    );
+    field(&row.title);
+    field(work_kind_to_str(row.kind));
+    field(&row.release_date.map(format_datetime).unwrap_or_default());
+    let digest = hasher.finalize();
+    digest[..16].iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn prepare(rows: &[PeerLeafAvailability]) -> Result<Vec<PreparedRow>, DbError> {
     rows.iter()
         .map(|row| {
-            let mut row = row.clone();
-            row.release_date = row.release_date.map(round).transpose()?;
-            row.updated_at = round(row.updated_at)?;
-            Ok(row)
+            let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
+            let content_hash = content_hash(row, &leaf_selector);
+            Ok(PreparedRow {
+                row: row.clone(),
+                leaf_selector,
+                content_hash,
+            })
         })
         .collect()
 }
 
-/// Every stored row of one peer, in no particular order.
-async fn load_for_peer(
-    conn: &mut AnyConnection,
+/// `(media_file_id, content_hash)` of every stored row of one peer. The query
+/// is answered from `idx_peer_leaf_availability_diff` alone (see the plan test
+/// below), so it touches neither the table nor the wide columns. A row stored
+/// before the hash existed has `None`.
+const STORED_FINGERPRINTS_SQL: &str =
+    "SELECT media_file_id, content_hash FROM peer_leaf_availability WHERE peer_node_id = ?";
+
+async fn load_fingerprints(
+    pool: &DbPool,
     peer_node_id: Uuid,
-) -> Result<Vec<PeerLeafAvailability>, DbError> {
-    let sql = format!("SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = ?");
-    let rows = sqlx::query(&sql)
+) -> Result<HashMap<String, Option<String>>, DbError> {
+    let rows = sqlx::query(STORED_FINGERPRINTS_SQL)
         .bind(peer_node_id.to_string())
-        .fetch_all(&mut *conn)
+        .fetch_all(pool)
         .await?;
-    rows.iter().map(from_row).collect()
+    rows.iter()
+        .map(|row| Ok((row.try_get("media_file_id")?, row.try_get("content_hash")?)))
+        .collect()
 }
 
 /// What turns one peer's stored rows into a new snapshot: rows to upsert (new
-/// or different) and file ids to delete. `updated_at` is when the sender
-/// derived the snapshot, not a property of the file, so a row that differs
-/// only in `updated_at` is unchanged.
+/// or different) and file ids to delete.
 struct SnapshotDiff<'a> {
-    changed: Vec<&'a PeerLeafAvailability>,
-    removed: Vec<Uuid>,
+    /// Positions in the incoming snapshot of the rows to upsert.
+    changed: Vec<usize>,
+    removed: Vec<String>,
+    snapshot: std::marker::PhantomData<&'a PreparedRow>,
 }
 
 impl<'a> SnapshotDiff<'a> {
-    fn between(stored: &[PeerLeafAvailability], incoming: &'a [PeerLeafAvailability]) -> Self {
-        let stored_by_file: HashMap<Uuid, &PeerLeafAvailability> =
-            stored.iter().map(|row| (row.media_file_id, row)).collect();
-        let incoming_files: HashSet<Uuid> = incoming.iter().map(|row| row.media_file_id).collect();
+    fn between(stored: &HashMap<String, Option<String>>, incoming: &'a [PreparedRow]) -> Self {
+        let incoming_files: HashSet<String> = incoming
+            .iter()
+            .map(|prepared| prepared.row.media_file_id.to_string())
+            .collect();
         let changed = incoming
             .iter()
-            .filter(|row| match stored_by_file.get(&row.media_file_id) {
-                Some(old) => {
-                    let mut old = (*old).clone();
-                    old.updated_at = row.updated_at;
-                    old != **row
+            .enumerate()
+            .filter(|(_, prepared)| {
+                match stored.get(&prepared.row.media_file_id.to_string()) {
+                    Some(Some(hash)) => *hash != prepared.content_hash,
+                    // New, or stored before the hash existed.
+                    _ => true,
                 }
-                None => true,
             })
+            .map(|(index, _)| index)
             .collect();
         let removed = stored
-            .iter()
-            .map(|row| row.media_file_id)
-            .filter(|id| !incoming_files.contains(id))
+            .keys()
+            .filter(|id| !incoming_files.contains(*id))
+            .cloned()
             .collect();
-        Self { changed, removed }
+        Self {
+            changed,
+            removed,
+            snapshot: std::marker::PhantomData,
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -239,6 +307,21 @@ impl<'a> SnapshotDiff<'a> {
 pub struct SqlxPeerLeafAvailabilityRepo {
     pool: DbPool,
     queue: Option<WriteQueue>,
+}
+
+/// One lock per peer so two replacements of the same peer's snapshot (a pull
+/// and a push arriving together) apply one after the other, each diffing
+/// against what the previous one left. Process-wide, not per repository
+/// instance: the API and the worker each build their own instance.
+fn peer_lock(peer_node_id: Uuid) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::OnceLock<DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>> =
+        std::sync::OnceLock::new();
+    LOCKS
+        .get_or_init(DashMap::new)
+        .entry(peer_node_id)
+        .or_default()
+        .value()
+        .clone()
 }
 
 impl SqlxPeerLeafAvailabilityRepo {
@@ -257,8 +340,8 @@ const UPSERT_SQL: &str = "INSERT INTO peer_leaf_availability \
                  (peer_node_id, media_file_id, source_instance_id, path, \
                  provider, external_id, leaf_selector, group_library_id, \
                  availability, container, codec, bitrate, size_bytes, duration_ms, \
-                 local_work_id, title, kind, release_date, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 local_work_id, title, kind, release_date, updated_at, content_hash) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (peer_node_id, media_file_id) DO UPDATE SET \
                  source_instance_id = excluded.source_instance_id, path = excluded.path, \
                  provider = excluded.provider, external_id = excluded.external_id, \
@@ -269,12 +352,13 @@ const UPSERT_SQL: &str = "INSERT INTO peer_leaf_availability \
                  size_bytes = excluded.size_bytes, duration_ms = excluded.duration_ms, \
                  local_work_id = excluded.local_work_id, title = excluded.title, \
                  kind = excluded.kind, release_date = excluded.release_date, \
-                 updated_at = excluded.updated_at";
+                 updated_at = excluded.updated_at, content_hash = excluded.content_hash";
 
 /// Binds one row to [`UPSERT_SQL`].
 fn bind_upsert<'q>(
     availability: &'q PeerLeafAvailability,
     leaf_selector: String,
+    content_hash: String,
 ) -> sqlx::query::Query<'q, sqlx::Any, sqlx::any::AnyArguments<'q>> {
     sqlx::query(UPSERT_SQL)
         .bind(availability.peer_node_id.to_string())
@@ -296,13 +380,15 @@ fn bind_upsert<'q>(
         .bind(work_kind_to_str(availability.kind))
         .bind(availability.release_date.map(format_datetime))
         .bind(format_datetime(availability.updated_at))
+        .bind(content_hash)
 }
 
 #[async_trait]
 impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
     async fn upsert(&self, availability: &PeerLeafAvailability) -> Result<(), DbError> {
         let leaf_selector = serde_json::to_string(&availability.leaf_selector)?;
-        bind_upsert(availability, leaf_selector)
+        let hash = content_hash(availability, &leaf_selector);
+        bind_upsert(availability, leaf_selector, hash)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -314,41 +400,72 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         rows: &[PeerLeafAvailability],
     ) -> Result<(), DbError> {
         // The peer's snapshot arrives complete every minute and mostly does
-        // not change. Compare it with what is stored first (a plain read), and
-        // write only the rows that differ, so an unchanged snapshot takes no
-        // write lock and no commit sync.
-        let incoming = Arc::new(normalised_rows(rows)?);
-        let stored = load_for_peer(&mut *self.pool.acquire().await?, peer_node_id).await?;
-        if SnapshotDiff::between(&stored, &incoming).is_empty() {
+        // not change. Compare it with what is stored first, and write only the
+        // rows that differ, so an unchanged snapshot takes no write lock and
+        // no commit sync.
+        //
+        // The comparison reads `(media_file_id, content_hash)` from a covering
+        // index on a pooled read connection, never inside the write
+        // transaction: the write queue's single transaction is shared by every
+        // writer, so nothing slow runs in it. The changes are then applied in
+        // chunks of [`WRITE_CHUNK_ROWS`], one queue operation each, so other
+        // queued writes commit between chunks. Each chunk is atomic; a reader
+        // can see a snapshot part-way applied, which is harmless because the
+        // table is a routing hint refreshed every minute. Upserts go first and
+        // deletions last, so a file never disappears before its replacement
+        // arrives.
+        let lock = peer_lock(peer_node_id);
+        let _one_replacement_at_a_time = lock.lock().await;
+
+        let prepared = Arc::new(prepare(rows)?);
+        let stored = load_fingerprints(&self.pool, peer_node_id).await?;
+        let diff = SnapshotDiff::between(&stored, &prepared);
+        if diff.is_empty() {
             return Ok(());
         }
-        // One write, so the changes share one commit (with other queued writes
-        // when there is a queue), and readers never see the inventory half
-        // replaced. The diff is taken again inside it, in case a concurrent
-        // writer changed this peer's rows since the read above.
-        write(self.queue.as_ref(), &self.pool, move |conn| {
-            let incoming = incoming.clone();
-            Box::pin(async move {
-                let stored = load_for_peer(&mut *conn, peer_node_id).await?;
-                let diff = SnapshotDiff::between(&stored, &incoming);
-                for media_file_id in &diff.removed {
-                    sqlx::query(
-                        "DELETE FROM peer_leaf_availability \
-                         WHERE peer_node_id = ? AND media_file_id = ?",
-                    )
-                    .bind(peer_node_id.to_string())
-                    .bind(media_file_id.to_string())
-                    .execute(&mut *conn)
-                    .await?;
-                }
-                for row in diff.changed {
-                    let leaf_selector = serde_json::to_string(&row.leaf_selector)?;
-                    bind_upsert(row, leaf_selector).execute(&mut *conn).await?;
-                }
-                Ok(())
+        for chunk in diff.changed.chunks(WRITE_CHUNK_ROWS) {
+            let chunk: Arc<Vec<usize>> = Arc::new(chunk.to_vec());
+            let prepared = prepared.clone();
+            write(self.queue.as_ref(), &self.pool, move |conn| {
+                let chunk = chunk.clone();
+                let prepared = prepared.clone();
+                Box::pin(async move {
+                    for index in chunk.iter() {
+                        let item = &prepared[*index];
+                        bind_upsert(
+                            &item.row,
+                            item.leaf_selector.clone(),
+                            item.content_hash.clone(),
+                        )
+                        .execute(&mut *conn)
+                        .await?;
+                    }
+                    Ok(())
+                })
             })
-        })
-        .await
+            .await?;
+        }
+        for chunk in diff.removed.chunks(WRITE_CHUNK_ROWS) {
+            let chunk: Arc<Vec<String>> = Arc::new(chunk.to_vec());
+            write(self.queue.as_ref(), &self.pool, move |conn| {
+                let chunk = chunk.clone();
+                Box::pin(async move {
+                    for media_file_id in chunk.iter() {
+                        sqlx::query(
+                            "DELETE FROM peer_leaf_availability \
+                             WHERE peer_node_id = ? AND media_file_id = ?",
+                        )
+                        .bind(peer_node_id.to_string())
+                        .bind(media_file_id.as_str())
+                        .execute(&mut *conn)
+                        .await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await?;
+        }
+        Ok(())
     }
 
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError> {
@@ -1069,6 +1186,319 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    async fn file_pool() -> (DbPool, std::path::PathBuf) {
+        let path = std::env::temp_dir().join(format!("playarr-peerleaf-{}.db", Uuid::new_v4()));
+        let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
+        (pool, path)
+    }
+
+    fn remove_db(path: &std::path::Path) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+    }
+
+    async fn plan(pool: &DbPool, sql: &str) -> Vec<String> {
+        let rows = sqlx::query(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .bind(Uuid::new_v4().to_string())
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        rows.iter()
+            .map(|row| row.try_get::<String, _>("detail").unwrap())
+            .collect()
+    }
+
+    /// Row 9935: the per-peer diff read must be answered from an index. The
+    /// primary key already led with `peer_node_id`, so what was missing was a
+    /// covering index: reading whole rows meant a table lookup per row and
+    /// every wide column (long paths, titles) through the driver.
+    #[tokio::test]
+    async fn the_peer_diff_read_uses_a_covering_index_on_peer_node_id() {
+        let (pool, path) = file_pool().await;
+        let diff = plan(&pool, STORED_FINGERPRINTS_SQL).await;
+        assert!(
+            diff.iter().any(|step| step.contains("SEARCH")
+                && step.contains("COVERING INDEX idx_peer_leaf_availability_diff")
+                && step.contains("peer_node_id=?")),
+            "diff read plan: {diff:?}"
+        );
+        assert!(
+            !diff.iter().any(|step| step.contains("SCAN")),
+            "diff read must not scan the table: {diff:?}"
+        );
+        // The whole-row listing is a keyed SEARCH too, never a table scan.
+        let listing = plan(
+            &pool,
+            "SELECT * FROM peer_leaf_availability WHERE peer_node_id = ? \
+             ORDER BY provider, external_id, leaf_selector",
+        )
+        .await;
+        assert!(
+            listing
+                .iter()
+                .any(|step| step.contains("SEARCH") && step.contains("peer_node_id=?")),
+            "listing plan: {listing:?}"
+        );
+        assert!(
+            !listing.iter().any(|step| step.starts_with("SCAN")),
+            "listing must not scan the table: {listing:?}"
+        );
+        pool.close().await;
+        remove_db(&path);
+    }
+
+    /// Rows stored before `content_hash` existed count as changed once, are
+    /// rewritten with a hash, and then stop counting.
+    #[tokio::test]
+    async fn rows_without_a_hash_are_rewritten_once() {
+        let (pool, path) = file_pool().await;
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let peer = Uuid::new_v4();
+        let rows: Vec<_> = (0..30)
+            .map(|i| {
+                sample(
+                    peer,
+                    playarr_model::ExternalProvider::Tmdb,
+                    &format!("id{i}"),
+                    LeafSelector::Movie,
+                )
+            })
+            .collect();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        sqlx::query("UPDATE peer_leaf_availability SET content_hash = NULL")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut watcher = pool.acquire().await.unwrap();
+        async fn version(conn: &mut sqlx::pool::PoolConnection<sqlx::Any>) -> sqlx::Result<i64> {
+            sqlx::query_scalar("PRAGMA data_version")
+                .fetch_one(&mut **conn)
+                .await
+        }
+        let before = version(&mut watcher).await.unwrap();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        let rewritten = version(&mut watcher).await.unwrap();
+        assert_ne!(before, rewritten, "legacy rows are rewritten once");
+        let hashed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM peer_leaf_availability WHERE content_hash IS NOT NULL",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(hashed, 30);
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        assert_eq!(rewritten, version(&mut watcher).await.unwrap());
+        drop(watcher);
+        pool.close().await;
+        remove_db(&path);
+    }
+
+    /// Every stored column except `updated_at` is part of the fingerprint.
+    #[tokio::test]
+    async fn a_change_to_any_content_column_is_written() {
+        let repo = SqlxPeerLeafAvailabilityRepo::new(test_sqlite_pool().await);
+        let peer = Uuid::new_v4();
+        let base = sample(
+            peer,
+            playarr_model::ExternalProvider::Tmdb,
+            "one",
+            LeafSelector::Movie,
+        );
+        repo.replace_for_peer(peer, std::slice::from_ref(&base))
+            .await
+            .unwrap();
+        let edits: [fn(&mut PeerLeafAvailability); 16] = [
+            |r| r.path = "/media/other.mkv".into(),
+            |r| r.source_instance_id = Uuid::new_v4(),
+            |r| r.provider = playarr_model::ExternalProvider::Tvdb,
+            |r| r.external_id = "other".into(),
+            |r| r.availability = Availability::Unknown,
+            |r| r.codec = Some("hevc".into()),
+            |r| r.release_date = None,
+            |r| r.container = None,
+            |r| r.bitrate = Some(1),
+            |r| r.size_bytes = Some(2),
+            |r| r.duration_ms = None,
+            |r| r.local_work_id = None,
+            |r| r.title = "Renamed".into(),
+            |r| r.group_library_id = None,
+            |r| r.kind = playarr_model::WorkKind::Series,
+            |r| {
+                r.leaf_selector = LeafSelector::Episode {
+                    season: 1,
+                    episode: 2,
+                }
+            },
+        ];
+        for edit in edits {
+            let mut next = base.clone();
+            edit(&mut next);
+            repo.replace_for_peer(peer, std::slice::from_ref(&next))
+                .await
+                .unwrap();
+            let stored = repo.list_for_peer(peer).await.unwrap();
+            assert_eq!(stored.len(), 1);
+            assert_eq!(stored[0], next);
+            repo.replace_for_peer(peer, std::slice::from_ref(&base))
+                .await
+                .unwrap();
+            assert_eq!(repo.list_for_peer(peer).await.unwrap()[0], base);
+        }
+    }
+
+    /// Concurrency (row 9935): reads of the inventory never wait for a write
+    /// batch that is holding the database's write lock.
+    #[tokio::test]
+    async fn reads_are_not_blocked_by_a_long_write_batch() {
+        let (pool, path) = file_pool().await;
+        let queue = WriteQueue::spawn(
+            pool.clone(),
+            crate::write_queue::WriteQueueConfig::default(),
+        );
+        let repo = Arc::new(
+            SqlxPeerLeafAvailabilityRepo::new(pool.clone()).with_write_queue(queue.clone()),
+        );
+        let peer = Uuid::new_v4();
+        let rows = inventory(peer, 3_000);
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+
+        // A write operation that takes the write lock, writes, and sits on it
+        // until released.
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let hold = {
+            let (queue, started, release) = (queue.clone(), started.clone(), release.clone());
+            tokio::spawn(async move {
+                queue
+                    .submit(move |conn| {
+                        let (started, release) = (started.clone(), release.clone());
+                        Box::pin(async move {
+                            sqlx::query(
+                                "DELETE FROM peer_leaf_availability WHERE peer_node_id = ?",
+                            )
+                            .bind(Uuid::new_v4().to_string())
+                            .execute(&mut *conn)
+                            .await?;
+                            started.notify_one();
+                            release.notified().await;
+                            Ok(())
+                        })
+                    })
+                    .await
+            })
+        };
+        started.notified().await;
+
+        // The diff read, an unchanged replacement (which only reads) and the
+        // whole-row listing all answer while the write lock is held. Reads
+        // that waited for the lock would never finish, because the batch only
+        // ends once they have; the timeout turns that into a failure.
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            assert_eq!(load_fingerprints(&pool, peer).await.unwrap().len(), 3_000);
+            repo.replace_for_peer(peer, &rows).await.unwrap();
+            assert_eq!(repo.list_for_peer(peer).await.unwrap().len(), 3_000);
+        })
+        .await
+        .expect("reads waited for the write batch");
+        assert!(
+            !hold.is_finished(),
+            "the write batch was still holding the lock"
+        );
+        release.notify_one();
+        hold.await.unwrap().unwrap();
+        queue.shutdown().await;
+        pool.close().await;
+        remove_db(&path);
+    }
+
+    /// Concurrency (row 9935): replacing a big snapshot is applied in chunks,
+    /// so other queued writes commit while it is still going instead of
+    /// waiting for the whole replacement.
+    #[tokio::test]
+    async fn a_big_replacement_lets_other_writes_in_between_chunks() {
+        let (pool, path) = file_pool().await;
+        sqlx::query("CREATE TABLE beat (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let queue = WriteQueue::spawn(
+            pool.clone(),
+            crate::write_queue::WriteQueueConfig::default(),
+        );
+        let repo = Arc::new(
+            SqlxPeerLeafAvailabilityRepo::new(pool.clone()).with_write_queue(queue.clone()),
+        );
+        let peer = Uuid::new_v4();
+        let rows = inventory(peer, WRITE_CHUNK_ROWS * 6);
+        let before = queue.stats().ops;
+        let replacing = {
+            let (repo, rows) = (repo.clone(), rows.clone());
+            tokio::spawn(async move { repo.replace_for_peer(peer, &rows).await })
+        };
+        let mut finished_during = 0;
+        let mut beats = 0;
+        while !replacing.is_finished() {
+            beats += 1;
+            queue
+                .submit(move |conn| {
+                    Box::pin(async move {
+                        sqlx::query("INSERT INTO beat (n) VALUES (?)")
+                            .bind(beats)
+                            .execute(&mut *conn)
+                            .await?;
+                        Ok(())
+                    })
+                })
+                .await
+                .unwrap();
+            if !replacing.is_finished() {
+                finished_during += 1;
+            }
+        }
+        replacing.await.unwrap().unwrap();
+        assert!(
+            finished_during >= 2,
+            "other writes should commit between chunks ({finished_during} did)"
+        );
+        // Six chunks of rows, not one operation holding the lock throughout.
+        let replace_ops = queue.stats().ops - before - beats as u64;
+        assert_eq!(replace_ops, 6, "one queue operation per chunk");
+        assert_eq!(repo.list_for_peer(peer).await.unwrap().len(), rows.len());
+        queue.shutdown().await;
+        pool.close().await;
+        remove_db(&path);
+    }
+
+    /// A pull and a push for the same peer arriving together apply one after
+    /// the other, so the older snapshot cannot land on top of the newer one.
+    #[tokio::test]
+    async fn concurrent_replacements_of_one_peer_apply_in_turn() {
+        // Two instances, as the API and the worker each build their own.
+        let (pool, path) = file_pool().await;
+        let api = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let worker = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let peer = Uuid::new_v4();
+        let first = inventory(peer, 600);
+        let second: Vec<_> = first.iter().take(300).cloned().collect();
+        let (a, b) = tokio::join!(
+            api.replace_for_peer(peer, &first),
+            worker.replace_for_peer(peer, &second)
+        );
+        a.unwrap();
+        b.unwrap();
+        assert_eq!(
+            api.list_for_peer(peer).await.unwrap().len(),
+            300,
+            "the replacement that ran last must win"
+        );
+        pool.close().await;
+        remove_db(&path);
+    }
+
     /// Timing evidence (run with `--ignored --nocapture`): an unchanged
     /// 2,000-row snapshot on a file database with the production pragmas,
     /// delete-and-reinsert versus the diff.
@@ -1102,7 +1532,8 @@ mod tests {
             .unwrap();
         for row in &rows {
             let leaf_selector = serde_json::to_string(&row.leaf_selector).unwrap();
-            bind_upsert(row, leaf_selector)
+            let hash = content_hash(row, &leaf_selector);
+            bind_upsert(row, leaf_selector, hash)
                 .execute(&mut *tx)
                 .await
                 .unwrap();
@@ -1153,6 +1584,85 @@ mod tests {
             "500 rows: per-row commits {per_row:?}, one transaction {:?}",
             t.elapsed()
         );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Rows shaped like a real peer inventory: distinct file ids, long paths,
+    /// episode selectors, and a title per work.
+    fn inventory(peer: Uuid, count: usize) -> Vec<PeerLeafAvailability> {
+        (0..count)
+            .map(|i| {
+                let mut row = sample(
+                    peer,
+                    playarr_model::ExternalProvider::Tmdb,
+                    &format!("{}", 1000 + i / 20),
+                    LeafSelector::Episode {
+                        season: (i / 10 % 5) as u32 + 1,
+                        episode: (i % 10) as u32 + 1,
+                    },
+                );
+                row.path = format!(
+                    "/srv/media/series/Sample Series {}/Season {:02}/Sample Series {} - S{:02}E{:02} - Episode Title.mkv",
+                    i / 20, i / 10 % 5 + 1, i / 20, i / 10 % 5 + 1, i % 10 + 1
+                );
+                row.title = format!("Sample Series {}", i / 20);
+                row
+            })
+            .collect()
+    }
+
+    /// Timing evidence (run with `--ignored --nocapture --release`): the
+    /// diff read of one peer's inventory next to another peer's, on a file
+    /// database with the production pragmas.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_peer_inventory_read_and_replace() {
+        let path = std::env::temp_dir().join(format!("playarr-bench-{}.db", Uuid::new_v4()));
+        let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let (peer, other) = (Uuid::new_v4(), Uuid::new_v4());
+        println!(
+            "plan, whole rows: {:?}",
+            plan(
+                &pool,
+                &format!("SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = ?")
+            )
+            .await
+        );
+        println!(
+            "plan, fingerprints: {:?}",
+            plan(&pool, STORED_FINGERPRINTS_SQL).await
+        );
+        let rows = inventory(peer, 50_000);
+        let t = std::time::Instant::now();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        repo.replace_for_peer(other, &inventory(other, 50_000))
+            .await
+            .unwrap();
+        println!("seed 2 x 50k rows: {:?}", t.elapsed());
+        let t = std::time::Instant::now();
+        let stored = load_fingerprints(&pool, peer).await.unwrap();
+        println!("load_fingerprints {} rows: {:?}", stored.len(), t.elapsed());
+        let t = std::time::Instant::now();
+        let full = repo.list_for_peer(peer).await.unwrap();
+        println!(
+            "list_for_peer (all columns) {} rows: {:?}",
+            full.len(),
+            t.elapsed()
+        );
+        let t = std::time::Instant::now();
+        repo.replace_for_peer(peer, &rows).await.unwrap();
+        println!("replace unchanged: {:?}", t.elapsed());
+        let mut moved = rows.clone();
+        for row in moved.iter_mut().step_by(100) {
+            row.size_bytes = Some(1);
+        }
+        let t = std::time::Instant::now();
+        repo.replace_for_peer(peer, &moved).await.unwrap();
+        println!("replace 500 changed: {:?}", t.elapsed());
         let _ = std::fs::remove_file(&path);
     }
 }
