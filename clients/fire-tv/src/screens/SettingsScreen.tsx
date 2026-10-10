@@ -6,6 +6,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Animated, Easing, Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
+import {useApiClient} from '../api/ApiClientProvider';
 import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES, type RouteName} from '../navigation/routes';
@@ -104,8 +105,24 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
   const [active, setActive] = useState<SettingsSectionId>(initial);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const scroll = useRef(new Animated.Value(0)).current;
-  const activeIndex = SETTINGS_SECTIONS.findIndex((section) => section.id === active);
-  const activeSection = SETTINGS_SECTIONS[activeIndex] ?? SETTINGS_SECTIONS[0];
+  // Web lists Request latency for admins only (pages/settings/Index.tsx ADMIN_ONLY_SECTIONS, from the self capabilities).
+  const client = useApiClient();
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getSelfCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) setIsAdmin(capabilities.is_admin === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+  const sections = isAdmin ? SETTINGS_SECTIONS : SETTINGS_SECTIONS.filter((section) => section.id !== 'request-latency');
+  const activeIndex = sections.findIndex((section) => section.id === active);
+  const activeSection = sections[activeIndex] ?? sections[0];
   useTvBackNavigation(ROUTES.home);
 
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -125,21 +142,17 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
         <T size={33.6} weight={580} ls={-1.512} lh={50.4} color={colour.ink} lines={1}>
           {t('settings.index.title')}
         </T>
-        <View style={{marginTop: u(5.5), alignSelf: 'flex-start', borderTopWidth: 1, borderTopColor: colour.lineStrong, paddingTop: u(6.4)}}>
-          <T size={13.76} weight={900} ls={0.619} lh={20.6} color={colour.inkMuted} upper>
+        {/* Web: the open section as the one shared page subtitle (12.288 px / 820, uppercase, brand ink) at y 111.8. */}
+        <View style={{marginTop: u(5.4)}}>
+          <T size={12.288} weight={820} ls={0.983} lh={18.4} color={scheme === 'dark' ? '#eaa6b6' : '#821e36'} upper>
             {t(activeSection.titleKey)}
           </T>
-          <View style={{marginTop: u(4)}}>
-            <T size={12.16} weight={480} lh={15.2} color={colour.inkMuted} upper>
-              {t(activeSection.descriptionKey)}
-            </T>
-          </View>
         </View>
       </View>
 
       <Box x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} style={{overflow: 'hidden'}} pointerEvents="box-none">
         <Animated.View style={{position: 'absolute', top: u(-LIST_CLIP_TOP), left: 0, width: u(672), transform: [{translateY: scroll}]}} pointerEvents="box-none">
-          {SETTINGS_SECTIONS.map((section, index) => (
+          {sections.map((section, index) => (
             <Row
               key={section.id}
               section={section}
@@ -156,7 +169,7 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
       </Box>
 
       <EdgeFade side="top" active={scrollOffset > 0} x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} />
-      <EdgeFade side="bottom" active={LIST_TOP + SETTINGS_SECTIONS.length * ROW_PITCH - scrollOffset > 1040} x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} />
+      <EdgeFade side="bottom" active={LIST_TOP + sections.length * ROW_PITCH - scrollOffset > 1040} x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} />
       <Box x={0} y={0} w={1920} h={1080} pointerEvents="box-none">
         <Panel id={active} />
       </Box>
