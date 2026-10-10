@@ -27,6 +27,17 @@ describe("one small subtitle style", () => {
     }
   });
 
+  it("puts the subtitle in one place on every page: under the title, never beside it", () => {
+    const markup = html(<PageHeader title="Preferences" detail="Appearance" back={back} />);
+    expect(markup).toContain("has-subtitle");
+    expect(markup).not.toContain("is-detail-wrapped");
+    expect(html(<PageHeader title="Movies" back={back} />)).not.toContain("has-subtitle");
+    const block = rule(layout, ".tv-library-heading.has-subtitle > .page-header-title-block");
+    expect(block).toContain("flex-direction: column");
+    expect(rule(layout, ".tv-library-heading.has-subtitle")).toContain("align-items: flex-start");
+    expect(layout).not.toContain("is-detail-wrapped");
+  });
+
   it("shares the media-page kicker declarations: one rule serves .page-subtitle, .tv-provider and .tv-detail-kicker", () => {
     const shared = /(?:^|\n)\.page-subtitle,\s*\.tv-provider,\s*\.tv-detail-kicker\s*\{([^}]*)\}/.exec(global)?.[1] ?? "";
     expect(shared).toContain("color: var(--brand-ink)");
