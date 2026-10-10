@@ -9,6 +9,14 @@ import AppKit
 @MainActor
 enum MacDebugRemote {
     static func install(window: NSWindow) {
+        // `-PlayarrMacSnapshot <path.png> [-PlayarrMacSnapshotDelay <seconds>]`: one snapshot once settled.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-PlayarrMacSnapshot"), args.indices.contains(i + 1) {
+            let delay = args.firstIndex(of: "-PlayarrMacSnapshotDelay").flatMap { args.indices.contains($0 + 1) ? Double(args[$0 + 1]) : nil } ?? 10
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                snapshot(window: window, to: URL(fileURLWithPath: args[i + 1]))
+            }
+        }
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("app.playarr.macos.debug"), object: nil, queue: .main
         ) { note in
