@@ -1905,6 +1905,8 @@ private fun TelevisionProfilesStage(
 ) {
     val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
+        // Web keeps the Playarr mark at the top left of the profile picker, where the shell draws it.
+        PlayarrLogo(Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 60.dp))
         // `.profile-clients-link`: the glass pill bottom right (web shows it on every TV client).
         ProfilesGlassPill(onClick = onClients, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 50.dp, bottom = 34.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2277,7 +2279,8 @@ private fun ProfilesChromeTrigger(
         color = if (expanded) WebSurfaceStrong else WebBackground,
         border = BorderStroke(1.dp, if (expanded) WebInkSoft else WebInkMuted.copy(alpha = 0.45f)),
         modifier = Modifier
-            .then(if (webPhone) Modifier else Modifier.widthIn(min = minWidth))
+            // A fixed width on TV: the label row fills the trigger, so a min width alone let the first select take the whole row.
+            .then(if (webPhone) Modifier else Modifier.width(minWidth))
             .height(48.dp)
             .scale(if (expanded) 1.02f else 1f),
     ) {
@@ -4150,7 +4153,6 @@ private fun TvSettingsBody(
 ) {
     val locale = LocalPlayarrLanguage.current.locale
     val entries = phoneSettingsIndex
-    val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
     // Web default focus: the section list, on the first (selected) section; LEFT/RIGHT then cross to the panel.
     val firstRow = remember { androidx.compose.ui.focus.FocusRequester() }
     TvDefaultFocusEffect(Unit) { runCatching { firstRow.requestFocus() } }
@@ -4165,16 +4167,12 @@ private fun TvSettingsBody(
             ),
         ),
     ) {
-        Box(Modifier.offset(x = 227.dp, y = 112.dp).width(440.dp).height(1.dp).background(TvSettingsPalette.headerLine))
+        // Web: the section is the page header subtitle (`.page-subtitle`, owner rule 2026-10-10), with no rule or caption line.
         Text(
             playarrString(section.label).uppercase(locale),
-            color = WebInkMuted, fontSize = 13.76.sp, fontWeight = FontWeight.Black, letterSpacing = 0.6192.sp, lineHeight = 15.sp, style = cssLine(),
-            modifier = Modifier.offset(x = 226.dp, y = 119.5.dp),
-        )
-        Text(
-            playarrString(description).uppercase(locale),
-            color = WebInkMuted, fontSize = 12.16.sp, fontWeight = FontWeight(500), letterSpacing = (-0.06).sp, lineHeight = 14.sp, maxLines = 1, softWrap = false, style = cssLine(),
-            modifier = Modifier.offset(x = 227.dp, y = 142.7.dp).widthIn(max = 760.dp),
+            color = io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.brandInk,
+            fontSize = 12.288.sp, fontWeight = FontWeight(820), letterSpacing = 0.983.sp, lineHeight = 18.432.sp, style = cssLine(),
+            modifier = Modifier.offset(x = 226.6.dp, y = 111.8.dp),
         )
         LazyColumn(
             // Padding, not offset: the list must end at the screen edge so rows past it (11 sections) scroll into view.
