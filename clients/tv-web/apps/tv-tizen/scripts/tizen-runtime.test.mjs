@@ -368,4 +368,25 @@ test("external links open in the TV browser instead of replacing Playarr", () =>
   cleanup();
   assert.equal(listeners.has("click"), false);
   assert.equal(windowObject.open("https://example.com/x"), "original");
+
+test("registers remote keys with a writable copy of the key list", () => {
+  // Samsung's argument validator writes into the array it is given (seen on the Tizen 10 TV emulator:
+  // "Cannot assign to read only property '0'"), so the frozen shared list must never be passed directly.
+  const registered = [];
+  const tizenObject = {
+    tvinputdevice: {
+      registerKeyBatch(keys) {
+        keys[0] = keys[0];
+        registered.push(...keys);
+      },
+    },
+  };
+  const cleanup = installTizenPlatformRuntime({
+    windowObject: { location: { hash: "#/", pathname: "/index.html" }, innerWidth: 1920, innerHeight: 1080, addEventListener() {}, removeEventListener() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {} },
+    documentObject: { documentElement: { dataset: {} }, body: {}, querySelector: () => null, getElementById: () => null, addEventListener() {}, removeEventListener() {} },
+    tizenObject,
+    webapisObject: {},
+  });
+  assert.deepEqual(registered, [...TIZEN_REMOTE_KEYS]);
+  cleanup();
 });

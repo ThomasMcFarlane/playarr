@@ -24,6 +24,25 @@ class PlayarrPlaybackRecoveryTest {
     }
 
     @Test
+    fun `a retry after the decoder fallback stays on the converted stream`() {
+        val original = PlayarrPlaybackLaunchSettings("original", null, false, 2, "sub-1")
+        assertEquals(original, playarrAutoRetryLaunchSettings(original, decoderFallbackAttempted = false))
+        assertNull(playarrAutoRetryLaunchSettings(null, decoderFallbackAttempted = false))
+
+        val retry = playarrAutoRetryLaunchSettings(original, decoderFallbackAttempted = true)!!
+        assertTrue(retry.forceTranscode)
+        assertEquals(DECODE_FALLBACK_PROFILE, retry.profile)
+        assertEquals(DECODE_FALLBACK_PROFILE, retry.qualityId)
+        assertEquals(2, retry.audioStreamIndex)
+        assertEquals("sub-1", retry.subtitleTrackId)
+        assertTrue(playarrAutoRetryLaunchSettings(null, decoderFallbackAttempted = true)!!.forceTranscode)
+        assertTrue(
+            source("PlayarrExperience.kt")
+                .contains("playarrAutoRetryLaunchSettings(activeRequest?.launchSettings, decoderFallbackAttempted)"),
+        )
+    }
+
+    @Test
     fun `double tap seeks ten seconds by half of the screen`() {
         assertEquals(-10_000L, playarrDoubleTapSeekDeltaMs(100f, 1000f))
         assertEquals(10_000L, playarrDoubleTapSeekDeltaMs(900f, 1000f))

@@ -141,7 +141,8 @@ function registerRemoteKeys(tizenObject) {
   if (!input) return;
   try {
     if (typeof input.registerKeyBatch === "function") {
-      input.registerKeyBatch(TIZEN_REMOTE_KEYS, undefined, (error) => {
+      // Pass a copy: the Samsung validator writes to its argument, and the shared list is frozen.
+      input.registerKeyBatch([...TIZEN_REMOTE_KEYS], undefined, (error) => {
         console.warn("Could not register all Samsung remote keys", error);
       });
       return;

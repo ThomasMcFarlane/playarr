@@ -196,6 +196,8 @@ export struct PosterCard {
    * (non-reactive) callback field -- functions are not observable state,
    * same pattern as `AsyncState.ets`'s `retry`. */
   onSelect: () => void = () => {};
+  /** Called when the card gains focus (web TV Home moves its hero to the focused card). */
+  onFocused: () => void = () => {};
 
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
@@ -340,6 +342,7 @@ export struct PosterCard {
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);
+      this.onFocused();
     })
     .onBlur(() => {
       this.setFocused(false);
