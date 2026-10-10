@@ -12,6 +12,7 @@ import {useBackLayer} from '../navigation/backPolicy';
 import {TvFocusScope, focusNode} from '../platform/focus';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
+import {FocusRing} from './FocusRing';
 import {EdgeFade} from './EdgeFade';
 import {T, u} from './kit';
 import {useScrollReveal} from './useScrollReveal';
@@ -50,6 +51,8 @@ export interface DrawerRow {
 export type DrawerSection =
   | {key: string; label: string; columns: 2 | 3; chips: DrawerChip[]}
   | {key: string; label: string; rows: DrawerRow[]}
+  /** Web's shared Select / MultiSelect in a drawer: one full-width field showing the choice; pressing it opens the options. */
+  | {key: string; label: string; select: {value: string; onPress: () => void}}
   | {key: string; label: string; height: number; render: (top: number, reveal: (y: number, h: number) => void) => React.ReactNode};
 
 export interface FilterDrawerProps {
@@ -78,6 +81,8 @@ function layoutSections(sections: DrawerSection[]): {tops: number[]; end: number
     } else if ('chips' in section) {
       const rows = Math.ceil(section.chips.length / section.columns);
       y += LABEL_H + LABEL_GAP + rows * (CHIP_H + CHIP_GAP) - CHIP_GAP;
+    } else if ('select' in section) {
+      y += LABEL_H + LABEL_GAP + CHIP_H;
     } else {
       y += section.height;
     }
@@ -150,6 +155,8 @@ export function FilterDrawer({kicker, title, closeLabel, onClose, sections, foot
                         const chipTop = top + LABEL_H + LABEL_GAP + row * (CHIP_H + CHIP_GAP);
                         return <Chip key={chip.key} chip={chip} x={CONTENT_X + col * (width + CHIP_GAP)} y={chipTop} w={width} onReveal={revealChip} />;
                       })
+                    : 'select' in section
+                    ? <SelectField label={section.label} value={section.select.value} onPress={section.select.onPress} x={CONTENT_X} y={top + LABEL_H + LABEL_GAP} w={wide ? WIDE_W - 2 * CONTENT_X : CONTENT_W} onReveal={revealChip} />
                     : section.render(top + LABEL_H + LABEL_GAP, revealChip)}
                 </View>
               );
@@ -322,6 +329,34 @@ function Row({row, x, y, w, onReveal}: {row: DrawerRow; x: number; y: number; w:
           </T>
         </View>
       ) : null}
+    </Pressable>
+  );
+}
+
+function SelectField({label, value, onPress, x, y, w, onReveal}: {label: string; value: string; onPress: () => void; x: number; y: number; w: number; onReveal: (y: number, h: number) => void}): React.ReactElement {
+  const {colour} = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      onFocus={() => {
+        setFocused(true);
+        onReveal(y, CHIP_H);
+      }}
+      onBlur={() => setFocused(false)}
+      onPress={onPress}
+      style={{position: 'absolute', left: u(x), top: u(y), width: u(w), height: u(CHIP_H), borderRadius: u(12), borderWidth: 1, borderColor: colour.line, backgroundColor: colour.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: u(16)}}
+    >
+      <View style={{flex: 1}}>
+        <T size={10.56} weight={700} color={colour.ink} lines={1}>
+          {value}
+        </T>
+      </View>
+      <T size={12} weight={700} color={colour.inkMuted}>
+        {'\u2304'}
+      </T>
+      {focused ? <FocusRing radius={12} /> : null}
     </Pressable>
   );
 }

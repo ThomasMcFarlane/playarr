@@ -39,7 +39,7 @@
  * (design doc §7: "WorkDetail backs /series/:id, /movies/:id, ...").
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ActivityIndicator, Animated, Easing, FlatList, Image, Pressable, Text, View} from 'react-native';
+import {ActivityIndicator, Animated, Easing, FlatList, Image, Pressable, ScrollView, Text, View} from 'react-native';
 import type {ApiClient, WatchProgress, Work, WorkKind} from '@playarr-tv/api-client';
 import {ArtworkImage} from '../components/ArtworkImage';
 import {useLanguage} from '../i18n/LanguageProvider';
@@ -58,6 +58,7 @@ import {Preview} from '../tv/Preview';
 import {RailFrost, Stage} from '../tv/Stage';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {cardArtUrl, stageArtUrl} from '../tv/ArtOfWork';
+import {Sheet, SheetOption} from '../tv/Sheet';
 import {FilterDrawer, type DrawerChip, type DrawerSection} from '../tv/FilterDrawer';
 import {
   type ArtworkSize,
@@ -314,6 +315,7 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   const [audioLangs, setAudioLangs] = useState<string[]>([]);
   const [subtitleLangs, setSubtitleLangs] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [languagePicker, setLanguagePicker] = useState<'audio' | 'subs' | null>(null);
   const [drawerFocused, setDrawerFocused] = useState(false);
   const [facets, setFacets] = useState<LanguageFacets | null>(null);
   const loadingMore = useRef(false);
@@ -452,9 +454,16 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
         ],
       },
     ];
+    // Web shows each language filter as a MultiSelect field ("Any language" or the picked names), not a wall of chips.
     for (const which of ['audio', 'subs'] as const) {
       const chips = languageChips(which);
-      if (chips.length > 0) out.push({key: which, label: which === 'audio' ? t('pages.library.audioLanguage') : t('pages.library.subtitleLanguage'), columns: 3, chips});
+      if (chips.length === 0) continue;
+      const picked = chips.filter((chip) => chip.selected).map((chip) => chip.label.split(' \u00b7 ')[0]);
+      out.push({
+        key: which,
+        label: which === 'audio' ? t('pages.library.audioLanguage') : t('pages.library.subtitleLanguage'),
+        select: {value: picked.length > 0 ? picked.join(', ') : t('pages.library.anyLanguage'), onPress: () => setLanguagePicker(which)},
+      });
     }
     return out;
   };
@@ -544,6 +553,22 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
               : undefined
           }
         />
+      ) : null}
+      {filtersOpen && languagePicker ? (
+        <Sheet title={languagePicker === 'audio' ? t('pages.library.audioLanguage') : t('pages.library.subtitleLanguage')} onClose={() => setLanguagePicker(null)}>
+          <SheetOption
+            label={t('pages.library.anyLanguage')}
+            selected={(languagePicker === 'audio' ? audioLangs : subtitleLangs).length === 0}
+            hasTVPreferredFocus
+            onPress={() => (languagePicker === 'audio' ? setAudioLangs([]) : setSubtitleLangs([]))}
+          />
+          {/* Long lists scroll: the focused option is kept in view by the native scroll view. */}
+          <ScrollView style={{height: u(860)}}>
+            {languageChips(languagePicker).map((chip) => (
+              <SheetOption key={chip.key} label={chip.label} selected={chip.selected} onPress={chip.onPress} />
+            ))}
+          </ScrollView>
+        </Sheet>
       ) : null}
     </Stage>
   );
