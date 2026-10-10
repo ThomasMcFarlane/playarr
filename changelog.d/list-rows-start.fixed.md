@@ -1,0 +1,1 @@
+- Web: list rows (Watchlist, Requests, Downloads) keep their natural height and stack from the top; one item no longer stretches to the panel height (1.9967).
