@@ -796,10 +796,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # BuildKit comes from mirror.gcr.io (a public Docker Hub mirror), digest-pinned, and the Dockerfile uses its
+      # built-in frontend (no `# syntax=` pull), so Docker Hub auth outages (1.9931) cannot fail this job.
       - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=mirror.gcr.io/moby/buildkit@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
 
       - name: Build the web export stage
-        run: docker buildx build -f infra/docker/backend.Dockerfile --target web --output type=cacheonly .
+        env:
+          # Digest-pinned node:23-slim index, pulled through mirror.gcr.io.
+          NODE_IMAGE: mirror.gcr.io/library/node:23-slim@sha256:86191b94d2a163be41f3dc7fe5e5fcaca8ba2f1be7275d98a06343483c17414a
+        run: |
+          set -o pipefail
+          # Bounded retry (3 attempts, 15 s then 45 s backoff) only for registry/network 5xx-style failures;
+          # a real build error fails on the first attempt.
+          for attempt in 1 2 3; do
+            if docker buildx build -f infra/docker/backend.Dockerfile --target web \
+                 --build-arg "NODE_IMAGE=$NODE_IMAGE" --output type=cacheonly . 2>&1 | tee build.log; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ] && grep -Eqi '(50[0-9]|bad gateway|service unavailable|gateway time-?out|TLS handshake timeout|i/o timeout|connection reset|unexpected EOF|failed to (resolve|fetch|authorize)|toomanyrequests)' build.log; then
+              delay=$((attempt == 1 ? 15 : 45))
+              echo "::warning::Registry error on attempt $attempt, retrying in ${delay}s"
+              sleep "$delay"
+            else
+              exit 1
+            fi
+          done
 
   # ---------------------------------------------------------------------
   # Web behaviour (owner ruling 8 October 2026: CI tests the web styles as the main source of truth; the native parity

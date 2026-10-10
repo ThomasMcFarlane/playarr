@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1.7
+# No `# syntax=` line on purpose: it makes BuildKit pull the docker/dockerfile frontend image from Docker Hub
+# on every build (a Docker Hub auth 504 failed CI, 1.9931). Nothing here needs a 1.7-only feature, so the
+# builder's built-in Dockerfile frontend is used.
 #
 # ==============================================================================
 # Playarr Server backend image -- multi-stage Rust build
@@ -54,6 +56,9 @@ ARG RUST_VERSION=1
 #                       uses this so the image carries the tarball's binaries and the
 #                       multi-arch image step never compiles a second time (no disk spike).
 ARG ARTIFACTS=built-artifacts
+# Image for the web-builder stage. CI overrides it with a digest-pinned mirror.gcr.io reference
+# (--build-arg NODE_IMAGE=...) so the build does not depend on Docker Hub being up.
+ARG NODE_IMAGE=node:23-slim
 # trixie, not bookworm: the prebuilt ONNX Runtime that ort-sys links is built
 # with a newer libstdc++ (GCC 13+) than bookworm's GCC 12 provides, so the
 # final link fails with undefined `std::__cxx11::basic_string::_M_replace_cold`.
@@ -149,7 +154,7 @@ RUN set -eux; \
 # planner/builder stages above -- BuildKit runs this concurrently with
 # them, not after.
 # ------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM node:23-slim AS web-builder
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS web-builder
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 COPY clients/tv-web/ ./clients/tv-web/
