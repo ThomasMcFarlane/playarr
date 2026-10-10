@@ -35,6 +35,8 @@ while IFS= read -r f; do
     $T/web/* | $T/admin/*)
       rest=${f#$T/}; d=${rest%%/*} ;;
     $T/*.md | $T/PLAYARR_HANDOVER.md | $T/k8s/* | $T/deploy/*) continue ;;
+    # The web header-button parity test reads the Apple clients' Swift sources: run the web package for them.
+    clients/apple-tv/* | clients/ios/*) d=web ;;
     $T/* | .github/workflows/ci.yml | scripts/ci/tv-web-scope.sh) full ;;
     *) continue ;;
   esac
