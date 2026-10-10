@@ -3414,7 +3414,8 @@ internal fun LibraryResults(
     // Web phone: first row 20 px under the 38 px header, which starts 2 px under the status bar inset.
     val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 60.dp, bottom = 104.dp)
     // Web `.tv-title-grid-content` at 1920: 51.3 px start, 105.7 px end, 162 px first row, 25.92 x 27 gaps.
-    val screenPadding = if (isTelevision) PaddingValues(start = 51.3.dp, end = 105.7.dp, top = 22.dp, bottom = 104.dp) else padding
+    // Television: web's first column starts at x 783.4 (measured on the live grid).
+    val screenPadding = if (isTelevision) PaddingValues(start = 53.7.dp, end = 103.3.dp, top = 22.dp, bottom = 104.dp) else padding
     when (viewMode) {
         LibraryViewMode.Screen -> LazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: if (isTelevision) GridCells.Adaptive(landscapeWidth) else GridCells.Fixed(2),
@@ -3858,10 +3859,11 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     }
                 }
                 if (isTelevision && sortMode == "title") {
-                    // Web `.tv-alphabet`: 62 x 690 at (1845.5, 270), 27 buttons of 24, spread evenly.
+                    // Web `.tv-alphabet`: 56 dp wide from y 270 to the bottom (8 dp top, 64.8 dp bottom padding), 27 buttons of
+                    // 44 x 44 (WCAG 2.5.5 targets) in a column that scrolls; the 24 dp circle marks the active letter.
                     Column(
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 270.dp, end = 12.5.dp).width(62.dp).height(690.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 278.dp, end = 18.5.dp, bottom = 64.8.dp).width(44.dp).fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         (listOf("#") + ('A'..'Z').map(Char::toString)).forEach { letter ->
@@ -3869,6 +3871,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                             val shownLetter = if (activeLetter == "#") selected.sortTitle.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' }?.toString() ?: "#" else activeLetter
                             val active = shownLetter == letter
                             var letterFocused by remember { mutableStateOf(false) }
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
@@ -3886,6 +3889,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                                     fontSize = 9.216.sp,
                                     fontWeight = FontWeight.Normal,
                                 )
+                            }
                             }
                         }
                     }
