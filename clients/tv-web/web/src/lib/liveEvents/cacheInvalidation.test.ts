@@ -56,6 +56,25 @@ describe("withQueryCacheInvalidation", () => {
     vi.useRealTimers();
   });
 
+  it("a server group change refetches only the group list and keeps every stored copy", () => {
+    vi.useFakeTimers();
+    const cache = filled();
+    const registry = createLiveRegistry({ debounceMs: 200 });
+    const groupList = vi.fn();
+    const catalogue = vi.fn();
+    registry.register({ areas: ["serverGroup"] }, groupList);
+    registry.register({ areas: ["catalog", "account"] }, catalogue);
+    const live = withQueryCacheInvalidation(registry, cache);
+    const invalidations = mapChangeToInvalidations({ type: "account", entity: "server_group", id: "self", changed: ["members"] });
+    expect(invalidations).toEqual([{ area: "serverGroup" }]);
+    live.invalidate(invalidations);
+    expect(kept(cache)).toEqual(KEYS);
+    vi.advanceTimersByTime(250);
+    expect(groupList).toHaveBeenCalledTimes(1);
+    expect(catalogue).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("an account change marks every stored copy stale", () => {
     const cache = filled();
     const live = withQueryCacheInvalidation(createLiveRegistry(), cache);

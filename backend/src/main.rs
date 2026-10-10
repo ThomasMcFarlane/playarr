@@ -1541,7 +1541,10 @@ async fn boot_api(
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
     let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
-    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(playarr_db::EventingPeerNodeRepo::new(
+        Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let peer_join_token_repo: Arc<dyn PeerJoinTokenRepo> =
         Arc::new(SqlxPeerJoinTokenRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =
@@ -2769,7 +2772,7 @@ async fn boot_worker(
     ));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
         Arc::new(SqlxMediaFileRepo::new(pool.clone()).with_write_queue(write_queue.clone())),
-        live_events,
+        live_events.clone(),
     ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     // §9.1/§3.6 (`docs/architecture/peer-groups.md`): this function's own
@@ -2783,7 +2786,10 @@ async fn boot_worker(
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
-    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(playarr_db::EventingPeerNodeRepo::new(
+        Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =

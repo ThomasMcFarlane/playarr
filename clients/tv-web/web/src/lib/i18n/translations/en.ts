@@ -913,13 +913,13 @@ export const en = {
   "settings.server.description":
     "Combine libraries from multiple servers in one Playarr interface.",
   "settings.server.disconnect": "Disconnect",
-  "settings.server.forgetServer": "Forget this server",
-  "settings.server.forgetServerHint":
-    "Clears every address remembered for this account's server group. You may be asked for a server address again next time.",
   "settings.server.kicker": "Make it yours",
   "settings.server.pageTitle": "Server connection - Settings",
   "settings.server.passwordAriaLabel": "Password for additional server",
   "settings.server.passwordPlaceholder": "Password",
+  "settings.server.groupBadge": "Server group",
+  "settings.server.groupHint":
+    "Servers in this group are added automatically by the server administrator and cannot be changed here.",
   "settings.server.primaryBadge": "Primary",
   "settings.server.primaryServerHint":
     "{{apiBaseUrl}} remains the primary server for profile and player preferences.",
@@ -928,7 +928,6 @@ export const en = {
     "Server connected. Its library is now joined with this profile.",
   "settings.server.serverConnectedToast": "Server connected.",
   "settings.server.serverDisconnectedToast": "Server disconnected.",
-  "settings.server.serverGroupForgottenToast": "Forgot remembered server addresses.",
   "settings.server.testConnection": "Test connection",
   "settings.server.testing": "Testing…",
   "settings.server.title": "Server connection",

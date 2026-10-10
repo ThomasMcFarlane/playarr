@@ -602,6 +602,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin_peer::list_peer_nodes_handler))
         .routes(routes!(admin_peer::peer_node_sync_status_handler))
         .routes(routes!(admin_peer::address_bundle_handler))
+        .routes(routes!(admin_peer::server_group_members_handler))
         .routes(routes!(peer::enroll_handler))
         .routes(routes!(peer::nodes_handler))
         .routes(routes!(peer::leave_notification_handler))
