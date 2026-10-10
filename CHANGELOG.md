@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
+- Tizen and webOS: web rules that use `:has()` (nav group spacing, search field focus ring, calendar agenda panel, downloads layout) now apply, through a build-time rewrite plus a small runtime that keeps a matching attribute up to date.
 - Apple TV: calendar week and month views, a focusable agenda whose details follow focus, the shared right-side drawer for Filters (library sort and order, calendar view) and the calendar link, search results in the web grid, a full-screen player that opens transcoded streams (session headers, waits for the playlist, no Matroska direct play) and no longer crashes before the duration is known, Play focused on film pages, and today on the calendar is your local day.
 - Web: a focused checkbox (Settings Your data and Remote, Calendar monitored-only switch) no longer traps keyboard and D-pad focus; arrow keys now move spatial focus away, Space still toggles.
 - Apple TV: library cards open the title on Select and show the card focus glow; the Playlists tab lists your playlists; Back on a top-level page returns Home and pops pushed pages first; Left into the nav lands on the active tab; the nav ends with the profile tile (Who's watching, Settings from the gear) instead of a Settings group; settings rows use the web focus look and the panel follows focus.
