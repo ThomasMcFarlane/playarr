@@ -1,0 +1,1 @@
+- Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
