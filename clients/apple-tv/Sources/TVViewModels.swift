@@ -26,9 +26,12 @@ final class TVHomeViewModel {
     }
 
     func load() async {
-        state = .loading
-        if TVParityLaunch.isLive {
-            rails = (try? await apiClient.fetchHomeRails()) ?? []
+        if state != .loaded { state = .loading } // a reload keeps the rails on screen (no blank flash)
+        // The web Home builds every rail from the server's shelves: when they load, nothing else is needed.
+        if TVParityLaunch.requestedScreen == nil, let fetched = try? await apiClient.fetchHomeRails(), !fetched.isEmpty {
+            rails = fetched
+            state = .loaded
+            return
         }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
