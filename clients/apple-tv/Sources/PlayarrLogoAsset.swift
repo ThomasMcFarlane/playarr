@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Embedded raster of `playarr-icon.svg` (84×84 @2x) for the shell logo.
 enum PlayarrLogoAsset {

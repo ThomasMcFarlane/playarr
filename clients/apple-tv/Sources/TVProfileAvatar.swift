@@ -1,6 +1,8 @@
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The six preset profile avatars of the web client (`ProfileAvatar.tsx`), drawn natively.
 /// The preset follows the web's `defaultProfileAvatarPreset(userId)` hash, so a user shows the

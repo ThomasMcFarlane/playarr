@@ -7,40 +7,85 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F917F09E8985CDABEE91CFDA /* TVSettingsPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DD2D1EB99FED3C09D2D0A9 /* TVSettingsPanels.swift */; };
-		53D2FEC1A61146F59482E74B /* DesignFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629ED86D27E46A3B33063016 /* DesignFont.swift */; };
-		D5D8CCEC4B9EE0A241E641D8 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */; };
-		527D38FBD08A9D6AB4DB9662 /* NunitoSans-wght-web.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */; };
-		3201749E36E7348E4A0FA92F /* TVTabPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8BF202016884CD7FA850E7 /* TVTabPages.swift */; };
-		961AC215D2B847594E40F409 /* TVWebParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCD1E46A5ADF7B172FAFF25 /* TVWebParityTests.swift */; };
-		BF9CAF96E70B19E3D37E3D2A /* TVPlayerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */; };
-		8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */; };
-		4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */; };
-		23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */; };
-		43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */; };
+		00B114180BE4CD72FF7E687B /* PlatformShims.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A221E048DD4337D3C2FE4CF /* PlatformShims.swift */; };
+		02AA3787C9F79E0ECE941359 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A3D7E0078DA28D58FDD0E5E7 /* Assets.xcassets */; };
+		043DACB6C9D4BB0A66B435B2 /* TVLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */; };
+		075695CE1B2A225EA8557FF4 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D16D13DD80C8A8F4BD72913 /* DesignTokens.swift */; };
+		0A4A3A3DA64C680587B4D5ED /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2C2C37179530F8B6D4F27D9A /* PlayarrKit */; };
+		0CF9FBCCA50DB5E7B13A6C76 /* TVSettingsPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFC578F55F9037ED72E28A1 /* TVSettingsPanels.swift */; };
+		117D4A5CF5F5BFDB9BC9AB72 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EFF15A5904B45253194E290 /* JetBrainsMono-Variable.ttf */; };
+		1D8A16240B1443F2FA25D9C9 /* TVEndOfPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 001803E02BF7072969FB6832 /* TVEndOfPlaybackView.swift */; };
+		1E15699717F807C5C2328D70 /* TVWebLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E0407D09C4DFEB24B19FA7B /* TVWebLayout.swift */; };
+		1FB32CB44E536AB04E7853A7 /* NunitoSans-wght-web.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 428807A834AC49027A995EE5 /* NunitoSans-wght-web.ttf */; };
+		1FD7B53EFC37E7FA8C7ED353 /* PlayarrAvatarAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241A992A98612B3F0FFD67A1 /* PlayarrAvatarAsset.swift */; };
+		1FEA33364ECE1A15753A4BE0 /* TVWebLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E0407D09C4DFEB24B19FA7B /* TVWebLayout.swift */; };
 		226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */; };
+		27009EFAAA63E6802BD9D36B /* TVProfileAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CC0514636B4EBA21112D1C /* TVProfileAvatar.swift */; };
+		2B1C098FDD56C09A08EC6D4E /* TVTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B61CCA34D643079DED4ED0E /* TVTheme.swift */; };
+		2C699C280FD1125431EC07B8 /* PlayarrMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C1263BCCD6BC4E08BB9C5C /* PlayarrMacApp.swift */; };
+		30874D61FAB4BCE9BFC6703D /* TVProfileAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CC0514636B4EBA21112D1C /* TVProfileAvatar.swift */; };
 		31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */; };
+		37AB87C90F185BCC5CB45757 /* TVRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D582C12CA26152EFDEE5953 /* TVRootView.swift */; };
+		398B276AED34960B6D1EA1A6 /* TVHouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06F9596C88F40ABC2BD98A7 /* TVHouseholdView.swift */; };
+		3A8CF2F94CC3BD3D76B4625F /* TVParityScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432012E333167B82AD013547 /* TVParityScreens.swift */; };
+		3B646336789F98F4AFD278E2 /* TVParityArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9E5548A58EDC968449C063 /* TVParityArtwork.swift */; };
+		3C4BF5BBE13D2D11207081A8 /* TVPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */; };
+		41452F22BA9BE2A7C83CE5FB /* DesignTokensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74904738AB90CAF6AE2F40CB /* DesignTokensTests.swift */; };
 		4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D582C12CA26152EFDEE5953 /* TVRootView.swift */; };
+		4C0952EDA9A8EA5E6E39A232 /* TVParityScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432012E333167B82AD013547 /* TVParityScreens.swift */; };
+		4C5A38C778B8E87AF402775B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A3D7E0078DA28D58FDD0E5E7 /* Assets.xcassets */; };
+		4EF9E4F6CCF7AC3E18C40310 /* TVWebParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF95B637D82D177EEF153BD7 /* TVWebParityTests.swift */; };
+		58E20C867B1C773319CE2385 /* TVCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268D27B3AE00D6970A501DE3 /* TVCalendarView.swift */; };
+		59C915AFAE5114EBB3369BAD /* TVTabPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFAAD11A5327658B2DE4AA2 /* TVTabPages.swift */; };
 		5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */; };
-		74E7B05672BEB39A4F106BF2 /* TVEndOfPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD8206CEACB0245E19C5F66 /* TVEndOfPlaybackView.swift */; };
-		6A1B2C3D4E5F60718293A4B5 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B0 /* DesignTokens.swift */; };
-		6A1B2C3D4E5F60718293A4B6 /* TVTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */; };
-		6A1B2C3D4E5F60718293A4B7 /* DesignTokensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */; };
-		6A1B2C3D4E5F60718293A4B8 /* TVParityScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */; };
+		687A3660467264F0BA9F0AAA /* PlayarrLogoAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADB121567A08C426718C9B8 /* PlayarrLogoAsset.swift */; };
+		6C57109CFDDBDA3A6BA880CB /* TVSettingsPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFC578F55F9037ED72E28A1 /* TVSettingsPanels.swift */; };
+		6F5A36FFB57C2C1E17D2D9A8 /* TVDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */; };
+		71C9DC8E7131BF3A04F8BD06 /* TVCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268D27B3AE00D6970A501DE3 /* TVCalendarView.swift */; };
+		753E3262833659DF55A95EF2 /* MacDebugRemote.swift in Sources */ = {isa = PBXBuildFile; fileRef = A173A6A40F45C78C6E8F71D2 /* MacDebugRemote.swift */; };
+		8A3D64D5EA78357CE7041E71 /* DesignFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2DCCC67C09A88BEFC04CC5 /* DesignFont.swift */; };
+		94DF4DABB7C318F2565159B4 /* TVWebParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF95B637D82D177EEF153BD7 /* TVWebParityTests.swift */; };
+		984330250A689C49E788C710 /* TVHouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06F9596C88F40ABC2BD98A7 /* TVHouseholdView.swift */; };
+		9B585CD0E75FC8DEA810B5D2 /* TVDisplayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1924B5B48CE922D766369127 /* TVDisplayPreferences.swift */; };
 		9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */; };
-		AF7DF9EA8CB93994B825C73E /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = ABDF4D6CFC05316980A29BBD /* PlayarrKit */; };
+		9E3CF214A0EA45F4968E056B /* PlayarrLogoAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADB121567A08C426718C9B8 /* PlayarrLogoAsset.swift */; };
+		A563FE951B8F69DD90088C8E /* TVPlayerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CBB70290F711C18FE4F7D2 /* TVPlayerChrome.swift */; };
+		A6566E79A5BC4A18AEB28722 /* MacFocusEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DEF797A7C6BF4DACEE05B5 /* MacFocusEngineTests.swift */; };
+		A9D0BD17BBF72B9F1B39173A /* DesignFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2DCCC67C09A88BEFC04CC5 /* DesignFont.swift */; };
+		AF7DF9EA8CB93994B825C73E /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4BCC564EA7B2B0D96440FDAE /* PlayarrKit */; };
+		B2311A0F2BA19D80A92DFB20 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EFF15A5904B45253194E290 /* JetBrainsMono-Variable.ttf */; };
+		B26E36833F26FF10478669A8 /* TVTabPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFAAD11A5327658B2DE4AA2 /* TVTabPages.swift */; };
 		B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61029885CE1ECACC599117A4 /* TVSettingsView.swift */; };
+		B5A9B35E8AFA816D3E80A229 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61029885CE1ECACC599117A4 /* TVSettingsView.swift */; };
+		B8BB4DB695155CAD66215459 /* TVEndOfPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 001803E02BF7072969FB6832 /* TVEndOfPlaybackView.swift */; };
+		B9818F586D0E0C5A92007932 /* MacFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83CE44B5934F69BA3080EA60 /* MacFocus.swift */; };
 		BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
+		C5DCCF897EE190A6F46E698E /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D16D13DD80C8A8F4BD72913 /* DesignTokens.swift */; };
+		CD1C948976B4F2DAF80D5698 /* TVAppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */; };
+		CDA8BCBD5A61F338B6FC6280 /* TVPlayerProgressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 317A9CF9A0C224CE05B5C89B /* TVPlayerProgressTests.swift */; };
+		D4591ACBDCCF9DEE2912EAB0 /* MacFocusEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DEF797A7C6BF4DACEE05B5 /* MacFocusEngineTests.swift */; };
 		D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */; };
+		D78810CAA824CE5479E67804 /* TVParityArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9E5548A58EDC968449C063 /* TVParityArtwork.swift */; };
+		D8E01E5D4DE84CE0919B8F93 /* NunitoSans-wght-web.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 428807A834AC49027A995EE5 /* NunitoSans-wght-web.ttf */; };
+		DE5373DB4E681A1AA39B5719 /* TVDisplayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1924B5B48CE922D766369127 /* TVDisplayPreferences.swift */; };
+		E0C8F7293F385CFD4520421D /* TVViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */; };
+		E4C3410C2FDF62E37BCB4C6E /* TVPlayerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CBB70290F711C18FE4F7D2 /* TVPlayerChrome.swift */; };
 		E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */; };
-		A1B2C3D4E5F60718293A4F1 /* TVDisplayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */; };
-6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */; };
-6A1B2C3D4E5F60718293A4D1 /* PlayarrAvatarAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4D0 /* PlayarrAvatarAsset.swift */; };
-6A1B2C3D4E5F60718293A4D3 /* TVParityArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */; };
-6A1B2C3D4E5F60718293A4E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */; };
+		EBA893D5529EEF4D1937BC5B /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
+		EC81F0804F74B849CE9360BA /* TVTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B61CCA34D643079DED4ED0E /* TVTheme.swift */; };
+		EFCEE48CA0979CED4B5669FD /* TVPlayerProgressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 317A9CF9A0C224CE05B5C89B /* TVPlayerProgressTests.swift */; };
+		F4718DE2F3A3FCB19F0365AA /* PlayarrAvatarAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241A992A98612B3F0FFD67A1 /* PlayarrAvatarAsset.swift */; };
+		F698916D54A10FB83431F8E5 /* DesignTokensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74904738AB90CAF6AE2F40CB /* DesignTokensTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		116DF81BA9B3F257D4AC8B70 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A0F02D254DA0E80636F242E6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C7EAF227072F9B6AE24EE40;
+			remoteInfo = PlayarrMac;
+		};
 		8A079F48A5C17F366CE14C1E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A0F02D254DA0E80636F242E6 /* Project object */;
@@ -51,39 +96,47 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		74DD2D1EB99FED3C09D2D0A9 /* TVSettingsPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsPanels.swift; sourceTree = "<group>"; };
-		629ED86D27E46A3B33063016 /* DesignFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DesignFont.swift; path = ../../ios/Sources/PlayarrApp/DesignFont.swift; sourceTree = "<group>"; };
-		E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = JetBrainsMono-Variable.ttf; path = ../ios/Resources/Fonts/JetBrainsMono-Variable.ttf; sourceTree = "<group>"; };
-		1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = NunitoSans-wght-web.ttf; path = ../../docs/parity/fonts/NunitoSans-wght-web.ttf; sourceTree = "<group>"; };
-		1A8BF202016884CD7FA850E7 /* TVTabPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVTabPages.swift; sourceTree = "<group>"; };
-		0CCD1E46A5ADF7B172FAFF25 /* TVWebParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebParityTests.swift; sourceTree = "<group>"; };
-		2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerChrome.swift; sourceTree = "<group>"; };
-		D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVProfileAvatar.swift; sourceTree = "<group>"; };
-		7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVHouseholdView.swift; sourceTree = "<group>"; };
-		FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVCalendarView.swift; sourceTree = "<group>"; };
-		9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebLayout.swift; sourceTree = "<group>"; };
+		001803E02BF7072969FB6832 /* TVEndOfPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVEndOfPlaybackView.swift; sourceTree = "<group>"; };
 		12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDetailView.swift; sourceTree = "<group>"; };
 		12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerAddressTests.swift; sourceTree = "<group>"; };
+		1924B5B48CE922D766369127 /* TVDisplayPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDisplayPreferences.swift; sourceTree = "<group>"; };
+		1E0407D09C4DFEB24B19FA7B /* TVWebLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebLayout.swift; sourceTree = "<group>"; };
+		241A992A98612B3F0FFD67A1 /* PlayarrAvatarAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrAvatarAsset.swift; sourceTree = "<group>"; };
+		268D27B3AE00D6970A501DE3 /* TVCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVCalendarView.swift; sourceTree = "<group>"; };
+		2A221E048DD4337D3C2FE4CF /* PlatformShims.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformShims.swift; sourceTree = "<group>"; };
+		2ADB121567A08C426718C9B8 /* PlayarrLogoAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrLogoAsset.swift; sourceTree = "<group>"; };
+		2D16D13DD80C8A8F4BD72913 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		2D582C12CA26152EFDEE5953 /* TVRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVRootView.swift; sourceTree = "<group>"; };
+		317A9CF9A0C224CE05B5C89B /* TVPlayerProgressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerProgressTests.swift; sourceTree = "<group>"; };
 		3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrTVApp.swift; sourceTree = "<group>"; };
+		37DEF797A7C6BF4DACEE05B5 /* MacFocusEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacFocusEngineTests.swift; sourceTree = "<group>"; };
+		3B61CCA34D643079DED4ED0E /* TVTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVTheme.swift; sourceTree = "<group>"; };
+		3EFF15A5904B45253194E290 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		41935314E8276AC50A9746A6 /* PlayarrTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlayarrTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		41CBB70290F711C18FE4F7D2 /* TVPlayerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerChrome.swift; sourceTree = "<group>"; };
+		428807A834AC49027A995EE5 /* NunitoSans-wght-web.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-wght-web.ttf"; sourceTree = "<group>"; };
+		432012E333167B82AD013547 /* TVParityScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityScreens.swift; sourceTree = "<group>"; };
+		4EFAAD11A5327658B2DE4AA2 /* TVTabPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVTabPages.swift; sourceTree = "<group>"; };
 		61029885CE1ECACC599117A4 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
-		6A1B2C3D4E5F60718293A4B0 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
-		6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVTheme.swift; sourceTree = "<group>"; };
-		6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokensTests.swift; sourceTree = "<group>"; };
-		6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityScreens.swift; sourceTree = "<group>"; };
+		6C9E5548A58EDC968449C063 /* TVParityArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityArtwork.swift; sourceTree = "<group>"; };
+		74904738AB90CAF6AE2F40CB /* DesignTokensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokensTests.swift; sourceTree = "<group>"; };
+		7AFC578F55F9037ED72E28A1 /* TVSettingsPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsPanels.swift; sourceTree = "<group>"; };
+		7B2DCCC67C09A88BEFC04CC5 /* DesignFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignFont.swift; sourceTree = "<group>"; };
 		7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PlayarrTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8344794ED86861A8C8F34EB8 /* PlayarrMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PlayarrMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		83CE44B5934F69BA3080EA60 /* MacFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacFocus.swift; sourceTree = "<group>"; };
+		96C1263BCCD6BC4E08BB9C5C /* PlayarrMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrMacApp.swift; sourceTree = "<group>"; };
+		97CC0514636B4EBA21112D1C /* TVProfileAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVProfileAvatar.swift; sourceTree = "<group>"; };
+		A173A6A40F45C78C6E8F71D2 /* MacDebugRemote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacDebugRemote.swift; sourceTree = "<group>"; };
+		A3D7E0078DA28D58FDD0E5E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B55D266DA17523B0E68FD342 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ../ios; sourceTree = SOURCE_ROOT; };
+		CF95B637D82D177EEF153BD7 /* TVWebParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebParityTests.swift; sourceTree = "<group>"; };
 		D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAppEnvironment.swift; sourceTree = "<group>"; };
+		E06F9596C88F40ABC2BD98A7 /* TVHouseholdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVHouseholdView.swift; sourceTree = "<group>"; };
+		E2C25418B78259C265A7C4C5 /* PlayarrMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PlayarrMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerView.swift; sourceTree = "<group>"; };
-		6BD8206CEACB0245E19C5F66 /* TVEndOfPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVEndOfPlaybackView.swift; sourceTree = "<group>"; };
 		F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryViews.swift; sourceTree = "<group>"; };
 		F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVViewModels.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDisplayPreferences.swift; sourceTree = "<group>"; };
-6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrLogoAsset.swift; sourceTree = "<group>"; };
-6A1B2C3D4E5F60718293A4D0 /* PlayarrAvatarAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrAvatarAsset.swift; sourceTree = "<group>"; };
-6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityArtwork.swift; sourceTree = "<group>"; };
-6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Supporting/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,55 +148,144 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E45304B02BEACE60755355F6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A4A3A3DA64C680587B4D5ED /* PlayarrKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		17632B8F34146D198BF1D7F2 /* fonts */ = {
+			isa = PBXGroup;
+			children = (
+				428807A834AC49027A995EE5 /* NunitoSans-wght-web.ttf */,
+			);
+			path = fonts;
+			sourceTree = "<group>";
+		};
+		3595BBC042017FD2057B3893 /* docs */ = {
+			isa = PBXGroup;
+			children = (
+				977F32BA6B3DC5B8FDC43D91 /* parity */,
+			);
+			path = docs;
+			sourceTree = "<group>";
+		};
 		3C10A307C8E1D18D0055C05D /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				8344794ED86861A8C8F34EB8 /* PlayarrMac.app */,
+				E2C25418B78259C265A7C4C5 /* PlayarrMacTests.xctest */,
 				7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */,
 				41935314E8276AC50A9746A6 /* PlayarrTVTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+		4F798E75732AC5E742F75DB3 /* Supporting */ = {
+			isa = PBXGroup;
+			children = (
+				A3D7E0078DA28D58FDD0E5E7 /* Assets.xcassets */,
+			);
+			path = Supporting;
+			sourceTree = "<group>";
+		};
+		6312B37A86CCA6EFB717C4B0 /* clients */ = {
+			isa = PBXGroup;
+			children = (
+				BE31E9EE0A37FE85F7BEDA9F /* ios */,
+			);
+			name = clients;
+			path = ..;
+			sourceTree = "<group>";
+		};
 		66A396CCE97C43937D7A9BD7 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */,
-				0CCD1E46A5ADF7B172FAFF25 /* TVWebParityTests.swift */,
+				74904738AB90CAF6AE2F40CB /* DesignTokensTests.swift */,
+				37DEF797A7C6BF4DACEE05B5 /* MacFocusEngineTests.swift */,
+				317A9CF9A0C224CE05B5C89B /* TVPlayerProgressTests.swift */,
 				12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */,
+				CF95B637D82D177EEF153BD7 /* TVWebParityTests.swift */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		747974F60D9D7E2B94E679AB /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F6BDD86B11E8F128AB809A0C /* PlayarrApp */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		75914CB398E87FEFA9D910FF /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				A173A6A40F45C78C6E8F71D2 /* MacDebugRemote.swift */,
+				83CE44B5934F69BA3080EA60 /* MacFocus.swift */,
+				2A221E048DD4337D3C2FE4CF /* PlatformShims.swift */,
+				96C1263BCCD6BC4E08BB9C5C /* PlayarrMacApp.swift */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		8468B951CB9D6E277ECAB61A /* src */ = {
+			isa = PBXGroup;
+			children = (
+				3595BBC042017FD2057B3893 /* docs */,
+			);
+			name = src;
+			path = ../..;
+			sourceTree = "<group>";
+		};
+		977F32BA6B3DC5B8FDC43D91 /* parity */ = {
+			isa = PBXGroup;
+			children = (
+				17632B8F34146D198BF1D7F2 /* fonts */,
+			);
+			path = parity;
+			sourceTree = "<group>";
+		};
+		BE31E9EE0A37FE85F7BEDA9F /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				E28738BD07850F18032E3BF1 /* Resources */,
+				747974F60D9D7E2B94E679AB /* Sources */,
+			);
+			path = ios;
 			sourceTree = "<group>";
 		};
 		C58245455747F1533147EFAD /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				6A1B2C3D4E5F60718293A4B0 /* DesignTokens.swift */,
+				2D16D13DD80C8A8F4BD72913 /* DesignTokens.swift */,
+				241A992A98612B3F0FFD67A1 /* PlayarrAvatarAsset.swift */,
+				2ADB121567A08C426718C9B8 /* PlayarrLogoAsset.swift */,
 				3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */,
 				D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */,
+				268D27B3AE00D6970A501DE3 /* TVCalendarView.swift */,
 				12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */,
+				1924B5B48CE922D766369127 /* TVDisplayPreferences.swift */,
+				001803E02BF7072969FB6832 /* TVEndOfPlaybackView.swift */,
+				E06F9596C88F40ABC2BD98A7 /* TVHouseholdView.swift */,
 				F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */,
-				6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */,
+				6C9E5548A58EDC968449C063 /* TVParityArtwork.swift */,
+				432012E333167B82AD013547 /* TVParityScreens.swift */,
+				41CBB70290F711C18FE4F7D2 /* TVPlayerChrome.swift */,
 				E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */,
-				6BD8206CEACB0245E19C5F66 /* TVEndOfPlaybackView.swift */,
+				97CC0514636B4EBA21112D1C /* TVProfileAvatar.swift */,
 				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
-				A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */,
+				7AFC578F55F9037ED72E28A1 /* TVSettingsPanels.swift */,
 				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
-				1A8BF202016884CD7FA850E7 /* TVTabPages.swift */,
-				2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */,
-				D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */,
-				7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */,
-				FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */,
-				9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */,
-				74DD2D1EB99FED3C09D2D0A9 /* TVSettingsPanels.swift */,
-				629ED86D27E46A3B33063016 /* DesignFont.swift */,
-				6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */,
-				6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */,
-				6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */,
-				6A1B2C3D4E5F60718293A4D0 /* PlayarrAvatarAsset.swift */,
+				4EFAAD11A5327658B2DE4AA2 /* TVTabPages.swift */,
+				3B61CCA34D643079DED4ED0E /* TVTheme.swift */,
 				F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */,
+				1E0407D09C4DFEB24B19FA7B /* TVWebLayout.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -156,29 +298,74 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		E28738BD07850F18032E3BF1 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				E731B91698527BFD13936780 /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		E4BE1A990FF65E2AE11FD4A8 = {
 			isa = PBXGroup;
 			children = (
+				6312B37A86CCA6EFB717C4B0 /* clients */,
+				75914CB398E87FEFA9D910FF /* macOS */,
 				DB2B72D2056E6445413753C7 /* Packages */,
 				C58245455747F1533147EFAD /* Sources */,
-				6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */,
-				E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */,
-				1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */,
+				8468B951CB9D6E277ECAB61A /* src */,
+				4F798E75732AC5E742F75DB3 /* Supporting */,
 				66A396CCE97C43937D7A9BD7 /* Tests */,
 				3C10A307C8E1D18D0055C05D /* Products */,
 			);
 			sourceTree = "<group>";
 		};
+		E731B91698527BFD13936780 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				3EFF15A5904B45253194E290 /* JetBrainsMono-Variable.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		F6BDD86B11E8F128AB809A0C /* PlayarrApp */ = {
+			isa = PBXGroup;
+			children = (
+				7B2DCCC67C09A88BEFC04CC5 /* DesignFont.swift */,
+			);
+			path = PlayarrApp;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0C7EAF227072F9B6AE24EE40 /* PlayarrMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8945F55184D8C77EF810BF90 /* Build configuration list for PBXNativeTarget "PlayarrMac" */;
+			buildPhases = (
+				26D1D20630F8DBC4CAE92C5E /* Sources */,
+				215F7E7F5463923BEA793AA2 /* Resources */,
+				E45304B02BEACE60755355F6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PlayarrMac;
+			packageProductDependencies = (
+				2C2C37179530F8B6D4F27D9A /* PlayarrKit */,
+			);
+			productName = PlayarrMac;
+			productReference = 8344794ED86861A8C8F34EB8 /* PlayarrMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 		4D965032404117B41A3E1D1C /* PlayarrTV */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BCE81007F91E7B73ABC4059D /* Build configuration list for PBXNativeTarget "PlayarrTV" */;
 			buildPhases = (
 				FEF49D8951F4C942BCFB42A2 /* Sources */,
+				F8B748677B3A23C7DAD57485 /* Resources */,
 				5A7117D1999A629F0214700A /* Frameworks */,
-				6A1B2C3D4E5F60718293A4E2 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -186,11 +373,29 @@
 			);
 			name = PlayarrTV;
 			packageProductDependencies = (
-				ABDF4D6CFC05316980A29BBD /* PlayarrKit */,
+				4BCC564EA7B2B0D96440FDAE /* PlayarrKit */,
 			);
 			productName = PlayarrTV;
 			productReference = 7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5C2BF2DF16673A2946EBF0D4 /* PlayarrMacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B1A430E72A5A302EBE1F44E /* Build configuration list for PBXNativeTarget "PlayarrMacTests" */;
+			buildPhases = (
+				4FBD915165699DBF0852B61B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0A930963547C7498B2BD56B6 /* PBXTargetDependency */,
+			);
+			name = PlayarrMacTests;
+			packageProductDependencies = (
+			);
+			productName = PlayarrMacTests;
+			productReference = E2C25418B78259C265A7C4C5 /* PlayarrMacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		F2D5AE02E6269B36E0D8DEF0 /* PlayarrTVTests */ = {
 			isa = PBXNativeTarget;
@@ -218,10 +423,9 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 76685712B07AFBB39A59BEE3 /* Build configuration list for PBXProject "PlayarrTV" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -234,10 +438,11 @@
 				B03D58F9664E938BE32A32AA /* XCLocalSwiftPackageReference "../ios" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 3C10A307C8E1D18D0055C05D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				0C7EAF227072F9B6AE24EE40 /* PlayarrMac */,
+				5C2BF2DF16673A2946EBF0D4 /* PlayarrMacTests */,
 				4D965032404117B41A3E1D1C /* PlayarrTV */,
 				F2D5AE02E6269B36E0D8DEF0 /* PlayarrTVTests */,
 			);
@@ -245,26 +450,84 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		6A1B2C3D4E5F60718293A4E2 /* Resources */ = {
+		215F7E7F5463923BEA793AA2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6A1B2C3D4E5F60718293A4E1 /* Assets.xcassets in Resources */,
-				D5D8CCEC4B9EE0A241E641D8 /* JetBrainsMono-Variable.ttf in Resources */,
-				527D38FBD08A9D6AB4DB9662 /* NunitoSans-wght-web.ttf in Resources */,
+				4C5A38C778B8E87AF402775B /* Assets.xcassets in Resources */,
+				117D4A5CF5F5BFDB9BC9AB72 /* JetBrainsMono-Variable.ttf in Resources */,
+				D8E01E5D4DE84CE0919B8F93 /* NunitoSans-wght-web.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F8B748677B3A23C7DAD57485 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02AA3787C9F79E0ECE941359 /* Assets.xcassets in Resources */,
+				B2311A0F2BA19D80A92DFB20 /* JetBrainsMono-Variable.ttf in Resources */,
+				1FB32CB44E536AB04E7853A7 /* NunitoSans-wght-web.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		26D1D20630F8DBC4CAE92C5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A9D0BD17BBF72B9F1B39173A /* DesignFont.swift in Sources */,
+				075695CE1B2A225EA8557FF4 /* DesignTokens.swift in Sources */,
+				753E3262833659DF55A95EF2 /* MacDebugRemote.swift in Sources */,
+				B9818F586D0E0C5A92007932 /* MacFocus.swift in Sources */,
+				00B114180BE4CD72FF7E687B /* PlatformShims.swift in Sources */,
+				1FD7B53EFC37E7FA8C7ED353 /* PlayarrAvatarAsset.swift in Sources */,
+				9E3CF214A0EA45F4968E056B /* PlayarrLogoAsset.swift in Sources */,
+				2C699C280FD1125431EC07B8 /* PlayarrMacApp.swift in Sources */,
+				CD1C948976B4F2DAF80D5698 /* TVAppEnvironment.swift in Sources */,
+				71C9DC8E7131BF3A04F8BD06 /* TVCalendarView.swift in Sources */,
+				6F5A36FFB57C2C1E17D2D9A8 /* TVDetailView.swift in Sources */,
+				DE5373DB4E681A1AA39B5719 /* TVDisplayPreferences.swift in Sources */,
+				1D8A16240B1443F2FA25D9C9 /* TVEndOfPlaybackView.swift in Sources */,
+				984330250A689C49E788C710 /* TVHouseholdView.swift in Sources */,
+				043DACB6C9D4BB0A66B435B2 /* TVLibraryViews.swift in Sources */,
+				3B646336789F98F4AFD278E2 /* TVParityArtwork.swift in Sources */,
+				3A8CF2F94CC3BD3D76B4625F /* TVParityScreens.swift in Sources */,
+				A563FE951B8F69DD90088C8E /* TVPlayerChrome.swift in Sources */,
+				3C4BF5BBE13D2D11207081A8 /* TVPlayerView.swift in Sources */,
+				30874D61FAB4BCE9BFC6703D /* TVProfileAvatar.swift in Sources */,
+				37AB87C90F185BCC5CB45757 /* TVRootView.swift in Sources */,
+				0CF9FBCCA50DB5E7B13A6C76 /* TVSettingsPanels.swift in Sources */,
+				B5A9B35E8AFA816D3E80A229 /* TVSettingsView.swift in Sources */,
+				B26E36833F26FF10478669A8 /* TVTabPages.swift in Sources */,
+				EC81F0804F74B849CE9360BA /* TVTheme.swift in Sources */,
+				E0C8F7293F385CFD4520421D /* TVViewModels.swift in Sources */,
+				1FEA33364ECE1A15753A4BE0 /* TVWebLayout.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4FBD915165699DBF0852B61B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F698916D54A10FB83431F8E5 /* DesignTokensTests.swift in Sources */,
+				D4591ACBDCCF9DEE2912EAB0 /* MacFocusEngineTests.swift in Sources */,
+				CDA8BCBD5A61F338B6FC6280 /* TVPlayerProgressTests.swift in Sources */,
+				EBA893D5529EEF4D1937BC5B /* TVServerAddressTests.swift in Sources */,
+				94DF4DABB7C318F2565159B4 /* TVWebParityTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6E2D563667F6EE146BF2D230 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6A1B2C3D4E5F60718293A4B7 /* DesignTokensTests.swift in Sources */,
-				961AC215D2B847594E40F409 /* TVWebParityTests.swift in Sources */,
+				41452F22BA9BE2A7C83CE5FB /* DesignTokensTests.swift in Sources */,
+				A6566E79A5BC4A18AEB28722 /* MacFocusEngineTests.swift in Sources */,
+				EFCEE48CA0979CED4B5669FD /* TVPlayerProgressTests.swift in Sources */,
 				BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */,
+				4EF9E4F6CCF7AC3E18C40310 /* TVWebParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -272,36 +535,41 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6A1B2C3D4E5F60718293A4B5 /* DesignTokens.swift in Sources */,
+				8A3D64D5EA78357CE7041E71 /* DesignFont.swift in Sources */,
+				C5DCCF897EE190A6F46E698E /* DesignTokens.swift in Sources */,
+				F4718DE2F3A3FCB19F0365AA /* PlayarrAvatarAsset.swift in Sources */,
+				687A3660467264F0BA9F0AAA /* PlayarrLogoAsset.swift in Sources */,
 				226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */,
 				31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */,
+				58E20C867B1C773319CE2385 /* TVCalendarView.swift in Sources */,
 				E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */,
+				9B585CD0E75FC8DEA810B5D2 /* TVDisplayPreferences.swift in Sources */,
+				B8BB4DB695155CAD66215459 /* TVEndOfPlaybackView.swift in Sources */,
+				398B276AED34960B6D1EA1A6 /* TVHouseholdView.swift in Sources */,
 				9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */,
-				6A1B2C3D4E5F60718293A4B8 /* TVParityScreens.swift in Sources */,
+				D78810CAA824CE5479E67804 /* TVParityArtwork.swift in Sources */,
+				4C0952EDA9A8EA5E6E39A232 /* TVParityScreens.swift in Sources */,
+				E4C3410C2FDF62E37BCB4C6E /* TVPlayerChrome.swift in Sources */,
 				5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */,
-				74E7B05672BEB39A4F106BF2 /* TVEndOfPlaybackView.swift in Sources */,
+				27009EFAAA63E6802BD9D36B /* TVProfileAvatar.swift in Sources */,
 				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
-				A1B2C3D4E5F60718293A4F1 /* TVDisplayPreferences.swift in Sources */,
+				6C57109CFDDBDA3A6BA880CB /* TVSettingsPanels.swift in Sources */,
 				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
-				3201749E36E7348E4A0FA92F /* TVTabPages.swift in Sources */,
-				BF9CAF96E70B19E3D37E3D2A /* TVPlayerChrome.swift in Sources */,
-				8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */,
-				4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */,
-				23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */,
-				43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */,
-				F917F09E8985CDABEE91CFDA /* TVSettingsPanels.swift in Sources */,
-				53D2FEC1A61146F59482E74B /* DesignFont.swift in Sources */,
-				6A1B2C3D4E5F60718293A4B6 /* TVTheme.swift in Sources */,
-				6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */,
-				6A1B2C3D4E5F60718293A4D3 /* TVParityArtwork.swift in Sources */,
-				6A1B2C3D4E5F60718293A4D1 /* PlayarrAvatarAsset.swift in Sources */,
+				59C915AFAE5114EBB3369BAD /* TVTabPages.swift in Sources */,
+				2B1C098FDD56C09A08EC6D4E /* TVTheme.swift in Sources */,
 				D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */,
+				1E15699717F807C5C2328D70 /* TVWebLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0A930963547C7498B2BD56B6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C7EAF227072F9B6AE24EE40 /* PlayarrMac */;
+			targetProxy = 116DF81BA9B3F257D4AC8B70 /* PBXContainerItemProxy */;
+		};
 		91DFD7FDFD597136F0D2E4AE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4D965032404117B41A3E1D1C /* PlayarrTV */;
@@ -361,11 +629,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -378,6 +646,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_IDENTITY = "$(PLAYARR_CODE_SIGN_IDENTITY)";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Supporting/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -385,8 +654,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos;
+				PRODUCT_BUNDLE_IDENTIFIER = app.playarr.ios;
 				PRODUCT_MODULE_NAME = PlayarrTV;
+				PROVISIONING_PROFILE_SPECIFIER = "$(PLAYARR_PROVISIONING_PROFILE)";
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
@@ -418,6 +688,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_IDENTITY = "$(PLAYARR_CODE_SIGN_IDENTITY)";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Supporting/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -425,8 +696,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos;
+				PRODUCT_BUNDLE_IDENTIFIER = app.playarr.ios;
 				PRODUCT_MODULE_NAME = PlayarrTV;
+				PROVISIONING_PROFILE_SPECIFIER = "$(PLAYARR_PROVISIONING_PROFILE)";
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
@@ -450,6 +722,90 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PlayarrTV.app/PlayarrTV";
+			};
+			name = Debug;
+		};
+		3EAC69F2CA895E05230404A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.macos.tests;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PlayarrMac.app/Contents/MacOS/PlayarrMac";
+			};
+			name = Release;
+		};
+		4DEDB6D4E82C1D1DBA25A93C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.playarr.macos;
+				PRODUCT_MODULE_NAME = PlayarrTV;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		738EEBED634AFF884A2AF74C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.playarr.macos;
+				PRODUCT_MODULE_NAME = PlayarrTV;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AABA447CB3726EC904EFB900 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.macos.tests;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PlayarrMac.app/Contents/MacOS/PlayarrMac";
 			};
 			name = Debug;
 		};
@@ -498,10 +854,10 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -521,11 +877,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		4B1A430E72A5A302EBE1F44E /* Build configuration list for PBXNativeTarget "PlayarrMacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AABA447CB3726EC904EFB900 /* Debug */,
+				3EAC69F2CA895E05230404A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		76685712B07AFBB39A59BEE3 /* Build configuration list for PBXProject "PlayarrTV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0222DB23692665FADC7B34B1 /* Debug */,
 				BE4B1CA823EDD54D85FA32DC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8945F55184D8C77EF810BF90 /* Build configuration list for PBXNativeTarget "PlayarrMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4DEDB6D4E82C1D1DBA25A93C /* Debug */,
+				738EEBED634AFF884A2AF74C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -549,7 +923,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		ABDF4D6CFC05316980A29BBD /* PlayarrKit */ = {
+		2C2C37179530F8B6D4F27D9A /* PlayarrKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PlayarrKit;
+		};
+		4BCC564EA7B2B0D96440FDAE /* PlayarrKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PlayarrKit;
 		};

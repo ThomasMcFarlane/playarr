@@ -8,7 +8,9 @@ let package = Package(
         .iOS(.v17),
         // The sibling Apple TV Xcode project consumes the same
         // `PlayarrKit` product as a local package dependency.
-        .tvOS(.v17)
+        .tvOS(.v17),
+        // The macOS app (clients/apple-tv PlayarrMac target) reuses PlayarrKit unchanged.
+        .macOS(.v14)
     ],
     products: [
         // The formal SPM product consumed by `Playarr.xcodeproj` and

@@ -1,6 +1,8 @@
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 enum TVTheme {
     static let canvasWidth = DesignTokens.Shell.canvasWidth
@@ -347,14 +349,21 @@ struct TVProfileAddLabel: View {
     }
 }
 
+#if canImport(UIKit)
+extension UIColor {
+    /// The macOS shim resolves dynamic colours to sRGB here; UIKit answers `getRed` directly.
+    var rgbForMix: UIColor { self }
+}
+#endif
+
 extension Color {
     /// Approximate CSS `color-mix(in srgb, a (1-amount), b amount)`.
     static func tvMix(_ a: Color, _ b: Color, amount: Double) -> Color {
         let t = max(0, min(1, amount))
         var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
         var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-        UIColor(a).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        UIColor(b).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        UIColor(a).rgbForMix.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(b).rgbForMix.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
         return Color(
             red: Double(r1 * (1 - t) + r2 * t),
             green: Double(g1 * (1 - t) + g2 * t),

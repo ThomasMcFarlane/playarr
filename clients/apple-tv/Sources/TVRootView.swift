@@ -2,7 +2,9 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
@@ -373,6 +375,9 @@ private struct TVProductionShell<Stage: View>: View {
                     self.actionsWork = nil
                     playing = PlayRequest(id: id, title: title)
                 }
+                #if os(macOS)
+                .macFocusLayer() // focus stays in the drawer while it is open (macOS/MacFocus.swift)
+                #endif
             }
         }
         .environment(\.openActions) { actionsWork = $0 }
