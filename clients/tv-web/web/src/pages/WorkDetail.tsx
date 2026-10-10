@@ -754,7 +754,7 @@ function SimilarTitlesTrack({
             key={similarWork.id}
             to={similarDetailRoute}
             state={{ backTo: detailRoute, navigationOrigin }}
-            className={`media-card tv-episode-card${selected ? " is-selected" : ""}`}
+            className={`media-card tv-title-card${selected ? " is-selected" : ""}`}
             data-navigation-focus-key={`detail:${workId}:similar:${similarWork.id}`}
             onFocus={() => setSelectedWorkId(similarWork.id)}
             onClick={onNavigate}
@@ -765,7 +765,7 @@ function SimilarTitlesTrack({
               parentRoute: detailRoute,
             })}
           >
-            <span className="tv-episode-art">
+            <span className="tv-title-card-art">
               <CachedArtworkImage
                 work={similarWork}
                 kinds={["backdrop", "poster"]}
@@ -774,9 +774,9 @@ function SimilarTitlesTrack({
                 fallback={<span>{similarWork.title}</span>}
               />
             </span>
-            <span className="tv-episode-copy">
-              <small>{workKindLabel(similarWork, t)}</small>
+            <span className="tv-title-card-copy">
               <strong>{similarWork.title}</strong>
+              <small>{workKindLabel(similarWork, t)}</small>
             </span>
           </Link>
         );

@@ -43,7 +43,7 @@ const RECORD = () => {
       panelX: pr ? pr.x : null, panelW: pr ? pr.width : null,
       panelOpacity: panel ? Number(getComputedStyle(panel).opacity) : null,
       anims: panel ? panel.getAnimations().map((a) => a.animationName ?? a.transitionProperty).filter(Boolean) : [],
-      scroll: grid ? grid.scrollTop : null, count: document.querySelectorAll(".tv-title-card").length,
+      scroll: grid ? grid.scrollTop : null, count: document.querySelectorAll(".tv-title-grid .tv-title-card").length,
       route: document.getAnimations().some((a) => /^route-enter-/.test(a.animationName ?? "")),
       pageAnims: document.getAnimations().map((a) => (a.animationName ?? a.transitionProperty) + "@" + Math.round(a.currentTime) + ":" + (a.effect?.target?.className?.toString?.() ?? "").split(" ")[0]).filter((n) => !/tv-loader-spin|skeleton|shimmer/.test(n)).slice(0, 4),
       skeleton: Boolean(document.querySelector(".app-main .skeleton-state")), cards,
@@ -106,7 +106,7 @@ function judge(rec, from, path = null) {
   return problems;
 }
 
-const kv = (page) => page.evaluate(() => document.querySelectorAll(".tv-title-card").length);
+const kv = (page) => page.evaluate(() => document.querySelectorAll(".tv-title-grid .tv-title-card").length);
 for (const [w, h] of [[1920, 1080], [1280, 720]]) {
   for (const theme of ["dark", "light"]) {
     const size = `${w}x${h} ${theme}`;

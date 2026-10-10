@@ -200,6 +200,20 @@ Android tokens are `object PlayarrPageTokens` in `core-designsystem/.../designsy
 - `WebPink` is renamed `WebAccent`. It is not pink: it is `#DFDCDD` in dark and `#675961` in light.
 - Both themes are first-class. No token may be defined for one theme only.
 
+### 3.1 The poster card (web, owner request 10 October 2026)
+
+The Library grid card is the canonical poster/title card. Every other poster or title card (Home rails, playlist rails and
+grids, Search results, "more like this" on detail pages, the music wall) is exactly that card: the same width, art ratio,
+radius, caption size and spacing at every stage size. One token set in `page-layout.css` defines it, and nothing else may
+set a poster card's size: `--card-w` (the Library column: the right-hand rail, `--card-rail-vw` of the stage, minus its
+padding, split into `--card-cols` columns), `--card-w-cover` and `--card-art-ratio-cover` for the 2:3 cover view,
+`--card-art-ratio`, `--card-radius`, `--card-copy-gap`, `--card-copy-inset`, `--card-title-size`, `--card-title-weight`
+and `--card-meta-size`. The band and phone layouts restate only the columns and gutters (`--card-rail-vw`, `--card-cols`,
+`--card-pad-*`), in the same place. A second detail line (year, kind, playlist counts) hangs below the card (zero layout
+height), so the card box stays art plus one title line. Cast circles, episode and chapter tiles, the cover-flow album card
+and list rows are other card types: they keep their own shape and are sized on the stage scale (`--vw`).
+`scripts/card-size-e2e.mjs` fails when any surface's card differs from the Library card by more than 1px.
+
 ## 4. Component API
 
 ### 4.1 Web: `clients/tv-web/web/src/components/shell/`

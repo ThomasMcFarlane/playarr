@@ -1,0 +1,1 @@
+- Web: the profile item in the left nav is a real link to the profiles page (it opens in a new tab with Ctrl/Cmd-click, middle-click or the context menu) and is now a square nav tile in its own group, with the first name beneath the avatar, that never overlaps other items or the page.

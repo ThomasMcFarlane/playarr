@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { NavLink, MemoryRouter } from "react-router-dom";
+import { ProfileNavLink } from "../src/components/shell/ProfileNavLink";
 import { CalendarIcon, DownloadsIcon, HomeIcon, MoviesIcon, MusicIcon, PlaylistsIcon, SearchIcon, SeriesIcon, SettingsIcon, WatchlistIcon } from "../src/components/NavIcons";
 
 // Mirrors the markup of `<nav className="app-nav">` in src/App.tsx; the classes and icons are the real ones.
@@ -37,6 +38,16 @@ function NavRail({ active }: { active: string }) {
               ))}
             </div>
           ))}
+          <div className="app-nav-group app-nav-group-profile app-user-identity-cluster">
+            <ProfileNavLink
+              displayName="Ada Lovelace"
+              ariaLabel="Profile: Ada Lovelace"
+              avatar={<span className="app-user-avatar" aria-hidden="true" />}
+              backTo={active}
+              route={active}
+              entryKey="story"
+            />
+          </div>
         </nav>
       </div>
     </MemoryRouter>

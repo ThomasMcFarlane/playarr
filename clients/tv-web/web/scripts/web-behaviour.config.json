@@ -17,6 +17,7 @@
     "details-contrast-e2e",
     "nav-player-e2e",
     "nav-rail-e2e",
+    "nav-profile-link-e2e",
     "edge-fade-e2e",
     "alphabet-rail-e2e",
     "nav-search-e2e",
@@ -24,7 +25,8 @@
     "drawer-spacing-e2e",
     "nav-library-preview-e2e",
     "nav-focus-e2e",
-    "relay-port-e2e"
+    "relay-port-e2e",
+    "card-size-e2e"
   ],
   "args": {
     "tablet-layout": [
@@ -61,7 +63,8 @@
     "focus-style-e2e": 52,
     "details-contrast-e2e": 150,
     "nav-player-e2e": 49,
-    "nav-rail-e2e": 11,
+    "nav-rail-e2e": 24,
+    "nav-profile-link-e2e": 125,
     "edge-fade-e2e": 17,
     "alphabet-rail-e2e": 120,
     "nav-search-e2e": 7,
@@ -69,6 +72,7 @@
     "drawer-spacing-e2e": 30,
     "nav-library-preview-e2e": 13,
     "nav-focus-e2e": 47,
-    "relay-port-e2e": 15
+    "relay-port-e2e": 15,
+    "card-size-e2e": 120
   }
 }
