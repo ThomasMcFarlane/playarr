@@ -20,7 +20,9 @@ import {snapshotFromWork, useWatchlistToggle} from '../lib/watchlist';
 import {Icon} from '../shell/icons';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
+import {yearRangeLabel} from '../lib/workYear';
 import {BalancedT, Box, T, u} from '../tv/kit';
+import {FocusRing} from '../tv/FocusRing';
 import {PageHeader} from '../tv/PageHeader';
 import {Sheet, SheetOption} from '../tv/Sheet';
 import {RailFrost, Stage} from '../tv/Stage';
@@ -75,12 +77,6 @@ function formatClock(positionMs: number): string {
   const minutes = totalMinutes % 60;
   const hours = Math.floor(totalMinutes / 60);
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${totalMinutes}:${pad(seconds)}`;
-}
-
-function releaseYear(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : String(date.getUTCFullYear());
 }
 
 function formatDetailDate(value: string, language: string): string | null {
@@ -226,7 +222,7 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
         : t('pages.workDetail.dateAdded');
   const runtimeText =
     runtimeLabel(runtimeMs, t) ?? (playMediaFileId ? t('pages.workDetail.loadingRuntime') : t('pages.workDetail.runtimeUnavailable'));
-  const year = releaseYear(work.release_date);
+  const year = yearRangeLabel(work);
   const dateText = dateValue ? formatDetailDate(dateValue, language) : null;
   const meta: Array<{key: string; text: string; lead?: boolean}> = [
     {key: 'lead', text: episodic ? seasonLabel : t('pages.workDetail.kindMovie'), lead: true},
@@ -303,6 +299,7 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
           title: credit.person.name,
           small: credit.character?.trim() || credit.job?.trim() || credit.department?.trim() || undefined,
           stacked: true,
+          person: true,
         };
       }),
     });
@@ -471,9 +468,10 @@ function PillRow({top, children}: {top: number; children: React.ReactNode}): Rea
 function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {label: string; glyph?: string; primary?: boolean; disabled?: boolean; onPress?: () => void; hasTVPreferredFocus?: boolean}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
-  const bg = primary ? (focused ? '#cf3157' : colour.ink) : focused ? mix(colour.ink, 0.88) : mix(colour.surfaceStrong, 0.72);
-  const fg = primary ? (focused ? '#ffffff' : colour.bg) : focused ? colour.bg : colour.ink;
-  const glyphColour = primary ? fg : focused ? colour.bg : '#cf3157';
+  // Focus is the control ring only (owner rule; web .tv-detail-play keeps its ink fill when focused).
+  const bg = primary ? colour.ink : mix(colour.surfaceStrong, 0.72);
+  const fg = primary ? colour.bg : colour.ink;
+  const glyphColour = primary ? fg : '#cf3157';
   return (
     <Pressable
       accessibilityRole="button"
@@ -494,9 +492,9 @@ function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {
         justifyContent: 'center',
         backgroundColor: bg,
         opacity: disabled ? 0.45 : 1,
-        transform: [{scale: focused ? 1.06 : 1}],
       }}
     >
+      {focused ? <FocusRing /> : null}
       {glyph ? (
         <View style={{marginRight: u(primary ? 10.4 : 8.8)}}>
           {glyph === 'play' ? (
