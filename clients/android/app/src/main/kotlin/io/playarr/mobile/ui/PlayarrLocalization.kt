@@ -504,6 +504,11 @@ internal enum class PlayarrString(
     LibraryViewScreen("screen", "หน้าจอ", "スクリーン"),
     LibraryViewCover("cover", "ปก", "カバー"),
     LibraryArtworkSize("Artwork size", "ขนาดภาพปก", "アートワークサイズ"),
+    SettingsArtworkSizeDescription(
+        "Sets the size of posters and thumbnails everywhere: Home, Library, Search and more.",
+        "กำหนดขนาดโปสเตอร์และภาพขนาดย่อทุกหน้า เช่น หน้าแรก ไลบรารี และการค้นหา",
+        "ホーム、ライブラリ、検索など、すべてのポスターとサムネイルの大きさを設定します。",
+    ),
     LibrarySizeSmall("small", "เล็ก", "小"),
     LibrarySizeMedium("medium", "กลาง", "中"),
     LibrarySizeLarge("large", "ใหญ่", "大"),
