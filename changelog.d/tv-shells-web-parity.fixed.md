@@ -1,3 +1,0 @@
-- Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
-- LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
-- Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).

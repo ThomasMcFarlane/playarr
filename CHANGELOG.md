@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
+- LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
+- Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).
 - Arr sync: a file the source replaced is removed only when exactly one replacement exists for the same episode or movie, and viewers's resume positions and choices move to it first. A file the source drops with no replacement is hidden (marked missing) and keeps its progress; it returns if the source lists it again. A pass that would change over half of a work's files, or over 200, changes nothing.
 - Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
 - Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.
