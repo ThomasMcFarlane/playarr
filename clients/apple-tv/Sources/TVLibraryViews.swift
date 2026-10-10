@@ -1014,7 +1014,11 @@ struct TVSearchView: View {
             Task { await model.search() }
         }
 
-        searchFiltersChip
+        // Web: Filters is the shell action column tile, as on the libraries.
+        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, TVShellActionColumn.edge)
+            .padding(.top, TVShellActionColumn.top)
 
         switch model.state {
         case .idle:
@@ -1093,58 +1097,41 @@ struct TVSearchView: View {
         .placed(x: 153.6, y: 172.8, w: 590, h: 76)
     }
 
-    private var searchFiltersChip: some View {
-        // Web `.tv-search-filter-toggle`: 172.3 x 56 pill at (153.6, 268.2).
-        ZStack(alignment: .topLeading) {
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
-                .frame(width: 172.3, height: 56)
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 24, y: 19, w: 18, h: 18)
-            Text("Filters")
-                .font(TVTheme.font(size: 11.14, weight: .bold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .placed(x: 44.8, y: 19.7, w: 40, h: 16.7)
-            Text("All \u{00B7} All libraries")
-                .font(TVTheme.font(size: 9.2, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-                .placed(x: 91.4, y: 21.1, w: 70, h: 13.8)
-        }
-        .frame(width: 172.3, height: 56, alignment: .topLeading)
-        .placed(x: 153.6, y: 268.2, w: 172.3, h: 56)
-    }
-
+    /// Web search `.details-panel` (TV): kicker 286.6, title 49.92/560 at 330.9 (420 wide, wraps), meta 13.056/600 at
+    /// title bottom + 27, overview 13.824/600 (336 wide, 4 lines) at meta bottom + 21.6.
     private func searchPreview(_ work: Work) -> some View {
-        let year = work.releaseDate.map { String($0.prefix(4)) }
+        let year = TVWebFormat.year(work.releaseDate)
         let kind = work.kind.rawValue.capitalized
+        let lines = TVTextWrap.lines(work.title, weight: 560, size: 49.92, kern: -3, width: 420).count
+        let metaY = 330.9 + 47.4 * CGFloat(max(1, lines)) + 27
+        let soft = DesignTokens.Color.textPrimary.opacity(0.86)
         return ZStack(alignment: .topLeading) {
             Text([kind, year].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
-                .font(TVTheme.font(size: 9.98, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 153.6, y: 362, w: 534.5, h: 15)
+                .font(TVTheme.font(size: 12.288, css: 860))
+                .tracking(0.98)
+                .foregroundStyle(DesignTokens.Stage.brandInk)
+                .placed(x: 153.6, y: 286.6, w: 544, h: 18.4)
             Text(work.title)
-                .font(TVTheme.font(size: 48, weight: .medium))
-                .tracking(-2.88)
+                .font(TVTheme.font(size: 49.92, css: 560))
+                .tracking(-3)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-                .lineLimit(1)
-                .placed(x: 153.6, y: 385.8, w: 534.5, h: 47)
-            HStack(spacing: 12) {
+                .lineLimit(2)
+                .frame(width: 420, alignment: .topLeading)
+                .placed(x: 153.6, y: 330.9, w: 420, h: 47.4 * CGFloat(max(1, lines)), alignment: .topLeading)
+            HStack(spacing: 12.8) {
                 if let year { Text(year) }
-                ForEach(work.genres.prefix(2), id: \.self) { Text($0) }
+                if !work.genres.isEmpty { Text(work.genres.prefix(2).joined(separator: " \u{00B7} ")) }
             }
-            .font(TVTheme.font(size: 10.37, weight: .regular))
-            .foregroundStyle(DesignTokens.Color.textDisabled)
-            .placed(x: 153.6, y: 447.2, h: 15.6)
+            .font(TVTheme.font(size: 13.056, css: 600))
+            .foregroundStyle(soft)
+            .placed(x: 153.6, y: metaY, h: 19.6)
             if let overview = work.overview, !overview.isEmpty {
                 Text(overview)
-                    .font(TVTheme.font(size: 12.29, weight: .regular))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .lineLimit(2)
-                    .placed(x: 153.6, y: 480.4, w: 534.5, h: 19)
+                    .font(TVTheme.font(size: 13.824, css: 600))
+                    .foregroundStyle(soft)
+                    .lineLimit(4)
+                    .frame(width: 336, alignment: .topLeading)
+                    .placed(x: 153.6, y: metaY + 19.6 + 21.6, w: 336, h: 87.4, alignment: .topLeading)
             }
         }
     }

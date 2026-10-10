@@ -137,7 +137,7 @@ final class TVSearchViewModel {
 
         state = .loading
         do {
-            results = try await apiClient.searchCatalog(query: trimmed, limit: 50)
+            results = try await apiClient.searchCatalog(query: trimmed, limit: 60) // the web asks for 60
             state = .loaded
         } catch let error as APIError {
             state = .failed(error.displayMessage)
