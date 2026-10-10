@@ -52,13 +52,11 @@ struct TVCalendarView: View {
         roundControl("\u{2192}", x: 1793.2) { Task { await model.step(1) } }
 
         // Side-panel buttons stack in the shell action column, in registration order.
-        TVActionTile(label: "Calendar link", symbol: "bell") {
+        pill("Calendar link", symbol: "bell", slot: 0) {
             panel = .link
             Task { await model.loadFeedStatus() }
         }
-        .placed(x: TVShellActionColumn.x, y: TVShellActionColumn.y(slot: 0), w: TVShellActionColumn.width, h: TVHeaderPill.height)
-        TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { panel = .filters }
-            .placed(x: TVShellActionColumn.x, y: TVShellActionColumn.y(slot: 1), w: TVShellActionColumn.width, h: TVHeaderPill.height)
+        pill("Filters", symbol: "line.3.horizontal.decrease", slot: 1) { panel = .filters }
 
         switch model.loadState {
         case .loading:
@@ -152,13 +150,7 @@ struct TVCalendarView: View {
 
     private func pillControl(_ label: String, x: CGFloat, width: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(TVTheme.font(size: 14.72, css: 720))
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-                .lineLimit(1)
-                .frame(width: width, height: 50)
-                .background(Capsule().fill(DesignTokens.Color.backgroundElevated))
-                .overlay(Capsule().stroke(DesignTokens.Stage.line.opacity(0.35), lineWidth: 1))
+            TVHeaderPill(label: label, symbol: "", width: width, control: true)
         }
         .buttonStyle(TVRingButtonStyle(cornerRadius: 25))
         .focusEffectDisabled()
@@ -654,49 +646,15 @@ struct TVCalendarView: View {
             }
         }
     }
-}
 
-/// Web `.status-pill`: one status per entry, tinted by its tone (14% over the surface, 60% border), ink text.
-struct TVStatusPill: View {
-    enum Tone { case available, upcoming, missing, neutral }
-    let tone: Tone
-
-    var body: some View {
-        let colour = TVCalendarView.toneColour(tone)
-        Text(label)
-            .font(TVTheme.font(size: 13.44, css: 750))
-            .foregroundStyle(DesignTokens.Color.textPrimary)
-            .padding(.horizontal, 10.4)
-            .frame(height: 26.6)
-            .background(Capsule().fill(colour.opacity(0.14)).background(Capsule().fill(DesignTokens.Stage.surface)))
-            .overlay(Capsule().stroke(colour.opacity(0.6), lineWidth: 1))
-            .fixedSize()
-    }
-
-    private var label: String {
-        switch tone {
-        case .available: return "Available"
-        case .upcoming: return "Upcoming"
-        case .missing: return "Missing"
-        case .neutral: return "Not tracked"
+    /// A shell action column tile (web `.page-filters-button`): the shared TVHeaderPill as a focusable button.
+    private func pill(_ label: String, symbol: String, slot: Int, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            TVHeaderPill(label: label, symbol: symbol, width: TVShellActionColumn.width)
         }
-    }
-}
-
-/// Opens a title the calendar only knows by id: loads it, then shows the normal detail page.
-struct TVWorkDetailLoader: View {
-    let workID: UUID
-    @Environment(TVAppEnvironment.self) private var environment
-    @State private var work: Work?
-
-    var body: some View {
-        Group {
-            if let work {
-                TVWorkDetailView(work: work, apiClient: environment.apiClient)
-            } else {
-                DesignTokens.Color.backgroundElevated.ignoresSafeArea()
-            }
-        }
-        .task(id: workID) { work = try? await environment.apiClient.fetchWork(id: workID).work }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
+        .disabled(TVParityLaunch.frozen)
+        .placed(x: TVShellActionColumn.x, y: TVShellActionColumn.y(slot: slot), w: TVShellActionColumn.width, h: TVHeaderPill.height)
     }
 }

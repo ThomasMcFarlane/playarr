@@ -1342,7 +1342,7 @@ struct TVLibraryKindView: View {
                     .zIndex(20)
 
                 if playlistID == nil, !listsPlaylists {
-                    TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { filtersOpen = true }
+                    filterLauncher
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
                         .padding(.trailing, TVShellActionColumn.edge)
@@ -1629,6 +1629,15 @@ struct TVLibraryKindView: View {
         .onAppear {
             if selectedID == nil { selectedID = work.id }
         }
+    }
+
+    /// Web `.page-filters-button`: the shared TVHeaderPill tile in the shell action column; opens the Filters drawer.
+    private var filterLauncher: some View {
+        Button { filtersOpen = true } label: {
+            TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: TVShellActionColumn.width)
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
+        .focusEffectDisabled()
     }
 
     /// Web: letters `#`, A to Z, 9.2px, 25.6px pitch from y 277; the current title's letter sits in a light disc.

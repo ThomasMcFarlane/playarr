@@ -202,6 +202,9 @@ jobs:
               - '.github/workflows/ci.yml'
             tv-web:
               - 'clients/tv-web/**'
+              # web/src/components/shell/headerButtonParity.test.ts reads the Apple clients' Swift sources.
+              - 'clients/apple-tv/**'
+              - 'clients/ios/**'
               # The layout parity job diffs against these pins with the shared capture tools.
               - 'docs/parity/web/layout/**'
               - 'scripts/parity/**'
