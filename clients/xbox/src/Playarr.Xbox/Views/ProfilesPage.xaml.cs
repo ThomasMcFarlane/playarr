@@ -100,14 +100,23 @@ namespace Playarr.Xbox.Views
 
             var avatar = new Border
             {
-                Width = 140,
-                Height = 140,
-                CornerRadius = new CornerRadius(70),
-                Background = new SolidColorBrush(Colors.SlateGray),
+                Width = 270,
+                Height = 270,
+                CornerRadius = new CornerRadius(135),
+                Background = new LinearGradientBrush
+                {
+                    StartPoint = new Windows.Foundation.Point(0, 0),
+                    EndPoint = new Windows.Foundation.Point(1, 1),
+                    GradientStops =
+                    {
+                        new GradientStop { Color = Color.FromArgb(0xFF, 0x8A, 0x6F, 0xC4), Offset = 0 },
+                        new GradientStop { Color = Color.FromArgb(0xFF, 0x4F, 0x4B, 0x8C), Offset = 1 },
+                    },
+                },
                 Child = new TextBlock
                 {
                     Text = initial,
-                    FontSize = 48,
+                    FontSize = 96,
                     FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -120,7 +129,7 @@ namespace Playarr.Xbox.Views
                 Spacing = 6,
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
-            nameRow.Children.Add(new TextBlock { Text = profile.DisplayName, FontSize = 20 });
+            nameRow.Children.Add(new TextBlock { Text = profile.DisplayName, FontSize = 18, FontWeight = FontWeights.SemiBold });
 
             if (profile.PinLocked)
             {
@@ -135,16 +144,34 @@ namespace Playarr.Xbox.Views
                 });
             }
 
-            var content = new StackPanel { Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center };
+            var content = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center };
             content.Children.Add(avatar);
             content.Children.Add(nameRow);
+            if (profile.IsCurrent)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = "WATCHING NOW",
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    CharacterSpacing = 60,
+                    Foreground = (Brush)Application.Current.Resources["PlayarrInkSoft"],
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+            }
 
             var tile = new Button
             {
                 Content = content,
                 Tag = profile,
                 Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
                 Padding = new Thickness(8),
+                CornerRadius = new CornerRadius(143),
+                VerticalAlignment = VerticalAlignment.Top,
+                FocusVisualPrimaryBrush = (Brush)Application.Current.Resources["PlayarrBrandInk"],
+                FocusVisualPrimaryThickness = new Thickness(3),
+                FocusVisualSecondaryThickness = new Thickness(0),
             };
             tile.Click += ProfileTile_Click;
 
@@ -156,6 +183,7 @@ namespace Playarr.Xbox.Views
             // Synchronous, one-shot: nothing to await, nothing to persist
             // server-side yet (see ProfilesViewModel's remarks) -- just move
             // on to HomePage.
+            ShellChrome.ProfileName = ((AvailableProfile)((Button)sender).Tag).DisplayName;
             App.Navigation.Navigate(typeof(HomePage));
         }
 
