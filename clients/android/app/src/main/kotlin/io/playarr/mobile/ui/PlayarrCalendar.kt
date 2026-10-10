@@ -1010,17 +1010,22 @@ internal fun CalendarWeek(
     onSelect: (CalendarItem) -> Unit,
     modifier: Modifier,
 ) {
-    val columnWidth = if (isTelevision) 400.dp else 296.dp
+    // Web TV week: 438 dp day columns 19 dp apart, the agenda's entry cards and day headings.
+    val columnWidth = if (isTelevision) 438.dp else 296.dp
     val skeletonDays = remember(groups) { if (groups.isEmpty()) 7 else groups.size }
     val dayItems = remember(groups, zone) { groups.map { groupSeriesEpisodes(it.entries, zone) } }
     val counts = remember(dayItems) { dayItems.map { it.size } }
     val requesters = remember(dayItems) { dayItems.map { column -> column.map { FocusRequester() } } }
     val track = rememberScrollState()
     val columnScroll = remember(groups.size) { List(groups.size) { ScrollState(0) } }
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalCalendarMetrics provides if (isTelevision) TvCalendarMetrics else LocalCalendarMetrics.current,
+        LocalCalendarToday provides today,
+    ) {
     Box(modifier.calendarEdgeFades(track.horizontalEdges())) {
         Row(
             Modifier.fillMaxSize().horizontalScroll(track).padding(end = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 19.dp else 20.dp),
         ) {
             if (loading) {
                 repeat(skeletonDays) { index ->
@@ -1037,17 +1042,24 @@ internal fun CalendarWeek(
                             .calendarEdgeFades(scroll.verticalEdges())
                             .verticalScroll(scroll)
                             .padding(top = 4.dp, bottom = 48.dp),
-                        verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 13.dp else CalendarRowSpacing),
                     ) {
-                        CalendarDayHeading(group.date, today, locale, isTelevision)
+                        if (isTelevision) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    phoneCalendarDayHeading(group.date, locale), color = WebInk, fontSize = 18.7.sp, lineHeight = 28.sp, fontWeight = FontWeight(560),
+                                    style = WebTextStyle, modifier = Modifier.semantics { heading() },
+                                )
+                                if (group.date == today) CalendarTodayBadge()
+                            }
+                        } else {
+                            CalendarDayHeading(group.date, today, locale, isTelevision)
+                        }
                         if (group.entries.isEmpty()) {
                             Text(playarrString(PlayarrString.CalendarEmptyDay), color = WebInkMuted, fontSize = 12.sp)
                         } else {
                             dayItems[column].forEachIndexed { row, item ->
-                                CalendarItemRow(
-                                    item, selected = item.key == selectedKey, isTelevision = isTelevision, zone = zone, wrapTitle = true,
-                                    onClick = { onSelect(item) },
-                                    modifier = Modifier
+                                val rowModifier = Modifier
                                         .focusRequester(requesters[column][row])
                                         .calendarDpad { key ->
                                             val target = calendarWeekNeighbour(counts, CalendarSlot(column, row), key)
@@ -1058,14 +1070,23 @@ internal fun CalendarWeek(
                                                 calendarConsumesAtEdge(key)
                                             }
                                         }
-                                        .calendarFocusReveal(),
-                                )
+                                        .calendarFocusReveal()
+                                if (isTelevision) {
+                                    PhoneCalendarEntry(item, selected = item.key == selectedKey, zone = zone, onClick = { onSelect(item) }, modifier = rowModifier)
+                                } else {
+                                    CalendarItemRow(
+                                        item, selected = item.key == selectedKey, isTelevision = isTelevision, zone = zone, wrapTitle = true,
+                                        onClick = { onSelect(item) },
+                                        modifier = rowModifier,
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -1288,7 +1309,7 @@ internal fun CalendarMonth(
         val wide = isTelevision || maxWidth >= 840.dp
         if (wide) {
             // Web `.calendar-month`: chips inside the day cells, filling the space below the header.
-            CalendarMonthChips(state, entries, loading, today, zone, locale, onSelect, onMore, Modifier.fillMaxSize().padding(top = 8.dp))
+            CalendarMonthChips(state, entries, loading, today, zone, locale, onSelect, onMore, Modifier.fillMaxSize().padding(top = 8.dp), isTelevision)
             return@BoxWithConstraints
         }
         val grid: @Composable (Modifier) -> Unit = { gridModifier ->
@@ -1395,6 +1416,7 @@ private fun CalendarMonthChips(
     onSelect: (CalendarItem) -> Unit,
     onMore: (LocalDate) -> Unit,
     modifier: Modifier,
+    isTelevision: Boolean = false,
 ) {
     val rows = remember(state.window) { calendarGridRows(state.window) }
     val cells = remember(rows) { rows.flatten() }
@@ -1406,11 +1428,12 @@ private fun CalendarMonthChips(
         val headerHeight = 26.dp
         val cellHeight = (maxHeight - headerHeight) / rows.size
         // Web: chips that fit = (cell height - 52) / 26, between 1 and 5; when more exist the last slot is "+N more".
-        val limit = ((cellHeight.value - 52f) / 26f).toInt().coerceIn(1, 5)
-        val visible = remember(cells, byDay, limit, loading) {
+        // Web TV text lines: 25 dp lines above a footer with the day number and "+N more", so the count never takes a line.
+        val limit = if (isTelevision) ((cellHeight.value - 50f) / 25f).toInt().coerceIn(1, 5) else ((cellHeight.value - 52f) / 26f).toInt().coerceIn(1, 5)
+        val visible = remember(cells, byDay, limit, loading, isTelevision) {
             cells.map { day ->
                 val items = if (loading) emptyList() else byDay[day].orEmpty()
-                val shown = if (items.size > limit) items.take(maxOf(1, limit - 1)) else items
+                val shown = if (items.size > limit) items.take(if (isTelevision) limit else maxOf(1, limit - 1)) else items
                 shown to (items.size - shown.size)
             }
         }
@@ -1419,7 +1442,7 @@ private fun CalendarMonthChips(
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(headerHeight)) {
                 calendarWeekdayLabels(firstDay, locale).forEach { label ->
-                    Text(label.uppercase(locale), color = WebInkMuted, fontSize = 12.sp, letterSpacing = 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                    Text(label.uppercase(locale), color = if (isTelevision) WebInkSoft else WebInkMuted, fontSize = 12.sp, letterSpacing = if (isTelevision) 0.96.sp else 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 }
             }
             rows.forEachIndexed { rowIndex, week ->
@@ -1436,6 +1459,39 @@ private fun CalendarMonthChips(
                             } else {
                                 calendarConsumesAtEdge(key)
                             }
+                        }
+                        if (isTelevision) {
+                            // Web `.calendar-month-cell`: hairline border, outside days tinted, today ringed in ink;
+                            // `.calendar-line` text rows with an availability dot, then the day number and "+N more".
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight()
+                                    .background(if (inMonth) Color.Transparent else WebSurfaceSoft.copy(alpha = 0.4f))
+                                    .border(1.dp, io.playarr.shared.designsystem.theme.PlayarrWebTheme.palette.hairline(0.11f, 0.13f))
+                                    .then(if (day == today) Modifier.border(2.dp, WebInk) else Modifier)
+                                    .padding(horizontal = 4.8.dp, vertical = 0.8.dp),
+                            ) {
+                                Column(Modifier.weight(1f).padding(top = 1.dp)) {
+                                    shown.forEachIndexed { slot, item ->
+                                        CalendarLine(
+                                            item, calendarItemTone(item, today, zone), onClick = { onSelect(item) },
+                                            modifier = Modifier.focusRequester(requesters[cell][slot]).calendarDpad(handleKey(slot)).calendarFocusReveal(),
+                                        )
+                                    }
+                                }
+                                Row(Modifier.height(30.dp).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Text(day.dayOfMonth.toString(), color = if (inMonth) WebInk else WebInkSoft, fontSize = 13.44.sp, fontWeight = FontWeight(640))
+                                    if (hidden > 0) {
+                                        val source = remember { MutableInteractionSource() }
+                                        Box(
+                                            Modifier.focusRequester(requesters[cell][shown.size]).calendarDpad(handleKey(shown.size)).calendarFocusReveal()
+                                                .calendarFocusRing(source, RoundedCornerShape(4.dp)).calendarClick(source) { onMore(day) }.padding(horizontal = 2.dp),
+                                        ) {
+                                            Text(playarrString(PlayarrString.CalendarMore, "count" to hidden), color = WebInkSoft, fontSize = 12.48.sp, maxLines = 1)
+                                        }
+                                    }
+                                }
+                            }
+                            return@forEachIndexed
                         }
                         Column(
                             Modifier.weight(1f).fillMaxHeight()
@@ -1953,4 +2009,32 @@ internal fun calendarRangeLabelShort(mode: CalendarViewMode, anchor: LocalDate, 
     val end = if (mode == CalendarViewMode.Agenda) window.end.minusDays(1) else window.end
     val day = PlayarrDateFormat("MMMd", locale)
     return "${day.format(window.start)} \u2013 ${day.format(end)}"
+}
+
+/** Web `.calendar-line`: a 25 dp row, a 9 dp dot in the tone colour, the 12.48 px title (a group is bold, "Title · 2×"). */
+@Composable
+private fun CalendarLine(item: CalendarItem, tone: CalendarPillTone, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(4.dp)
+    val label = when (item) {
+        is CalendarItem.Series -> "${item.title} \u00B7 ${item.entries.size}\u00D7"
+        is CalendarItem.Single -> item.title
+    }
+    val dot = when (tone) {
+        CalendarPillTone.Available -> if (webIsDark) Color(0xFF8AC5A5) else Color(0xFF224C3A)
+        CalendarPillTone.Upcoming -> Color(0xFFCF3157)
+        CalendarPillTone.Missing -> if (webIsDark) Color(0xFFF1A4A8) else Color(0xFF722F34)
+        CalendarPillTone.Neutral -> if (webIsDark) Color(0xFFCDC1C6) else Color(0xFF675961)
+    }
+    Row(
+        modifier.fillMaxWidth().height(25.dp).calendarFocusRing(source, shape).calendarClick(source, onClick)
+            .semantics(mergeDescendants = true) { contentDescription = label }.padding(horizontal = 5.6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(9.dp).background(dot, CircleShape))
+        Text(
+            label, color = WebInk, fontSize = 12.48.sp, lineHeight = 14.976.sp, fontWeight = if (item is CalendarItem.Series) FontWeight(680) else FontWeight.Normal,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 7.dp),
+        )
+    }
 }
