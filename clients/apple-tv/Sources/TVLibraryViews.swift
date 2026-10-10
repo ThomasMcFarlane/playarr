@@ -61,18 +61,20 @@ struct TVHomeView: View {
     /// Geometry is the web's at 1920x1080 in screen points; the stage starts after the nav column, hence `- nav`.
     private func productionHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
         let rails = Self.productionRails(viewModel)
-        let nav = Self.navColumn
         let firstFocus = rails.first?.works.first.map { HomeRailCardFocus(rail: "r0", workID: $0.id) }
         let hero = focusedCard.flatMap { focus in rails.lazy.flatMap(\.works).first { $0.id == focus.workID } }
             ?? rails.first?.works.first
-        return ZStack(alignment: .topLeading) {
+        return GeometryReader { geo in
+        // Screen coordinates: the stage's own origin (after the nav column) is subtracted once here.
+        let origin = geo.frame(in: .global).origin
+        ZStack(alignment: .topLeading) {
             liveHeroBackdrop(hero)
                 .frame(width: 1920, height: 1080)
-                .offset(x: -nav)
+                .offset(x: -origin.x, y: -origin.y)
                 .allowsHitTesting(false)
             if let hero {
                 TVHomeHeroCopy(work: hero, apiClient: environment.apiClient)
-                    .offset(x: -nav)
+                    .offset(x: -origin.x, y: -origin.y)
                     .allowsHitTesting(false)
             }
             ScrollViewReader { proxy in
@@ -91,10 +93,11 @@ struct TVHomeView: View {
                 }
             }
             // The first rail heading sits at y 402; rails above the focused one slide up past it, as on the web.
-            .padding(.top, 402)
-            .padding(.leading, 881.6 - nav - Self.cardBleed)
+            .padding(.top, 402 - origin.y)
+            .padding(.leading, 881.6 - origin.x - Self.cardBleed)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
         .defaultFocus($focusedCard, firstFocus)
         .onAppear { if focusedCard == nil { focusedCard = firstFocus } }
     }
@@ -105,9 +108,6 @@ struct TVHomeView: View {
     private static let railSpacing: CGFloat = 365.9 - railHeight
     /// Heading (26.5) and the gap to the art (35.3), plus the card (art and caption) and the track's 18/24 padding.
     private static let railHeight: CGFloat = 61.8 + TVWebHomeCard.height + 24
-    private static var navColumn: CGFloat {
-        DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2 + DesignTokens.Shell.navEdge * 2
-    }
 
     /// The server shelves with the web's primary rail first; older servers without shelves get the local rails.
     private static func productionRails(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
@@ -869,7 +869,8 @@ struct TVHomeHeroCopy: View {
 /// Web skeleton loading (owner 2026-10-08): the Home's final geometry with placeholder cards, never a spinner screen.
 struct TVHomeSkeleton: View {
     var body: some View {
-        let nav = DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2 + DesignTokens.Shell.navEdge * 2
+        GeometryReader { geo in
+        let origin = geo.frame(in: .global).origin
         let block = DesignTokens.Stage.surfaceSoft
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4).fill(block).frame(width: 120, height: 14).placed(x: 153.6, y: 261, w: 120, h: 14)
@@ -886,7 +887,8 @@ struct TVHomeSkeleton: View {
             }
         }
         .frame(width: 1920, height: 1080, alignment: .topLeading)
-        .offset(x: -nav)
+        .offset(x: -origin.x, y: -origin.y)
+        }
         .accessibilityHidden(true)
     }
 }
