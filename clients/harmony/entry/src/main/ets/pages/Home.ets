@@ -794,7 +794,9 @@ export struct Home {
           railId: 'home-continue-watching-tv',
           heading: 'Continue Watching',
           items: this.continueWatchingItems,
-          itemBuilder: this.tvCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.newMovieItems.length > 0) {
@@ -802,7 +804,9 @@ export struct Home {
           railId: 'home-new-movies-tv',
           heading: 'New Movies',
           items: this.newMovieItems,
-          itemBuilder: this.tvCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.newSeriesItems.length > 0) {
@@ -810,7 +814,9 @@ export struct Home {
           railId: 'home-new-series-tv',
           heading: 'New Series',
           items: this.newSeriesItems,
-          itemBuilder: this.tvCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.moreMovieItems.length > 0) {
@@ -818,7 +824,9 @@ export struct Home {
           railId: 'home-more-movies-tv',
           heading: 'More Movies',
           items: this.moreMovieItems,
-          itemBuilder: this.tvCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.moreSeriesItems.length > 0) {
@@ -826,7 +834,9 @@ export struct Home {
           railId: 'home-more-series-tv',
           heading: 'More Series',
           items: this.moreSeriesItems,
-          itemBuilder: this.tvCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
     }
@@ -847,7 +857,9 @@ export struct Home {
           items: this.continueWatchingItems,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.newMovieItems.length > 0) {
@@ -857,7 +869,9 @@ export struct Home {
           items: this.newMovieItems,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.newSeriesItems.length > 0) {
@@ -867,7 +881,9 @@ export struct Home {
           items: this.newSeriesItems,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.moreMovieItems.length > 0) {
@@ -877,7 +893,9 @@ export struct Home {
           items: this.moreMovieItems,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
       if (this.moreSeriesItems.length > 0) {
@@ -887,7 +905,9 @@ export struct Home {
           items: this.moreSeriesItems,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: this.touchCardItemBuilder,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.touchCardItemBuilder(item, index, activeRailFactor);
+          },
         })
       }
     }
