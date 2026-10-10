@@ -4,6 +4,7 @@ import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { useHomeView, type HomeViewPreference } from "../../lib/homeView";
 import { ARTWORK_SIZES, useArtworkSize } from "../../lib/artworkSize";
+import { SegmentedControl } from "../../components/ui";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
@@ -82,31 +83,25 @@ export function SettingsAppearancePage() {
             <h3>{t("settings.appearance.artworkSizeTitle")}</h3>
             <p>{t("settings.appearance.artworkSizeDescription")}</p>
           </div>
-          <div
-            className="theme-choice artwork-size-choice"
-            role="group"
-            aria-label={t("settings.appearance.artworkSizeAriaLabel")}
-          >
-            {ARTWORK_SIZES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`theme-choice-button${artworkSize === option ? " is-active" : ""}`}
-                onClick={() => {
-                  if (option === artworkSize) return;
-                  setArtworkSize(option);
-                  showToast(t("settings.appearance.artworkSizeSaved"));
-                }}
-                aria-pressed={artworkSize === option}
-              >
-                {option === "small"
+          <SegmentedControl
+            className="artwork-size-choice"
+            ariaLabel={t("settings.appearance.artworkSizeAriaLabel")}
+            value={artworkSize}
+            options={ARTWORK_SIZES.map((option) => ({
+              value: option,
+              label:
+                option === "small"
                   ? t("pages.library.sizeSmall")
                   : option === "large"
                     ? t("pages.library.sizeLarge")
-                    : t("pages.library.sizeMedium")}
-              </button>
-            ))}
-          </div>
+                    : t("pages.library.sizeMedium"),
+            }))}
+            onChange={(option) => {
+              if (option === artworkSize) return;
+              setArtworkSize(option);
+              showToast(t("settings.appearance.artworkSizeSaved"));
+            }}
+          />
         </div>
       </section>
     </SettingsSectionLayout>

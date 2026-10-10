@@ -1216,11 +1216,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   transform: scale(1.04);
 }
 
-.artwork-size-choice {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 8rem));
-}
-
 .appearance-setting {
   display: grid;
   gap: clamp(12px, calc(1.5 * var(--viewport-unit)), 20px);

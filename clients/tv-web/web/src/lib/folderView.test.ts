@@ -18,10 +18,9 @@ const ROOT = "31b51f0d-e8f1-5ed1-bf63-a0cae6215685";
 describe("folder URL state", () => {
   it("round-trips every view field and the navigation fields", () => {
     for (const view of ["list", "cover"] as const)
-      for (const size of ["small", "medium", "large"] as const)
-        for (const sort of ["name", "modified", "size", "duration"] as const)
+      for (const sort of ["name", "modified", "size", "duration"] as const)
           for (const order of ["asc", "desc"] as const) {
-            const state = { ...FOLDER_DEFAULTS, root: ROOT, path: "Season A/Deep", kind: "movie" as const, view, size, sort, order, q: "clip", type: "media" as const };
+            const state = { ...FOLDER_DEFAULTS, root: ROOT, path: "Season A/Deep", kind: "movie" as const, view, sort, order, q: "clip", type: "media" as const };
             const query = applyFolderUrl(new URLSearchParams(), state).toString();
             expect(parseFolderUrl(new URLSearchParams(query))).toEqual(state);
           }

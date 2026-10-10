@@ -8,11 +8,11 @@
   --folders-card-min: 220px;
 }
 
-.folders-page.is-size-small {
+:root[data-artwork-size="small"] .folders-page {
   --folders-card-min: 168px;
 }
 
-.folders-page.is-size-large {
+:root[data-artwork-size="large"] .folders-page {
   --folders-card-min: 300px;
 }
 
@@ -216,8 +216,17 @@
 }
 
 @media (max-width: 760px) {
-  .folders-page {
+  .folders-page,
+  :root[data-artwork-size] .folders-page {
     --folders-card-min: 150px;
+  }
+
+  :root[data-artwork-size="small"] .folders-page {
+    --folders-card-min: 120px;
+  }
+
+  :root[data-artwork-size="large"] .folders-page {
+    --folders-card-min: 190px;
   }
 }
 

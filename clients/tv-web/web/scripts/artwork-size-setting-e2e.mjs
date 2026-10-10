@@ -9,7 +9,7 @@ import { boot, opt } from "./e2e-common.mjs";
 
 const shots = opt("shots", "");
 if (shots) mkdirSync(shots, { recursive: true });
-const { check, open, finish } = await boot({ movies: 40, series: 12, artists: 4, playlists: 1, playlistItems: 6, watchlist: 4 });
+const { check, open, finish } = await boot({ movies: 40, series: 12, artists: 4, playlists: 1, playlistItems: 6, watchlist: 4, folders: true });
 
 const cardWidth = (page, sel) =>
   page.evaluate((selector) => {
@@ -31,6 +31,7 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     ["More like this", `/movies/${movie}`, "[data-tv-track-id=similar] a.media-card"],
   ];
   const widths = {};
+  const folders = {};
   for (const size of ["medium", "small", "large"]) {
     await page.goto(new URL("/settings/appearance", page.url()).href);
     await page.waitForTimeout(700);
@@ -47,12 +48,17 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
       measured.push([name, await cardWidth(page, sel)]);
       if (shots && width === 1920 && (name === "Library" || name === "Home")) await page.screenshot({ path: join(shots, `${name.toLowerCase()}-${size}.png`) });
     }
+    await page.goto(new URL("/folders", page.url()).href);
+    await page.waitForTimeout(1000);
+    folders[size] = await cardWidth(page, ".folders-card");
     widths[size] = measured;
     const base = measured[1][1];
     for (const [name, w] of measured) check(`${tag} ${size}: ${name} card ${w?.toFixed(1)} = Library ${base?.toFixed(1)}`, w !== null && base !== null && Math.abs(w - base) <= 1);
   }
   const lib = (s) => widths[s][1][1];
   check(`${tag}: small < medium < large (${lib("small")?.toFixed(0)} < ${lib("medium")?.toFixed(0)} < ${lib("large")?.toFixed(0)})`, lib("small") < lib("medium") && lib("medium") < lib("large"));
+
+  check(`${tag}: Folders cards follow the size (${folders.small?.toFixed(0)} < ${folders.medium?.toFixed(0)} < ${folders.large?.toFixed(0)})`, folders.small !== null && folders.small < folders.medium && folders.medium < folders.large);
 
   // Persists across reload (large was chosen last).
   await page.goto(new URL("/movies", page.url()).href);
@@ -73,6 +79,10 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   await page.goto(new URL("/movies?size=small", page.url()).href);
   await page.waitForTimeout(1000);
   check(`${tag}: legacy ?size=small mapped once and removed`, (await page.evaluate(() => localStorage.getItem("playarr-artwork-size"))) === "small" && !page.url().includes("size="));
+  await page.evaluate(() => localStorage.removeItem("playarr-artwork-size"));
+  await page.goto(new URL("/folders?size=large", page.url()).href);
+  await page.waitForTimeout(1000);
+  check(`${tag}: legacy Folders ?size=large mapped once and removed`, (await page.evaluate(() => localStorage.getItem("playarr-artwork-size"))) === "large" && !page.url().includes("size="));
   await context.close();
 }
 await finish();
