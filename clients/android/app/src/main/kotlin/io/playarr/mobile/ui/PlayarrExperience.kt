@@ -381,6 +381,9 @@ internal val WebAccent get() = PlayarrWebTheme.palette.accent
 @Deprecated("Use WebAccent", ReplaceWith("WebAccent"))
 internal val WebPink get() = WebAccent
 
+/** Clears the series' remembered resume answers (web "Ask again"); provided by the detail screen. */
+internal val LocalResumeAskAgain = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 /** Web kicker / eyebrow accent (`#cf3157`), distinct from the neutral palette accent. */
 internal val WebKicker = Color(0xFFCF3157)
 
@@ -4900,6 +4903,15 @@ internal class ExperienceDetailViewModel @Inject constructor(
 
     private suspend fun loadPlayarrSimilarWorks(work: Work): List<Work> = loadPlayarrSimilarWorks(api, work)
 
+    /** Web "Ask again": forget the remembered resume answers, then reload the plan so Start/Resume asks again. */
+    fun askResumeAgain(seriesWorkId: String) {
+        viewModelScope.launch {
+            runCatching { api.clearResumeChoices(seriesWorkId) }.getOrNull() ?: return@launch
+            val plan = runCatching { api.getResumePlan(seriesWorkId) }.getOrNull() ?: return@launch
+            updateSnapshot(seriesWorkId) { copy(resumePlan = plan) }
+        }
+    }
+
     /** Reports the option the viewer picked so declined gaps and rewatch answers are remembered. */
     fun recordResumeChoice(seriesWorkId: String, option: io.playarr.shared.data.model.ResumeOption) {
         viewModelScope.launch {
@@ -5126,6 +5138,7 @@ private fun ExperienceDetailScreen(
                         onDownload = { candidates -> pendingDownloadCandidates = candidates },
                     )
                 } else if (detail.children == WorkChildren.Movie || detail.children is WorkChildren.Series) {
+                    CompositionLocalProvider(LocalResumeAskAgain provides viewModel::askResumeAgain) {
                     ExperienceVideoDetailContent(
                         detail = detail,
                         progressByMedia = progressByMedia,
@@ -5151,6 +5164,7 @@ private fun ExperienceDetailScreen(
                         },
                         onDownload = { candidates -> pendingDownloadCandidates = candidates },
                     )
+                    }
                 } else {
         HeroBackdropStack {
                     AuthenticatedArtwork(
@@ -6207,6 +6221,11 @@ private fun VideoDetailActions(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (episode != null || work.kind != WorkKind.Movie) playPill()
+                // Web: "Ask again" beside Start/Resume once the plan rests on a remembered answer (any action but start).
+                val askAgain = LocalResumeAskAgain.current
+                if (smartPlan != null && smartPlan.action != io.playarr.shared.data.model.ResumeAction.Start && askAgain != null) {
+                    WebDetailPill(label = playarrString(PlayarrString.DetailResumeAskAgain), glyph = "\u21BA", onClick = { askAgain(work.id) })
+                }
                 WatchlistToggleButton(work, television = true)
                 // Android-only entry points, kept after the web pills: web adds to playlists from the context menu.
                 WebDetailPill(

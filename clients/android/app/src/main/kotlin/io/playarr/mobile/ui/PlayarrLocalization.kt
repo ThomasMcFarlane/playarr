@@ -731,6 +731,7 @@ internal enum class PlayarrString(
     ),
     DetailResumeFrom("Resume from {{position}}", "เล่นต่อจาก {{position}}", "{{position}}から再開"),
     DetailStartSeries("Start", "เริ่มดู", "再生を開始"),
+    DetailResumeAskAgain("Ask again", "ถามอีกครั้ง", "もう一度確認"),
     DetailResumeSeries("Resume", "ดูต่อ", "続きから再生"),
     DetailWatchAgain("Watch again", "ดูอีกครั้ง", "もう一度見る"),
     DetailStartSeriesTitle("Start {{title}}", "เริ่มดู {{title}}", "{{title}}の再生を開始"),
