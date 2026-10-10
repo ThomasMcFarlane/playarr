@@ -118,7 +118,7 @@ function pillToneFill(tone: EntryPillTone): string {
 }
 
 @Component
-export struct Calendar {
+export struct ReleaseCalendar {
   @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
@@ -444,5 +444,5 @@ export struct Calendar {
 /** Registered in `profile/router_map.json` as the `Calendar` route's `buildFunction`. */
 @Builder
 export function CalendarBuilder(): void {
-  Calendar()
+  ReleaseCalendar()
 }
