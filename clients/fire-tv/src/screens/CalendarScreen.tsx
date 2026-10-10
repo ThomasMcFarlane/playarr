@@ -9,7 +9,6 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
-import type {CalendarSourceStatus} from '@playarr-tv/api-client';
 import {useAsyncData} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {useLanguage} from '../i18n/LanguageProvider';
@@ -67,7 +66,6 @@ export function CalendarScreen(): React.ReactElement {
   const state = useAsyncData(() => client.getCalendar({start: window.start, end: window.end}), [client, window.start, window.end]);
   const groups = useMemo(() => (state.status === 'ready' ? groupByLocalDay(applyCalendarFilters(state.data.entries, filters, today), range) : []), [state, filters, today, range]);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
-  const sources: readonly CalendarSourceStatus[] = state.status === 'ready' ? state.data.sources : [];
   const dark = scheme === 'dark';
   // No source-error banner: users never see source health (owner rule; it is admin-only diagnostics).
   const contentTop = 240;
@@ -174,7 +172,7 @@ export function CalendarScreen(): React.ReactElement {
           }}
         />
       ) : null}
-      {panel === 'filters' ? <FiltersPanel view={view} onView={changeView} filters={filters} onFilters={setFilters} sources={sources} onClose={() => setPanel(null)} onFocused={() => setDrawerFocused(true)} /> : null}
+      {panel === 'filters' ? <FiltersPanel view={view} onView={changeView} filters={filters} onFilters={setFilters} onClose={() => setPanel(null)} onFocused={() => setDrawerFocused(true)} /> : null}
       {panel === 'link' ? <LinkPanel onClose={() => setPanel(null)} onFocused={() => setDrawerFocused(true)} /> : null}
 
     </Stage>

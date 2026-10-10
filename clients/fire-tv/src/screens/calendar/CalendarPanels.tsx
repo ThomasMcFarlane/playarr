@@ -3,8 +3,7 @@
  * the week and month views open.
  */
 import React, {useCallback, useEffect, useState} from 'react';
-import {Pressable, ScrollView, TextInput, View} from 'react-native';
-import type {CalendarSourceStatus} from '@playarr-tv/api-client';
+import {Pressable, ScrollView, View} from 'react-native';
 import {useApiClient} from '../../api/ApiClientProvider';
 import {QrCode} from '../../components/QrCode';
 import {useLanguage} from '../../i18n/LanguageProvider';
@@ -58,7 +57,6 @@ export function FiltersPanel({
   onView,
   filters,
   onFilters,
-  sources,
   onClose,
   onFocused,
 }: {
@@ -66,7 +64,6 @@ export function FiltersPanel({
   onView: (view: CalendarView) => void;
   filters: CalendarFilters;
   onFilters: (next: CalendarFilters) => void;
-  sources: readonly CalendarSourceStatus[];
   onClose: () => void;
   onFocused?: () => void;
 }): React.ReactElement {
@@ -77,32 +74,14 @@ export function FiltersPanel({
     {
       key: 'view',
       label: t('pages.library.view'),
-      columns: 2,
+      columns: 3,
       chips: CALENDAR_VIEWS.map((value) => ({key: value, label: t(VIEW_KEYS[value]), selected: view === value, icon: VIEW_ICONS[value], onPress: () => onView(value)})),
     },
     {key: 'type', label: t('pages.calendar.filterType'), columns: 3, chips: chips(CALENDAR_TYPE_PARAMS, (value) => t(TYPE_KEYS[value]), filters.types, (value) => onFilters({...filters, types: toggled(filters.types, value)}))},
   ];
-  if (sources.length > 0) {
-    sections.push({
-      key: 'source',
-      label: t('pages.calendar.filterSource'),
-      columns: 3,
-      chips: sources.map((source) => ({key: source.source_instance_id, label: source.name, selected: filters.sources.has(source.source_instance_id), onPress: () => onFilters({...filters, sources: toggled(filters.sources, source.source_instance_id)})})),
-    });
-  }
   sections.push(
     {key: 'status', label: t('pages.calendar.filterStatus'), columns: 3, chips: chips(CALENDAR_STATUSES, (value) => t(STATUS_KEYS[value]), filters.statuses, (value) => onFilters({...filters, statuses: toggled(filters.statuses, value)}))},
-    {
-      key: 'range',
-      label: t('pages.calendar.filterDateRange'),
-      height: 181.4,
-      render: (top, reveal) => (
-        <>
-          <DateField label={t('pages.calendar.rangeFrom')} value={filters.from} y={top} onChange={(from) => onFilters({...filters, from})} onReveal={reveal} />
-          <DateField label={t('pages.calendar.rangeTo')} value={filters.to} y={top + 82.6} onChange={(to) => onFilters({...filters, to})} onReveal={reveal} />
-        </>
-      ),
-    },
+    // The web dropped the source and date-range filters; Type, Status and Monitoring remain.
     {
       key: 'monitoring',
       label: t('pages.calendar.filterMonitored'),
@@ -133,58 +112,6 @@ export function FiltersPanel({
   );
 }
 
-/** A day typed as dd/mm/yyyy: 268 x 52, labelled above, as the web's date input. */
-function DateField({label, value, y, onChange, onReveal}: {label: string; value: Day | null; y: number; onChange: (day: Day | null) => void; onReveal: (y: number, h: number) => void}): React.ReactElement {
-  const {colour} = useTheme();
-  const [text, setText] = useState(value ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : '');
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    setText(value ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : '');
-  }, [value]);
-  const commit = (next: string): void => {
-    setText(next);
-    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(next);
-    if (match) onChange(`${match[3]}-${match[2]}-${match[1]}`);
-    else if (next === '') onChange(null);
-  };
-  return (
-    <View style={{position: 'absolute', left: u(46), top: u(y)}}>
-      <T size={11.136} weight={680} lh={16.7} color={colour.inkMuted}>
-        {label}
-      </T>
-      <View style={{marginTop: u(4)}}>
-        <View pointerEvents="none" style={{position: 'absolute', right: u(12), top: u(19), zIndex: 2}}>
-          <Icon name="calendar" size={u(12)} color={colour.ink} strokeWidth={2} />
-        </View>
-        <TextInput
-          value={text}
-          placeholder="dd/mm/yyyy"
-          placeholderTextColor={colour.ink}
-          keyboardType="numbers-and-punctuation"
-          onChangeText={commit}
-          onFocus={() => {
-            setFocused(true);
-            onReveal(y, 72);
-          }}
-          onBlur={() => setFocused(false)}
-          style={{
-            width: u(268),
-            height: u(52),
-            borderRadius: u(12),
-            paddingHorizontal: u(12),
-            paddingVertical: 0,
-            textAlignVertical: 'center',
-            color: colour.ink,
-            fontSize: u(11.52),
-            backgroundColor: colour.surfaceSoft,
-            borderWidth: u(focused ? 2 : 0),
-            borderColor: colour.ink,
-          }}
-        />
-      </View>
-    </View>
-  );
-}
 
 export function LinkPanel({onClose, onFocused}: {onClose: () => void; onFocused?: () => void}): React.ReactElement {
   const {colour} = useTheme();
