@@ -4,7 +4,6 @@
  */
 import React, {useCallback, useEffect, useState} from 'react';
 import {Pressable, ScrollView, TextInput, View} from 'react-native';
-import Svg, {Path} from '@amazon-devices/react-native-svg';
 import type {CalendarSourceStatus} from '@playarr-tv/api-client';
 import {useApiClient} from '../../api/ApiClientProvider';
 import {QrCode} from '../../components/QrCode';
@@ -32,6 +31,7 @@ import {mix} from '../../theme/color';
 import {useTheme} from '../../theme/ThemeProvider';
 import {CloseButton, FilterDrawer, type DrawerChip, type DrawerSection, DRAWER_W} from '../../tv/FilterDrawer';
 import {Button} from '../../tv/forms';
+import {FocusRing} from '../../tv/FocusRing';
 import {T, u} from '../../tv/kit';
 import {ItemDetails} from './CalendarParts';
 
@@ -388,19 +388,16 @@ export function PeriodPicker({label, anchor, locale, onChange}: {label: string; 
           setDraftYear(year);
           setOpen(true);
         }}
-        style={{position: 'absolute', left: u(153.6), top: u(162), height: u(62), paddingHorizontal: u(21), borderRadius: 999, flexDirection: 'row', alignItems: 'center', backgroundColor: focused ? colour.surfaceSoft : 'transparent'}}
+        // The web's range button: a secondary pill in the header group, left of Previous / Today / Next (right edge 1613.9).
+        style={{position: 'absolute', right: u(1920 - 1613.9), top: u(56.2), height: u(50), paddingHorizontal: u(21), borderRadius: 999, borderWidth: 1, borderColor: colour.line, flexDirection: 'row', alignItems: 'center', backgroundColor: colour.surface}}
       >
-        <T size={24} weight={640} lh={36} color={colour.ink}>
+        <T size={14.72} weight={720} color={colour.inkSoft}>
           {label}
         </T>
-        <View style={{marginLeft: u(10), width: u(7.4), height: u(7.4), marginTop: u(1)}}>
-          <Svg width={u(7.4)} height={u(7.4)} viewBox="0 0 8 8">
-            <Path d="M0 1H8L4 7.2Z" fill={colour.ink} />
-          </Svg>
-        </View>
+        {focused ? <FocusRing /> : null}
       </Pressable>
       {open ? (
-        <View style={{position: 'absolute', left: u(153.6), top: u(232), flexDirection: 'row', padding: u(9.6), borderRadius: u(18), borderWidth: 1, borderColor: colour.lineStrong, backgroundColor: colour.surfaceStrong, zIndex: 5}}>
+        <View style={{position: 'absolute', right: u(1920 - 1613.9), top: u(116), flexDirection: 'row', padding: u(9.6), borderRadius: u(18), borderWidth: 1, borderColor: colour.lineStrong, backgroundColor: colour.surfaceStrong, zIndex: 5}}>
           <TvFocusScope autoFocus trap={['up', 'down', 'left', 'right']}>
             <View style={{flexDirection: 'row'}}>
               <ScrollView style={{width: u(190), maxHeight: u(420)}} accessibilityLabel={t('pages.calendar.jumpMonth')}>

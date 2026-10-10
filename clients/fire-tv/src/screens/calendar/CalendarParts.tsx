@@ -203,7 +203,6 @@ export function ItemDetails({item, locale, onOpen, width = 571.2}: {item: Calend
   const route = workRouteForEntry(first);
   const time = entryTime(first);
   const state = itemState(item);
-  const sources = [...new Map(entries.flatMap((entry) => entry.sources).map((source) => [source.source_instance_id, source])).values()];
   const subtitle = item.kind === 'series' ? t('pages.calendar.groupSummary', {count: item.entries.length, codes: formatEpisodeCodes(item.entries)}) : [episodeCode(first), first.subtitle].filter(Boolean).join(' · ');
   const when = time
     ? new Intl.DateTimeFormat(locale, {dateStyle: 'full', timeStyle: 'short'}).format(time)
@@ -243,19 +242,6 @@ export function ItemDetails({item, locale, onOpen, width = 571.2}: {item: Calend
         <View style={{marginTop: u(1)}}>
           <Badge state={state} label={t(STATE_KEYS[state])} size={19.2} />
         </View>
-      </View>
-      <View style={{marginTop: u(11.4)}}>
-        <Label>{t('pages.calendar.sheetSources')}</Label>
-        {sources.map((source) => (
-          <View key={source.source_instance_id} style={{flexDirection: 'row'}}>
-            <T size={19.2} weight={400} lh={28.8} color={colour.ink}>
-              {`${source.source_name} `}
-            </T>
-            <T size={19.2} weight={400} lh={28.8} color={colour.inkMuted}>
-              {`(${source.source_kind})`}
-            </T>
-          </View>
-        ))}
       </View>
       <View style={{marginTop: u(14.4), flexDirection: 'row', alignItems: 'center'}}>
         {route ? (

@@ -1,6 +1,6 @@
 /**
  * The release calendar at the web TV layout's measurements (`clients/tv-web/web/src/pages/Calendar.tsx`): the period
- * navigation in the header, the period label, the banner for sources that could not be read, and one of the three views
+ * navigation in the header, the period label, and one of the three views
  * (agenda, week, month). The Filters and Calendar link tiles sit in the shell's action column and open the two drawers.
  *
  * Owner rules: week view moves LEFT and RIGHT between days and UP and DOWN between entries; the agenda's details follow
@@ -18,7 +18,6 @@ import {
   type CalendarView,
   type Day,
   anchorForView,
-  failedSources,
   fetchWindow,
   groupByLocalDay,
   localDayOf,
@@ -69,17 +68,20 @@ export function CalendarScreen(): React.ReactElement {
   const groups = useMemo(() => (state.status === 'ready' ? groupByLocalDay(applyCalendarFilters(state.data.entries, filters, today), range) : []), [state, filters, today, range]);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const sources: readonly CalendarSourceStatus[] = state.status === 'ready' ? state.data.sources : [];
-  const failed = state.status === 'ready' ? failedSources(state.data.sources) : [];
   const dark = scheme === 'dark';
-  const bannerHeight = failed.length > 0 ? 90 : 0;
-  const contentTop = failed.length > 0 ? 340 : 240;
+  // No source-error banner: users never see source health (owner rule; it is admin-only diagnostics).
+  const contentTop = 240;
 
   const rangeLabel = useMemo(() => {
     const utc = (options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat => new Intl.DateTimeFormat(locale, {...options, timeZone: 'UTC'});
-    if (view === 'month') return utc({month: 'long', year: 'numeric'}).format(parseDay(anchor));
+    if (view === 'month') return utc({month: 'short', year: 'numeric'}).format(parseDay(anchor));
+    // The web's short range button label ("6 – 12 Oct", "10 Oct – 8 Nov"; Intl formatRange in en-GB).
+    const start = parseDay(range.start);
+    const end = parseDay(range.end);
     const short = utc({day: 'numeric', month: 'short'});
-    const withYear = utc({day: 'numeric', month: 'short', year: 'numeric'});
-    return `${short.format(parseDay(range.start))} – ${withYear.format(parseDay(range.end))}`;
+    return start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear()
+      ? `${utc({day: 'numeric'}).format(start)} – ${short.format(end)}`
+      : `${short.format(start)} – ${short.format(end)}`;
   }, [locale, view, anchor, range]);
 
   const openRoute = useCallback(
@@ -126,41 +128,12 @@ export function CalendarScreen(): React.ReactElement {
         </T>
       </Box>
 
-      <RoundNav x={1634.4} glyph={'←'} label={t('pages.calendar.previous')} onPress={() => setAnchor(shiftAnchor(view, anchor, -1))} />
+      <RoundNav x={1629.3} glyph={'←'} label={t('pages.calendar.previous')} onPress={() => setAnchor(shiftAnchor(view, anchor, -1))} />
       <TodayPill label={t('pages.calendar.today')} onPress={() => setAnchor(anchorForView(view, today))} />
-      <RoundNav x={1783.6} glyph={'→'} label={t('pages.calendar.next')} onPress={() => setAnchor(shiftAnchor(view, anchor, 1))} />
+      <RoundNav x={1793.2} glyph={'→'} label={t('pages.calendar.next')} onPress={() => setAnchor(shiftAnchor(view, anchor, 1))} />
 
       <PeriodPicker label={rangeLabel} anchor={anchor} locale={locale} onChange={setAnchor} />
 
-      {failed.length > 0 ? (
-        <View
-          style={{
-            position: 'absolute',
-            left: u(153.6),
-            top: u(236),
-            width: u(1689.6),
-            height: u(bannerHeight),
-            borderRadius: u(12),
-            borderWidth: 1,
-            borderColor: mix(colour.danger, dark ? 0.55 : 0.8),
-            backgroundColor: colour.dangerSoft,
-            paddingHorizontal: u(17),
-            paddingTop: u(14),
-          }}
-        >
-          <T size={19.2} weight={700} lh={26} color={colour.danger}>
-            {t('pages.calendar.sourcesBannerTitle', {count: failed.length})}
-          </T>
-          {failed.map((source) => (
-            <View key={source.source_instance_id} style={{marginTop: u(8), flexDirection: 'row'}}>
-              <T size={19.2} weight={400} lh={28.8} color={colour.danger}>
-                {'•  '}
-                {t('pages.calendar.sourceLine', {name: source.name, reason: source.error ? `${sourceStatus(t, source)} (${source.error})` : sourceStatus(t, source)})}
-              </T>
-            </View>
-          ))}
-        </View>
-      ) : null}
 
       {state.status === 'loading' || state.status === 'idle' ? (
         <Box x={view === 'agenda' ? 786.4 : 153.6} y={contentTop} w={600}>
@@ -208,10 +181,6 @@ export function CalendarScreen(): React.ReactElement {
   );
 }
 
-function sourceStatus(t: ReturnType<typeof useLanguage>['t'], source: CalendarSourceStatus): string {
-  const key = source.status === 'unreachable' ? 'pages.calendar.sourceUnreachable' : source.status === 'rejected' ? 'pages.calendar.sourceRejected' : 'pages.calendar.sourceError';
-  return t(key);
-}
 
 function RoundNav({x, glyph, label, onPress}: {x: number; glyph: string; label: string; onPress: () => void}): React.ReactElement {
   const {colour} = useTheme();
@@ -223,7 +192,7 @@ function RoundNav({x, glyph, label, onPress}: {x: number; glyph: string; label: 
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={onPress}
-      style={{position: 'absolute', left: u(x), top: u(56.3), width: u(50), height: u(50), borderRadius: 999, backgroundColor: focused ? colour.ink : colour.surface, borderWidth: 1, borderColor: colour.line, alignItems: 'center', justifyContent: 'center'}}
+      style={{position: 'absolute', left: u(x), top: u(56.2), width: u(50), height: u(50), borderRadius: 999, backgroundColor: focused ? colour.ink : colour.surface, borderWidth: 1, borderColor: colour.line, alignItems: 'center', justifyContent: 'center'}}
     >
       <T size={14.72} weight={720} dy={3} color={focused ? colour.bg : colour.inkSoft}>
         {glyph}
@@ -244,7 +213,7 @@ function TodayPill({label, onPress}: {label: string; onPress: () => void}): Reac
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={onPress}
-      style={{position: 'absolute', left: u(1690.2), top: u(55), width: u(87.7), height: u(52.8), borderRadius: 999, backgroundColor: colour.surface, borderWidth: 1, borderColor: colour.line, alignItems: 'center', justifyContent: 'center'}}
+      style={{position: 'absolute', left: u(1694.7), top: u(56.2), width: u(83.2), height: u(50), borderRadius: 999, backgroundColor: colour.surface, borderWidth: 1, borderColor: colour.line, alignItems: 'center', justifyContent: 'center'}}
     >
       <T size={14.72} weight={720} color={colour.inkSoft}>
         {label}
