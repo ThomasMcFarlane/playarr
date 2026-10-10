@@ -7,7 +7,7 @@ import {
   type DeviceCodeResponse,
   type DeviceTokenSuccess,
 } from "@playarr-tv/device-auth";
-import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
+import { publicIpv4RelayUrl, resolveRelayAddress } from "../lib/loginServerUrl";
 import { useApiClient } from "../lib/ApiClientProvider";
 import {
   IS_PACKAGED_TV,
@@ -227,7 +227,8 @@ export function DeviceLogin({
         );
         if (cancelled) return;
         clearExpiryTimers();
-        const serverUrl = publicIpv4RelayUrl(claim.server_url);
+        const serverUrl = await resolveRelayAddress(claim.server_url);
+        if (cancelled) return;
         const serverUrls = [...new Set([claim.server_url, ...claim.server_urls])].map(
           (url) => publicIpv4RelayUrl(url)
         );

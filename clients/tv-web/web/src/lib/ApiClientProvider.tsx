@@ -40,7 +40,7 @@ import {
 } from "@playarr-tv/domain";
 import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 import { createLocalNetworkFetch } from "./localNetworkFetch";
-import { publicIpv4RelayUrl } from "./loginServerUrl";
+import { probeRelayCandidate, publicIpv4RelayUrl, resolveRelayAddress } from "./loginServerUrl";
 import {
   clearJoinedServerRegistry,
   createJoinedApiClient,
@@ -652,10 +652,13 @@ function fetchWithTimeout(
   };
 }
 
+/** The 443 then 8484 relay fallback probes with the same fetch the app uses (local-network aware). */
+const probeRelayWithBrowserFetch = (url: string) => probeRelayCandidate(url, browserFetch);
+
 /** `resolveReachableServer`'s probe: a real `GET /api/system/version` against `url`, short-timeout. */
 async function probeServerReachable(url: string): Promise<boolean> {
   const probeClient = new ApiClient({
-    baseUrl: publicIpv4RelayUrl(url),
+    baseUrl: await resolveRelayAddress(url, { probe: probeRelayWithBrowserFetch }),
     fetchImpl: fetchWithTimeout(browserFetch, SERVER_PROBE_TIMEOUT_MS),
   });
   try {
@@ -1101,7 +1104,9 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async ({ serverUrl, username, password }: LoginCredentials) => {
-      const targetApiBaseUrl = normaliseApiBaseUrl(publicIpv4RelayUrl(serverUrl));
+      const targetApiBaseUrl = normaliseApiBaseUrl(
+        await resolveRelayAddress(serverUrl, { probe: probeRelayWithBrowserFetch })
+      );
       const tokenStore = tokenStoreRef.current as TokenStore;
       const normalizedUsername = username.trim();
       const existingProfile = storedProfileSessions.find(
@@ -1170,7 +1175,9 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       if (!activeProfile) {
         throw new Error(t("lib.apiClientProvider.signInBeforeAddingServer"));
       }
-      const targetApiBaseUrl = normaliseApiBaseUrl(publicIpv4RelayUrl(serverUrl));
+      const targetApiBaseUrl = normaliseApiBaseUrl(
+        await resolveRelayAddress(serverUrl, { probe: probeRelayWithBrowserFetch })
+      );
       if (targetApiBaseUrl === apiBaseUrl) {
         throw new Error(t("lib.apiClientProvider.alreadyPrimaryServer"));
       }

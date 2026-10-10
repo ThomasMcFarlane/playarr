@@ -6,7 +6,7 @@ import { useAuth } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
-import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
+import { publicIpv4RelayUrl, resolveRelayAddress } from "../lib/loginServerUrl";
 import { useToast } from "../lib/toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
@@ -84,7 +84,7 @@ export function SignupPage() {
       for (const serverUrl of invite.serverUrls) {
         if (cancelled) return;
         const probeClient = new ApiClient({
-          baseUrl: publicIpv4RelayUrl(serverUrl),
+          baseUrl: await resolveRelayAddress(serverUrl),
           fetchImpl: fetchWithTimeout(browserFetch, SERVER_PROBE_TIMEOUT_MS),
         });
         try {
