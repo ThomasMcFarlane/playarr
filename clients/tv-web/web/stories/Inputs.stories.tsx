@@ -7,8 +7,6 @@ import { Caption } from "./fixtures";
 const MULTI_LABELS = {
   none: "Any genre",
   add: "Add genre",
-  search: "Search genres",
-  noMatches: "No matching genres",
   remove: (name: string) => `Remove ${name}`,
   announce: (count: number, shown: number) => `${count} selected, ${shown} listed`,
 };

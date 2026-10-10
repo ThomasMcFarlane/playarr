@@ -9,7 +9,7 @@ import { boot, opt, BACK_KEYS } from "./e2e-common.mjs";
 
 const shots = opt("shots", "");
 if (shots) mkdirSync(shots, { recursive: true });
-const { check, open, finish } = await boot({ movies: 6, series: 2, artists: 0 });
+const { check, open, finish } = await boot({ movies: 6, series: 2, artists: 0, playlists: 3, playlistItems: 3 });
 const back = BACK_KEYS[0][1];
 
 for (const [width, height] of [[1920, 1080], [1280, 720]]) {
@@ -50,6 +50,26 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   await page.waitForTimeout(1000);
   check(`${tag}: audio persists across reload`, (await page.locator(".ui-select-trigger", { hasText: "Spanish" }).count()) >= 1);
   if (shots) await page.screenshot({ path: join(shots, `player-${tag}.png`) });
+  await context.close();
+}
+
+// Playlists filters drawer: Show and Order are SegmentedControls (no pressed-button grids), arrows move, Back closes.
+for (const [width, height] of [[1920, 1080], [1280, 720]]) {
+  const tag = `${width}x${height}`;
+  const { context, page } = await open("/playlists?panel=filters", { width, height, theme: "dark" });
+  await page.waitForTimeout(600);
+  const drawer = page.locator("#playlist-filter-drawer");
+  check(`${tag} playlists: no legacy choice grid`, (await drawer.locator(".tv-filter-choice-grid:not(.tv-segmented)").count()) === 0);
+  const seg = drawer.locator('[role="group"] button[aria-pressed]');
+  check(`${tag} playlists: 3 + 2 segmented buttons, no text input`, (await seg.count()) === 5 && (await drawer.locator("input").count()) === 0, String(await seg.count()));
+  await seg.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  check(`${tag} playlists: arrows + OK choose a value`, (await page.evaluate(() => location.search)).includes("visibility=personal"));
+  await back(page);
+  await page.waitForTimeout(400);
+  check(`${tag} playlists: Back closes the drawer`, !(await drawer.isVisible().catch(() => false)));
   await context.close();
 }
 await finish();

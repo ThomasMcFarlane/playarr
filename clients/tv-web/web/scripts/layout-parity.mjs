@@ -306,7 +306,11 @@ async function stageGeometry(layoutId, theme, route) {
   await page.waitForTimeout(600);
   const out = await page.evaluate(() => {
     const r = (el) => (el ? (({ left, top, right, bottom }) => [left, top, right, bottom].map((n) => Math.round(n * 10) / 10))(el.getBoundingClientRect()) : null);
-    return { clock: r(document.querySelector(".app-clock")), column: r(document.querySelector(".tv-home-rails, .tv-library-grid-panel"))?.[0] ?? null };
+    // A row-list panel grows left by its --list-glow-room (room for the focus glow, 1.9980); its column starts after it.
+    const panel = document.querySelector(".tv-home-rails, .tv-library-grid-panel");
+    const glowRoom = panel ? parseFloat(getComputedStyle(panel).getPropertyValue("--list-glow-room")) || 0 : 0;
+    const left = r(panel)?.[0];
+    return { clock: r(document.querySelector(".app-clock")), column: left == null ? null : Math.round((left + glowRoom) * 10) / 10 };
   });
   await page.context().close();
   return out;

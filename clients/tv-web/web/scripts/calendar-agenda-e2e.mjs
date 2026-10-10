@@ -85,6 +85,13 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 72
     const focusedNow = await decorated(page);
     check(`${label}: the focused entry shows the glow and no other entry does`, focusedNow.length === 1 && focusedNow[0].focused && /rgb/.test(focusedNow[0].shadow), JSON.stringify(focusedNow));
     await shot("agenda-focused");
+    // No Request action and no catalogue / provider wording in the agenda details (owner, 10 Oct 2026).
+    const details = await page.evaluate(() => ({
+      buttons: [...document.querySelectorAll(".calendar-details button, .calendar-details a")].map((b) => b.textContent.trim()),
+      text: document.querySelector(".calendar-details")?.textContent ?? "",
+    }));
+    check(`${label}: the agenda details have no Request action`, details.text.length > 0 && !details.buttons.some((b) => /^request/i.test(b)), JSON.stringify(details.buttons));
+    check(`${label}: the agenda details show no "not in your catalogue" or "request provider" wording`, !/catalogue yet|request provider|root folder|quality profile/i.test(details.text), details.text);
     const selectedBefore = await page.evaluate(() => document.querySelector(".calendar-entry.is-selected .calendar-entry-title")?.textContent ?? null);
     const targets = [
       ["details panel", ".calendar-details a, .calendar-details button, .tv-details-panel a, .tv-details-panel button"],

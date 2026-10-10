@@ -73,7 +73,7 @@ describe("SettingsIndexPage", () => {
       'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
     expect(markup).toMatch(/class="[^"]*tv-page-back"/);
-    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(11);
+    expect(markup.match(/class="media-card media-card-solid settings-option(?: is-active)?"/g)).toHaveLength(11);
     expect(markup).toContain('data-tv-scroll-container="true"');
     expect(markup).toContain('data-tv-scroll-axis="vertical"');
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');

@@ -185,6 +185,9 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
         await page.waitForSelector("aside[role='dialog']", { timeout: 8000 });
         await page.waitForTimeout(700);
+        // The app applies the profile's stored theme once its preferences load, which can land after the first set.
+        await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+        await page.waitForTimeout(250);
         const m = await page.evaluate(MEASURE);
         check(`${label}: opens`, m !== null);
         if (!m) continue;

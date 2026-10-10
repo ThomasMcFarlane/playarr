@@ -58,7 +58,7 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { MoviesIcon, MusicIcon } from "../components/NavIcons";
 import { SearchablePlaylistSelect } from "../components/SearchablePlaylistSelect";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
-import { Button } from "../components/ui";
+import { Button, SegmentedControl } from "../components/ui";
 import { isBackKey } from "../lib/backKey";
 import { usePageBack } from "../lib/pageBack";
 
@@ -1367,46 +1367,32 @@ export function PlaylistsPage() {
       >
           <section>
             <h3>{t("pages.playlists.showLabel")}</h3>
-            <div className="tv-filter-choice-grid">
-              {(["all", "personal", "shared"] as PlaylistVisibility[]).map(
-                (option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={visibility === option ? "is-active" : ""}
-                    aria-pressed={visibility === option}
-                    onClick={() => updatePlaylistFilters(option, order)}
-                  >
-                    {option === "personal"
-                      ? t("pages.playlists.visibilityMine")
-                      : option === "shared"
-                        ? t("pages.playlists.visibilityShared")
-                        : t("pages.playlists.visibilityAll")}
-                  </button>
-                )
-              )}
-            </div>
+            <SegmentedControl
+              ariaLabel={t("pages.playlists.showLabel")}
+              value={visibility}
+              options={(["all", "personal", "shared"] as PlaylistVisibility[]).map((option) => ({
+                value: option,
+                label:
+                  option === "personal"
+                    ? t("pages.playlists.visibilityMine")
+                    : option === "shared"
+                      ? t("pages.playlists.visibilityShared")
+                      : t("pages.playlists.visibilityAll"),
+              }))}
+              onChange={(option) => updatePlaylistFilters(option, order)}
+            />
           </section>
           <section>
             <h3>{t("pages.playlists.orderLabel")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={order === "asc" ? "is-active" : ""}
-                aria-pressed={order === "asc"}
-                onClick={() => updatePlaylistFilters(visibility, "asc")}
-              >
-                {t("pages.playlists.orderAscending")}
-              </button>
-              <button
-                type="button"
-                className={order === "desc" ? "is-active" : ""}
-                aria-pressed={order === "desc"}
-                onClick={() => updatePlaylistFilters(visibility, "desc")}
-              >
-                {t("pages.playlists.orderDescending")}
-              </button>
-            </div>
+            <SegmentedControl
+              ariaLabel={t("pages.playlists.orderLabel")}
+              value={order}
+              options={[
+                { value: "asc", label: t("pages.playlists.orderAscending") },
+                { value: "desc", label: t("pages.playlists.orderDescending") },
+              ]}
+              onChange={(option) => updatePlaylistFilters(visibility, option)}
+            />
           </section>
       </FiltersDrawer>
       {playlistContext.contextMenu}
