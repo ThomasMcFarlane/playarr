@@ -4444,29 +4444,17 @@ private fun TvChoiceCell(
 /** Web TV segmented control: square cells in one bordered strip, the selected cell inverted. */
 @Composable
 private fun <T> TvSegmented(choices: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
-    Row(Modifier.height(50.dp).border(1.dp, TvSettingsPalette.segmentBorder)) {
+    // Web `.tv-segmented` (the shared filter choice grid): equal 56 dp segments across the panel, 8 dp apart.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         choices.forEach { (value, label) ->
-            val active = value == selected
-            var focused by remember { mutableStateOf(false) }
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .background(if (active) WebInk else TvSettingsPalette.segment)
-                    .webFocusRing(focused, radius = 0.dp, offset = (-3).dp)
-                    .onFocusChanged { focused = it.isFocused }
-                    .clickable { onSelected(value) }
-                    .padding(horizontal = 18.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, color = if (active) WebBackground else WebInkSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            }
+            PlayarrChoice(label, value == selected, Modifier.weight(1f)) { onSelected(value) }
         }
     }
 }
 
 @Composable
 private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
-    Text(playarrString(PlayarrString.SettingsColourTheme), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Text(playarrString(PlayarrString.SettingsColourTheme), color = WebInk, fontSize = 26.4.sp, fontWeight = FontWeight(560), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
     Spacer(Modifier.height(20.dp))
     TvSegmented(
         choices = listOf(
@@ -4479,7 +4467,7 @@ private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
     Spacer(Modifier.height(30.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
     Spacer(Modifier.height(32.dp))
-    Text(playarrString(PlayarrString.SettingsHomeViewTitle), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Text(playarrString(PlayarrString.SettingsHomeViewTitle), color = WebInk, fontSize = 26.4.sp, fontWeight = FontWeight(560), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
     Spacer(Modifier.height(9.dp))
     Text(playarrString(PlayarrString.SettingsHomeViewDescription), color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp)
     Spacer(Modifier.height(17.dp))
@@ -4493,7 +4481,7 @@ private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
     Spacer(Modifier.height(30.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
     Spacer(Modifier.height(32.dp))
-    Text(playarrString(PlayarrString.LibraryArtworkSize), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Text(playarrString(PlayarrString.LibraryArtworkSize), color = WebInk, fontSize = 26.4.sp, fontWeight = FontWeight(560), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
     Spacer(Modifier.height(9.dp))
     Text(playarrString(PlayarrString.SettingsArtworkSizeDescription), color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp)
     Spacer(Modifier.height(17.dp))
