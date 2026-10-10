@@ -211,13 +211,16 @@ final class TVAppEnvironment {
         // The saved session is read synchronously first: the async restore below can lose the race
         // against the pairing gate, which starts a code request as soon as it appears and so leaves
         // the signed-out state the restore needs.
+        // An expired access token is normal (it lasts 15 minutes): the API client refreshes it with the saved
+        // refresh token on the first request, so the app stays signed in like the web. Only a refresh the server
+        // rejects (the store is then cleared) signs the device out.
         if launchToken == nil, hasConfiguredServer {
             if let data = defaults.data(forKey: "com.playarr.playarr.tvos.session.\(effectiveURL.absoluteString)"),
-               let saved = try? JSONDecoder().decode(StoredAuthSession.self, from: data),
-               saved.expiresAt > Date().addingTimeInterval(30) {
+               let saved = try? JSONDecoder().decode(StoredAuthSession.self, from: data) {
                 pairingState = .signedIn
-            } else {
-                Task { await self.restoreSessionIfPossible() }
+                if saved.expiresAt <= Date().addingTimeInterval(30) {
+                    Task { await self.verifyRestoredSession() }
+                }
             }
         }
     }
@@ -261,11 +264,13 @@ final class TVAppEnvironment {
 
     /// If UserDefaults still holds a non-expired device session, open the
     /// signed-in shell without another QR pass.
-    private func restoreSessionIfPossible() async {
-        guard case .signedOut = pairingState else { return }
-        guard let session = await tokenStore.currentSession() else { return }
-        guard session.expiresAt > Date().addingTimeInterval(30) else { return }
-        pairingState = .signedIn
+    /// Refreshes an expired saved session; signs out only when the server rejected it (not when offline).
+    private func verifyRestoredSession() async {
+        do {
+            _ = try await apiClient.listCatalogKinds()
+        } catch {
+            if await tokenStore.currentSession() == nil, case .signedIn = pairingState { signOut() }
+        }
     }
 
     /// Default QR gate uses the playarr.app hosted broker so the on-screen
