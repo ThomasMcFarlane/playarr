@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, type HTMLAttributes, type KeyboardE
 import { Button } from "../ui";
 import { browserDrawerCloseEnv, playDrawerClose, restoreOpenerFocus, snapshotDrawer } from "./drawerClose";
 import { isBackKey } from "../../lib/backKey";
+import { smoothScrollIntoView } from "../../lib/smoothScroll";
+import { useScrollEdges } from "../../lib/useScrollEdges";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -71,6 +73,9 @@ function DrawerPanel({
   onCloseRef.current = onClose;
   const mountedRef = useRef(false);
   const customKeys = onKeyDown !== undefined;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // The body is the scroller (header and footer stay put); the shared edge fade shows where content continues.
+  useScrollEdges(bodyRef, "vertical", "drawer-body");
 
   const openerRef = useRef<HTMLElement | null>(null);
 
@@ -102,6 +107,8 @@ function DrawerPanel({
     }
     const handleBack = (event: KeyboardEvent) => {
       if (!isBackKey(event)) return;
+      // A nested popup (multi-select list) closes itself first and returns focus to its field.
+      if ((event.target as Element | null)?.closest?.("[data-nested-back]")) return;
       event.preventDefault();
       event.stopPropagation();
       onCloseRef.current();
@@ -157,7 +164,19 @@ function DrawerPanel({
           <span aria-hidden="true">×</span>
         </Button>
       </header>
-      <div className="drawer-body">{children}</div>
+      <div
+        ref={bodyRef}
+        className="drawer-body"
+        data-fade-children=""
+        onFocus={(event) => {
+          // Keep the focused control inside the visible body: smooth, honouring the body's scroll-padding.
+          if (event.target instanceof HTMLElement && event.target !== event.currentTarget) {
+            smoothScrollIntoView(event.target);
+          }
+        }}
+      >
+        {children}
+      </div>
       {footer ? <footer className="drawer-footer">{footer}</footer> : null}
     </aside>
   );

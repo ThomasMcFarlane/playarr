@@ -73,9 +73,16 @@ export function attachScrollEdges(element: HTMLElement, axis: FadeAxis): () => v
   const resizeObserver = new ResizeObserver(schedule);
   // The scroller, plus its wrapper when it has a single child (settings sections, lists), which is what grows.
   resizeObserver.observe(element);
-  if (element.childElementCount === 1) resizeObserver.observe(element.firstElementChild as Element);
-  const mutationObserver = new MutationObserver(() => {
+  // A body of a few sections (drawers) grows through any of them.
+  const observeChildren = () => {
     if (element.childElementCount === 1) resizeObserver.observe(element.firstElementChild as Element);
+    else if (element.dataset.fadeChildren !== undefined) {
+      for (const child of element.children) resizeObserver.observe(child);
+    }
+  };
+  observeChildren();
+  const mutationObserver = new MutationObserver(() => {
+    observeChildren();
     // Content arrived: measure in this microtask so the fade is there for the very next paint.
     measure();
     schedule();

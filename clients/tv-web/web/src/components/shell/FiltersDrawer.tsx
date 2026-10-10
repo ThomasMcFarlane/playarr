@@ -18,7 +18,7 @@ export function FilterSection({
 }
 
 /** Shared multi-select: a set of toggle chips (`aria-pressed`) for a filter section. */
-export function MultiSelect<T extends string>({
+export function ToggleChips<T extends string>({
   options,
   selected,
   onChange,
