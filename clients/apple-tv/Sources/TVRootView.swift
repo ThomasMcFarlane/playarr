@@ -294,6 +294,8 @@ private struct TVProductionShell<Stage: View>: View {
                 )
                 .frame(width: navColumn)
                 .focusSection()
+                // Web: Back on a top-level page goes Home (from the nav or the page's root, never a pushed page).
+                .modifier(TVBackToHome(active: tab != .home) { nav = .home })
                 .zIndex(1)
 
                 // The stage spans the whole screen under the floating nav, as on the web: pages place their content
@@ -304,15 +306,13 @@ private struct TVProductionShell<Stage: View>: View {
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationBarBackButtonHidden(true)
                         .focusSection()
+                        .modifier(TVBackToHome(active: tab != .home) { nav = .home })
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.leading, -navColumn)
                 .focusSection()
                 .focused(shellFocus, equals: .stage)
             }
-            // Web: Back on a top-level page (from the stage or the nav) goes Home; on Home the system Menu stays.
-            // A pushed page (detail) pops first: the navigation stack handles Menu before this ancestor.
-            .modifier(TVBackToHome(active: tab != .home) { nav = .home })
             // One scope for dock + stage so resetFocus / prefersDefaultFocus
             // can pull the remote out of ScrollView rails into the dock.
             .focusScope(shellFocusNamespace)
