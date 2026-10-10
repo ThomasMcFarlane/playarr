@@ -1,0 +1,1 @@
+- Apple TV: the library Filters drawer has the web View choice (list, screen, cover) and audio and subtitle language filters; entering a library grid lands on the first (or last focused) title; open drawers are modal.
