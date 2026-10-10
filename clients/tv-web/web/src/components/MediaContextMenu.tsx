@@ -24,6 +24,7 @@ import { leafSubtitle, playableLeaves, type PlayableLeaf } from "../lib/playable
 import { useToast } from "../lib/toast";
 import {
   DownloadQualityDrawer,
+  type DownloadScope,
   type DownloadQualitySelection,
 } from "./DownloadQualityDrawer";
 import { Drawer } from "./shell";
@@ -97,6 +98,8 @@ export interface MediaContextItem {
   preferredEpisodeId?: string | null;
   /** Exact leaf or leaves represented by this UI item. */
   leaves?: PlayableLeaf[];
+  /** Wider download scopes for an episode: every leaf of its season. Adds the scope choice to the download view. */
+  downloadScopes?: { season?: PlayableLeaf[] };
   /** A whole playlist represented by this UI item -- the Download action fans this out via `listPlaylistItems` + per-item detail resolution. */
   playlistId?: string;
   /** Preserve a surface's specialised short action, e.g. chapter offset or playlist selection. */
@@ -290,6 +293,7 @@ export function useMediaContextMenu({
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<PlaylistResponse | null>(null);
   const [downloadLeaves, setDownloadLeaves] = useState<PlayableLeaf[]>([]);
+  const [downloadScopes, setDownloadScopes] = useState<DownloadScope[] | undefined>(undefined);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const originRef = useRef<HTMLElement | null>(null);
   const firstActionRef = useRef<HTMLButtonElement>(null);
@@ -362,6 +366,7 @@ export function useMediaContextMenu({
     setPlaylistPicker({ status: "idle" });
     setSelectedPlaylist(null);
     setDownloadLeaves([]);
+    setDownloadScopes(undefined);
     setDownloadBusy(false);
     playlistActionInFlightRef.current = false;
     // Watch state and playlists move between opens: never reuse a detail read for an earlier menu.
@@ -570,6 +575,12 @@ export function useMediaContextMenu({
         throw new Error(t("components.mediaContextMenu.noPlayableMedia"));
       }
       setDownloadLeaves(leaves);
+      const wider = activeItem.downloadScopes;
+      const scopes: DownloadScope[] = [{ id: "episode", leaves }];
+      if (leaves.length === 1 && wider?.season && wider.season.length > 1) {
+        scopes.push({ id: "season", leaves: wider.season });
+      }
+      setDownloadScopes(scopes.length > 1 ? scopes : undefined);
       setContextView("download");
       setBusyAction(null);
     } catch (caught) {
@@ -582,13 +593,14 @@ export function useMediaContextMenu({
 
   const confirmDownload = useCallback(
     async (selection: DownloadQualitySelection) => {
-      if (downloadBusy || downloadLeaves.length === 0) return;
+      const chosenLeaves = selection.leaves.length > 0 ? selection.leaves : downloadLeaves;
+      if (downloadBusy || chosenLeaves.length === 0) return;
       setDownloadBusy(true);
       setError(null);
       try {
         const fallbackWorkId = activeItem?.work?.id ?? activeItem?.workId ?? "";
-        for (let index = 0; index < downloadLeaves.length; index += DOWNLOAD_BATCH_SIZE) {
-          const batch = downloadLeaves.slice(index, index + DOWNLOAD_BATCH_SIZE);
+        for (let index = 0; index < chosenLeaves.length; index += DOWNLOAD_BATCH_SIZE) {
+          const batch = chosenLeaves.slice(index, index + DOWNLOAD_BATCH_SIZE);
           await Promise.all(
             batch.map((leaf) =>
               downloads.enqueue({
@@ -611,10 +623,10 @@ export function useMediaContextMenu({
           t("components.mediaContextMenu.genericTitle");
         close();
         showToast(
-          downloadLeaves.length === 1
+          chosenLeaves.length === 1
             ? t("components.mediaContextMenu.downloadStarted", { title })
             : t("components.mediaContextMenu.downloadsStarted", {
-                count: downloadLeaves.length,
+                count: chosenLeaves.length,
               })
         );
       } catch (caught) {
@@ -1014,6 +1026,7 @@ export function useMediaContextMenu({
             t("components.mediaContextMenu.genericTitle")
           }
           leaves={downloadLeaves}
+          scopes={downloadScopes}
           busy={downloadBusy}
           onClose={returnToActions}
           onConfirm={(selection) => void confirmDownload(selection)}

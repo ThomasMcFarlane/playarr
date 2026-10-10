@@ -198,7 +198,7 @@ async function runScrim(layoutId, theme) {
     await openPage(page, layoutId, spec);
     await page.waitForSelector("a[href*='/movies/']", { timeout: 15000 });
     await page.click("a[href*='/movies/']", { button: "right" });
-    const open = await sample(page, "media-context-enter", ".media-context-drawer");
+    const open = await sample(page, "tv-filter-drawer-in", ".media-context-drawer");
     await page.waitForTimeout(500);
     await page.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
     await triggerClose(page, how, spec);

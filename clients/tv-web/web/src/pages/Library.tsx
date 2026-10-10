@@ -51,7 +51,6 @@ import {
   formatLanguageParam,
   languageDisplayName,
   parseLanguageParam,
-  toggleLanguage,
 } from "../lib/languageFilters";
 import { ListPanel } from "../components/tv/ListPanel";
 import { useDwellPrefetch } from "../lib/prefetch";
@@ -62,6 +61,7 @@ import { useFocusedDetailsController } from "../lib/useFocusedDetails";
 import { CrossfadeArt, LibraryPreview } from "../components/LibraryPreview";
 import {
   applyLibraryView,
+  LEGACY_SIZE_PARAM,
   parseLibraryView,
   rememberLibraryView,
   storedLibraryView,
@@ -71,16 +71,17 @@ import {
   type LibraryLoadedList,
   libraryImageKinds,
   libraryFirstPageParams,
-  type ArtworkSize,
   type LibraryKind,
   type LibrarySort,
   type LibraryView,
   type SortOrder,
 } from "../lib/libraryView";
+import { adoptLegacyArtworkSize, useArtworkSize } from "../lib/artworkSize";
 import { useCoverflowMotion } from "../lib/libraryCoverflow";
 import { usePanelParam } from "../lib/usePanelParam";
 import { releaseYear, yearRangeLabel } from "../lib/workYear";
 import { FilterSection, FiltersDrawer, PageLayout, ViewToggle } from "../components/shell";
+import { MultiSelect } from "../components/ui";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
 const INITIAL_MOUNTED = 48;
@@ -242,17 +243,32 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
   // so they survive reloads and can be shared or bookmarked.
   const [searchParams, setSearchParams] = useSearchParams();
-  // View, card size and sort live in the URL too (`?view=list&size=large&sort=date_added&order=desc`);
+  // View and sort live in the URL too (`?view=list&sort=date_added&order=desc`);
   // localStorage only supplies the default for a fresh URL with none of them.
   const {
     view,
-    size: artworkSize,
     sort,
     order,
   } = useMemo(
     () => parseLibraryView(searchParams, kind, storedLibraryView(kind)),
     [kind, searchParams]
   );
+  // The artwork size is a global setting (Settings > Appearance). An old `?size=` link is adopted once
+  // when nothing is saved yet, then dropped from the URL.
+  const { size: artworkSize, setSize: setArtworkSize } = useArtworkSize();
+  const legacySize = searchParams.get(LEGACY_SIZE_PARAM);
+  useEffect(() => {
+    if (legacySize === null) return;
+    adoptLegacyArtworkSize(legacySize, setArtworkSize);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete(LEGACY_SIZE_PARAM);
+        return next;
+      },
+      { replace: true }
+    );
+  }, [legacySize, setArtworkSize, setSearchParams]);
   const audioKey = searchParams.get("audio") ?? "";
   const subtitleKey = searchParams.get("subs") ?? "";
   const audioLangs = useMemo(() => parseLanguageParam(audioKey), [audioKey]);
@@ -537,17 +553,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   }
 
   /** Each view/size/sort change is its own history entry, so back/forward step through them. */
-  function updateView(patch: Partial<{ view: LibraryView; size: ArtworkSize; sort: LibrarySort; order: SortOrder }>) {
+  function updateView(patch: Partial<{ view: LibraryView; sort: LibrarySort; order: SortOrder }>) {
     rememberLibraryView(kind, patch);
     setSearchParams((current) => applyLibraryView(current, patch));
   }
 
   function changeView(nextView: LibraryView) {
     updateView({ view: nextView });
-  }
-
-  function changeArtworkSize(nextSize: ArtworkSize) {
-    updateView({ size: nextSize });
   }
 
   function changeSort(nextSort: LibrarySort) {
@@ -1060,6 +1072,130 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     hasGrid
   );
 
+  const filtersDrawer = (
+      <FiltersDrawer
+        key="filters"
+        id={`${kind}-library-filters`}
+        open={filtersOpen}
+        kicker={t("pages.library.libraryControls")}
+        title={t("pages.library.filters")}
+        ariaLabel={t("pages.library.filterDrawerAriaLabel", { plural })}
+        closeLabel={t("pages.library.closeFilters")}
+        onClose={() => setFiltersOpen(false)}
+      >
+          <FilterSection title={t("pages.library.view")}>
+            <ViewToggle
+              ariaLabel={t("pages.library.view")}
+              value={view}
+              onChange={changeView}
+              options={(
+                (kind === "artist"
+                  ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
+                  : (["list", "screen", "cover"] as LibraryView[])
+                ).map((option) => ({
+                  value: option,
+                  icon: option,
+                  label:
+                    option === "cover-flow"
+                      ? t("pages.library.viewCoverFlow")
+                      : option === "list"
+                        ? t("pages.library.viewList")
+                        : option === "screen"
+                          ? t("pages.library.viewScreen")
+                          : t("pages.library.viewCover"),
+                }))
+              )}
+            />
+          </FilterSection>
+
+          <FilterSection title={t("pages.library.sortBy")}>
+            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+              <button
+                type="button"
+                className={sort === "title" ? "is-active" : ""}
+                onClick={() => changeSort("title")}
+                aria-pressed={sort === "title"}
+              >
+                {t("pages.library.sortTitle")}
+              </button>
+              <button
+                type="button"
+                className={sort === "date_added" ? "is-active" : ""}
+                onClick={() => changeSort("date_added")}
+                aria-pressed={sort === "date_added"}
+              >
+                {t("pages.library.sortDateAdded")}
+              </button>
+            </div>
+          </FilterSection>
+
+          <FilterSection title={t("pages.library.order")}>
+            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+              <button
+                type="button"
+                className={order === "asc" ? "is-active" : ""}
+                onClick={() => changeOrder("asc")}
+                aria-pressed={order === "asc"}
+              >
+                {sort === "title" ? t("pages.library.sortAscAlpha") : t("pages.library.sortAscDate")}
+              </button>
+              <button
+                type="button"
+                className={order === "desc" ? "is-active" : ""}
+                onClick={() => changeOrder("desc")}
+                aria-pressed={order === "desc"}
+              >
+                {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
+              </button>
+            </div>
+          </FilterSection>
+
+          {(
+            [
+              ["audio", t("pages.library.audioLanguage"), languageFacets?.audio, audioLangs],
+              ["subs", t("pages.library.subtitleLanguage"), languageFacets?.subtitle, subtitleLangs],
+            ] as const
+          ).map(([which, heading, facets, selected]) => {
+            const options = languageOptions(facets, [...selected]);
+            return (
+              <FilterSection key={which} title={heading} data-language-filter={which}>
+                {options.length === 0 ? (
+                  <p>{t("pages.library.noLanguages")}</p>
+                ) : (
+                  <MultiSelect
+                    ariaLabel={heading}
+                    options={options.map((option) => ({
+                      value: option.code,
+                      label: option.name,
+                      hint: option.count === null ? undefined : String(option.count),
+                    }))}
+                    selected={selected}
+                    onChange={(next) => changeLanguages(which, next)}
+                    labels={{
+                      none: t("pages.library.anyLanguage"),
+                      add: t("pages.library.addLanguage"),
+                      search: t("pages.library.searchLanguages"),
+                      noMatches: t("pages.library.noMatchingLanguages"),
+                      remove: (name) => t("pages.library.removeLanguage", { name }),
+                      announce: (count, shown) => t("pages.library.languagesAnnounce", { count, shown }),
+                    }}
+                  />
+                )}
+              </FilterSection>
+            );
+          })}
+          {audioLangs.length + subtitleLangs.length > 0 ? (
+            <FilterSection>
+              <div className="tv-filter-choice-grid">
+                <button type="button" onClick={clearLanguages}>
+                  {t("pages.library.clearLanguages")}
+                </button>
+              </div>
+            </FilterSection>
+          ) : null}
+      </FiltersDrawer>
+  );
+
   if (items === null || initialError || !items.length || !selected) {
     // The header and Back stay up while the library loads, fails or is empty.
     return (
@@ -1068,6 +1204,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
         ariaLabel={t("pages.library.stageAriaLabel", { plural })}
         header={{ title: plural, back: { label: t("pages.library.backToHome"), to: "/" } }}
+        overlay={filtersDrawer}
         state={
           initialError
             ? {
@@ -1106,6 +1243,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       pageId="library"
       className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
       ariaLabel={t("pages.library.stageAriaLabel", { plural })}
+      overlay={filtersDrawer}
       backdrop={{
         artKey: "library-art",
         art: <CrossfadeArt work={selected} kinds={["backdrop", "poster"]} />,
@@ -1227,141 +1365,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
             </div>
       </ListPanel>
 
-      <FiltersDrawer
-        id={`${kind}-library-filters`}
-        open={filtersOpen}
-        kicker={t("pages.library.libraryControls")}
-        title={t("pages.library.filters")}
-        ariaLabel={t("pages.library.filterDrawerAriaLabel", { plural })}
-        closeLabel={t("pages.library.closeFilters")}
-        onClose={() => setFiltersOpen(false)}
-      >
-          <FilterSection title={t("pages.library.view")}>
-            <ViewToggle
-              ariaLabel={t("pages.library.view")}
-              value={view}
-              onChange={changeView}
-              options={(
-                (kind === "artist"
-                  ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
-                  : (["list", "screen", "cover"] as LibraryView[])
-                ).map((option) => ({
-                  value: option,
-                  icon: option,
-                  label:
-                    option === "cover-flow"
-                      ? t("pages.library.viewCoverFlow")
-                      : option === "list"
-                        ? t("pages.library.viewList")
-                        : option === "screen"
-                          ? t("pages.library.viewScreen")
-                          : t("pages.library.viewCover"),
-                }))
-              )}
-            />
-          </FilterSection>
-
-          <FilterSection title={t("pages.library.artworkSize")}>
-            <div className="tv-filter-choice-grid">
-              {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={artworkSize === size ? "is-active" : ""}
-                  onClick={() => changeArtworkSize(size)}
-                  aria-pressed={artworkSize === size}
-                >
-                  {size === "small"
-                    ? t("pages.library.sizeSmall")
-                    : size === "large"
-                      ? t("pages.library.sizeLarge")
-                      : t("pages.library.sizeMedium")}
-                </button>
-              ))}
-            </div>
-          </FilterSection>
-
-          <FilterSection title={t("pages.library.sortBy")}>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={sort === "title" ? "is-active" : ""}
-                onClick={() => changeSort("title")}
-                aria-pressed={sort === "title"}
-              >
-                {t("pages.library.sortTitle")}
-              </button>
-              <button
-                type="button"
-                className={sort === "date_added" ? "is-active" : ""}
-                onClick={() => changeSort("date_added")}
-                aria-pressed={sort === "date_added"}
-              >
-                {t("pages.library.sortDateAdded")}
-              </button>
-            </div>
-          </FilterSection>
-
-          <FilterSection title={t("pages.library.order")}>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={order === "asc" ? "is-active" : ""}
-                onClick={() => changeOrder("asc")}
-                aria-pressed={order === "asc"}
-              >
-                {sort === "title" ? t("pages.library.sortAscAlpha") : t("pages.library.sortAscDate")}
-              </button>
-              <button
-                type="button"
-                className={order === "desc" ? "is-active" : ""}
-                onClick={() => changeOrder("desc")}
-                aria-pressed={order === "desc"}
-              >
-                {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
-              </button>
-            </div>
-          </FilterSection>
-
-          {(
-            [
-              ["audio", t("pages.library.audioLanguage"), languageFacets?.audio, audioLangs],
-              ["subs", t("pages.library.subtitleLanguage"), languageFacets?.subtitle, subtitleLangs],
-            ] as const
-          ).map(([which, heading, facets, selected]) => {
-            const options = languageOptions(facets, [...selected]);
-            return (
-              <FilterSection key={which} title={heading} data-language-filter={which}>
-                {options.length === 0 ? (
-                  <p>{t("pages.library.noLanguages")}</p>
-                ) : (
-                  <div className="tv-filter-choice-grid">
-                    {options.map((option) => (
-                      <button
-                        key={option.code}
-                        type="button"
-                        className={selected.includes(option.code) ? "is-active" : ""}
-                        onClick={() => changeLanguages(which, toggleLanguage(selected, option.code))}
-                        aria-pressed={selected.includes(option.code)}
-                      >
-                        {option.count === null ? option.name : `${option.name} · ${option.count}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </FilterSection>
-            );
-          })}
-          {audioLangs.length + subtitleLangs.length > 0 ? (
-            <FilterSection>
-              <div className="tv-filter-choice-grid">
-                <button type="button" onClick={clearLanguages}>
-                  {t("pages.library.clearLanguages")}
-                </button>
-              </div>
-            </FilterSection>
-          ) : null}
-      </FiltersDrawer>
 
       {sort === "title" ? (
         <AlphabetRail

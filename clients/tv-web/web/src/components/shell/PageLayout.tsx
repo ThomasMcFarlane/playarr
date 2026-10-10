@@ -21,6 +21,11 @@ export interface PageLayoutProps {
   /** Exactly one of children or state. */
   state?: PageLayoutState;
   children?: ReactNode;
+  /**
+   * Layers that must survive the page's loading, empty and error states without remounting (the Filters drawer:
+   * changing a filter reloads the list, and the open panel must keep its focus and scroll). Panel body only.
+   */
+  overlay?: ReactNode;
   ariaLabel?: string;
   /**
    * Page identity classes for the body content (`tv-library tv-directory ...`, `calendar-page`). Never header, pill
@@ -45,7 +50,7 @@ function StateView({ state }: { state: PageLayoutState }) {
  * The one page frame for routed pages. The header is always rendered (so Back
  * is reachable while the page loads, fails or is empty) and the states render inside the body, never instead of the page.
  */
-export function PageLayout({ pageId, header, body = "panel", backdrop, state, children, ariaLabel, className, bodyClassName }: PageLayoutProps) {
+export function PageLayout({ pageId, header, body = "panel", backdrop, state, children, overlay, ariaLabel, className, bodyClassName }: PageLayoutProps) {
   const headerNode = "kind" in header && header.kind === "none" ? null : <PageHeader {...(header as PageHeaderProps)} />;
   const content = state ? (
     body === "panel" ? (
@@ -84,6 +89,7 @@ export function PageLayout({ pageId, header, body = "panel", backdrop, state, ch
       {backdrop?.wash === false ? null : <div className="tv-stage-wash" />}
       {headerNode}
       {content}
+      {overlay}
     </section>
   );
 }

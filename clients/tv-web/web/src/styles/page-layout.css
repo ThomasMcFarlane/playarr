@@ -55,8 +55,10 @@
   --card-pad-left: var(--library-rail-left);
   --card-pad-right: var(--library-rail-right);
   --card-rail-vw: 62;
-  --card-cols: 3;
-  --card-cols-cover: 5;
+  /* The artwork size setting (Settings > Appearance) shifts every column count: small +1, large -1. */
+  --card-size-step: 0;
+  --card-cols: calc(3 + var(--card-size-step));
+  --card-cols-cover: calc(5 + var(--card-size-step));
   --card-grid-gap: clamp(14px, calc(1.35 * var(--vw)), 28px);
   --card-grid-gap-cover: clamp(12px, calc(1 * var(--vw)), 20px);
   --card-w: calc(
@@ -107,11 +109,19 @@
   --page-edge-fade-floor: 0.3;
 }
 
+:root[data-artwork-size="small"] {
+  --card-size-step: 1;
+}
+
+:root[data-artwork-size="large"] {
+  --card-size-step: -1;
+}
+
 /* The poster card follows the Library grid in every layout (same columns, same gutters as the Library rules in global.css). */
 @media (max-width: 1100px), (max-height: 700px) {
   :root {
     --card-rail-vw: 66;
-    --card-cols-cover: 4;
+    --card-cols-cover: calc(4 + var(--card-size-step));
   }
 }
 
@@ -121,8 +131,8 @@
     --card-rail-vw: 100;
     --card-pad-left: var(--mobile-page-gutter);
     --card-pad-right: var(--mobile-page-gutter);
-    --card-cols: 2;
-    --card-cols-cover: 2;
+    --card-cols: calc(2 + var(--card-size-step));
+    --card-cols-cover: calc(2 + var(--card-size-step));
     --card-grid-gap: 12px;
     --card-grid-gap-cover: 12px;
   }
@@ -144,8 +154,6 @@
 /* Surfaces that stay dark in both themes keep the white ring (the token is recomputed here, not only the colour). */
 .player-page,
 .end-screen,
-.playback-health-panel,
-.media-context-drawer,
 .profile-pin-dialog {
   --focus-ring-color: #ffffff;
   --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);

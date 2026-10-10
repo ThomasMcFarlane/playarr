@@ -10,7 +10,7 @@ export { Drawer } from "./Drawer";
 export { MasterDetail } from "./MasterDetail";
 export { SkeletonBlock, SkeletonLines } from "./Skeleton";
 export { ViewToggle, type ViewOption } from "./ViewToggle";
-export { ChoiceGroup, DateRangeField, FilterSection, FiltersDrawer, MultiSelect } from "./FiltersDrawer";
+export { ChoiceGroup, DateRangeField, FilterSection, FiltersDrawer } from "./FiltersDrawer";
 export { PeriodPicker } from "./PeriodPicker";
 export { ShellActionColumnProvider, ShellActionColumnSlot } from "./ShellActionColumn";
 export { ProfileNavLink, shortProfileName, type ProfileNavLinkProps } from "./ProfileNavLink";

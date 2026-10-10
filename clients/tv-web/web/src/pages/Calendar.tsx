@@ -17,7 +17,6 @@ import {
   FilterSection,
   FiltersDrawer,
   MasterDetail,
-  MultiSelect,
   PageLayout,
   type PageHeaderProps,
   SkeletonBlock,
@@ -88,6 +87,7 @@ import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer, useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
+import { MultiSelect } from "../components/ui";
 import "./Calendar.css";
 import { isBackKey } from "../lib/backKey";
 
@@ -1120,6 +1120,15 @@ export function CalendarPage() {
       ],
   };
 
+  const selectLabels = (which: "Type" | "Source" | "Status") => ({
+    none: t(`pages.calendar.any${which}` as TranslationKey),
+    add: t(`pages.calendar.add${which}` as TranslationKey),
+    search: t("pages.calendar.searchOptions"),
+    noMatches: t("pages.calendar.noMatchingOptions"),
+    remove: (name: string) => t("pages.calendar.removeOption", { name }),
+    announce: (count: number, shown: number) => t("pages.calendar.optionsAnnounce", { count, shown }),
+  });
+
   const drawers = (
     <>
       <FiltersDrawer
@@ -1147,8 +1156,9 @@ export function CalendarPage() {
           <MultiSelect
             ariaLabel={t("pages.calendar.filterLabel")}
             options={CALENDAR_TYPE_PARAMS.map((value) => ({ value, label: t(TYPE_KEYS[value]) }))}
-            selected={filters.types}
-            onChange={(types) => setFilters({ ...filters, types })}
+            selected={[...filters.types]}
+            onChange={(types) => setFilters({ ...filters, types: new Set(types as CalendarTypeParam[]) })}
+            labels={selectLabels("Type")}
           />
         </FilterSection>
         {sourceOptions.length > 0 ? (
@@ -1156,8 +1166,9 @@ export function CalendarPage() {
             <MultiSelect
               ariaLabel={t("pages.calendar.filterSource")}
               options={sourceOptions}
-              selected={filters.sources}
-              onChange={(next) => setFilters({ ...filters, sources: next })}
+              selected={[...filters.sources]}
+              onChange={(next) => setFilters({ ...filters, sources: new Set(next) })}
+              labels={selectLabels("Source")}
             />
           </FilterSection>
         ) : null}
@@ -1165,8 +1176,9 @@ export function CalendarPage() {
           <MultiSelect
             ariaLabel={t("pages.calendar.filterStatus")}
             options={CALENDAR_STATUSES.map((value) => ({ value, label: t(STATUS_KEYS[value]) }))}
-            selected={filters.statuses}
-            onChange={(statuses) => setFilters({ ...filters, statuses })}
+            selected={[...filters.statuses]}
+            onChange={(statuses) => setFilters({ ...filters, statuses: new Set(statuses as CalendarStatus[]) })}
+            labels={selectLabels("Status")}
           />
         </FilterSection>
         <FilterSection title={t("pages.calendar.filterDateRange")}>
@@ -1185,12 +1197,15 @@ export function CalendarPage() {
           />
         </FilterSection>
         <FilterSection title={t("pages.calendar.filterMonitored")}>
-          <MultiSelect
-            ariaLabel={t("pages.calendar.filterMonitored")}
-            options={[{ value: "monitored", label: t("pages.calendar.monitoredOnly") }]}
-            selected={new Set(filters.monitoredOnly ? ["monitored"] : [])}
-            onChange={(next) => setFilters({ ...filters, monitoredOnly: next.has("monitored") })}
-          />
+          <label className="remote-toggle">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={filters.monitoredOnly}
+              onChange={(event) => setFilters({ ...filters, monitoredOnly: event.target.checked })}
+            />
+            <span>{t("pages.calendar.monitoredOnly")}</span>
+          </label>
         </FilterSection>
         {activeCount > 0 ? (
           <section>

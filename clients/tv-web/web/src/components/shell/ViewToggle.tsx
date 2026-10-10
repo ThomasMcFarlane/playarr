@@ -1,3 +1,5 @@
+import { SegmentedControl } from "../ui";
+
 export interface ViewOption<T extends string> {
   value: T;
   label: string;
@@ -18,23 +20,22 @@ export function ViewToggle<T extends string>({
   ariaLabel: string;
 }) {
   return (
-    <div className="tv-filter-choice-grid tv-filter-view-options" role="group" aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={value === option.value ? "is-active" : ""}
-          onClick={() => onChange(option.value)}
-          aria-pressed={value === option.value}
-        >
+    <SegmentedControl
+      className="tv-filter-view-options"
+      ariaLabel={ariaLabel}
+      value={value}
+      onChange={onChange}
+      options={options.map((option) => ({
+        value: option.value,
+        label: option.label,
+        icon: (
           <span className={`tv-view-icon tv-view-icon-${option.icon}`} aria-hidden="true">
             <i />
             <i />
             <i />
           </span>
-          <strong>{option.label}</strong>
-        </button>
-      ))}
-    </div>
+        ),
+      }))}
+    />
   );
 }

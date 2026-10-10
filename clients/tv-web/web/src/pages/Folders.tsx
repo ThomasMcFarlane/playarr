@@ -8,6 +8,7 @@ import {
 } from "@playarr-tv/api-client";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { Button } from "../components/ui";
+import { adoptLegacyArtworkSize, useArtworkSize } from "../lib/artworkSize";
 import { EmptyState, ErrorState, ChoiceGroup, FilterSection, FiltersDrawer, PageLayout, ScrollArea, SkeletonState, ViewToggle } from "../components/shell";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes } from "../lib/formatBytes";
@@ -73,7 +74,7 @@ function FileGlyph() {
 /**
  * Folders library view: browse the root folders an administrator enabled as a
  * directory tree, play and resume files. All state that defines what is on
- * screen (root, path, view, size, sort, order, search, type) lives in the URL
+ * screen (root, path, view, sort, order, search, type) lives in the URL
  * (`lib/folderView.ts`), so refresh, back/forward and deep links restore it.
  */
 export function FoldersPage() {
@@ -84,6 +85,21 @@ export function FoldersPage() {
   const [params, setParams] = useSearchParams();
   const url = useMemo(() => parseFolderUrl(params), [params]);
   const [panel, setPanel] = usePanelParam(["filters"] as const);
+  // The artwork size is a global setting. An old `?size=` link is adopted once, then dropped from the URL.
+  const { setSize: setArtworkSize } = useArtworkSize();
+  const legacySize = params.get("size");
+  useEffect(() => {
+    if (legacySize === null) return;
+    adoptLegacyArtworkSize(legacySize, setArtworkSize);
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("size");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [legacySize, setArtworkSize, setParams]);
   useDocumentTitle(t("pages.folders.title"));
 
   const [rootsState, setRootsState] = useState<RootsState>({ status: "loading" });
@@ -245,7 +261,6 @@ export function FoldersPage() {
   }, [listReady, listing, rootsState]);
 
   const filterCount = activeFolderFilterCount(url);
-  const sizeClass = `is-size-${url.size}`;
   const rootName = currentRoot?.name ?? null;
   const detail = rootName ?? (roots && roots.length > 1 ? t("pages.folders.chooseRoot") : null);
 
@@ -253,7 +268,7 @@ export function FoldersPage() {
     <PageLayout
       pageId="folders"
       body="bleed"
-      className={`folders-page folders-view-${url.view} ${sizeClass}`}
+      className={`folders-page folders-view-${url.view}`}
       ariaLabel={t("pages.folders.title")}
       header={{
         title: t("pages.folders.title"),
@@ -439,20 +454,6 @@ export function FoldersPage() {
             onChange={(view) => update({ view }, { replace: true })}
           />
         </FilterSection>
-        {url.view === "cover" ? (
-          <FilterSection title={t("pages.folders.size")}>
-            <ChoiceGroup
-              ariaLabel={t("pages.folders.size")}
-              value={url.size}
-              options={[
-                { value: "small", label: t("pages.folders.sizeSmall") },
-                { value: "medium", label: t("pages.folders.sizeMedium") },
-                { value: "large", label: t("pages.folders.sizeLarge") },
-              ]}
-              onChange={(size) => update({ size }, { replace: true })}
-            />
-          </FilterSection>
-        ) : null}
         <FilterSection title={t("pages.folders.sortBy")}>
           <ChoiceGroup
             ariaLabel={t("pages.folders.sortBy")}
