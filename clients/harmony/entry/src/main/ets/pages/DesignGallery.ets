@@ -565,7 +565,9 @@ struct DesignGallery {
               'hero, clamped to five lines maximum on the TV profile so long copy ' +
               'never overruns the title panel.',
             onPlay: () => {},
-            railsSlot: this.stageRailsSlot,
+            railsSlot: (): void => {
+              this.stageRailsSlot();
+            },
           })
           NavRail({
             items: GALLERY_NAV_RAIL_ITEMS,

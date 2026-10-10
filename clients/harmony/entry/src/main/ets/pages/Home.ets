@@ -912,7 +912,10 @@ export struct Home {
         onPlay: ((): void => {
       this.handleHeroPlay();
     }),
-        railsSlot: this.tvRailsSlot,
+        // Arrow wrapper keeps `this` = Home; a bare method reference runs with Stage as `this`.
+        railsSlot: (): void => {
+          this.tvRailsSlot();
+        },
       })
       NavRail({
         items: this.navItems,
