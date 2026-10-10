@@ -693,6 +693,9 @@ struct TVMultiSelectSection: View {
     private var summary: String {
         if selection.isEmpty { return "Any language" }
         return selection.map { code in options.first { $0.code == code }?.displayName ?? code }.joined(separator: ", ")
+    }
+}
+
 /// Web `.status-pill`: one status per entry, tinted by its tone (14% over the surface, 60% border), ink text.
 struct TVStatusPill: View {
     enum Tone { case available, upcoming, missing, neutral }
