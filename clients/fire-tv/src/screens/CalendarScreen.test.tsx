@@ -52,7 +52,7 @@ const response = {
 describe('CalendarScreen', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('lists a release with its state and warns about an unreadable source', async () => {
+  it('lists a release with its state and shows no source banner or source names', async () => {
     jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(JSON.stringify(response), {status: 200, headers: {'Content-Type': 'application/json'}}));
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -70,8 +70,9 @@ describe('CalendarScreen', () => {
     expect(text).toContain('Calendar');
     expect(text).toContain('A Film');
     expect(text).toContain('In library');
-    expect(text).toContain('1 source(s) could not be read');
-    expect(text).toContain('Sonarr');
+    // Users never see source health or source-provider names (owner rule): no banner, no "reported by" line.
+    expect(text).not.toContain('could not be read');
+    expect(text).not.toContain('Sonarr');
   });
 
   async function mount(): Promise<ReactTestRenderer> {
@@ -110,7 +111,7 @@ describe('CalendarScreen', () => {
       await Promise.resolve();
     });
     // The month grid names the weekdays (the text is upper-cased by style, not in the string).
-    expect(allText(renderer)).toContain('October 2026');
+    expect(allText(renderer)).toContain('Oct 2026');
     expect(allText(renderer)).toContain('Mon | Tue | Wed');
   });
 
