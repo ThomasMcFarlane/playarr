@@ -389,6 +389,8 @@ export type UserInviteRequestResponse = components["schemas"]["UserInviteRequest
 export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestStatus"];
 export type ReviewUserInviteRequest = components["schemas"]["ReviewUserInviteRequest"];
 export type PeerAddressBundle = components["schemas"]["PeerAddressBundle"];
+export type ServerGroupMembers = components["schemas"]["ServerGroupMembers"];
+export type ServerGroupMember = components["schemas"]["ServerGroupMember"];
 export type PeerAddressEntry = components["schemas"]["PeerAddressEntry"];
 export type PeerAddress = components["schemas"]["PeerAddress"];
 export type PeerGroup = components["schemas"]["PeerGroup"];
@@ -884,6 +886,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/peer-groups/self", method: "DELETE" },
   { schemaPath: "/api/v1/admin/peer-groups/join-tokens", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/self/address-bundle", method: "GET" },
+  { schemaPath: "/api/v1/peer-groups/self/members", method: "GET" },
   { schemaPath: "/api/v1/admin/peer-nodes", method: "GET" },
   { schemaPath: "/api/v1/admin/peer-nodes/self", method: "PUT" },
   { schemaPath: "/api/v1/admin/peer-nodes/{id}/sync-status", method: "GET" },
@@ -2275,6 +2278,11 @@ export class ApiClient {
         params: { path: { id } },
       })
     );
+  }
+
+  /** Read-only members of this server's group, for any signed-in user. */
+  async getServerGroupMembers(): Promise<ServerGroupMembers> {
+    return this.unwrap(await this.raw.GET("/api/v1/peer-groups/self/members", {}));
   }
 
   async getPeerAddressBundle(): Promise<PeerAddressBundle> {

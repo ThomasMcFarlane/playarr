@@ -17,6 +17,7 @@ const TAGS_BY_AREA: Record<LiveArea, readonly QueryTag[] | "all"> = {
   account: "all",
   // Not stored in the query cache (read fresh each time).
   downloads: [],
+  serverGroup: [],
   admin: [],
 };
 

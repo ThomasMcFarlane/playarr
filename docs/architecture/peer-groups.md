@@ -1223,7 +1223,7 @@ export interface KnownServerGroup {
 export function readKnownServers(): KnownServerGroup | undefined;
 export function rememberGroup(group: KnownServerGroup): void;
 export function rememberServerSuccess(url: string): void;   // bumps lastSuccessAt, updates lastGoodUrl
-export function forgetGroup(): void;                         // explicit manual reset -- the only recovery
+export function forgetGroup(): void;                         // called on sign-out -- the only recovery
                                                                // path if a group becomes fully defunct
 export async function resolveReachableServer(
   group: KnownServerGroup,
@@ -1236,8 +1236,10 @@ export async function resolveReachableServer(
 PeerAddressBundle | null` field (§6.1's type, reused: cheap to attach). The
 client writes it straight into `KnownServerGroup` on every successful
 call, so the remembered list picks up newly added or removed peers without
-a separate "refresh my address book" round trip, while `forgetGroup()`
-remains the explicit manual escape hatch if a group is abandoned entirely.
+a separate "refresh my address book" round trip. Signing out calls
+`forgetGroup()`: an account belongs to its server, so signing out is the
+recovery path if a group is abandoned entirely. There is no separate
+"forget this server" action.
 
 ### 7.2 Refresh-before-reprompt
 
@@ -1271,8 +1273,8 @@ first (read `knownServers`, call `resolveReachableServer`); only when no
 group is remembered at all does it fall back to today's query-param/
 single-key logic: so an in-progress upgrade, or a client that has never
 been grouped, keeps working unchanged. Once a group is known, the server-
-address input UI does not reappear until the user explicitly calls
-`forgetGroup()` from a new settings action.
+address input UI does not reappear until the user signs out, which
+calls `forgetGroup()`.
 
 **Rollout invariant, restated**: everything in §6-§7 is additive to a
 single-node deployment. `KnownServerGroup.groupId` stays absent, every

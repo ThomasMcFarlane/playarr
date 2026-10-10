@@ -64,8 +64,8 @@ pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};
 pub use embedding::{EmbeddingRepo, SqlxEmbeddingRepo};
 pub use eventing::{
     EventingDownloadTicketRepo, EventingMediaFileRepo, EventingMediaRequestRepo,
-    EventingPlaylistRepo, EventingRequestIntegrationRepo, EventingWatchProgressRepo,
-    EventingWatchlistRepo, EventingWorkRepo,
+    EventingPeerNodeRepo, EventingPlaylistRepo, EventingRequestIntegrationRepo,
+    EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
 };
 pub use folder::{DiscoveredRoot, FolderRepo, RootConfigUpdate, ScanIndexRow, SqlxFolderRepo};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
