@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addLegacyTvCssFallbacks, colorMixToChannels, legacyTvCssPlugin } from "./legacy-tv-css.mjs";
+import { addLegacyTvCssFallbacks, colorMixToChannels, legacyTvCssPlugin, rewriteHasSelector } from "./legacy-tv-css.mjs";
 
 test("expands inset while preserving the modern shorthand", () => {
   const css = addLegacyTvCssFallbacks(".overlay { position: fixed; inset: 0 auto 2rem; }");
@@ -54,9 +54,39 @@ test("color-mix in keyframes keeps the solid fallback", () => {
   assert.ok(!css.includes("@supports"));
 });
 
+test("scrollbar-width: none also hides the WebKit scrollbar for Chromium before 121", () => {
+  const css = addLegacyTvCssFallbacks(`.week-day, .agenda { overflow: auto; scrollbar-width: none; } .rail::before { scrollbar-width: none; } .x { scrollbar-width: thin; }`);
+  assert.match(css, /\.week-day::-webkit-scrollbar, \.agenda::-webkit-scrollbar \{\s*display: none;?\s*\}/);
+  assert.equal((css.match(/::-webkit-scrollbar/g) ?? []).length, 2);
+});
+
+test("scrollbar-color gets an inherited WebKit scrollbar with the same colours", () => {
+  const css = addLegacyTvCssFallbacks(`.week { overflow: auto; scrollbar-color: var(--line-strong) transparent; }`);
+  assert.match(css, /\.week::-webkit-scrollbar, \.week ::-webkit-scrollbar \{\s*width: 15px;\s*height: 15px;\s*background-color: transparent;?\s*\}/);
+  assert.match(css, /\.week::-webkit-scrollbar-thumb, \.week ::-webkit-scrollbar-thumb \{\s*background-color: var\(--line-strong\);/);
+});
+
 test("Vite plugin transforms CSS only", () => {
   const plugin = legacyTvCssPlugin();
   assert.equal(plugin.transform("const inset = 0", "/src/app.ts"), null);
   const result = plugin.transform(".x { inset: 0; }", "/src/app.css?direct");
   assert.match(result.code, /top: 0/);
+});
+
+test(":has() rules get an attribute-based copy for engines without :has()", () => {
+  const css = addLegacyTvCssFallbacks(
+    `.nav>.group:has(+.profile){margin:0} @supports selector(:has(a)){.form input:focus-visible{outline:0} .form:has(input:focus-visible){outline:2px solid}}`
+  );
+  assert.match(css, /@supports not selector\(:has\(a\)\)\{\.nav>\.group\[data-lc-has~="h[0-9a-z]+"\]\{margin:0\}\}/);
+  assert.match(css, /@supports not selector\(:has\(a\)\)\{\.form input:focus-visible\{outline:0\} \.form\[data-lc-has~="h[0-9a-z]+"\]\{outline:2px solid\}\}/);
+  assert.match(css, /--lc-has-h[0-9a-z]+:"\{\\"anchor\\":\\"\.group\\",\\"relative\\":\\"\+\.profile\\"\}"/);
+  // The original rules stay for engines that support :has().
+  assert.match(css, /^\.nav>\.group:has\(\+\.profile\)\{margin:0\}/);
+});
+
+test("rewriteHasSelector handles selector lists inside :has()", () => {
+  const definitions = new Map();
+  assert.match(rewriteHasSelector(".content:has(.list,.section)", definitions), /^\.content\[data-lc-has~="h[0-9a-z]+"\]$/);
+  assert.deepEqual([...definitions.values()], [{ anchor: ".content", relative: ".list,.section" }]);
+  assert.equal(rewriteHasSelector(".a:has(.b:has(.c))"), undefined);
 });

@@ -174,6 +174,85 @@ export function colorMixToChannels(value) {
   return output;
 }
 
+
+const HAS_SUPPORTS = "selector(:has(a))";
+const HAS_ATTRIBUTE = "data-lc-has";
+
+function hasId(anchor, relative) {
+  let hash = 5381;
+  for (const char of `${anchor}|${relative}`) hash = ((hash * 33) ^ char.charCodeAt(0)) >>> 0;
+  return `h${hash.toString(36)}`;
+}
+
+/**
+ * Rewrites `A:has(R)` into `A[data-lc-has~="hN"]` and returns the definitions the runtime
+ * (`legacy-has.mjs`) needs to set that attribute. Undefined when the selector cannot be rewritten
+ * (nested :has, or :has without a compound before it).
+ */
+export function rewriteHasSelector(selector, definitions = new Map()) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < selector.length) {
+    const start = selector.indexOf(":has(", cursor);
+    if (start < 0) return output + selector.slice(cursor);
+    const open = start + ":has".length;
+    const close = matchingParen(selector, open);
+    if (close < 0) return undefined;
+    const relative = selector.slice(open + 1, close).trim();
+    if (relative.includes(":has(")) return undefined;
+    const before = output + selector.slice(cursor, start);
+    const anchor = before.split(/\s*[>+~]\s*|\s+/).pop();
+    if (!anchor) return undefined;
+    const id = hasId(anchor.replace(/\[data-lc-has~="h[0-9a-z]+"\]/g, ""), relative);
+    definitions.set(id, { anchor: anchor.replace(/\[data-lc-has~="h[0-9a-z]+"\]/g, ""), relative });
+    output = `${before}[${HAS_ATTRIBUTE}~="${id}"]`;
+    cursor = close + 1;
+  }
+  return output;
+}
+
+function addHasFallbacks(root) {
+  const definitions = new Map();
+  const legacyBlock = (nodes) => postcss.atRule({ name: "supports", params: `not ${HAS_SUPPORTS}`, nodes });
+  const rewriteRule = (rule) => {
+    if (!rule.selector.includes(":has(")) return rule.clone();
+    const selectors = rule.selectors.map((selector) => rewriteHasSelector(selector, definitions));
+    if (selectors.some((selector) => selector === undefined)) return undefined;
+    return rule.clone({ selectors });
+  };
+  // Web's own `@supports selector(:has(...))` blocks: give engines without :has() the same rules,
+  // with the :has() part provided by the runtime attribute.
+  root.walkAtRules("supports", (atRule) => {
+    if (!/^selector\(\s*:has\(/.test(atRule.params.trim())) return;
+    const copy = [];
+    atRule.each((node) => {
+      if (node.type !== "rule") return;
+      const rewritten = rewriteRule(node);
+      if (rewritten) copy.push(rewritten);
+    });
+    if (copy.length) atRule.after(legacyBlock(copy));
+  });
+  root.walkRules((rule) => {
+    if (!rule.selector.includes(":has(")) return;
+    if (rule.parent?.type === "atrule" && rule.parent.name === "supports" && /:has\(/.test(rule.parent.params)) return;
+    if (rule.parent?.type === "atrule" && /keyframes$/i.test(rule.parent.name)) return;
+    const rewritten = rewriteRule(rule);
+    if (rewritten) rule.after(legacyBlock([rewritten]));
+  });
+  if (definitions.size) {
+    root.append(
+      legacyBlock([
+        postcss.rule({
+          selector: ":root",
+          nodes: [...definitions].map(([id, definition]) =>
+            postcss.decl({ prop: `--lc-has-${id}`, value: JSON.stringify(JSON.stringify(definition)) })
+          ),
+        }),
+      ])
+    );
+  }
+}
+
 export function addLegacyTvCssFallbacks(css, from = undefined) {
   const root = postcss.parse(css, { from });
   const mixedRules = new Set();
@@ -216,6 +295,32 @@ export function addLegacyTvCssFallbacks(css, from = undefined) {
     }
   });
 
+  // `scrollbar-width: none` needs Chromium 121. Older engines hide the bar with the WebKit pseudo-element.
+  root.walkRules((rule) => {
+    if (!rule.nodes?.some((node) => node.type === "decl" && node.prop === "scrollbar-width" && node.value.trim() === "none")) return;
+    const selectors = rule.selectors.filter((selector) => !selector.includes("::"));
+    if (selectors.length === 0) return;
+    rule.after(postcss.rule({ selectors: selectors.map((selector) => `${selector}::-webkit-scrollbar`), nodes: [postcss.decl({ prop: "display", value: "none" })] }));
+  });
+
+  // `scrollbar-color` (Chromium 121) inherits; draw the same bar for the element and its descendants:
+  // the classic 15px gutter, track colour, and a thumb inset 3px with rounded ends.
+  root.walkRules((rule) => {
+    const colour = rule.nodes?.find((node) => node.type === "decl" && node.prop === "scrollbar-color");
+    if (!colour) return;
+    const [thumb, track] = postcss.list.space(colour.value);
+    const selectors = rule.selectors.filter((selector) => !selector.includes("::"));
+    if (!thumb || !track || selectors.length === 0) return;
+    const scoped = (pseudo) => selectors.flatMap((selector) => [`${selector}${pseudo}`, `${selector} ${pseudo}`]);
+    const decls = (entries) => entries.map(([prop, value]) => postcss.decl({ prop, value }));
+    rule.after(
+      postcss.rule({ selectors: scoped("::-webkit-scrollbar-thumb"), nodes: decls([["background-color", thumb], ["border", "3px solid transparent"], ["background-clip", "padding-box"], ["border-radius", "8px"]]) })
+    );
+    rule.after(
+      postcss.rule({ selectors: scoped("::-webkit-scrollbar"), nodes: decls([["width", "15px"], ["height", "15px"], ["background-color", track]]) })
+    );
+  });
+
   // A declaration that contains var() is never dropped at parse time, so a fallback placed before
   // it cannot win on engines without color-mix(). Keep the rgba() form in the rule and give the
   // original color-mix() declarations back to engines that support them, right after the rule so
@@ -230,6 +335,7 @@ export function addLegacyTvCssFallbacks(css, from = undefined) {
     });
     rule.after(postcss.atRule({ name: "supports", params: MIX_SUPPORTS, nodes: [modern] }));
   }
+  addHasFallbacks(root);
   return root.toString();
 }
 
