@@ -141,7 +141,7 @@ struct TVSettingsView: View {
                     displayPreferences.artworkSize = TVDisplayPreferences.ArtworkSize.allCases[index]
                 }
             }
-            .frame(width: 995, height: 1, alignment: .topLeading)
+            .frame(width: 995, height: 760, alignment: .topLeading) // real height: controls outside a 1-pt frame cannot take focus
         case 4:
             Text("Playarr Server")
                 .font(.system(size: 22, weight: .semibold))
