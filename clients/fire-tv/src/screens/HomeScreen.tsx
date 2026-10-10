@@ -15,6 +15,7 @@ import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
+import {focusNode, getFocusedTag} from '../platform';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
 import {runtimeLabel} from '../lib/runtimeLabel';
 import {blend} from '../theme/color';
@@ -158,6 +159,12 @@ export function HomeScreen(): React.ReactElement {
 
   const [focus, setFocus] = useState<{rail: number; item: number}>({rail: 0, item: 0});
   const selected = rails[focus.rail]?.items[focus.item] ?? rails[0]?.items[0];
+  // A late On Deck answer rebuilds the rails and unmounts the focused card, which leaves nothing focused and the remote
+  // dead. Put focus back on the selected card whenever the rails change and focus was lost (web keeps it in place).
+  const selectedCardRef = useRef<View>(null);
+  useEffect(() => {
+    if (!getFocusedTag()) focusNode(selectedCardRef);
+  }, [rails]);
 
   const railY = useRef(new Animated.Value(0)).current;
   // The rails scroll through their LEFT offset (JS-driven), not a transform: Vega's focus engine measures layout frames and
@@ -264,6 +271,7 @@ export function HomeScreen(): React.ReactElement {
                       progress={progress}
                       progressReady={progressRows !== null}
                       first={railIndex === 0 && itemIndex === 0}
+                      cardRef={active && itemIndex === focus.item ? selectedCardRef : undefined}
                       index={itemIndex}
                       baseUrl={baseUrl}
                       token={token}
@@ -350,6 +358,7 @@ function HomeCard(props: {
   progress: WatchProgress | undefined;
   progressReady: boolean;
   first: boolean;
+  cardRef?: React.Ref<View>;
   index: number;
   baseUrl: string;
   token: string | undefined;
@@ -358,12 +367,13 @@ function HomeCard(props: {
   onFocus: () => void;
   onPress: () => void;
 }): React.ReactElement {
-  const {work, mediaFileId, title, progress, progressReady, first, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
+  const {work, mediaFileId, title, progress, progressReady, first, cardRef, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
   const {colour} = useTheme();
   const kind = preferredArtworkKind(work, ['backdrop', 'poster']);
   const uri = mediaFileId ? mediaThumbnailUrl(baseUrl, mediaFileId) : kind ? workArtworkUrl(baseUrl, work.id, kind) : undefined;
   return (
     <Pressable
+      ref={cardRef}
       accessibilityRole="button"
       accessibilityLabel={work.title}
       hasTVPreferredFocus={first}

@@ -2,7 +2,7 @@
  * The shell chrome every signed-in screen sits in, drawn at the web TV layout's measurements (1920x1080 CSS px, from the
  * web client's DOM): the logo, the clock, the three-group left rail and the profile chip with the app version.
  */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {TvFocusScope} from '../platform';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {WorkKind} from '@playarr-tv/api-client';
@@ -90,12 +90,12 @@ function RailLink({
   item,
   active,
   onSelect,
-  activeRef,
+  onActiveNode,
 }: {
   item: RailItem;
   active: boolean;
   onSelect: (target: RailTarget) => void;
-  activeRef: React.MutableRefObject<unknown>;
+  onActiveNode: (node: unknown) => void;
 }): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
@@ -104,7 +104,7 @@ function RailLink({
   return (
     <Pressable
       ref={(node) => {
-        if (active) activeRef.current = node;
+        if (active && node) onActiveNode(node);
       }}
       accessibilityRole="button"
       accessibilityLabel={item.label}
@@ -147,7 +147,10 @@ function Rail({
   const {colour} = useTheme();
   let y = RAIL_TOP;
   // Entering the rail from the content (LEFT) lands on the page's own item, and UP/DOWN stay inside it, like the web.
-  const activeRef = useRef<unknown>(null);
+  // Held in state, not a ref: the focus guide reads its destination at render, and a ref is still empty on the first render,
+  // so LEFT from the content found no rail item until something else re-rendered the rail.
+  const [activeNode, setActiveNode] = useState<unknown>(null);
+  const activeRef = useMemo(() => ({current: activeNode}), [activeNode]);
   return (
     <TvFocusScope trap={['up', 'down']} destinations={[activeRef]} style={{position: 'absolute', left: 0, top: 0, width: sw(128), height: sw(1080)}}>
       {groups.map((group) => {
@@ -173,7 +176,7 @@ function Rail({
           >
             {group.items.map((item, index) => (
               <View key={item.target} style={{marginTop: index === 0 ? 0 : sw(GROUP_GAP)}}>
-                <RailLink item={item} active={active === item.target} onSelect={onSelect} activeRef={activeRef} />
+                <RailLink item={item} active={active === item.target} onSelect={onSelect} onActiveNode={setActiveNode} />
               </View>
             ))}
           </View>
