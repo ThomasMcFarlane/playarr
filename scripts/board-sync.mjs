@@ -12,7 +12,7 @@
 // row numbers it wrote, one per line, and writes nothing when no row matches.
 import fs from 'node:fs';
 import path from 'node:path';
-import { canonicalCells, formatRow } from './lib/board.mjs';
+import { canonicalCells, formatRow, stripEpicNumber } from './lib/board.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (name) => { const i = argv.indexOf(`--${name}`); return i < 0 ? undefined : argv[i + 1]; };
@@ -37,7 +37,7 @@ if (fs.existsSync(tdir)) {
   for (const f of fs.readdirSync(tdir)) {
     if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
     const lines = fs.readFileSync(path.join(tdir, f), 'utf8').split('\n').filter(Boolean);
-    const section = lines[0]?.startsWith('section:') ? lines.shift() : null;
+    const section = lines[0]?.startsWith('section:') || lines[0]?.startsWith('section-new:') ? lines.shift() : null;
     for (const row of lines.filter((l) => l.startsWith('|'))) {
       const n = /^\|\s*(\d+)\s*\|/.exec(row)?.[1];
       if (n) frags.set(n, { f, section, row, file: path.join(tdir, f) });
@@ -49,7 +49,7 @@ const boardFile = path.join(root, 'TASKS.md');
 if (fs.existsSync(boardFile)) {
   let sec = '';
   for (const l of fs.readFileSync(boardFile, 'utf8').split('\n')) {
-    if (l.startsWith('## ')) sec = l.slice(3).trim();
+    if (l.startsWith('## ')) sec = stripEpicNumber(l.slice(3));
     const n = /^\|\s*(\d+)\s*\|/.exec(l)?.[1];
     if (n && !sec.startsWith('Completed work')) boardRows.set(n, l);
   }
