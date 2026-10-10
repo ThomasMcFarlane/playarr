@@ -38,7 +38,24 @@ pub struct OwnAvailabilityCache<T> {
     derive_lock: Mutex<()>,
     /// A background refresh is queued or running.
     refreshing: AtomicBool,
+    /// Longest a background derivation may run before it is dropped, which
+    /// frees the derive lock (a hung network mount would otherwise hold it
+    /// for ever).
+    derive_timeout: Duration,
 }
+
+/// Clears the `refreshing` flag when the background task ends, however it ends
+/// (finished, timed out or panicked).
+struct RefreshingGuard<'a>(&'a AtomicBool);
+
+impl Drop for RefreshingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// Default for [`OwnAvailabilityCache::with_derive_timeout`].
+pub const DEFAULT_DERIVE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 impl<T> OwnAvailabilityCache<T> {
     pub fn new(ttl: Duration) -> Self {
@@ -47,7 +64,14 @@ impl<T> OwnAvailabilityCache<T> {
             slot: StdMutex::new(None),
             derive_lock: Mutex::new(()),
             refreshing: AtomicBool::new(false),
+            derive_timeout: DEFAULT_DERIVE_TIMEOUT,
         }
+    }
+
+    /// Sets how long a background derivation may run.
+    pub fn with_derive_timeout(mut self, timeout: Duration) -> Self {
+        self.derive_timeout = timeout;
+        self
     }
 
     pub fn ttl(&self) -> Duration {
@@ -122,13 +146,19 @@ impl<T: Send + Sync + 'static> OwnAvailabilityCache<T> {
                 if !self.refreshing.swap(true, Ordering::AcqRel) {
                     let cache = self.clone();
                     tokio::spawn(async move {
-                        let outcome = cache.get_or_derive(derive).await;
-                        cache.refreshing.store(false, Ordering::Release);
-                        if let Err(err) = outcome {
-                            tracing::warn!(
+                        let _reset = RefreshingGuard(&cache.refreshing);
+                        match tokio::time::timeout(cache.derive_timeout, cache.get_or_derive(derive))
+                            .await
+                        {
+                            Ok(Ok(_)) => {}
+                            Ok(Err(err)) => tracing::warn!(
                                 error = ?err,
                                 "refreshing the own availability snapshot failed; serving the previous one"
-                            );
+                            ),
+                            Err(_) => tracing::warn!(
+                                timeout_s = cache.derive_timeout.as_secs(),
+                                "refreshing the own availability snapshot timed out; serving the previous one"
+                            ),
                         }
                     });
                 }
@@ -294,5 +324,73 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(*again, 7);
+    }
+
+    #[tokio::test]
+    async fn a_panicking_background_refresh_does_not_stop_later_refreshes() {
+        let cache = Arc::new(OwnAvailabilityCache::new(Duration::from_millis(10)));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let max_stale = Duration::from_secs(60);
+        cache
+            .get_or_refresh(max_stale, || async { Ok::<_, ()>(0usize) })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let c = calls.clone();
+        cache
+            .get_or_refresh(max_stale, move || async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                if true {
+                    panic!("derive panicked");
+                }
+                Ok::<_, ()>(1usize)
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let c = calls.clone();
+        let served = cache
+            .get_or_refresh(max_stale, move || async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, ()>(2usize)
+            })
+            .await
+            .unwrap();
+        assert_eq!(*served, 0, "still the stale snapshot");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "a second derivation ran");
+    }
+
+    #[tokio::test]
+    async fn a_hung_derivation_is_dropped_and_frees_the_lock() {
+        let cache = Arc::new(
+            OwnAvailabilityCache::new(Duration::from_millis(10))
+                .with_derive_timeout(Duration::from_millis(100)),
+        );
+        let max_stale = Duration::from_millis(60);
+        cache
+            .get_or_refresh(max_stale, || async { Ok::<_, ()>(0usize) })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        // Served stale; the background derivation never finishes.
+        cache
+            .get_or_refresh(max_stale, || async {
+                std::future::pending::<()>().await;
+                Ok::<_, ()>(1usize)
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        // Past max_stale, this caller must wait for the lock, which the
+        // timeout frees.
+        let value = tokio::time::timeout(
+            Duration::from_secs(5),
+            cache.get_or_refresh(max_stale, || async { Ok::<_, ()>(2usize) }),
+        )
+        .await
+        .expect("a hung derivation must not hold the lock for ever")
+        .unwrap();
+        assert_eq!(*value, 2);
     }
 }

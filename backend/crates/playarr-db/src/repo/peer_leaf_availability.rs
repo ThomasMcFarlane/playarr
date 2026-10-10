@@ -307,19 +307,26 @@ impl<'a> SnapshotDiff<'a> {
 pub struct SqlxPeerLeafAvailabilityRepo {
     pool: DbPool,
     queue: Option<WriteQueue>,
-    /// One lock per peer so two replacements of the same peer's snapshot (a
-    /// pull and a push arriving together) apply one after the other, each
-    /// diffing against what the previous one left.
-    peer_locks: DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>,
+}
+
+/// One lock per peer so two replacements of the same peer's snapshot (a pull
+/// and a push arriving together) apply one after the other, each diffing
+/// against what the previous one left. Process-wide, not per repository
+/// instance: the API and the worker each build their own instance.
+fn peer_lock(peer_node_id: Uuid) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::OnceLock<DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>> =
+        std::sync::OnceLock::new();
+    LOCKS
+        .get_or_init(DashMap::new)
+        .entry(peer_node_id)
+        .or_default()
+        .value()
+        .clone()
 }
 
 impl SqlxPeerLeafAvailabilityRepo {
     pub fn new(pool: DbPool) -> Self {
-        Self {
-            pool,
-            queue: None,
-            peer_locks: DashMap::new(),
-        }
+        Self { pool, queue: None }
     }
 
     /// Sends `replace_for_peer` through the shared write queue.
@@ -407,12 +414,7 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         // table is a routing hint refreshed every minute. Upserts go first and
         // deletions last, so a file never disappears before its replacement
         // arrives.
-        let lock = self
-            .peer_locks
-            .entry(peer_node_id)
-            .or_default()
-            .value()
-            .clone();
+        let lock = peer_lock(peer_node_id);
         let _one_replacement_at_a_time = lock.lock().await;
 
         let prepared = Arc::new(prepare(rows)?);
@@ -1309,8 +1311,14 @@ mod tests {
         repo.replace_for_peer(peer, std::slice::from_ref(&base))
             .await
             .unwrap();
-        let edits: [fn(&mut PeerLeafAvailability); 10] = [
+        let edits: [fn(&mut PeerLeafAvailability); 16] = [
             |r| r.path = "/media/other.mkv".into(),
+            |r| r.source_instance_id = Uuid::new_v4(),
+            |r| r.provider = playarr_model::ExternalProvider::Tvdb,
+            |r| r.external_id = "other".into(),
+            |r| r.availability = Availability::Unknown,
+            |r| r.codec = Some("hevc".into()),
+            |r| r.release_date = None,
             |r| r.container = None,
             |r| r.bitrate = Some(1),
             |r| r.size_bytes = Some(2),
@@ -1358,14 +1366,16 @@ mod tests {
         let rows = inventory(peer, 3_000);
         repo.replace_for_peer(peer, &rows).await.unwrap();
 
-        // A write operation that takes the write lock, writes, and sits on it.
+        // A write operation that takes the write lock, writes, and sits on it
+        // until released.
         let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
         let hold = {
-            let (queue, started) = (queue.clone(), started.clone());
+            let (queue, started, release) = (queue.clone(), started.clone(), release.clone());
             tokio::spawn(async move {
                 queue
                     .submit(move |conn| {
-                        let started = started.clone();
+                        let (started, release) = (started.clone(), release.clone());
                         Box::pin(async move {
                             sqlx::query(
                                 "DELETE FROM peer_leaf_availability WHERE peer_node_id = ?",
@@ -1374,7 +1384,7 @@ mod tests {
                             .execute(&mut *conn)
                             .await?;
                             started.notify_one();
-                            tokio::time::sleep(std::time::Duration::from_millis(4_000)).await;
+                            release.notified().await;
                             Ok(())
                         })
                     })
@@ -1385,16 +1395,20 @@ mod tests {
 
         // The diff read, an unchanged replacement (which only reads) and the
         // whole-row listing all answer while the write lock is held. Reads
-        // that waited for the lock could not finish before the batch does, so
-        // the batch still running afterwards is the assertion (it does not
-        // depend on how fast this machine is).
-        assert_eq!(load_fingerprints(&pool, peer).await.unwrap().len(), 3_000);
-        repo.replace_for_peer(peer, &rows).await.unwrap();
-        assert_eq!(repo.list_for_peer(peer).await.unwrap().len(), 3_000);
+        // that waited for the lock would never finish, because the batch only
+        // ends once they have; the timeout turns that into a failure.
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            assert_eq!(load_fingerprints(&pool, peer).await.unwrap().len(), 3_000);
+            repo.replace_for_peer(peer, &rows).await.unwrap();
+            assert_eq!(repo.list_for_peer(peer).await.unwrap().len(), 3_000);
+        })
+        .await
+        .expect("reads waited for the write batch");
         assert!(
             !hold.is_finished(),
-            "the reads only finished after the write batch released the lock"
+            "the write batch was still holding the lock"
         );
+        release.notify_one();
         hold.await.unwrap().unwrap();
         queue.shutdown().await;
         pool.close().await;
@@ -1463,20 +1477,24 @@ mod tests {
     /// the other, so the older snapshot cannot land on top of the newer one.
     #[tokio::test]
     async fn concurrent_replacements_of_one_peer_apply_in_turn() {
+        // Two instances, as the API and the worker each build their own.
         let (pool, path) = file_pool().await;
-        let repo = Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+        let api = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let worker = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
         let peer = Uuid::new_v4();
         let first = inventory(peer, 600);
         let second: Vec<_> = first.iter().take(300).cloned().collect();
         let (a, b) = tokio::join!(
-            repo.replace_for_peer(peer, &first),
-            repo.replace_for_peer(peer, &second)
+            api.replace_for_peer(peer, &first),
+            worker.replace_for_peer(peer, &second)
         );
         a.unwrap();
         b.unwrap();
-        let stored = repo.list_for_peer(peer).await.unwrap().len();
-        assert!(stored == 600 || stored == 300, "got {stored}");
-        // Whichever ran last, the table matches exactly one of the snapshots.
+        assert_eq!(
+            api.list_for_peer(peer).await.unwrap().len(),
+            300,
+            "the replacement that ran last must win"
+        );
         pool.close().await;
         remove_db(&path);
     }
