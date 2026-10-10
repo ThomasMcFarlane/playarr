@@ -921,7 +921,7 @@ async fn build_action_context(
         && memo.backend(state).await == playarr_model::requests::RequestBackend::Direct
     {
         ctx.request_unavailable_reason =
-            Some("The request provider has no default root folder or quality profile".into());
+            Some("Requests are not available for this title yet".into());
     }
     let Some(work) = work else {
         return Ok(ctx);
@@ -1300,7 +1300,7 @@ pub async fn request_title_handler(
     else {
         return Err(unprocessable(
             "request_provider_not_configured",
-            "The request provider has no default root folder or quality profile",
+            "Requests are not available for this title yet",
         ));
     };
     let (root, profile) = (

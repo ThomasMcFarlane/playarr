@@ -25,7 +25,6 @@ import {
 } from "../components/shell";
 import { Button, buttonClassName } from "../components/ui";
 import { PeriodPicker } from "../components/shell";
-import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { retryTransient } from "../lib/retryTransient";
@@ -631,7 +630,6 @@ function ItemDetails({
       ? t(plan.play.resume ? "pages.calendar.resumeEpisode" : "pages.calendar.playEpisode", { code })
       : t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")
     : "";
-  const showRequest = plan.legacy ? !openRoute : plan.request !== null;
   const showWatchlist = plan.legacy ? !openRoute : plan.watchlist !== null;
   const tone = itemPillTone(item, today);
   const requested = Boolean(plan.request?.requested);
@@ -647,7 +645,6 @@ function ItemDetails({
     </>
   );
   const hints = [
-    plan.request && !plan.request.enabled && plan.request.reason ? plan.request.reason : null,
     plan.watchlist && !plan.watchlist.enabled && plan.watchlist.reason ? plan.watchlist.reason : null,
   ].filter((hint): hint is string => Boolean(hint));
   return (
@@ -689,14 +686,6 @@ function ItemDetails({
               {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
             </Button>
           ) : null}
-          {showRequest ? (
-            <RequestButton
-              snapshot={snapshot}
-              className={buttonClassName({ variant: openRoute ? "secondary" : "primary" })}
-              disabled={plan.request ? !plan.request.enabled && !plan.request.requested : false}
-              alreadyRequested={plan.request?.requested}
-            />
-          ) : null}
           {showWatchlist && !(plan.watchlist && !plan.watchlist.enabled) ? (
             <WatchlistToggle
               snapshot={snapshot}
@@ -707,7 +696,6 @@ function ItemDetails({
         </>
       }
     >
-      {!openRoute && !plan.play ? <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p> : null}
       {hints.map((hint) => (
         <p key={hint} className="hint">
           {hint}
