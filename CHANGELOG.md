@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: the app stays signed in after it has been idle for more than 15 minutes; it refreshes the expired access token instead of showing the sign-in code.
 - Apple TV: page subtitles sit under the title in the shared small style, text colours use the web's AAA tokens, library pages load the whole library and show its real count, series pages drop the "No availability data yet" line, and the calendar no longer shows a source provider name.
 - Web: the focus ring on the profile picker tiles and the avatar presets is drawn around the circular avatar, not the square tile (one shared `circle-focus-host` / `circle-focus-target` style) (1.9979)
 - Web: player Up next and health drawers use the shared Drawer theme tokens and close button (1.9978)
