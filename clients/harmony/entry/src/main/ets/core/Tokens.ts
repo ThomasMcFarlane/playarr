@@ -360,10 +360,11 @@ export const TvGeometry: TvGeometryTokens = {
   homeRailsWidth: 1190,
   homeRailsInsetLeft: 152,
   homeRailsTop: 402,
-  // Web rail pitch is 366: heading 26 + gap 30 + card 213 + 97 between rails.
+  // Web rail pitch is 366 (heading 26, gap 30, card 213, 97 to the next heading); the list height
+  // includes room for the focus lift and caption, so the gap between rails is smaller here.
   homeRailsHeadingGap: 30,
-  homeRailsListHeight: 236,
-  homeRailsRowGap: 74,
+  homeRailsListHeight: 250,
+  homeRailsRowGap: 79,
 
   utilityRowTop: 56,
   utilityRowHeight: 50,
