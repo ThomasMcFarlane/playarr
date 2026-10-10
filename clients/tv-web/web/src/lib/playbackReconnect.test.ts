@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   MAX_RECONNECT_ATTEMPTS,
@@ -6,6 +7,7 @@ import {
   isUnhandledEngineError,
   sessionCloseForEngineState,
   reconnectDelayMs,
+  shouldFallBackToTranscodeAfterDecodeError,
 } from "./playbackReconnect";
 
 const session = "https://server.example/api/v1/media/sessions/abc/master.m3u8";
@@ -63,5 +65,25 @@ describe("session close on terminal engine state", () => {
   it("ignores non-terminal states", () => {
     expect(sessionCloseForEngineState("loading", "playing")).toBeNull();
     expect(sessionCloseForEngineState("error", "loading")).toBeNull();
+  });
+});
+
+describe("decode-error fallback to a forced transcode", () => {
+  const fresh = { forceTranscode: false, alreadyAttempted: false };
+  it("falls back once for a source-video session that fails to decode", () => {
+    for (const code of ["3014", "3015", "3016", "4032", "MEDIA_3", "MEDIA_4"]) {
+      expect(shouldFallBackToTranscodeAfterDecodeError({ code }, fresh)).toBe(true);
+    }
+    expect(shouldFallBackToTranscodeAfterDecodeError({ code: "3016" }, { ...fresh, alreadyAttempted: true })).toBe(false);
+  });
+  it("never falls back from a forced transcode or for network errors", () => {
+    expect(shouldFallBackToTranscodeAfterDecodeError({ code: "3016" }, { ...fresh, forceTranscode: true })).toBe(false);
+    expect(shouldFallBackToTranscodeAfterDecodeError({ code: "1001", httpStatus: 404, requestUri: session }, fresh)).toBe(false);
+    expect(shouldFallBackToTranscodeAfterDecodeError(undefined, fresh)).toBe(false);
+  });
+  it("is wired into the playback engine", () => {
+    const engine = readFileSync(new URL("./usePlaybackEngine.ts", import.meta.url), "utf8");
+    expect(engine).toContain("shouldFallBackToTranscodeAfterDecodeError(engineState.error");
+    expect(engine).toContain("profile: DECODE_FALLBACK_PROFILE,");
   });
 });

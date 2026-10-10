@@ -41,6 +41,7 @@ import { IS_TIZEN } from "./clientPlatform";
 import { DOWNLOADED_QUALITY_ID } from "./qualityIds";
 import {
   canReconnect,
+  DECODE_FALLBACK_PROFILE,
   humanNegotiationMessage,
   isTransientNegotiationError,
   MAX_NEGOTIATION_AUTO_RETRIES,
@@ -48,6 +49,7 @@ import {
   isUnhandledEngineError,
   sessionCloseForEngineState,
   reconnectDelayMs,
+  shouldFallBackToTranscodeAfterDecodeError,
 } from "./playbackReconnect";
 
 /** Selector id for the synthetic "Downloaded" quality option a completed local copy adds to `qualityOptions` -- never a real server rendition profile. */
@@ -276,6 +278,8 @@ export function usePlaybackEngine(
   const userSelectedQualityRef = useRef(false);
   const negotiationRequestRef = useRef<PlaybackInfoParams>(WEB_PLAYBACK_CAPABILITIES);
   const automaticRecoveryUrlRef = useRef<string | null>(null);
+  // One automatic switch to a forced H.264 transcode per title after a decode failure.
+  const decodeFallbackAttemptedRef = useRef(false);
   // The engine error a reconnect was already started for (see `isUnhandledEngineError`).
   const recoveredEngineErrorRef = useRef<PlaybackEngineState["error"]>(undefined);
   const initialNegotiationRef = useRef(true);
@@ -607,6 +611,7 @@ export function usePlaybackEngine(
         : {}),
     };
     automaticRecoveryUrlRef.current = null;
+    decodeFallbackAttemptedRef.current = false;
     reconnectingRef.current = false;
     reconnectAttemptRef.current = 0;
     setReconnecting(false);
@@ -889,6 +894,44 @@ export function usePlaybackEngine(
     qualitySwitching,
     stopActiveSession,
   ]);
+
+  // The source video (direct play, or HLS whose video the server copied) does
+  // not decode here, e.g. HEVC on a browser or TV shell that claimed it: ask
+  // once for a forced H.264 transcode at the same position instead of showing
+  // the error (TASKS 20.260; the Android player does the same).
+  useEffect(() => {
+    if (qualitySwitching) return;
+    if (negotiation.kind !== "ready" || engineState.state !== "error") return;
+    if (!mediaFileId) return;
+    if (
+      !shouldFallBackToTranscodeAfterDecodeError(engineState.error, {
+        forceTranscode: negotiationRequestRef.current.forceTranscode === true,
+        alreadyAttempted: decodeFallbackAttemptedRef.current,
+      })
+    ) {
+      return;
+    }
+    decodeFallbackAttemptedRef.current = true;
+    recoveredEngineErrorRef.current = engineState.error;
+    const absolutePositionSeconds =
+      engineState.currentTimeSeconds + negotiation.sourceOffsetSeconds;
+    pendingQualitySwitchRef.current = {
+      positionSeconds: absolutePositionSeconds,
+      shouldPlay: true,
+    };
+    negotiationRequestRef.current = {
+      ...negotiationRequestRef.current,
+      profile: DECODE_FALLBACK_PROFILE,
+      forceTranscode: true,
+      startPositionMs: Math.max(0, Math.round(absolutePositionSeconds * 1000)),
+    };
+    loadedForUrl.current = null;
+    void stopActiveSession("error")
+      .catch(() => undefined)
+      .finally(() => {
+        setRetryCount((count) => count + 1);
+      });
+  }, [engineState, mediaFileId, negotiation, qualitySwitching, stopActiveSession]);
 
   // Playback is confirmed healthy again: forget the reconnect budget.
   useEffect(() => {
