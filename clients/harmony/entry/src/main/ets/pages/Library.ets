@@ -806,13 +806,16 @@ export struct Library {
           this.tvGrid();
         },
       })
-      NavRail({
-        items: this.navItems,
-        selectedId: this.kind,
-        onSelect: (id: string): void => {
-          this.handleNavSelect(id);
-        },
-      })
+      // NavRail reads `items` once (plain field), so it is created after the kinds arrive.
+      if (this.navItems.length > 0) {
+        NavRail({
+          items: this.navItems,
+          selectedId: this.kind,
+          onSelect: (id: string): void => {
+            this.handleNavSelect(id);
+          },
+        })
+      }
       PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
         .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
       Row() {
