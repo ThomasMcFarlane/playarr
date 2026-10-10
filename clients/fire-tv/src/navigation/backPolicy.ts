@@ -195,6 +195,9 @@ export function useTvBackNavigation(fallbackBackTo?: RouteName): void {
       navigation.canGoBack()
     );
     if (target === null) return false;
+    // The same press also reaches the screen under this one (screens stay mounted): mark it handled so that screen
+    // does not walk back a second level (Calendar -> Home -> profile picker on one Back).
+    lastLayerClosedAt = Date.now();
     if (target === -1) {
       navigation.goBack();
     } else {
