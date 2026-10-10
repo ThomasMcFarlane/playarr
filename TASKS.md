@@ -52,6 +52,7 @@ Steps only the repository owner can perform.
 | 9981 | Web: Settings default audio/subtitle language (and other long choice lists) as shared dropdowns | in_progress | settings-select worker | settings-language-select | | 2026-10-11 01:30 ICT | Owner request 2026-10-10: Select/MultiSelect/SegmentedControl instead of toggle-button lists in Settings. |
 | 9988 | Web: remove duplicate Library filter from Search | in_progress | filters worker | multiselect-tv | | 2026-10-11 01:30 ICT | Owner ruling 2026-10-10: the Search Filters Library section lists views by admin-chosen name, duplicates Type and can expose provider-flavoured names. Section, state, matching and strings are removed; an old library param is dropped from the URL. |
 | 9980 | Web: Settings menu items cropped on the left (and other vertical menus) | in_progress | settings-crop worker | fix/settings-menu-crop | | 2026-10-11 01:00 ICT | Owner bug 2026-10-10; scroller inline padding like agenda 1.9965 and rails 1.9951 |
+| 9987 | Web: remaining toggle-button choice lists (playlists, keep-until, track pickers) use shared Select/SegmentedControl | in_progress | settings-select worker | settings-language-select | | 2026-10-11 02:30 ICT | Owner consistency rule: one shared control per pattern. Follows 1.9981. |
 
 ## 2. Server performance and security (2026-10-03)
 
