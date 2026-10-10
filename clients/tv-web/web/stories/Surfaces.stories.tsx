@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { DateRangeField, MasterDetail, PeriodPicker } from "../src/components/shell";
+import { MasterDetail, PeriodPicker } from "../src/components/shell";
 import { ProfileAvatar } from "../src/components/ProfileAvatar";
 import { LanguageDropdown } from "../src/components/LanguageDropdown";
 import { WatchStateOverlay } from "../src/components/WatchStateOverlay";
@@ -14,7 +14,6 @@ function Surfaces() {
   const [period, setPeriod] = useState("2026-10-01");
   const [jumpOpen, setJumpOpen] = useState(true);
   const jumpTrigger = useRef<HTMLButtonElement>(null);
-  const [range, setRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
   return (
     <div className="sb-pad sb-col" style={{ maxWidth: 900 }}>
       <div>
@@ -46,10 +45,6 @@ function Surfaces() {
           Oct 2026
         </button>
         <PeriodPicker id="story-period-jump" open={jumpOpen} onOpenChange={setJumpOpen} triggerRef={jumpTrigger} value={period} label="October 2026" locale="en-GB" dialogLabel="Choose a period" monthLabel="Month" yearLabel="Year" onChange={setPeriod} />
-      </div>
-      <div>
-        <Caption>Date range field</Caption>
-        <DateRangeField from={range.from} to={range.to} fromLabel="From" toLabel="To" clearLabel="Clear" onChange={setRange} />
       </div>
       <div>
         <Caption>Language dropdown</Caption>
