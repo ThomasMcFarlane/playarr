@@ -70,6 +70,9 @@ namespace Playarr.Xbox.Views
             {
                 RailsPanel.Children.Add(BuildRail(rail));
             }
+
+            var first = _viewModel.Rails.Count > 0 && _viewModel.Rails[0].Items.Count > 0 ? _viewModel.Rails[0].Items[0] : null;
+            HeroTitle.Text = first?.Title ?? string.Empty;
         }
 
         private UIElement BuildRail(HomeRail rail)
@@ -89,6 +92,19 @@ namespace Playarr.Xbox.Views
                 "<ItemsStackPanel Orientation='Horizontal' /></ItemsPanelTemplate>");
             list.ItemContainerStyle = CatalogTileFactory.CardContainerStyle;
             list.ItemClick += RailItem_Click;
+            list.GotFocus += (s, e) =>
+            {
+                if (e.OriginalSource is ListViewItem { Content: FrameworkElement { Tag: Guid id } })
+                {
+                    foreach (var work in rail.Items)
+                    {
+                        if (work.Id == id)
+                        {
+                            HeroTitle.Text = work.Title;
+                        }
+                    }
+                }
+            };
             foreach (var work in rail.Items)
             {
                 list.Items.Add(CatalogTileFactory.CreateLandscapeCard(work));
