@@ -2,9 +2,12 @@ import {
   installWebOsLifecycle,
   loadWebOsRuntimeConfig,
 } from "./webosLifecycle.mjs";
+import { installLegacyHas } from "../../../tooling/legacy-has.mjs";
 
 document.documentElement.dataset.platform = "tv-webos";
 installWebOsLifecycle();
+// Chromium 94 (webOS 23) has no :has(); the build rewrites those rules for this runtime.
+installLegacyHas();
 
 async function startPlayarr(): Promise<void> {
   await loadWebOsRuntimeConfig(`${import.meta.env.BASE_URL}playarr-config.json`);

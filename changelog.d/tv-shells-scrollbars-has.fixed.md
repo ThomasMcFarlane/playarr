@@ -1,0 +1,2 @@
+- Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
+- Tizen and webOS: web rules that use `:has()` (nav group spacing, search field focus ring, calendar agenda panel, downloads layout) now apply, through a build-time rewrite plus a small runtime that keeps a matching attribute up to date.
