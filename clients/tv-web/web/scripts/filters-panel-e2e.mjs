@@ -153,6 +153,50 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
     await context.close();
   }
 }
+// Calendar filters: Type and Status are multi-selects, Monitored only is a switch, no chips or pills remain.
+for (const [width, height] of [[1920, 1080], [1280, 720]]) {
+  const tag = `calendar ${width}x${height}`;
+  const { context, page, errors } = await open("/calendar?panel=filters", { width, height });
+  try {
+    await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await page.waitForTimeout(700);
+    const pills = await page.evaluate(() =>
+      [...document.querySelectorAll(".tv-filter-drawer .tv-filter-choice-grid:not(.tv-segmented) button")].map((b) => b.textContent.trim())
+    );
+    check(`${tag}: no filter chips or pills (only the Clear action may use the grid)`, pills.every((t) => /clear/i.test(t)), JSON.stringify(pills));
+    for (const [title, type, param, expect] of [["Type", "mus", "type", "music"], ["Status", "air", "status", "aired"]]) {
+      const section = page.locator(`.tv-filter-drawer .drawer-body section:has(> h3:text-is("${title}"))`);
+      check(`${tag} ${title}: is a multi-select`, (await section.locator(".ui-multiselect").count()) === 1);
+      await section.locator(".ui-multiselect-trigger").focus();
+      await page.keyboard.press("Enter");
+      await page.waitForSelector(`.tv-filter-drawer [role="listbox"]`);
+      await page.keyboard.type(type);
+      const shown = await section.locator('[role="option"]').allTextContents();
+      check(`${tag} ${title}: typing filters`, shown.length === 1, JSON.stringify(shown));
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(400);
+      check(`${tag} ${title}: toggling sets ?${param}=${expect}`, new URL(page.url()).searchParams.get(param) === expect, page.url());
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      const state = await page.evaluate(() => ({ drawer: !!document.querySelector(".tv-filter-drawer"), onField: document.activeElement?.classList.contains("ui-multiselect-trigger") }));
+      check(`${tag} ${title}: Escape closes the list only and refocuses the field`, state.drawer && state.onField, JSON.stringify(state));
+    }
+    const sw = page.locator('.tv-filter-drawer input[role="switch"]');
+    check(`${tag}: Monitored only is one switch`, (await sw.count()) === 1);
+    check(`${tag}: switch target is at least 44px`, await sw.evaluate((el) => el.offsetHeight >= 44 && el.offsetWidth >= 44));
+    await sw.focus();
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(400);
+    check(`${tag}: switch on sets ?monitored=1`, new URL(page.url()).searchParams.get("monitored") === "1" && (await sw.isChecked()), page.url());
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(400);
+    check(`${tag}: switch off clears ?monitored`, new URL(page.url()).searchParams.get("monitored") === null && !(await sw.isChecked()), page.url());
+    check(`${tag}: no page errors`, errors.length === 0, errors.join("; "));
+    if (shots) await page.screenshot({ path: `${shots}/calendar-filters-${width}x${height}.png` });
+  } finally {
+    await context.close();
+  }
+}
 // Panels that overflow at these sizes: Calendar filters, and Movies at a short window.
 for (const [path, width, height, name] of [
   ["/calendar?panel=filters", 1920, 1080, "calendar 1920x1080"],

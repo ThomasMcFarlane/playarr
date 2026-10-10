@@ -17,43 +17,6 @@ export function FilterSection({
   );
 }
 
-/** Shared multi-select: a set of toggle chips (`aria-pressed`) for a filter section. */
-export function ToggleChips<T extends string>({
-  options,
-  selected,
-  onChange,
-  ariaLabel,
-}: {
-  options: ReadonlyArray<{ value: T; label: string }>;
-  selected: ReadonlySet<T>;
-  onChange: (next: Set<T>) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <div className="tv-filter-choice-grid" role="group" aria-label={ariaLabel}>
-      {options.map((option) => {
-        const on = selected.has(option.value);
-        return (
-          <button
-            key={option.value}
-            type="button"
-            className={on ? "is-active" : ""}
-            aria-pressed={on}
-            onClick={() => {
-              const next = new Set(selected);
-              if (on) next.delete(option.value);
-              else next.add(option.value);
-              onChange(next);
-            }}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Shared calendar-range control: inclusive from/to days (`YYYY-MM-DD`), either may be empty. */
 export function DateRangeField({
   from,
