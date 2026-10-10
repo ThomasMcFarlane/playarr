@@ -67,6 +67,11 @@ impl<K: Hash + Eq + Clone, V: Clone> SwrCache<K, V> {
         self.with(|i| i.entries.clear());
     }
 
+    /// Drops the cached values whose key matches (one source reported changes).
+    pub(crate) fn clear_where(&self, matches: impl Fn(&K) -> bool) {
+        self.with(|i| i.entries.retain(|k, _| !matches(k)));
+    }
+
     fn insert(&self, key: K, value: V) {
         let max = self.max_entries;
         self.with(|i| {
