@@ -396,6 +396,24 @@ internal fun Modifier.heroBackdrop(isTelevision: Boolean, tvWidthFraction: Float
         fillMaxWidth().fillMaxHeight(phoneHeightFraction).heroBackdropFade(false)
     }
 
+/**
+ * Web `.details-panel::before`: a surface band at 94% behind the details panel, from 40% of its width before it to 22%
+ * after it and 14% above and below, faded in over its first 22% and out over its last 20%, and masked to fade over the
+ * top and bottom 10%. Drawn behind the column, outside its bounds.
+ */
+internal fun Modifier.detailsPanelBand(): Modifier = drawBehind {
+    val scrim = WebSurface.copy(alpha = 0.94f)
+    val left = -0.40f * size.width
+    val top = -0.14f * size.height
+    val w = size.width * 1.62f
+    val h = size.height * 1.28f
+    val clear = scrim.copy(alpha = 0f)
+    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(left, top, left + w, top + h), androidx.compose.ui.graphics.Paint())
+    drawRect(Brush.horizontalGradient(0f to clear, 0.22f to scrim, 0.80f to scrim, 1f to clear, startX = left, endX = left + w), topLeft = Offset(left, top), size = Size(w, h))
+    drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black, 0.90f to Color.Black, 1f to Color.Transparent, startY = top, endY = top + h), topLeft = Offset(left, top), size = Size(w, h), blendMode = BlendMode.DstIn)
+    drawContext.canvas.restore()
+}
+
 /** Fraction of the backdrop, from its leading edge, kept fully opaque before the trailing fade (web `.tv-key-art img` mask: 72%). */
 internal const val HERO_BACKDROP_FADE_START = 0.72f
 
@@ -420,7 +438,7 @@ internal const val HERO_SCRIM_TEXT_ALPHA = 0.70f
 
 /**
  * The hero scrim. Television mirrors web exactly: `.tv-key-art::after` (a 22% edge fade on the left, top and bottom)
- * plus `.tv-stage-wash` (surface at .94 fading out over the left 31% and at .5 over the right 34%), so the key art
+ * plus `.tv-stage-wash` (surface at .94 to .90 over the left 36%, gone by 52%, and at .5 over the right 34%), so the key art
  * shows through everywhere else. Phones keep [heroScrimBrush].
  */
 @Composable
@@ -429,10 +447,12 @@ internal fun Modifier.heroScrim(isTelevision: Boolean): Modifier {
     val surface = WebSurface
     val clear = surface.copy(alpha = 0f)
     return drawBehind {
+        // `.tv-key-art::after`: 90deg surface to transparent at 22%; 0deg (bottom up) surface to transparent at 22%, back to surface from 82%.
         drawRect(Brush.horizontalGradient(0f to surface, 0.22f to clear, 1f to clear))
-        drawRect(Brush.verticalGradient(0f to surface, 0.22f to clear, 0.82f to clear, 1f to surface))
-        drawRect(Brush.horizontalGradient(colors = listOf(surface.copy(alpha = 0.94f), clear), startX = 0f, endX = size.width * 0.31f))
-        drawRect(Brush.horizontalGradient(colors = listOf(clear, surface.copy(alpha = 0.5f)), startX = size.width * 0.66f, endX = size.width))
+        drawRect(Brush.verticalGradient(0f to surface, 0.18f to clear, 0.78f to clear, 1f to surface))
+        // `.tv-stage-wash`: surface at .94, .90 at 36%, transparent at 52%; and from the right, .5 fading out by 34%.
+        drawRect(Brush.horizontalGradient(0f to surface.copy(alpha = 0.94f), 0.36f to surface.copy(alpha = 0.90f), 0.52f to clear, 1f to clear))
+        drawRect(Brush.horizontalGradient(0f to clear, 0.66f to clear, 1f to surface.copy(alpha = 0.5f)))
     }
 }
 
@@ -2800,47 +2820,45 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: Featur
     val kind = work.kind.playarrSingularLabel()
     val genre = work.genres.firstOrNull() ?: playarrString(PlayarrString.HomeDefaultGenre)
     if (isTelevision && style != FeatureCopyStyle.Detail) {
-        // Web `.tv-provider` / `h2` / `.tv-preview-meta` / `.tv-preview-overview`: a 455 dp column starting at y 259.2.
+        // Web `DetailsPanel` (`.details-panel.is-stage`): eyebrow, title, meta and overview in a 455 dp column from y 259.2,
+        // `--dp-soft` text with a 14 px surface glow, over its own surface band (`.details-panel::before`).
         val library = style == FeatureCopyStyle.Library
-        Column(Modifier.width(455.dp)) {
+        val palette = PlayarrWebTheme.palette
+        val soft = palette.detailsSoft
+        val glow = WebTextStyle.copy(shadow = androidx.compose.ui.graphics.Shadow(WebSurface.copy(alpha = 0.9f), blurRadius = 14f * LocalDensity.current.density))
+        Column(Modifier.width(455.dp).detailsPanelBand()) {
             Text(
                 if (library) {
                     (work.genres.firstOrNull() ?: kind).uppercase(language.locale)
                 } else {
                     playarrString(PlayarrString.HomeKindGenre, "kind" to kind, "genre" to genre).uppercase(language.locale)
                 },
-                color = WebKicker,
+                color = palette.brandInk,
                 fontSize = 12.288.sp,
-                fontWeight = FontWeight(820),
+                fontWeight = FontWeight(860),
                 letterSpacing = 0.983.sp,
                 lineHeight = 18.432.sp,
-                style = WebTextStyle,
+                style = glow,
             )
             WebHeroTitle(work.title, Modifier.padding(top = 25.9.dp))
             if (library) {
-                Row(Modifier.padding(top = 27.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        java.time.ZonedDateTime.ofInstant(work.addedAt, java.time.ZoneOffset.UTC).year.toString(),
-                        color = WebInkSoft,
-                        fontSize = 12.096.sp,
-                        lineHeight = 18.144.sp,
-                        style = WebTextStyle,
-                    )
-                    Text(
+                Row(Modifier.padding(top = 27.dp), horizontalArrangement = Arrangement.spacedBy(12.8.dp)) {
+                    // The release year, never the library added date (ruling 2026-10-08).
+                    listOfNotNull(
+                        playarrKindYear(work.releaseDate)?.toString(),
                         work.genres.take(2).joinToString(" \u00B7 ").ifBlank { kind },
-                        color = WebInkMuted,
-                        fontSize = 12.096.sp,
-                        lineHeight = 18.144.sp,
-                        style = WebTextStyle,
-                    )
+                    ).forEach {
+                        Text(it, color = soft, fontSize = 13.056.sp, lineHeight = 19.584.sp, fontWeight = FontWeight(600), style = glow)
+                    }
                 }
             }
             Text(
                 work.overview?.takeIf(String::isNotBlank) ?: playarrString(PlayarrString.HomeNoSynopsis),
-                color = WebInkMuted,
-                fontSize = 12.864.sp,
-                lineHeight = 20.325.sp,
-                style = WebTextStyle,
+                color = soft,
+                fontSize = if (library) 13.824.sp else 12.864.sp,
+                lineHeight = if (library) 21.842.sp else 20.325.sp,
+                fontWeight = FontWeight(600),
+                style = glow,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 21.7.dp).widthIn(max = 360.dp),
@@ -4249,8 +4267,7 @@ private fun TelevisionSearchBody(
         if (showPreview && !filtersOpen) {
             Column(Modifier.offset(x = 153.6.dp, y = 362.dp).width(517.6.dp)) {
                 val kicker = if (selectedWork != null) {
-                    val year = selectedWork.addedAt.atZone(java.time.ZoneOffset.UTC).year
-                    "${selectedWork.kind.playarrSingularLabel()} \u00B7 ${selectedWork.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year ?: year}"
+                    selectedWork.playarrKindYearLabel()
                 } else {
                     playarrString(if (selectedPlaylist?.isSystem == true) PlayarrString.SearchSystemPlaylist else PlayarrString.SearchPlaylist)
                 }
