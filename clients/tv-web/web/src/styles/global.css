@@ -5120,8 +5120,20 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   gap: 0.5rem;
 }
 
-.tv-filter-view-options {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* One row of equal segments (the SegmentedControl sets the column count), icon over label, same height as the other
+   panel choice buttons. */
+.tv-segmented button {
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem 0.3rem;
+  min-width: 0;
+}
+
+.tv-segmented button strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.1;
 }
 
 .tv-filter-choice-grid-wide {
