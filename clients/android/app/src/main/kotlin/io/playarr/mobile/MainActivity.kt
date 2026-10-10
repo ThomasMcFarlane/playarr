@@ -185,6 +185,10 @@ class MainActivity : ComponentActivity() {
         io.playarr.mobile.ui.parityClock = intent.getStringExtra("parity_clock")?.takeIf {
             (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         }?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+        // Debuggable builds only: start on a given route so parity captures reach every screen with the D-pad alone.
+        io.playarr.mobile.ui.parityRoute = intent.getStringExtra("parity_route")?.takeIf {
+            (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && it.isNotBlank()
+        }
         io.playarr.mobile.ui.parityPauseAtMs = intent.getLongExtra("parity_pause_at_ms", -1L).takeIf {
             it >= 0L && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         }
