@@ -224,6 +224,7 @@ export interface TvGeometryTokens {
   // Title panel.
   titlePanelTopPct: number;
   titlePanelLeft: number;
+  titlePanelTop: number;
   titlePanelWidth: number;
 
   // Primary action.
@@ -243,6 +244,10 @@ export interface TvGeometryTokens {
   homeRailsColumnLeftPct: number;
   homeRailsColumnVerticalPaddingVhPct: number;
   homeRailsColumnRowGap: number;
+  homeRailsLeft: number;
+  homeRailsWidth: number;
+  homeRailsInsetLeft: number;
+  homeRailsTop: number;
 
   // Utility/clock row.
   utilityRowTop: number;
@@ -327,8 +332,10 @@ export const TvGeometry: TvGeometryTokens = {
   stageWashRightFadePct: 34,
 
   titlePanelTopPct: 31,
-  titlePanelLeft: 144,
-  titlePanelWidth: 518,
+  titlePanelLeft: 154,
+  titlePanelWidth: 455,
+  // Web TV Home `.tv-home-feature` top edge (live DOM, 1920x1080).
+  titlePanelTop: 259,
 
   primaryActionTopPct: 47,
   primaryActionLeftPct: 47.5,
@@ -344,6 +351,12 @@ export const TvGeometry: TvGeometryTokens = {
   homeRailsColumnLeftPct: 38,
   homeRailsColumnVerticalPaddingVhPct: 50,
   homeRailsColumnRowGap: 48,
+  // Web `.tv-home-rails`: a full-height column from x=730; headings and cards start 152 in (x=882);
+  // the active rail's heading sits at y=402.
+  homeRailsLeft: 730,
+  homeRailsWidth: 1190,
+  homeRailsInsetLeft: 152,
+  homeRailsTop: 402,
 
   utilityRowTop: 56,
   utilityRowHeight: 50,
@@ -352,12 +365,12 @@ export const TvGeometry: TvGeometryTokens = {
   logoLeft: 59,
   logoTop: 34,
 
-  homeRailCardWidthLandscape: 219,
+  homeRailCardWidthLandscape: 327,
   homeRailCardWidthCover: 172,
   railPanelCardWidth: 230,
   railItemGapHome: 25,
   railItemGapTitle: 23,
-  railHeadingSize: 18,
+  railHeadingSize: 17.664,
   railHeadingWeight: 610,
   libraryGridColumns: 3,
   libraryGridRowGap: 36,
