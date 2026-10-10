@@ -26,6 +26,13 @@ describe("playbackCapabilitiesForPlatform", () => {
     expect(playbackCapabilitiesForPlatform("web").audioCodecs).toContain("flac");
   });
 
+  it("claims HEVC on the desktop browser only when MSE can decode it", () => {
+    expect(playbackCapabilitiesForPlatform("web", true).videoCodecs).toBe("h264,h265,vp9,av1");
+    expect(playbackCapabilitiesForPlatform("web", false).videoCodecs).toBe("h264,vp9,av1");
+    // jsdom has no MediaSource: no claim.
+    expect(playbackCapabilitiesForPlatform("web").videoCodecs).not.toContain("h265");
+  });
+
   it("uses the conservative VIDAA browser profile without thinning containers wrongly", () => {
     const vidaa = playbackCapabilitiesForPlatform("tv-vidaa");
     expect(vidaa).toEqual({
