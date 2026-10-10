@@ -20,13 +20,17 @@
 //                                      in place; a new row is appended to the end of that section's
 //                                      table. Depends hold `<epic>.<task>` references; a bare row ID that is on the
 //                                      board is rewritten to its reference when the fragment folds.
+//                                      A fragment that updates an existing row must keep its title (normalised word
+//                                      overlap >= 0.5), or `--check` fails: a different task reusing the number would
+//                                      overwrite an unrelated row. A leading `retitle: true` line allows a deliberate rename.
+//                                      Two fragments for one ID with different titles also fail.
 //                                      A line `remove: <row-number>` deletes that row from the board
 //                                      (a fragment may hold only remove lines; a missing row is an error).
 //
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveSection, HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta, parseEpicHeading, stripEpicNumber, nextEpicNumber, epicByRow, normaliseDepends, dependsProblems, normaliseSection } from './lib/board.mjs';
+import { resolveSection, HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta, parseEpicHeading, stripEpicNumber, nextEpicNumber, epicByRow, normaliseDepends, dependsProblems, normaliseSection, titlesDiffer } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -105,9 +109,12 @@ for (const f of tkFiles) {
   const lines = fs.readFileSync(path.join(root, 'tasks.d', f), 'utf8').split('\n').map((l) => l.replace(/\s+$/, '')).filter(Boolean);
   let section = null;
   let sectionNew = false;
+  let retitle = false;
+  // `retitle: true` (leading line) allows this fragment to rename an existing row.
   // `section: <heading>` resolves against the board (see resolveSection); `section-new: <name>` deliberately creates an epic.
-  while (lines[0]?.startsWith('section:') || lines[0]?.startsWith('section-new:')) {
+  while (lines[0]?.startsWith('section:') || lines[0]?.startsWith('section-new:') || /^retitle:/.test(lines[0] ?? '')) {
     const l = lines.shift();
+    if (l.startsWith('retitle:')) { retitle = /^retitle:\s*true$/i.test(l); continue; }
     sectionNew = l.startsWith('section-new:');
     section = l.slice(l.indexOf(':') + 1).trim();
   }
@@ -123,7 +130,7 @@ for (const f of tkFiles) {
     else if (!cells) err(`tasks.d/${f}: row ${n} must have the eight columns ${HEADER_LINE}`);
     else {
       for (const pr of rowProblems(cells)) err(`tasks.d/${f}: row ${n}: ${pr}`);
-      tkFrags.push({ f, n, section, sectionNew, row: formatRow(cells), cells });
+      tkFrags.push({ f, n, section, sectionNew, retitle, row: formatRow(cells), cells });
     }
   }
 }
@@ -181,8 +188,17 @@ function applyTasks(lines, fail) {
 if (check) {
   const boardFile = path.join(root, 'TASKS.md');
   const onBoard = new Set(fs.existsSync(boardFile) ? [...fs.readFileSync(boardFile, 'utf8').matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) => m[1]) : []);
+  const boardTitles = new Map();
+  if (fs.existsSync(boardFile)) for (const l of fs.readFileSync(boardFile, 'utf8').split('\n')) { const c = l.startsWith('|') ? parseCells(l) : null; if (c && /^\d+$/.test(c[0])) boardTitles.set(c[0], c[1]); }
+  const pendingTitles = new Map();
   for (const fr of tkFrags) {
     if (fr.remove) continue;
+    const hint = 'Is this a different task reusing the number? Use a new number, or add `retitle: true` to the fragment to rename deliberately.';
+    const old = boardTitles.get(fr.n);
+    if (old !== undefined && !fr.retitle && titlesDiffer(fr.cells[1], old)) err(`tasks.d/${fr.f}: row ${fr.n} title mismatch: fragment '${fr.cells[1]}' vs board '${old}'. ${hint}`);
+    const earlier = pendingTitles.get(fr.n);
+    if (earlier && !fr.retitle && titlesDiffer(fr.cells[1], earlier.title)) err(`tasks.d/${fr.f}: row ${fr.n} title mismatch: fragment '${fr.cells[1]}' vs pending fragment tasks.d/${earlier.f} '${earlier.title}'. Two fragments target the same ID. ${hint}`);
+    if (!earlier) pendingTitles.set(fr.n, { f: fr.f, title: fr.cells[1] });
     const e = openRowEta(fr.cells, now);
     if (e.error) err(`tasks.d/${fr.f}: row ${fr.n}: ${e.error}`);
     if (e.warning) warnings.push(`warning: tasks.d/${fr.f}: row ${fr.n}: ${e.warning}`);

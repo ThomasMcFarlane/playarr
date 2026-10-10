@@ -190,3 +190,18 @@ export function resolveSection(name, headings) {
   const list = headings.map((h) => `  - ${h}`).join('\n');
   return { error: `section "${name}" matches no heading on the board (a leading "Active: "/"Planned: " is ignored). Use one of:\n${list}\nTo create a new epic on purpose, use a "section-new: <name>" line instead.` };
 }
+
+// Word-overlap (Jaccard) similarity of two task titles after lowercasing and stripping punctuation, 0..1.
+// Used to catch a fragment that reuses an existing row number for an unrelated task.
+export function titleSimilarity(a, b) {
+  const words = (s) => new Set(String(s).toLowerCase().replace(/[^\p{L}\p{N}\s]+/gu, ' ').split(/\s+/).filter(Boolean));
+  const x = words(a);
+  const y = words(b);
+  if (!x.size && !y.size) return 1;
+  let both = 0;
+  for (const w of x) if (y.has(w)) both++;
+  return both / (x.size + y.size - both);
+}
+
+export const TITLE_MATCH_MIN = 0.5;
+export const titlesDiffer = (a, b) => titleSimilarity(a, b) < TITLE_MATCH_MIN;

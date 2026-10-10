@@ -1,0 +1,1 @@
+- Board fold `--check` now fails when a tasks.d fragment reuses an existing row number with a materially different title (override with `retitle: true`), or when two fragments for one ID disagree on the title.
