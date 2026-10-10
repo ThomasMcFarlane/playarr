@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Button } from "../src/components/ui";
-import { Drawer, FilterSection, MultiSelect, ScrollArea } from "../src/components/shell";
+import { Button, MultiSelect } from "../src/components/ui";
+import { Drawer, FilterSection, ScrollArea } from "../src/components/shell";
 
 const GENRES = ["Action", "Drama", "Comedy", "Documentary", "Thriller", "Animation"].map((g) => ({ value: g, label: g }));
 

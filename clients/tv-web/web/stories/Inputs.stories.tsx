@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { MultiSelect, ViewToggle } from "../src/components/shell";
-import { SegmentedControl, Select } from "../src/components/ui";
+import { ViewToggle } from "../src/components/shell";
+import { MultiSelect, SegmentedControl, Select } from "../src/components/ui";
 import { Caption } from "./fixtures";
 
 const OPTIONS = [
