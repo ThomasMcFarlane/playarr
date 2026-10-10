@@ -354,7 +354,10 @@ final class TVPlayerViewModel {
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title,
                                                startPositionSeconds: resumeSeconds, httpHeaders: headers))
             // `-PlayarrMuted` (shared test simulators, e.g. the device wall Mac): the player never makes a sound.
-            if ProcessInfo.processInfo.arguments.contains("-PlayarrMuted") { engine.isMuted = true }
+            if ProcessInfo.processInfo.arguments.contains("-PlayarrMuted") {
+                engine.isMuted = true
+                NSLog("PlayarrTV: player muted by -PlayarrMuted (isMuted=%@)", engine.isMuted ? "true" : "false")
+            }
             engine.play()
             state = .ready
             activeMediaFileID = mediaFileID
