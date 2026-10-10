@@ -1376,7 +1376,12 @@ struct TVLibraryKindView: View {
                         }
                         .scrollClipDisabled()
                         .task(id: "\(audioLangs)-\(subtitleLangs)") {
-                            facets = try? await environment.apiClient.catalogLanguages(kind: workKind, audioLang: audioLangs, subtitleLang: subtitleLangs)
+                            do {
+                                facets = try await environment.apiClient.catalogLanguages(kind: workKind, audioLang: audioLangs, subtitleLang: subtitleLangs)
+                            } catch {
+                                NSLog("PlayarrTV: language facets failed: %@", String(describing: error))
+                                facets = LanguageFacets(audio: [], subtitle: [])
+                            }
                         }
                     }
                     .zIndex(30)

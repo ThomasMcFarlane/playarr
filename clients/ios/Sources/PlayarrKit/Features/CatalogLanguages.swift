@@ -18,6 +18,11 @@ public struct LanguageFacet: Codable, Hashable, Sendable, Identifiable {
 public struct LanguageFacets: Codable, Sendable {
     public let audio: [LanguageFacet]
     public let subtitle: [LanguageFacet]
+
+    public init(audio: [LanguageFacet], subtitle: [LanguageFacet]) {
+        self.audio = audio
+        self.subtitle = subtitle
+    }
 }
 
 public extension PlayarrRequestTransport {
