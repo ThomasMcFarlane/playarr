@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the black (light theme: white) bars behind the selected card's title and meta, added by the AAA work, are gone: captions on the page background carry no box, and the selected caption takes the new full-contrast `--ink-max` token instead. Home and the shared rail stack also ignore real focus that trails the remote marker onto a card the marker has already left, so a quick Down then Up cannot glide the rails back to the old rail; `nav-rail-centre-e2e` now checks every frame after the last key moves only toward the final rail position, never away from it or past it.
+- Web: moving left or right along a rail never re-centres the rail stack vertically under remote keys: the stack is centred once, when a rail is entered, and a later real focus on a card of the same rail (which trails the remote marker) is ignored. `nav-rail-centre-e2e` checks the stack's scroll offset, transform and position are constant on every frame for Right x5 then Left x3 after a Down, on Home and Series, at both sizes and in both themes.
+- Web client: a public server address typed without a port now tries the relay name on 443 and falls back to 8484 (the default server listener) when 443 does not connect, fails TLS or times out, and remembers the port that worked. A port typed by the user is always used exactly as typed. Docs (relay, Cloudflare, systemd, Docker) describe the 443 then 8484 order.
 - Web: the Library A to Z rail is one column again. The 44px letters (WCAG 2.5.5) no longer wrap into two or three columns when they do not fit the stage; the column scrolls instead, with the shared soft edge fade at the top and bottom (present from first paint, no boxes), and the focused or highlighted letter is always scrolled smoothly into view. Owner request 2026-10-10.
 - Web: after Home loads, every nav section (Movies, Series, Music, Calendar, Watchlist, Playlists) is warmed at idle, nav items prefetch after 150 ms of focus and keep going when focus leaves the nav, and an Enter release no longer opens the card a cached page focuses within the same key press.
 - Web: Home no longer snaps back to the first rail when its rail set changes after the viewer has moved on (a rail appearing or going a few seconds after first paint): the stack now stays centred on the rail the viewer is on. `nav-home-hold-e2e` checks marker and scroll stay put for 5 s after settling, warm and on a cold start.
@@ -381,6 +384,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the active rail heading no longer scales or shifts when a rail becomes active; it changes colour only, so the title cannot read as the rail moving vertically (Home and any shared rail stack). Layout-Change: owner request 2026-10-10, reference Home rail moves vertically when moving left/right (owner). `nav-rail-centre-e2e` checks the heading's box is constant from the Down through 700 ms.
 - Web: every page header subtitle now uses the one small media-page subtitle style (Calendar, Settings and its sections, Playlists, Search, Library, Folders, film, series and music pages). The bold item-title style, the two-line Settings section detail and the divider are gone.
 - Board fold resolves renamed `section:` names through an alias table, keeps existing rows in their epic, and fails `--check` on an unknown section instead of creating a heading (`section-new:` creates one on purpose).
 - Pull requests merged directly now have their `tasks.d/` and `changelog.d/` fragments folded onto `main` by the new `Fold board` workflow (`scripts/fold-main.sh`), and `Board sync` folds its row flips straight onto `main` instead of opening a PR, which GitHub Actions is not permitted to do here (the run for #437 failed on that).
@@ -2626,6 +2630,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Unit tests for the relay address normaliser and the 443 then 8484 probe order, plus `relay-port-e2e.mjs`, which signs in through a relay name served only on 8484.
 - Web: the focus-style end-to-end check covers calendar agenda, week and month cards in both themes at 1920 and 1280; Storybook stories for the details panel and status pill.
 - Web behaviour gate: nav-smoke, tablet-layout, focus-style-e2e and edge-fade-e2e no longer sit in `tracked`, so a failure now blocks `ci-required` (row 9623).
 - Web: `tokenContrast.test.ts` computes the contrast of every text token against every surface it is used on (7:1, both themes); `scripts/a11y-aaa.mjs` and `scripts/a11y-aaa-pages.mjs` run axe-core with the WCAG 2.2 AAA rules over the Storybook stories and the pages.

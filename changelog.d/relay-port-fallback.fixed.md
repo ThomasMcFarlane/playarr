@@ -1,1 +1,0 @@
-- Web client: a public server address typed without a port now tries the relay name on 443 and falls back to 8484 (the default server listener) when 443 does not connect, fails TLS or times out, and remembers the port that worked. A port typed by the user is always used exactly as typed. Docs (relay, Cloudflare, systemd, Docker) describe the 443 then 8484 order.

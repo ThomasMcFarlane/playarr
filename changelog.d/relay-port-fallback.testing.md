@@ -1,1 +1,0 @@
-- Unit tests for the relay address normaliser and the 443 then 8484 probe order, plus `relay-port-e2e.mjs`, which signs in through a relay name served only on 8484.
