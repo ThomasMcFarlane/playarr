@@ -119,6 +119,8 @@ import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
 import { HOME_NAV_ID, buildNavRailItems } from '../navigation/NavItems';
 import { titleCountLabel } from '../core/CountFormat';
+import { AlphabetRail } from '../design/components/AlphabetRail';
+import { alphabetFor, firstIndexAtOrAfter, workLetter } from '../core/AlphabetIndex';
 import { Spacing, Radii } from '../core/Tokens';
 
 import { getCatalog, getCatalogKinds } from '../data/CatalogRepository';
@@ -426,6 +428,9 @@ export struct Library {
   /** The TV hero: the focused title, the first one until a card takes focus (web `.tv-library-preview`). */
   @State private hero: Work | undefined = undefined;
   @State private navItems: NavRailItem[] = [];
+  /** The A-Z rail's current letter: the hero's (web `activeLetter`). */
+  @State private activeLetter: string = '#';
+  private gridScroller: Scroller = new Scroller();
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
   // actual values always go through design/Theme.ets's resolvers and
@@ -439,6 +444,39 @@ export struct Library {
   aboutToAppear(): void {
     this.loadPage(0);
     this.loadNav();
+  }
+
+  private setHero(work: Work | undefined): void {
+    this.hero = work;
+    if (work !== undefined) {
+      this.activeLetter = workLetter(work.sort_title, work.title);
+    }
+  }
+
+  /** Web `jumpToLetter`: the first title at or after the letter in the current order, loading pages until
+   * one is found; with none, the last loaded title. */
+  private async jumpToLetter(letter: string): Promise<void> {
+    let index = firstIndexAtOrAfter(this.loadedLetters(), letter, this.order);
+    while (index < 0 && this.hasMore && !this.isLoadingMore) {
+      const before = this.items.length;
+      await this.loadPage(before);
+      if (this.items.length === before) {
+        break;
+      }
+      index = firstIndexAtOrAfter(this.loadedLetters(), letter, this.order);
+    }
+    if (index < 0) {
+      index = this.items.length - 1;
+    }
+    if (index < 0) {
+      return;
+    }
+    this.gridScroller.scrollToIndex(index);
+    this.setHero(this.items[index]);
+  }
+
+  private loadedLetters(): string[] {
+    return this.items.map((work: Work): string => workLetter(work.sort_title, work.title));
   }
 
   private async loadNav(): Promise<void> {
@@ -577,7 +615,7 @@ export struct Library {
       this.items = nextItems;
       if (offset === 0) {
         this.total = total !== null ? total : -1;
-        this.hero = nextItems[0];
+        this.setHero(nextItems[0]);
       }
       this.hasMore = page.items.length >= catalogPageSize && !reachedTotal;
       this.errorMessage = '';
@@ -749,7 +787,7 @@ export struct Library {
 
   @Builder
   private tvGrid(): void {
-    Grid() {
+    Grid(this.gridScroller) {
       ForEach(
         this.items,
         (work: Work) => {
@@ -764,7 +802,7 @@ export struct Library {
                 this.openDetail(workId);
               },
               onFocused: (focused: Work) => {
-                this.hero = focused;
+                this.setHero(focused);
               },
             })
           }
@@ -824,6 +862,15 @@ export struct Library {
       .height(tv(TvGeometry.utilityRowHeight))
       .alignItems(VerticalAlign.Center)
       .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
+      if (this.sort === 'title') {
+        AlphabetRail({
+          letters: alphabetFor(this.order),
+          activeLetter: this.activeLetter,
+          onJump: (letter: string): void => {
+            this.jumpToLetter(letter);
+          },
+        })
+      }
       Row({ space: tv(TV_HEADER_GAP) }) {
         Text('←')
           .fontSize(tv(TV_BACK_GLYPH_SIZE))
