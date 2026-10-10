@@ -11246,6 +11246,21 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
   box-shadow: var(--card-glow) !important;
 }
 
+/*
+ * Circular focus target (owner 2026-10-10): a focusable circular avatar (profile picker, avatar presets) draws the focus
+ * treatment on the circle itself, never on its square tile. Put .circle-focus-host on the focusable control and
+ * .circle-focus-target on the circle; the cast headshots get the same result through the card art rules above.
+ */
+.circle-focus-host:focus-visible,
+body[data-input-mode="remote"] .circle-focus-host[data-remote-active] {
+  outline: 0;
+}
+
+.circle-focus-host:focus-visible .circle-focus-target,
+body[data-input-mode="remote"] .circle-focus-host[data-remote-active] .circle-focus-target {
+  box-shadow: 0 22px 52px rgba(31, 14, 20, 0.28), var(--card-glow) !important;
+}
+
 /* Shared Select (components/ui/Select.tsx): a field showing the chosen option that opens an inline list. 7:1 ink on
    surface, 44px minimum rows, same focus treatment as the other panel choices. */
 .ui-select {
