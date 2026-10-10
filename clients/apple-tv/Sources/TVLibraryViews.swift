@@ -923,6 +923,8 @@ struct TVHomeSkeleton: View {
 struct TVWorkArt: View {
     let work: Work
     let apiClient: PlayarrAPIClient
+    /// Cover (2:3) cards ask for the poster first (web `libraryImageKinds("cover")`).
+    var posterFirst = false
 
     var body: some View {
         if let url {
@@ -951,8 +953,8 @@ struct TVWorkArt: View {
     }
 
     private var url: URL? {
-        let path = work.images.first(where: { $0.kind == .backdrop })?.url
-            ?? work.images.first(where: { $0.kind == .poster })?.url
+        let order: [ImageKind] = posterFirst ? [.poster, .backdrop] : [.backdrop, .poster]
+        let path = order.lazy.compactMap { kind in work.images.first(where: { $0.kind == kind })?.url }.first
             ?? work.images.first?.url
         guard let path else { return nil }
         return apiClient.resolvedURL(forPath: path)
@@ -1279,6 +1281,15 @@ struct TVLibraryKindView: View {
     @State private var filtersOpen = false
     @State private var sort = "title"
     @State private var order = "asc"
+    /// Web library view (`?view=`): list rows, screen (16:9) cards or cover (2:3) cards.
+    @State private var view = "screen"
+    /// Web audio/subtitle language filters (any of the chosen codes) and the facets the drawer offers.
+    @State private var audioLangs: [String] = []
+    @State private var subtitleLangs: [String] = []
+    @State private var facets: LanguageFacets?
+    /// The title focus returns to when it re-enters the grid, and whether the next focus is such an entry.
+    @State private var lastFocusedID: UUID?
+    @State private var entryPending = true
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1333,6 +1344,7 @@ struct TVLibraryKindView: View {
                 }
 
                 titleGrid(size: geo.size)
+                    .disabled(filtersOpen) // the open drawer is modal, as on the web
                     .zIndex(5)
 
                 alphabetRail
@@ -1343,6 +1355,7 @@ struct TVLibraryKindView: View {
 
                 if playlistID == nil, !listsPlaylists {
                     filterLauncher
+                        .disabled(filtersOpen)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
                         .padding(.trailing, TVShellActionColumn.edge)
@@ -1352,16 +1365,33 @@ struct TVLibraryKindView: View {
 
                 if filtersOpen {
                     TVDrawer(kicker: "Library controls", title: "Filters", onClose: { filtersOpen = false }) {
-                        TVChoiceSection(title: "Sort by", options: [("title", "Title"), ("date_added", "Date added")], selection: $sort)
-                        TVChoiceSection(title: "Order", options: [("asc", sort == "title" ? "A-Z" : "Oldest"),
-                                                                  ("desc", sort == "title" ? "Z-A" : "Newest")], selection: $order)
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                TVChoiceSection(title: "View", options: [("list", "List"), ("screen", "Screen"), ("cover", "Cover")], selection: $view)
+                                TVChoiceSection(title: "Sort by", options: [("title", "Title"), ("date_added", "Date added")], selection: $sort)
+                                TVChoiceSection(title: "Order", options: [("asc", sort == "title" ? "A-Z" : "Oldest"),
+                                                                          ("desc", sort == "title" ? "Z-A" : "Newest")], selection: $order)
+                                TVMultiSelectSection(title: "Audio language", facets: facets?.audio, loaded: facets != nil, selection: $audioLangs)
+                                TVMultiSelectSection(title: "Subtitle language", facets: facets?.subtitle, loaded: facets != nil, selection: $subtitleLangs)
+                            }
+                            .padding(.bottom, 80)
+                        }
+                        .scrollClipDisabled()
+                        .task(id: "\(audioLangs)-\(subtitleLangs)") {
+                            do {
+                                facets = try await environment.apiClient.catalogLanguages(kind: workKind, audioLang: audioLangs, subtitleLang: subtitleLangs)
+                            } catch {
+                                NSLog("PlayarrTV: language facets failed: %@", String(describing: error))
+                                facets = LanguageFacets(audio: [], subtitle: [])
+                            }
+                        }
                     }
                     .zIndex(30)
                 }
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(sort)-\(order)-\(environment.serverURL.absoluteString)") {
+        .task(id: "\(workKind?.rawValue ?? "all")-\(sort)-\(order)-\(audioLangs)-\(subtitleLangs)-\(environment.serverURL.absoluteString)") {
             await loadItems()
         }
     }
@@ -1509,11 +1539,13 @@ struct TVLibraryKindView: View {
         let gridWidth = size.width - 783.4
         let padL: CGFloat = 0
         let padR: CGFloat = 0
-        let cols = displayPreferences.cardColumns
-        let gap: CGFloat = 25.92
-        let cardW = displayPreferences.cardWidth
-        let artH = cardW * 9 / 16
-
+        // Web: screen cards use `--card-w` (3 + step columns, 25.92 apart); cover cards `--card-w-cover`
+        // (5 + step columns, 19.2 apart, 2:3); list rows are one column.
+        let cover = view == "cover"
+        let cols = view == "list" ? 1 : cover ? displayPreferences.cardColumns + 2 : displayPreferences.cardColumns
+        let gap: CGFloat = cover ? 19.2 : 25.92
+        let cardW = view == "list" ? 1033.44 : cover ? (1033.44 - 19.2 * CGFloat(cols - 1)) / CGFloat(cols) : displayPreferences.cardWidth
+        let artH = cover ? cardW * 1.5 : cardW * 9 / 16
         return ScrollView(.vertical, showsIndicators: false) {
             LazyVGrid(
                 columns: Array(
@@ -1524,7 +1556,11 @@ struct TVLibraryKindView: View {
                 spacing: 27
             ) {
                 ForEach(items) { work in
-                    libraryCard(work: work, width: cardW, artHeight: artH, showTitle: true, artIncludesDot: false)
+                    if view == "list" {
+                        libraryRow(work)
+                    } else {
+                        libraryCard(work: work, width: cardW, artHeight: artH, showTitle: true, artIncludesDot: false)
+                    }
                 }
             }
             .padding(.top, DesignTokens.Shell.libraryRailTop)
@@ -1533,8 +1569,21 @@ struct TVLibraryKindView: View {
             .padding(.trailing, padR)
         }
         .frame(width: gridWidth)
-        // Web: the first title is focused when the page opens.
-        .defaultFocus($selectedID, items.first?.id)
+        // Web: the first title is focused when the page opens and whenever focus enters the grid from outside
+        // (the nav, the header); `.userInitiated` applies it on every entry, not only the first.
+        .focusSection()
+        .defaultFocus($selectedID, items.first?.id, priority: .userInitiated)
+        // Entering the grid from outside (nav, header) lands on the last focused title, else the first (web), never on
+        // the card that happens to sit level with the nav item.
+        .onChange(of: selectedID) { previous, current in
+            guard let current else { return }
+            if previous == nil, entryPending, let target = lastFocusedID ?? items.first?.id {
+                entryPending = false
+                if target != current { selectedID = target; return }
+            }
+            lastFocusedID = current
+        }
+        .onChange(of: selectedID == nil) { _, left in if left { entryPending = true } }
         // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
         .mask(
             LinearGradient(
@@ -1570,7 +1619,7 @@ struct TVLibraryKindView: View {
                                 .interpolation(.high)
                                 .frame(width: width, height: artHeight)
                         } else {
-                            TVWorkArt(work: work, apiClient: environment.apiClient)
+                            TVWorkArt(work: work, apiClient: environment.apiClient, posterFirst: view == "cover")
                                 .frame(width: width, height: artHeight)
                                 .clipped()
                         }
@@ -1626,9 +1675,41 @@ struct TVLibraryKindView: View {
             selectedID = nil
             requestNavFocus()
         }
-        .onAppear {
-            if selectedID == nil { selectedID = work.id }
+
+    }
+
+    /// Web list view row (`.tv-list-card`): a 172.8 x 97.2 thumbnail, the title 14.98/610 and "Genres · Year" 9.6 beside
+    /// it; rows 121.9 apart. Same focus look and actions as the cards.
+    private func libraryRow(_ work: Work) -> some View {
+        let isSelected = selected?.id == work.id
+        return TVCardButton(work: work, route: playlistCounts[work.id] != nil ? .playlist(id: work.id, name: work.title) : nil) {
+            HStack(alignment: .center, spacing: 30) {
+                TVWorkArt(work: work, apiClient: environment.apiClient)
+                    .frame(width: 172.8, height: 97.2)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: isSelected && !parityMode, cornerRadius: 9))
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(work.title)
+                        .font(TVTheme.font(size: 14.976, css: 610))
+                        .tracking(-0.22)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(1)
+                    Text([work.genres.prefix(2).joined(separator: " \u{00B7} "), TVWebFormat.year(work.releaseDate) ?? ""]
+                        .filter { !$0.isEmpty }.joined(separator: "  "))
+                        .font(TVTheme.font(size: 9.6, css: 400))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 1033.44, height: 97.2 + 24.7 - 27, alignment: .leading)
+            .scaleEffect(isSelected ? 1.015 : 1, anchor: .leading)
+            .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.26), value: isSelected)
         }
+        .buttonStyle(TVFocusableCardButtonStyle())
+        .focused($selectedID, equals: work.id)
+        .disabled(parityMode)
+        .focusEffectDisabled()
     }
 
     /// Web `.page-filters-button`: the shared TVHeaderPill tile in the shell action column; opens the Filters drawer.
@@ -1762,14 +1843,13 @@ struct TVLibraryKindView: View {
         }
         do {
             // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
-            let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 48, offset: 0)
+            let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, audioLang: audioLangs, subtitleLang: subtitleLangs, limit: 48, offset: 0)
             items = page.items
             total = page.total.map(Int.init)
-            selectedID = items.first?.id
             didLoad = true
             items = Self.ordered(items, sort: sort, order: order)
             while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
-                let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 500, offset: items.count)
+                let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, audioLang: audioLangs, subtitleLang: subtitleLangs, limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
                 items = Self.ordered(items + next.items, sort: sort, order: order)
             }
@@ -1809,7 +1889,6 @@ extension TVLibraryKindView {
             items = cards
         }
         total = items.count
-        selectedID = items.first?.id
     }
 
     private static func works(_ ids: [UUID], api: PlayarrAPIClient) async -> [Work] {

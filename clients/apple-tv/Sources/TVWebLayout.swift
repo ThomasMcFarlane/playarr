@@ -608,6 +608,94 @@ struct TVActionRow: View {
         .focusEffectDisabled()
     }
 }
+
+
+/// Web `MultiSelect` in a drawer section: the field shows "Any language" or the chosen names; Select opens the
+/// options (name and title count), each toggles; any chosen code matches.
+struct TVMultiSelectSection: View {
+    let title: String
+    let facets: [LanguageFacet]?
+    let loaded: Bool
+    @Binding var selection: [String]
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11.9) {
+            Text(title.uppercased())
+                .font(TVTheme.font(size: 9.6, css: 720))
+                .tracking(0.672)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .frame(height: 14.4)
+            if !loaded {
+                RoundedRectangle(cornerRadius: 12).fill(DesignTokens.Stage.surfaceSoft.opacity(0.5)).frame(width: 268, height: 58.8)
+            } else if (facets ?? []).isEmpty, selection.isEmpty {
+                Text("No languages to filter by.")
+                    .font(TVTheme.font(size: 11.84, css: 400))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            } else {
+                Button { open.toggle() } label: {
+                    HStack {
+                        Text(summary)
+                            .font(TVTheme.font(size: 11.84, css: 680))
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(open ? "\u{2303}" : "\u{2304}")
+                            .font(TVTheme.font(size: 11.84, css: 680))
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                    }
+                    .padding(.horizontal, 19.4)
+                    .frame(width: 268, height: 58.8)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DesignTokens.Stage.surfaceSoft.opacity(0.64)))
+                }
+                .buttonStyle(TVRingButtonStyle(cornerRadius: 12))
+                .focusEffectDisabled()
+                if open {
+                    ForEach(options) { facet in
+                        let chosen = selection.contains(facet.code)
+                        Button {
+                            if chosen { selection.removeAll { $0 == facet.code } } else { selection.append(facet.code) }
+                        } label: {
+                            HStack {
+                                Text(chosen ? "\u{2713}" : "")
+                                    .frame(width: 18, alignment: .leading)
+                                Text(facet.displayName).lineLimit(1)
+                                Spacer(minLength: 0)
+                                if let count = facet.count {
+                                    Text("\(count)").foregroundStyle(DesignTokens.Color.textDisabled)
+                                }
+                            }
+                            .font(TVTheme.font(size: 11.84, css: chosen ? 760 : 520))
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .padding(.horizontal, 14)
+                            .frame(width: 268, height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(chosen ? DesignTokens.Stage.surfaceSoft : Color.clear))
+                        }
+                        .buttonStyle(TVRingButtonStyle(cornerRadius: 10))
+                        .focusEffectDisabled()
+                    }
+                }
+            }
+        }
+        .padding(.bottom, 30.3)
+    }
+
+    /// The facets plus any chosen code the facets no longer list (web `languageOptions`).
+    private var options: [LanguageFacet] {
+        var rows = facets ?? []
+        for code in selection where !rows.contains(where: { $0.code == code }) {
+            rows.append(LanguageFacet(code: code, name: nil, count: nil))
+        }
+        return rows
+    }
+
+    private var summary: String {
+        if selection.isEmpty { return "Any language" }
+        return selection.map { code in options.first { $0.code == code }?.displayName ?? code }.joined(separator: ", ")
+    }
+}
+
 /// Web `.status-pill`: one status per entry, tinted by its tone (14% over the surface, 60% border), ink text.
 struct TVStatusPill: View {
     enum Tone { case available, upcoming, missing, neutral }

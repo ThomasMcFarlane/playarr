@@ -84,6 +84,10 @@ struct TVCalendarView: View {
             }
         }
 
+        if panel != nil {
+            // The open drawer is modal (web): a transparent shield keeps focus out of the page behind it.
+            Color.clear.contentShape(Rectangle()).frame(width: 1920, height: 1080).focusable(false)
+        }
         switch panel {
         case .filters:
             TVDrawer(kicker: "Calendar", title: "Filters", onClose: { panel = nil }) {
