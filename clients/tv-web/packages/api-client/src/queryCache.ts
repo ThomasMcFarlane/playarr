@@ -26,8 +26,10 @@ export type QueryTag =
   | "views";
 
 export interface QueryCacheOptions {
-  /** Most entries kept; the least recently used is dropped first. */
+  /** Most entries kept; the least recently used is dropped first (kept entries last: see `FetchQueryOptions.keep`). */
   maxEntries?: number;
+  /** Most entries that may be marked `keep` at once; past it the oldest of them become ordinary entries again. */
+  maxKept?: number;
   now?: () => number;
 }
 
@@ -37,12 +39,21 @@ interface Entry {
   tags: readonly QueryTag[];
   /** Set by `invalidate`: still shown as a first paint, never served as fresh. */
   stale?: boolean;
+  /** Dropped last when the cache is full (see `FetchQueryOptions.keep`). Survives a refetch of the same key. */
+  keep?: boolean;
 }
 
 export interface FetchQueryOptions {
   tags?: readonly QueryTag[];
   /** A stored value younger than this is returned without any request. */
   ttlMs?: number;
+  /**
+   * Marks the stored result as a copy a later first paint depends on (a section warmed ahead of its first visit).
+   * A full cache drops ordinary entries first, so a burst of small reads (a work's detail for every card the remote
+   * crosses) cannot push it out before it is used. The mark stays on the key through later refetches, and the
+   * number of marked entries is bounded (`maxKept`).
+   */
+  keep?: boolean;
   /**
    * Lets this caller walk away. Aborting rejects only this caller's promise with an `AbortError`; the shared
    * request itself is aborted only once every caller has left, and never while a caller without a signal
@@ -74,6 +85,7 @@ function abortError(): Error {
 
 export class QueryCache {
   private readonly maxEntries: number;
+  private readonly maxKept: number;
   private readonly now: () => number;
   private readonly entries = new Map<string, Entry>();
   private readonly inflight = new Map<string, Flight>();
@@ -83,7 +95,8 @@ export class QueryCache {
   private epoch = 0;
 
   constructor(options: QueryCacheOptions = {}) {
-    this.maxEntries = options.maxEntries ?? 120;
+    this.maxEntries = options.maxEntries ?? 200;
+    this.maxKept = options.maxKept ?? 100;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -144,14 +157,38 @@ export class QueryCache {
     return { data: entry.data as T, at: entry.at, stale: entry.stale === true };
   }
 
-  private store(key: string, data: unknown, tags: readonly QueryTag[], at: number = this.now()): void {
+  private store(key: string, data: unknown, tags: readonly QueryTag[], at: number = this.now(), keep = false): void {
     const id = this.scoped(key);
+    const kept = keep || this.entries.get(id)?.keep === true;
     this.entries.delete(id);
-    this.entries.set(id, { data, at, tags });
+    this.entries.set(id, { data, at, tags, ...(kept ? { keep: true } : {}) });
+    if (kept) this.limitKept();
     while (this.entries.size > this.maxEntries) {
-      const oldest = this.entries.keys().next().value;
-      if (oldest === undefined) break;
-      this.entries.delete(oldest);
+      // Ordinary entries go first, least recently used among them; kept ones only when nothing else is left.
+      let victim: string | undefined;
+      for (const [candidate, entry] of this.entries) {
+        if (!entry.keep) {
+          victim = candidate;
+          break;
+        }
+      }
+      victim ??= this.entries.keys().next().value;
+      if (victim === undefined) break;
+      this.entries.delete(victim);
+    }
+  }
+
+  /** Keeps the marked entries bounded: the least recently used ones past `maxKept` turn ordinary again. */
+  private limitKept(): void {
+    let kept = 0;
+    for (const entry of this.entries.values()) if (entry.keep) kept += 1;
+    if (kept <= this.maxKept) return;
+    for (const entry of this.entries.values()) {
+      if (kept <= this.maxKept) break;
+      if (entry.keep) {
+        delete entry.keep;
+        kept -= 1;
+      }
     }
   }
 
@@ -167,7 +204,13 @@ export class QueryCache {
     const id = this.scoped(key);
     if (options.ttlMs !== undefined) {
       const hit = this.entries.get(id);
-      if (hit && !hit.stale && this.now() - hit.at < options.ttlMs) return Promise.resolve(hit.data as T);
+      if (hit && !hit.stale && this.now() - hit.at < options.ttlMs) {
+        if (options.keep && !hit.keep) {
+          hit.keep = true;
+          this.limitKept();
+        }
+        return Promise.resolve(hit.data as T);
+      }
     }
     const running = this.inflight.get(id);
     // A request every caller walked away from is as good as gone: a new caller starts a fresh one.
@@ -178,7 +221,7 @@ export class QueryCache {
     flight.promise = loader(controller.signal).then(
       (data) => {
         if (this.inflight.get(id) === flight) this.inflight.delete(id);
-        if (this.epoch === startedEpoch) this.store(key, data, options.tags ?? []);
+        if (this.epoch === startedEpoch) this.store(key, data, options.tags ?? [], undefined, options.keep);
         return data;
       },
       (error: unknown) => {

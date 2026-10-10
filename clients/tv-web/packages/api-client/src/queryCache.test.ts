@@ -91,6 +91,40 @@ describe("QueryCache reads", () => {
     expect(cache.peek("b")).toBeUndefined();
     expect(cache.peek("c")).toBeDefined();
   });
+
+  it("drops ordinary entries before ones marked keep, however recently they were used", async () => {
+    // A warmed section sits untouched while a burst of small reads (a work's detail per focused card) fills the cache.
+    const cache = new QueryCache({ maxEntries: 4 });
+    cache.setScope("s");
+    await cache.fetch("section", async () => "warm", { keep: true });
+    for (let i = 0; i < 20; i += 1) cache.set(`work:${i}`, i);
+    expect(cache.size).toBe(4);
+    expect(cache.peek("section")?.data).toBe("warm");
+    expect(cache.peek("work:19")).toBeDefined();
+    expect(cache.peek("work:0")).toBeUndefined();
+  });
+
+  it("keeps the mark through a refetch, and marks a copy the ttl served", async () => {
+    const cache = new QueryCache({ maxEntries: 3 });
+    cache.setScope("s");
+    await cache.fetch("a", async () => 1, { keep: true });
+    await cache.fetch("a", async () => 2); // the page's own read, no mark of its own
+    await cache.fetch("b", async () => "b");
+    await cache.fetch("b", async () => "b2", { ttlMs: 60_000, keep: true });
+    for (let i = 0; i < 10; i += 1) cache.set(`x${i}`, i);
+    expect(cache.peek("a")?.data).toBe(2);
+    expect(cache.peek("b")?.data).toBe("b");
+  });
+
+  it("bounds the marked entries: past maxKept the least recently used turn ordinary", async () => {
+    const cache = new QueryCache({ maxEntries: 4, maxKept: 2 });
+    cache.setScope("s");
+    for (const key of ["k1", "k2", "k3"]) await cache.fetch(key, async () => key, { keep: true });
+    for (let i = 0; i < 10; i += 1) cache.set(`x${i}`, i);
+    expect(cache.peek("k1")).toBeUndefined();
+    expect(cache.peek("k2")).toBeDefined();
+    expect(cache.peek("k3")).toBeDefined();
+  });
 });
 
 describe("QueryCache invalidation", () => {

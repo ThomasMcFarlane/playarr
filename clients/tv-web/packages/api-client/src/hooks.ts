@@ -218,7 +218,8 @@ export function prefetchWorkDetail(client: ApiClient, workId: string): void {
 export function prefetchHomeRails(
   client: ApiClient,
   params: { lang?: string; library?: "movie" | "series" | "artist" } = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { keep?: boolean } = {}
 ): void {
   const { queries } = client;
   if (!queries.enabled) return;
@@ -227,6 +228,7 @@ export function prefetchHomeRails(
       tags: ["catalog", "progress", "watchlist"],
       ttlMs: 15_000,
       signal,
+      keep: options.keep,
     })
     .catch(() => undefined);
 }
@@ -243,7 +245,12 @@ export function calendarCacheKey(start: string, end: string): string {
  * Warms the query cache with a calendar window (the neighbouring period) so stepping to it paints
  * from the stored copy. A no-op while the cache is off and when one is stored or already loading.
  */
-export function prefetchCalendar(client: ApiClient, window: { start: string; end: string }, signal?: AbortSignal): void {
+export function prefetchCalendar(
+  client: ApiClient,
+  window: { start: string; end: string },
+  signal?: AbortSignal,
+  options: { keep?: boolean } = {}
+): void {
   const { queries } = client;
   if (!queries.enabled) return;
   void queries
@@ -251,6 +258,7 @@ export function prefetchCalendar(client: ApiClient, window: { start: string; end
       tags: CALENDAR_QUERY_TAGS,
       ttlMs: 60_000,
       signal,
+      keep: options.keep,
     })
     .catch(() => undefined);
 }
