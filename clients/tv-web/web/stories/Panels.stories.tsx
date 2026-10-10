@@ -3,10 +3,19 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button, MultiSelect } from "../src/components/ui";
 import { Drawer, FilterSection, ScrollArea } from "../src/components/shell";
 
+const MULTI_LABELS = {
+  none: "Any genre",
+  add: "Add genre",
+  search: "Search genres",
+  noMatches: "No matching genres",
+  remove: (name: string) => `Remove ${name}`,
+  announce: (count: number, shown: number) => `${count} selected, ${shown} listed`,
+};
+
 const GENRES = ["Action", "Drama", "Comedy", "Documentary", "Thriller", "Animation"].map((g) => ({ value: g, label: g }));
 
 function DrawerDemo({ open, tall }: { open: boolean; tall?: boolean }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(["Drama"]));
+  const [selected, setSelected] = useState<string[]>(["Drama"]);
   const [isOpen, setIsOpen] = useState(open);
   return (
     <div className="sb-pad">
@@ -27,12 +36,12 @@ function DrawerDemo({ open, tall }: { open: boolean; tall?: boolean }) {
         }
       >
         <FilterSection title="Genres">
-          <MultiSelect options={GENRES} selected={selected} onChange={setSelected} ariaLabel="Genres" />
+          <MultiSelect options={GENRES} selected={selected} onChange={setSelected} ariaLabel="Genres" labels={MULTI_LABELS} />
         </FilterSection>
         {tall
           ? Array.from({ length: 6 }, (_, i) => (
               <FilterSection key={i} title={`Section ${i + 1}`}>
-                <MultiSelect options={GENRES} selected={selected} onChange={setSelected} ariaLabel={`Section ${i + 1}`} />
+                <MultiSelect options={GENRES} selected={selected} onChange={setSelected} ariaLabel={`Section ${i + 1}`} labels={MULTI_LABELS} />
               </FilterSection>
             ))
           : null}
