@@ -62,24 +62,18 @@
  */
 
 import { image } from '@kit.ImageKit';
-import { activeColors, toResourceColor, toResourceColorWithAlpha, resolvedThemeMode } from '../Theme';
+import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../Theme';
 import type { ThemeModeSetting } from '../Theme';
 import { tv } from '../Metrics';
-import { TvGeometry, Radii } from '../../core/Tokens';
-import type { RgbaColor } from '../../core/Tokens';
+import { TvGeometry } from '../../core/Tokens';
 import {
   ENTRY_CURVE,
-  INTERACTION_CURVE,
   ENTRY_KEY_ART_MS,
   ENTRY_COPY_MS,
   ENTRY_COPY_DELAY_MS,
-  ENTRY_PRIMARY_ACTION_MS,
-  ENTRY_PRIMARY_ACTION_DELAY_MS,
   ENTRY_RAILS_MS,
   ENTRY_RAILS_DELAY_MS,
-  INTERACTION_NAV_EXPAND_MS,
 } from '../Motion';
-import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from './FocusLift';
 import { FeatureCopy } from './FeatureCopy';
 
 /** Gradient angles (brief 5.9), ArkUI's `linearGradient({angle})` uses the
@@ -97,58 +91,11 @@ const KEY_ART_ENTRY_SCALE_FROM: number = 1.06;
 const KEY_ART_ENTRY_BLUR_FROM: number = 12;
 const COPY_ENTRY_TRANSLATE_X: number = 34; // translateX(-34px)
 const RAILS_ENTRY_TRANSLATE_X: number = 60; // translateX(60px)
-const PRIMARY_ACTION_ENTRY_SCALE_FROM: number = 0.65;
-
-/** Brief 5.6 -- glass recipes. Not in `core/Tokens.ts` (no shadow/blur
- * table exists there). */
-const RAIL_PANEL_BLUR_RADIUS: number = 30;
-const RAIL_PANEL_SURFACE_OPACITY_LIGHT: number = 0.72;
-const RAIL_PANEL_SURFACE_OPACITY_DARK: number = 0.76;
-const RAIL_PANEL_HAIRLINE_ALPHA: number = 0.22;
-const RAIL_PANEL_SHADOW_OFFSET_Y: number = 30;
-const RAIL_PANEL_SHADOW_RADIUS: number = 90;
-const RAIL_PANEL_SHADOW_ALPHA: number = 0.08;
-
-const PRIMARY_ACTION_BLUR_RADIUS: number = 22;
-const PRIMARY_ACTION_SURFACE_OPACITY: number = 0.92;
-const PRIMARY_ACTION_HAIRLINE_ALPHA: number = 0.62;
-const PRIMARY_ACTION_SHADOW_OFFSET_Y: number = 26;
-const PRIMARY_ACTION_SHADOW_RADIUS: number = 65;
-const PRIMARY_ACTION_SHADOW_ALPHA: number = 0.2;
-
-/** Primary-action play glyph: not in the brief's own tables at all.
- * Derived from `.tv-primary-action span { font-size: clamp(1rem, 1.35vw,
- * 1.65rem); margin-left: 0.14em }` in global.css, evaluated at 1920px the
- * same way this file's sibling `FeatureCopy.ets` derives its synopsis
- * size: the preferred branch (`1.35vw` @ 1920 = 25.92) and the upper-bound
- * branch (`1.65rem` * 16 = 26.4) both round to 26. */
-const PRIMARY_ACTION_GLYPH_SIZE: number = 26;
-const PRIMARY_ACTION_GLYPH_NUDGE_X: number = PRIMARY_ACTION_GLYPH_SIZE * 0.14;
-
-const HAIRLINE_WHITE: RgbaColor = { r: 255, g: 255, b: 255, a: 1 };
 
 /** Converts a brief `*Pct` field (a literal CSS percentage, e.g. `22` for
  * `22%`) to the 0-1 fraction ArkUI's gradient `colors` stop offsets use. */
 function pct100(value: number): number {
   return value / 100;
-}
-
-function lerpChannel(from: number, to: number, t: number): number {
-  return from + (to - from) * t;
-}
-
-/** Per-channel (including alpha) linear interpolation between two
- * `RgbaColor` records, returned as an ArkUI `rgba(...)` resource-colour
- * string -- used to crossfade the primary action's glass background to
- * `ink` and its glyph colour to `bg` on focus (brief 5.8: "primary play
- * action | scale(1.16), background -> ink, content -> bg"). */
-function lerpColor(from: RgbaColor, to: RgbaColor, t: number): string {
-  return toResourceColor({
-    r: Math.round(lerpChannel(from.r, to.r, t)),
-    g: Math.round(lerpChannel(from.g, to.g, t)),
-    b: Math.round(lerpChannel(from.b, to.b, t)),
-    a: lerpChannel(from.a, to.a, t),
-  });
 }
 
 @Component
@@ -174,10 +121,6 @@ export struct Stage {
   @Prop title: string = '';
   @Prop metaLines: string[] = [];
   @Prop synopsis: string = '';
-  /** Called when the primary play action is activated. Plain
-   * (non-reactive) callback field -- functions are not observable state,
-   * same documented pattern as `AsyncState.ets`'s `retry` field. */
-  onPlay: () => void = () => {};
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
   // actual values always go through design/Theme.ets's resolvers and
@@ -190,10 +133,8 @@ export struct Stage {
   // Entry-reveal progress, 0..1, one per staggered element (brief 5.7).
   @State private keyArtEntry: number = 0;
   @State private copyEntry: number = 0;
-  @State private primaryActionEntry: number = 0;
   @State private railsEntry: number = 0;
 
-  @State private primaryActionFocusPercent: number = 0;
 
   /** Default rails slot: nothing, until the caller supplies real content
    * (a later slice's Home page, with its own `MediaRail` instances) --
@@ -214,44 +155,11 @@ export struct Stage {
       }
     );
     this.getUIContext().animateTo(
-      { duration: ENTRY_PRIMARY_ACTION_MS, delay: ENTRY_PRIMARY_ACTION_DELAY_MS, curve: ENTRY_CURVE },
-      () => {
-        this.primaryActionEntry = 1;
-      }
-    );
-    this.getUIContext().animateTo(
       { duration: ENTRY_RAILS_MS, delay: ENTRY_RAILS_DELAY_MS, curve: ENTRY_CURVE },
       () => {
         this.railsEntry = 1;
       }
     );
-  }
-
-  private setPrimaryActionFocused(focused: boolean): void {
-    this.getUIContext().animateTo({ duration: INTERACTION_NAV_EXPAND_MS, curve: INTERACTION_CURVE }, () => {
-      this.primaryActionFocusPercent = focused ? 1 : 0;
-    });
-  }
-
-  private railPanelSurfaceOpacity(): number {
-    if (resolvedThemeMode() === 'dark') {
-      return RAIL_PANEL_SURFACE_OPACITY_DARK;
-    }
-    return RAIL_PANEL_SURFACE_OPACITY_LIGHT;
-  }
-
-  private primaryActionBackgroundColor(): string {
-    const from: RgbaColor = {
-      r: activeColors().surfaceStrong.r,
-      g: activeColors().surfaceStrong.g,
-      b: activeColors().surfaceStrong.b,
-      a: PRIMARY_ACTION_SURFACE_OPACITY,
-    };
-    return lerpColor(from, activeColors().ink, this.primaryActionFocusPercent);
-  }
-
-  private primaryActionGlyphColor(): string {
-    return lerpColor(activeColors().ink, activeColors().bg, this.primaryActionFocusPercent);
   }
 
   @Builder
@@ -378,80 +286,27 @@ export struct Stage {
       })
     }
     .width(tv(TvGeometry.titlePanelWidth))
-    .position({ x: tv(TvGeometry.titlePanelLeft), y: `${TvGeometry.titlePanelTopPct}%` })
+    .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.titlePanelTop) })
     .opacity(this.copyEntry)
     .translate({ x: -tv(COPY_ENTRY_TRANSLATE_X) * (1 - this.copyEntry) })
   }
 
-  @Builder
-  private primaryActionLayer(): void {
-    Stack() {
-      Text('▶')
-        .fontSize(tv(PRIMARY_ACTION_GLYPH_SIZE))
-        .fontColor(this.primaryActionGlyphColor())
-        .offset({ x: tv(PRIMARY_ACTION_GLYPH_NUDGE_X) })
-    }
-    .width(tv(TvGeometry.primaryActionSize))
-    .height(tv(TvGeometry.primaryActionSize))
-    .alignContent(Alignment.Center)
-    .borderRadius(Radii.circleFull)
-    .clip(true)
-    .backgroundColor(this.primaryActionBackgroundColor())
-    .backdropBlur(tv(PRIMARY_ACTION_BLUR_RADIUS))
-    .border({ width: tv(1), color: toResourceColorWithAlpha(HAIRLINE_WHITE, PRIMARY_ACTION_HAIRLINE_ALPHA) })
-    .shadow({
-      radius: tv(PRIMARY_ACTION_SHADOW_RADIUS),
-      color: toResourceColorWithAlpha(activeColors().ink, PRIMARY_ACTION_SHADOW_ALPHA),
-      offsetX: 0,
-      offsetY: tv(PRIMARY_ACTION_SHADOW_OFFSET_Y),
-    })
-    .position({ x: `${TvGeometry.primaryActionLeftPct}%`, y: `${TvGeometry.primaryActionTopPct}%` })
-    .markAnchor({ x: '50%', y: '50%' })
-    .focusable(true)
-    .onFocus(() => {
-      this.setPrimaryActionFocused(true);
-    })
-    .onBlur(() => {
-      this.setPrimaryActionFocused(false);
-    })
-    .onClick(() => {
-      this.onPlay();
-    })
-    .opacity(this.primaryActionEntry)
-    .scale({
-      x:
-        (PRIMARY_ACTION_ENTRY_SCALE_FROM + (1 - PRIMARY_ACTION_ENTRY_SCALE_FROM) * this.primaryActionEntry) *
-        (1 +
-          (FOCUS_LIFT.primaryPlayAction.scale - 1) *
-            effectiveFocusPercent(this.primaryActionFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)),
-      y:
-        (PRIMARY_ACTION_ENTRY_SCALE_FROM + (1 - PRIMARY_ACTION_ENTRY_SCALE_FROM) * this.primaryActionEntry) *
-        (1 +
-          (FOCUS_LIFT.primaryPlayAction.scale - 1) *
-            effectiveFocusPercent(this.primaryActionFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)),
-    })
-  }
-
+  // Web TV Home has no panel behind the rails: a plain, natively scrollable full-height column (`.tv-home-rails`).
   @Builder
   private railPanelLayer(): void {
-    Column() {
-      this.railsSlot()
+    Scroll() {
+      Column() {
+        this.railsSlot()
+      }
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: tv(TvGeometry.homeRailsInsetLeft), top: tv(TvGeometry.homeRailsTop), bottom: tv(TvGeometry.homeRailsTop) })
     }
-    .width(tv(TvGeometry.railPanelWidth))
-    .constraintSize({ minHeight: tv(TvGeometry.railPanelMinHeight) })
-    .padding(tv(TvGeometry.railPanelPadding))
-    .borderRadius(Radii.railPanel)
-    .clip(true)
-    .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, this.railPanelSurfaceOpacity()))
-    .backdropBlur(tv(RAIL_PANEL_BLUR_RADIUS))
-    .border({ width: tv(1), color: toResourceColorWithAlpha(HAIRLINE_WHITE, RAIL_PANEL_HAIRLINE_ALPHA) })
-    .shadow({
-      radius: tv(RAIL_PANEL_SHADOW_RADIUS),
-      color: toResourceColorWithAlpha(activeColors().ink, RAIL_PANEL_SHADOW_ALPHA),
-      offsetX: 0,
-      offsetY: tv(RAIL_PANEL_SHADOW_OFFSET_Y),
-    })
-    .position({ x: tv(TvGeometry.railPanelLeft), y: `${TvGeometry.railPanelTopPct}%` })
+    .width(tv(TvGeometry.homeRailsWidth))
+    .height('100%')
+    .align(Alignment.TopStart)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
+    .position({ x: tv(TvGeometry.homeRailsLeft), y: 0 })
     .opacity(this.railsEntry)
     .translate({ x: tv(RAILS_ENTRY_TRANSLATE_X) * (1 - this.railsEntry) })
   }
@@ -465,7 +320,6 @@ export struct Stage {
       this.stageWashRightLayer()
       this.titlePanelLayer()
       this.railPanelLayer()
-      this.primaryActionLayer()
     }
     .width('100%')
     .height('100%')

@@ -24,6 +24,7 @@ import {
   playerPreferencesUrl,
   catalogUrl,
   catalogKindsUrl,
+  homeRailsUrl,
   catalogSearchUrl,
   catalogDetailUrl,
   catalogSimilarUrl,
@@ -105,6 +106,7 @@ describe('Endpoints - 4.8 catalog', () => {
 
   it('catalogKindsUrl', () => {
     assert.equal(catalogKindsUrl(), '/api/v1/catalog/kinds');
+    assert.equal(homeRailsUrl(), '/api/v1/home/rails');
   });
 
   it('catalogSearchUrl (query string is left to the caller)', () => {

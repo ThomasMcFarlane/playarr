@@ -46,6 +46,7 @@ import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
+import {yearRangeLabel} from '../lib/workYear';
 import {Icon} from '../shell/icons';
 import {ActionTile} from '../tv/ActionTile';
 import {EdgeFade} from '../tv/EdgeFade';
@@ -56,7 +57,6 @@ import {Preview} from '../tv/Preview';
 import {RailFrost, Stage} from '../tv/Stage';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {cardArtUrl, stageArtUrl} from '../tv/ArtOfWork';
-import {workYear} from './HomeScreen';
 import {useCatalogBrowse} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {artworkAuthHeaders, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
@@ -405,9 +405,9 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   }
 }
 
-function releaseYearOf(work: Pick<Work, 'release_date'>): string | undefined {
-  const year = workYear(work);
-  return year === null ? undefined : String(year);
+/** The release year (or "2011–2019" for an ended series), never the added date: web's `yearRangeLabel`. */
+function releaseYearOf(work: Work): string | undefined {
+  return yearRangeLabel(work) ?? undefined;
 }
 
 function Filters(): React.ReactElement {
