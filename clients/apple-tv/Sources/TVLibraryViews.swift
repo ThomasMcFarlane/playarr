@@ -101,6 +101,8 @@ struct TVHomeView: View {
         .defaultFocus($focusedCard, firstFocus)
         // The lead rail can change after the first paint (On deck arrives): keep focus on a card that still exists.
         .task(id: firstFocus) {
+            // The lazy rail creates its cards after this first layout pass: wait a frame or two before focusing.
+            try? await Task.sleep(for: .milliseconds(200))
             let ids = Set(rails.flatMap(\.works).map(\.id))
             if focusedCard.map({ !ids.contains($0.workID) }) ?? true { focusedCard = firstFocus }
         }
