@@ -6,6 +6,7 @@ import io.playarr.shared.designsystem.page.PlayarrPageBody
 import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
+import io.playarr.shared.designsystem.page.PlayarrEmptyArt
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
 import io.playarr.shared.designsystem.page.PlayarrPageState
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
@@ -4409,6 +4410,13 @@ private fun TelevisionSearchBody(
                 }
             }
         }
+        if (query.isBlank() && !filtersOpen) {
+            // Web `.tv-search-prompt`: the hint under the field while nothing is typed.
+            Text(
+                playarrString(PlayarrString.SearchEmptyPrompt), color = WebInkSoft, fontSize = 13.824.sp, lineHeight = 21.427.sp,
+                style = WebTextStyle, modifier = Modifier.offset(x = 153.6.dp, y = 303.dp).width(282.dp),
+            )
+        }
         if (showPreview && !filtersOpen) {
             Column(Modifier.offset(x = 153.6.dp, y = 362.dp).width(517.6.dp)) {
                 val kicker = if (selectedWork != null) {
@@ -4454,11 +4462,12 @@ private fun TelevisionSearchBody(
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                     is ExperienceLoad.Failed -> PlayarrErrorState(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query.isBlank()) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                        // Web: the idle title beside the search art; the prompt sits under the search field.
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchIdleTitle), art = PlayarrEmptyArt.Search))
                     } else if (mediaFilter == PlayarrSearchMediaType.Game) {
                         DiscoveryExtrasSection(query = query.trim(), gamesOnly = true, navController = navController, modifier = Modifier.fillMaxSize())
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription), PlayarrEmptyArt.Search))
                     } else {
                         // Web `data-tv-grid` with `data-tv-grid-edge-left=".tv-search input"`: index navigation over three columns, LEFT in
                         // the first column goes to the search field.

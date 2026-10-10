@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
@@ -165,7 +167,8 @@ private fun PlayarrNavButton(item: PlayarrNavItem) {
             color = palette.surface,
             contentColor = palette.inkSoft,
             border = BorderStroke(1.dp, palette.pillBorder),
-            modifier = (if (glyph != null) Modifier.size(height) else Modifier.size(if (tv) 92.dp else 76.dp, height))
+            // Television label pills (Today, the calendar date range) size to their label from 92 dp (web `.ui-btn`); phone keeps 76 dp.
+            modifier = (if (glyph != null) Modifier.size(height) else if (tv) Modifier.widthIn(min = 92.dp).height(height) else Modifier.size(76.dp, height))
                 .then(item.modifier)
                 .then(if (item.primary) Modifier.graphicsLayer { scaleX = 1.055f; scaleY = 1.055f } else Modifier)
                 // The ring is the focus state (white in dark, ink in light), never alongside another ring and never a fill.
@@ -174,7 +177,7 @@ private fun PlayarrNavButton(item: PlayarrNavItem) {
         ) {
             Box(contentAlignment = Alignment.Center) {
                 if (glyph != null) Text(glyph, fontSize = 13.sp, fontWeight = FontWeight(720))
-                else Text(item.label, fontSize = 14.4.sp, fontWeight = FontWeight(720))
+                else Text(item.label, fontSize = 14.4.sp, fontWeight = FontWeight(720), maxLines = 1, modifier = if (tv) Modifier.padding(horizontal = 20.dp) else Modifier)
             }
         }
     }
