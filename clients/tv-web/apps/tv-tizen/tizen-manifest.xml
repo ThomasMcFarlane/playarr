@@ -31,6 +31,8 @@
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/network.get"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- Opens external links in the TV browser (launchAppControl). -->
+  <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
   <tizen:setting screen-orientation="landscape"
