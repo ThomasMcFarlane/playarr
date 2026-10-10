@@ -1024,6 +1024,17 @@ export function CalendarPage() {
   // range label (the header copy would be hidden there). One copy means one default-focus marker.
   const navButtons = (
     <>
+      <Button
+        variant="secondary"
+        active={jumpOpen}
+        onClick={() => setJumpOpen((v) => !v)}
+        aria-expanded={jumpOpen}
+        aria-controls="calendar-period-jump"
+        ref={rangeButtonRef}
+        data-range-button
+      >
+        {rangeButtonLabel}
+      </Button>
       <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => stepAnchor(-1)}>
         <span aria-hidden="true">←</span>
       </Button>
@@ -1052,6 +1063,13 @@ export function CalendarPage() {
                 id: "calendar-navigation",
                 label: t("pages.calendar.navigationLabel"),
                 items: [
+                  {
+                    id: "range",
+                    label: rangeButtonLabel,
+                    onSelect: () => setJumpOpen((v) => !v),
+                    popover: { open: jumpOpen, controls: "calendar-period-jump", buttonRef: rangeButtonRef },
+                    buttonProps: { "data-range-button": true },
+                  },
                   { id: "previous", label: t("pages.calendar.previous"), icon: "prev" as const, onSelect: () => stepAnchor(-1) },
                   {
                     id: "today",
@@ -1063,17 +1081,6 @@ export function CalendarPage() {
                 ],
               },
             ]),
-        {
-          kind: "panel",
-          id: "range",
-          label: rangeButtonLabel,
-          icon: "calendar",
-          open: jumpOpen,
-          onToggle: () => setJumpOpen((v) => !v),
-          controls: "calendar-period-jump",
-          buttonRef: rangeButtonRef,
-          buttonProps: { "data-range-button": true },
-        },
         {
           kind: "panel",
           id: "subscription",
