@@ -8,6 +8,7 @@ import type { NavRailItem } from '../design/components/NavRail';
 import type { WorkKind } from '../core/Types/Catalog';
 
 export const HOME_NAV_ID: string = 'home';
+export const CALENDAR_NAV_ID: string = 'calendar';
 
 const PLACEHOLDER_NAV_ICON: ResourceStr = $r('app.media.playarr_logo');
 
@@ -32,6 +33,9 @@ export function navIconFor(id: string): ResourceStr {
   }
   if (id === 'artist') {
     return $r('app.media.nav_music');
+  }
+  if (id === CALENDAR_NAV_ID) {
+    return $r('app.media.nav_calendar');
   }
   return PLACEHOLDER_NAV_ICON;
 }
@@ -62,4 +66,9 @@ export function buildNavRailItems(kinds: WorkKind[]): NavRailItem[] {
     items.push({ id: kind, icon: navIconFor(kind), label: catalogKindNavLabel(kind) });
   }
   return items;
+}
+
+/** Web's Playlists/Watchlist/Requests/Calendar group: only the screens this client has so far. */
+export function buildSecondaryNavItems(): NavRailItem[] {
+  return [{ id: CALENDAR_NAV_ID, icon: navIconFor(CALENDAR_NAV_ID), label: 'Calendar' }];
 }
