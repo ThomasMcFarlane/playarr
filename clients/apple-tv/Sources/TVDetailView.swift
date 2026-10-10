@@ -430,7 +430,9 @@ struct TVWorkDetailView: View {
                     .placed(x: x, y: 620.7, w: 268, h: 190, alignment: .topLeading)
                 }
             }
-            if !viewModel.similar.isEmpty {
+            if !viewModel.cast.isEmpty {
+                castRail(viewModel.cast)
+            } else if !viewModel.similar.isEmpty {
                 railHeading("Similar Titles", count: "\(viewModel.similar.count) titles", y: 854.3)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 25) {
@@ -460,6 +462,39 @@ struct TVWorkDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Web detail "Cast" rail: heading at y 891, 103.7 circles from x 905.8 at a 176.95 pitch, the person's photo or
+    /// initials (34.4 / 640) on the raised surface.
+    private func castRail(_ cast: [Credit]) -> some View {
+        ZStack(alignment: .topLeading) {
+            Text("Cast")
+                .font(TVTheme.font(size: 17.664, css: 610))
+                .tracking(-0.53)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .placed(x: 881.6, y: 891, w: 400, h: 26.5)
+            Text(cast.count == 1 ? "1 person" : "\(cast.count) people")
+                .font(TVTheme.font(size: 9.984, css: 400))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 881.6, y: 921.5, w: 400, h: 15)
+            ForEach(Array(cast.prefix(12).enumerated()), id: \.element.id) { index, credit in
+                let initials = credit.person.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+                ZStack {
+                    Circle().fill(DesignTokens.Stage.surfaceSoft)
+                    Text(initials)
+                        .font(TVTheme.font(size: 34.4, css: 640))
+                        .tracking(-1.72)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    if let url = credit.person.headshotURL.flatMap({ apiClient.resolvedURL(forPath: $0) }),
+                       url.scheme?.hasPrefix("http") == true {
+                        AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color.clear }
+                    }
+                }
+                .frame(width: 103.7, height: 103.7)
+                .clipShape(Circle())
+                .placed(x: 905.8 + 176.95 * CGFloat(index), y: 971.7, w: 103.7, h: 103.7)
+            }
+        }
     }
 
     /// Web `.tv-episode-art`: a raised tile, radius 13.44, with the picture filling it.
@@ -555,7 +590,14 @@ struct TVWorkDetailView: View {
         let code = "S \(String(format: "%02d", season.season.seasonNumber)) \u{00B7} E \(String(format: "%02d", ep.episodeNumber))"
         let card = ZStack(alignment: .topLeading) {
             episodeArt(width: 268, height: 150.8, heavy: selected) {
-                TVWorkArt(work: detail.work, apiClient: apiClient)
+                // Web `MediaThumbnailArtwork`: the episode's own frame at 30 s; the series art until it loads.
+                if let mediaFileID = episode.mediaFileID {
+                    TVAuthedImage(load: {
+                        try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: 30_000)
+                    }) { TVWorkArt(work: detail.work, apiClient: apiClient) }
+                } else {
+                    TVWorkArt(work: detail.work, apiClient: apiClient)
+                }
             }
             // The art grows to 1.025 over 240 ms (ease) when focused.
             .scaleEffect(selected ? 1.025 : 1)

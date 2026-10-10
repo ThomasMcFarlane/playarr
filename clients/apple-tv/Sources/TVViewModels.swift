@@ -161,6 +161,8 @@ final class TVWorkDetailViewModel {
     private(set) var detail: WorkDetail?
     /// Titles similar to this one (`/similar`), shown under a movie's chapters.
     private(set) var similar: [Work] = []
+    /// Web detail "Cast" rail (`/catalog/{id}/credits`).
+    private(set) var cast: [Credit] = []
     /// How long a series usually takes to appear after release.
     private(set) var availabilityLag: AvailabilityLag?
     /// The episode the series' resume plan points at (the page opens focused on it).
@@ -204,6 +206,7 @@ final class TVWorkDetailViewModel {
             detail = loaded
             state = .loaded
             similar = (try? await apiClient.fetchSimilarWorks(id: workID, limit: 12)) ?? []
+            cast = (try? await apiClient.fetchWorkCredits(id: workID).cast) ?? []
             if loaded.work.kind == .series {
                 availabilityLag = (try? await apiClient.fetchAvailabilityLag(id: workID)) ?? nil
                 resumeTarget = (try? await apiClient.fetchSeriesResumeTarget(seriesID: workID)) ?? nil
