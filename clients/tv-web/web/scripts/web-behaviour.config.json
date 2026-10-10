@@ -35,7 +35,8 @@
     "drawer-consistency-e2e",
     "avatar-focus-circle-e2e",
     "checkbox-focus-e2e",
-    "settings-language-select-e2e"
+    "settings-language-select-e2e",
+    "settings-server-group-e2e"
   ],
   "args": {
     "tablet-layout": [
