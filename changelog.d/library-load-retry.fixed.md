@@ -1,0 +1,1 @@
+- Web: Movies, Series and Music no longer stay on "could not be loaded" when the browser drops its connections while the first page of the library loads (for example a network change): the first page is retried twice after a short wait before the error state appears. An e2e (`nav-library-load-retry-e2e.mjs`) drops the first requests and checks the cards still appear.
