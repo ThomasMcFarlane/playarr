@@ -51,7 +51,8 @@ for (const [name, path] of panels) {
         await page.waitForTimeout(700);
         const rows = await page.evaluate(MEASURE);
         const later = (rows ?? []).filter((r) => !r.first);
-        check(`${label}: panel has at least two labelled sections`, later.length >= 1, JSON.stringify(rows));
+        // Search Filters now has the single Type section; every other panel has several.
+        check(`${label}: panel has labelled sections`, name === "search" ? (rows ?? []).length >= 1 : later.length >= 1, JSON.stringify(rows));
         for (const r of later) {
           check(`${label}: "${r.text}" has >= ${MIN_ABOVE_PX}px above it`, r.above >= MIN_ABOVE_PX, `${r.above}px`);
           check(`${label}: "${r.text}" gap above (${r.above}px) is larger than label-to-items (${r.toItems}px)`, r.above > r.toItems, `${r.above} vs ${r.toItems}`);

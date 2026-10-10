@@ -1,9 +1,10 @@
 /**
  * Release-calendar filters and their URL (query string) representation.
  *
- * Every filter round-trips through `?type=tv,movie&source=1,2&status=upcoming&from=2026-10-01&to=2026-10-31&monitored=1`
+ * Every filter round-trips through `?type=tv,movie&status=upcoming&monitored=1`
  * so refresh, back/forward and deep links restore the exact view. Unknown or
- * malformed values are ignored rather than throwing.
+ * malformed values are ignored rather than throwing. The old `source`, `from` and `to` keys are ignored
+ * (and dropped by `writeCalendarFilters`): the period lives in the page's own date switcher.
  */
 import type { CalendarEntry, CalendarMediaKind } from "@playarr-tv/api-client";
 import { entryLocalDay, type Day } from "./calendar";
@@ -31,20 +32,13 @@ export function typeForKind(kind: CalendarMediaKind): CalendarTypeParam {
 
 export interface CalendarFilters {
   types: ReadonlySet<CalendarTypeParam>;
-  /** Source instance ids. */
-  sources: ReadonlySet<string>;
   statuses: ReadonlySet<CalendarStatus>;
-  from: Day | null;
-  to: Day | null;
   monitoredOnly: boolean;
 }
 
 export const EMPTY_CALENDAR_FILTERS: CalendarFilters = {
   types: new Set(),
-  sources: new Set(),
   statuses: new Set(),
-  from: null,
-  to: null,
   monitoredOnly: false,
 };
 
@@ -68,18 +62,15 @@ function parseDayParam(raw: string | null): Day | null {
 }
 
 export function parseCalendarFilters(params: URLSearchParams): CalendarFilters {
-  let from = parseDayParam(params.get("from"));
-  let to = parseDayParam(params.get("to"));
-  if (from && to && from > to) [from, to] = [to, from];
   return {
     types: parseList(params.get("type"), CALENDAR_TYPE_PARAMS),
-    sources: parseList(params.get("source")),
     statuses: parseList(params.get("status"), CALENDAR_STATUSES),
-    from,
-    to,
     monitoredOnly: params.get("monitored") === "1",
   };
 }
+
+/** Removed filters whose old links must keep working. */
+export const LEGACY_KEYS = ["source", "from", "to"] as const;
 
 /** Returns a copy of `params` with the filter keys replaced; other keys are preserved. */
 export function writeCalendarFilters(params: URLSearchParams, filters: CalendarFilters): URLSearchParams {
@@ -93,10 +84,8 @@ export function writeCalendarFilters(params: URLSearchParams, filters: CalendarF
     return items.length > 0 ? items.join(",") : null;
   };
   set("type", list(filters.types, CALENDAR_TYPE_PARAMS));
-  set("source", list(filters.sources));
   set("status", list(filters.statuses, CALENDAR_STATUSES));
-  set("from", filters.from);
-  set("to", filters.to);
+  for (const legacy of LEGACY_KEYS) next.delete(legacy);
   set("monitored", filters.monitoredOnly ? "1" : null);
   return next;
 }
@@ -104,9 +93,7 @@ export function writeCalendarFilters(params: URLSearchParams, filters: CalendarF
 export function activeFilterCount(filters: CalendarFilters): number {
   return (
     (filters.types.size > 0 ? 1 : 0) +
-    (filters.sources.size > 0 ? 1 : 0) +
     (filters.statuses.size > 0 ? 1 : 0) +
-    (filters.from || filters.to ? 1 : 0) +
     (filters.monitoredOnly ? 1 : 0)
   );
 }
@@ -133,16 +120,10 @@ export function applyCalendarFilters(
 ): CalendarEntry[] {
   return entries.filter((entry) => {
     if (filters.types.size > 0 && !filters.types.has(typeForKind(entry.media_kind))) return false;
-    if (filters.sources.size > 0 && !entry.sources.some((s) => filters.sources.has(s.source_instance_id))) {
-      return false;
-    }
     if (filters.statuses.size > 0 && ![...filters.statuses].some((s) => matchesStatus(entry, s, today))) {
       return false;
     }
     if (filters.monitoredOnly && !entry.monitored) return false;
-    const day = entryLocalDay(entry);
-    if (filters.from && day < filters.from) return false;
-    if (filters.to && day > filters.to) return false;
     return true;
   });
 }

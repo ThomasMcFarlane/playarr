@@ -6,8 +6,6 @@ import { Drawer, FilterSection, ScrollArea } from "../src/components/shell";
 const MULTI_LABELS = {
   none: "Any genre",
   add: "Add genre",
-  search: "Search genres",
-  noMatches: "No matching genres",
   remove: (name: string) => `Remove ${name}`,
   announce: (count: number, shown: number) => `${count} selected, ${shown} listed`,
 };

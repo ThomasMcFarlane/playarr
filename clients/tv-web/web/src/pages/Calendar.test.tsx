@@ -150,12 +150,11 @@ describe("day sections", () => {
   });
 });
 
-describe("calendar source labels", () => {
+describe("calendar filters show no source names", () => {
   const page = readFileSync(new URL("./Calendar.tsx", import.meta.url), "utf8");
 
-  it("uses the neutral display_label, never the admin-chosen name", () => {
-    expect(page).toContain("source.display_label ?? source.name");
-    expect(page).not.toMatch(/\{source\.source_name\}/);
+  it("has no Source filter, so no source or provider name reaches the panel", () => {
+    expect(page).not.toMatch(/sourceOptions|display_label|source\.name|\{source\.source_name\}|filterSource/);
   });
 });
 
