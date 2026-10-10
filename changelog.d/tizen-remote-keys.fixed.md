@@ -1,0 +1,1 @@
+- Samsung Tizen: the remote's media keys (play, pause, stop, rewind, fast-forward, previous, next) are registered again. Samsung's API writes to the list it is given, and Playarr passed a frozen list, so registration failed silently.
