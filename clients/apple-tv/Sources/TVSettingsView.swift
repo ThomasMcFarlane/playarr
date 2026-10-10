@@ -77,7 +77,7 @@ struct TVSettingsView: View {
                     .frame(width: 480.4, height: 91.9, alignment: .topLeading)
                 }
                 .buttonStyle(.plain)
-                .focusable(!TVParityLaunch.frozen)
+                .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
                 .focusEffectDisabled(TVParityLaunch.frozen)
                 .placed(x: 153.6, y: top, w: 480.4, h: 91.9)
             }
