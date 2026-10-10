@@ -15,11 +15,58 @@
         remarks for why this screen composes LoginViewModel's logic rather
         than factoring a shared UserControl.
     -->
-    <ScrollViewer Padding="48">
-        <StackPanel MaxWidth="720" Spacing="32">
+    <!--
+        Web TV settings workspace (1920x1080): Back + "Preferences" with the open section as subtitle, the numbered
+        section list on the left (x 154-634, 92 px rows) and the open section's controls on the right from x=774.
+        Only sections this client implements are listed, keeping the web's numbers.
+    -->
+    <Grid>
+        <Button
+            x:Name="BackButton"
+            Width="50"
+            Height="50"
+            CornerRadius="25"
+            Margin="154,56,0,0"
+            Padding="0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            BorderBrush="{StaticResource PlayarrLineStrong}"
+            BorderThickness="1"
+            Click="BackButton_Click">
+            <FontIcon Glyph="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+        </Button>
+        <StackPanel Margin="228,57,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <TextBlock Text="Preferences" Style="{StaticResource PlayarrPageTitle}" />
             <TextBlock
-                Text="Settings"
-                Style="{StaticResource TitleTextBlockStyle}" />
+                Text="SERVER CONNECTION"
+                FontSize="11"
+                FontWeight="Bold"
+                CharacterSpacing="120"
+                Foreground="{StaticResource PlayarrBrandInk}"
+                Margin="0,6,0,0" />
+        </StackPanel>
+
+        <Button
+            Width="480"
+            Height="92"
+            Margin="154,162,0,0"
+            Padding="32,0,32,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            HorizontalContentAlignment="Stretch"
+            CornerRadius="0"
+            BorderThickness="0"
+            Background="{StaticResource PlayarrSurfaceSoft}">
+            <Grid>
+                <TextBlock Text="05" FontSize="10" FontWeight="Bold" Margin="0,-22,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="Server connection" FontSize="30" Margin="60,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="&#x2192;" FontSize="18" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Button>
+
+    <ScrollViewer Margin="774,200,0,0" Padding="0,0,106,48" VerticalScrollBarVisibility="Hidden">
+        <StackPanel MaxWidth="1040" HorizontalAlignment="Left" Spacing="32">
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Current server" Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7" />
@@ -65,7 +112,7 @@
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <Button x:Name="SignOutButton" Content="Sign Out" Click="SignOutButton_Click" />
+                <Button x:Name="SignOutButton" Content="Sign out" Click="SignOutButton_Click" />
             </StackPanel>
 
             <TextBlock
@@ -74,4 +121,5 @@
                 Opacity="0.6" />
         </StackPanel>
     </ScrollViewer>
+    </Grid>
 </Page>
