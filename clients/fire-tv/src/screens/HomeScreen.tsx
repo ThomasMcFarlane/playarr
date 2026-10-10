@@ -7,7 +7,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, Easing, Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
 import type {ResumePlan, WatchProgress, Work} from '@playarr-tv/api-client';
-import {useCatalogBrowse, useHomeRails} from '@playarr-tv/api-client/react';
+import {useCatalogBrowse, useHomeRails, useWorkDetail} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
 import {ArtworkImage} from '../components/ArtworkImage';
@@ -16,6 +16,8 @@ import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
+import {runtimeLabel} from '../lib/runtimeLabel';
+import {blend} from '../theme/color';
 import {EdgeFade, TRACK_GUTTER} from '../tv/EdgeFade';
 import {MediaFocus} from '../tv/mediaFocus';
 import {BalancedT, Box, T, u} from '../tv/kit';
@@ -203,11 +205,13 @@ export function HomeScreen(): React.ReactElement {
   const artKind = preferredArtworkKind(selected, ['backdrop', 'poster']);
   const artUri = artKind ? workArtworkUrl(baseUrl, selected.id, artKind) : undefined;
   const dark = scheme === 'dark';
+  // The web details panel's --dp-soft: ink 88% over the surface.
+  const soft = blend(colour.ink, colour.surface, 0.88);
 
   return (
     <Stage artUri={artUri} accessToken={token}>
       <Box x={153.6} y={259.2} w={455}>
-        <T size={12.288} weight={860} ls={0.983} color={dark ? 'rgb(234, 166, 182)' : '#cf3157'} upper lh={18.4}>
+        <T size={12.288} weight={860} ls={0.983} color={dark ? '#eaa6b6' : '#821e36'} upper lh={18.4}>
           {kicker}
         </T>
         <View style={{marginTop: u(25.9), left: u(2.5), top: u(3)}}>
@@ -215,8 +219,9 @@ export function HomeScreen(): React.ReactElement {
             {featureTitle}
           </BalancedT>
         </View>
+        <FeatureRuntime workId={selected.id} color={soft} />
         <View style={{marginTop: u(21.6), width: u(324), top: u(2)}}>
-          <T size={12.864} weight={600} lh={20.3} color={colour.inkMuted} lines={5}>
+          <T size={12.864} weight={600} lh={20.3} color={soft} lines={5}>
             {featureOverview}
           </T>
         </View>
@@ -298,6 +303,22 @@ export function HomeScreen(): React.ReactElement {
         </Animated.View>
       </Box>
     </Stage>
+  );
+}
+
+/** The web Home feature's runtime line ("2h 17m"), from the focused title's detail; nothing until it arrives. */
+function FeatureRuntime({workId, color}: {workId: string; color: string}): React.ReactElement | null {
+  const client = useApiClient();
+  const {t} = useLanguage();
+  const state = useWorkDetail(client, workId);
+  const label = state.status === 'ready' ? runtimeLabel(state.data.runtime_ms, t) : null;
+  if (!label) return null;
+  return (
+    <View style={{marginTop: u(22.6)}}>
+      <T size={12.864} weight={600} lh={18} color={color} lines={1}>
+        {label}
+      </T>
+    </View>
   );
 }
 
