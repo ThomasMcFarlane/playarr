@@ -34,6 +34,8 @@
   /* Shell action column: where the 30 September launcher sat (commit 54224f36). */
   --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
   --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
+  /* Gap between page content and the shell action column (the library grid, and the calendar's week and month). */
+  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
   --shell-action-column-top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
   /* The focus indicator is a ring, never a fill: white in dark theme, the theme ink in light theme. */
   --focus-ring-color: var(--ink);

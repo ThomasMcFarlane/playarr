@@ -440,16 +440,18 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
 }
 
 /**
- * A month-cell chip and the cell's bottom row (the day number, with "+N more" beside it when entries overflow) are
- * each one 44px target (AAA target size, `min-height` in Calendar.css) with a 2px gap between rows. The bottom row
- * is always present, so its height is reserved before the cell's remaining room decides how many chips fit.
+ * A month cell's bottom row (the day number, with "+N more" beside it when entries overflow) is one 44px target
+ * (`min-height` in Calendar.css). Entries above it are plain text lines, at least `MONTH_LINE_PX` tall and stretched to
+ * share the remaining room (to a 44px ceiling). Owner design: compact text lines relax the AAA 2.5.5 target size, so
+ * each line's hit area is the cell's full width and the tallest height that fits.
  */
-const CELL_TARGET_PX = 44;
-const CELL_GAP_PX = 2;
+const MONTH_FOOT_PX = 44;
+const MONTH_LINE_PX = 22;
+const MONTH_LINES_GAP_PX = 2;
 
-/** How many of `count` chips a cell of `room` px shows above its reserved bottom row. */
+/** How many of `count` entry lines a cell of `room` px shows above its reserved bottom row. */
 export function monthChipsThatFit(room: number, count: number): number {
-  const fit = Math.floor((room - CELL_TARGET_PX) / (CELL_TARGET_PX + CELL_GAP_PX));
+  const fit = Math.floor((room - MONTH_FOOT_PX - MONTH_LINES_GAP_PX) / MONTH_LINE_PX);
   return Math.max(0, Math.min(count, fit));
 }
 
@@ -477,7 +479,7 @@ export function MonthGrid({
   const weeks = buildMonthGrid(anchor, firstDay, groups, today);
   const weekdayFormat = utcFormatter(locale, { weekday: "short" });
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [cellRoom, setCellRoom] = useState(CELL_TARGET_PX * MONTH_CHIP_LIMIT);
+  const [cellRoom, setCellRoom] = useState(MONTH_FOOT_PX + MONTH_LINES_GAP_PX + MONTH_LINE_PX * MONTH_CHIP_LIMIT);
 
   // The grid always fills the space below the header (loading and loaded alike); cells share it equally. Each
   // cell shows as many chips as fit above its bottom row (day number, "+N more"), whose height stays reserved so
@@ -547,11 +549,12 @@ export function MonthGrid({
                       {shown.map((item) => {
                         const entry = itemEntry(item);
                         const chipText = item.kind === "series" ? `${item.title} · ${item.entries.length}×` : entry.title;
+                        const tone = itemPillTone(item, today);
                         return (
                           <li key={item.key}>
                             <button
                               type="button"
-                              className={`media-card media-card-solid calendar-chip calendar-availability-${itemAvailability(item)}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
+                              className={`calendar-line calendar-availability-${itemAvailability(item)}${item.kind === "series" ? " calendar-line-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
                               title={
                                 item.kind === "series"
                                   ? `${item.title} · ${t("pages.calendar.groupSummary", {
@@ -560,11 +563,12 @@ export function MonthGrid({
                                     })}`
                                   : [entry.title, entrySubtitle(entry)].filter(Boolean).join(" · ")
                               }
-                              aria-label={`${chipText}, ${formatDayHeading(cell.day, locale)}`}
+                              aria-label={`${chipText}, ${t(PILL_KEYS[tone])}, ${formatDayHeading(cell.day, locale)}`}
                               data-navigation-focus-key={`calendar:${item.key}`}
                               onClick={(event) => onSelect(item, event.currentTarget)}
                             >
-                              {chipText}
+                              <span className={`calendar-dot is-${tone}`} aria-hidden="true" />
+                              <span className="calendar-line-text">{chipText}</span>
                             </button>
                           </li>
                         );

@@ -131,9 +131,9 @@ for (const theme of THEMES) {
     await page.waitForTimeout(700);
     expectCard("library grid card", await settled(page));
 
-    // Calendar cards in every view (agenda rows, week entries, month chips): the card is the visible box and carries the
+    // Calendar cards in every view (agenda rows and week entries; month entries are plain text lines with a status dot, owner 2026-10-10, checked by calendar-layout.mjs): the card is the visible box and carries the
     // shadow itself; focus is the shared lift, never a ring or a white border.
-    for (const view of ["agenda", "week", "month"]) {
+    for (const view of ["agenda", "week"]) {
       await page.goto(`${base}/calendar?view=${view}`);
       await page.waitForSelector(".calendar-chip, .calendar-entry");
       await page.waitForTimeout(1500);

@@ -48,7 +48,7 @@ async function open(view, viewport, theme = "light") {
   }, { base, userId: USER_ID, theme });
   const page = await context.newPage();
   await page.goto(`${base}/calendar?view=${view}&date=2026-10-07&platform=tv-webos`);
-  await page.waitForSelector(view === "month" ? ".calendar-chip" : ".calendar-entry", { timeout: 15000 });
+  await page.waitForSelector(view === "month" ? ".calendar-line" : ".calendar-entry", { timeout: 15000 });
   await page.waitForFunction(() => !document.querySelector(".calendar-scroll .skeleton, .tv-library-grid-panel .skeleton"));
   await page.waitForTimeout(500);
   return { context, page };
@@ -142,7 +142,7 @@ try {
   // ---- Month: LEFT/RIGHT between cells, UP/DOWN between weeks ----
   {
     const { context, page } = await open("month", { width: 1920, height: 1080 });
-    await page.evaluate(() => document.querySelectorAll(".calendar-month-row")[1].querySelectorAll(".calendar-month-cell")[2].querySelector(".calendar-chip").focus());
+    await page.evaluate(() => document.querySelectorAll(".calendar-month-row")[1].querySelectorAll(".calendar-month-cell")[2].querySelector(".calendar-line").focus());
     await page.waitForTimeout(150);
     const a = await focusInfo(page);
     await key(page, "ArrowRight");
