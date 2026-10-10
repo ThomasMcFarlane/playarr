@@ -440,17 +440,17 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
 }
 
 /**
- * A month-cell chip and the "+N more" line are each one 44px target (AAA target size, `min-height` in Calendar.css)
- * with a 2px gap between rows. The cell's remaining height decides how many chips fit beside a reserved "+N more".
+ * A month-cell chip and the cell's bottom row (the day number, with "+N more" beside it when entries overflow) are
+ * each one 44px target (AAA target size, `min-height` in Calendar.css) with a 2px gap between rows. The bottom row
+ * is always present, so its height is reserved before the cell's remaining room decides how many chips fit.
  */
 const CELL_TARGET_PX = 44;
 const CELL_GAP_PX = 2;
 
-/** How many chips a cell of `room` px shows: all `count` when they fit, else as many as fit beside the "+N more" line. */
+/** How many of `count` chips a cell of `room` px shows above its reserved bottom row. */
 export function monthChipsThatFit(room: number, count: number): number {
-  const row = CELL_TARGET_PX + CELL_GAP_PX;
-  if (count * row - CELL_GAP_PX <= room) return count;
-  return Math.max(0, Math.min(count, Math.floor((room - CELL_TARGET_PX) / row)));
+  const fit = Math.floor((room - CELL_TARGET_PX) / (CELL_TARGET_PX + CELL_GAP_PX));
+  return Math.max(0, Math.min(count, fit));
 }
 
 export function MonthGrid({
@@ -480,21 +480,16 @@ export function MonthGrid({
   const [cellRoom, setCellRoom] = useState(CELL_TARGET_PX * MONTH_CHIP_LIMIT);
 
   // The grid always fills the space below the header (loading and loaded alike); cells share it equally. Each
-  // cell shows as many chips as fit in the room under its day number, keeping the "+N more" line's height
-  // reserved so that line is never clipped by the cell.
+  // cell shows as many chips as fit above its bottom row (day number, "+N more"), whose height stays reserved so
+  // that row is never clipped by the cell.
   useLayoutEffect(() => {
     const element = bodyRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
     const update = () => {
       const cell = element.querySelector<HTMLElement>(".calendar-month-cell");
-      const day = cell?.querySelector<HTMLElement>(".calendar-month-day");
-      if (!cell || !day) return;
+      if (!cell) return;
       const style = getComputedStyle(cell);
-      const dayStyle = getComputedStyle(day);
-      const room =
-        cell.clientHeight -
-        parseFloat(style.paddingBottom) -
-        (day.offsetTop + day.offsetHeight + parseFloat(dayStyle.marginBottom));
+      const room = cell.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       setCellRoom(Math.floor(room));
     };
     update();
@@ -533,14 +528,16 @@ export function MonthGrid({
                 const items = groupSeriesEpisodes(cell.entries);
                 const shown = items.slice(0, monthChipsThatFit(cellRoom, items.length));
                 const hidden = items.length - shown.length;
+                const dayNumber = (
+                  <time dateTime={cell.day} className="calendar-month-day">
+                    {parseDay(cell.day).getUTCDate()}
+                  </time>
+                );
                 return (
                   <div
                     key={cell.day}
                     className={`calendar-month-cell${cell.inMonth ? "" : " is-outside"}${cell.isToday ? " is-today" : ""}`}
                   >
-                    <time dateTime={cell.day} className="calendar-month-day">
-                      {parseDay(cell.day).getUTCDate()}
-                    </time>
                     <ul>
                       {loading && (weekIndex + cellIndex) % 3 !== 0 ? (
                         <li aria-hidden="true">
@@ -574,10 +571,13 @@ export function MonthGrid({
                       })}
                     </ul>
                     {hidden > 0 ? (
-                      <button type="button" className="calendar-more" onClick={() => onMore(cell.day)}>
-                        {t("pages.calendar.more", { count: hidden })}
+                      <button type="button" className="calendar-month-foot calendar-more" onClick={() => onMore(cell.day)}>
+                        {dayNumber}
+                        <span>{t("pages.calendar.more", { count: hidden })}</span>
                       </button>
-                    ) : null}
+                    ) : (
+                      <div className="calendar-month-foot">{dayNumber}</div>
+                    )}
                   </div>
                 );
               })}

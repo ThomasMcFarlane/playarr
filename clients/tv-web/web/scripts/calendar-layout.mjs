@@ -108,11 +108,22 @@ for (const [vp, label] of [[{ width: 1920, height: 1080 }, "1920x1080"], [{ widt
             if (!inside(r)) bad.push({ day, what: "chip", cell: [c.top, c.bottom].map(Math.round), box: [r.top, r.bottom].map(Math.round) });
           }
         }
-        return { more, bad };
+        // The day number shares the bottom row with "+N more" (or sits alone on it): both lie inside the cell.
+        for (const cell of document.querySelectorAll(".calendar-month-cell")) {
+          const c = cell.getBoundingClientRect();
+          const r = cell.querySelector(".calendar-month-day")?.getBoundingClientRect();
+          if (!r || r.top < c.top - 0.5 || r.bottom > c.bottom + 0.5) bad.push({ what: "day number" });
+        }
+        // Every day with 2+ entries shows at least one chip.
+        let noChip = 0;
+        for (const cell of document.querySelectorAll(".calendar-month-cell")) {
+          if (cell.querySelector(".calendar-more") && !cell.querySelector(".calendar-chip")) noChip += 1;
+        }
+        return { more, bad, noChip };
       });
       await context.close();
-      const ok = result.bad.length === 0 && (density === "default" || result.more > 0);
-      console.log(`${ok ? "PASS" : "FAIL"}  ${label} month ${theme} ${density}: ${result.more} "+N more" lines and every chip fully inside their cells`, ok ? "" : JSON.stringify(result.bad.slice(0, 3)));
+      const ok = result.bad.length === 0 && result.noChip === 0 && (density === "default" || result.more > 0);
+      console.log(`${ok ? "PASS" : "FAIL"}  ${label} month ${theme} ${density}: ${result.more} "+N more" lines and every chip and day number fully inside their cells, a chip beside every "+N more"`, ok ? "" : JSON.stringify({ noChip: result.noChip, bad: result.bad.slice(0, 3) }));
       failed ||= !ok;
     }
   }
