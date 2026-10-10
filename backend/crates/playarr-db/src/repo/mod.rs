@@ -84,10 +84,10 @@ pub use live_event::{
     LiveEventPublisher, LiveEventRepo, NewLiveEvent, SqlxLiveEventRepo,
     MAX_ROWS as LIVE_EVENT_MAX_ROWS, RETENTION_MS as LIVE_EVENT_RETENTION_MS,
 };
-pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
+pub use media_file::{MediaFileRepo, PruneOutcome, SqlxMediaFileRepo};
 pub use media_language::{
-    FileLanguages, LanguageUpdate, MediaLanguageRepo, SqlxMediaLanguageRepo, KIND_AUDIO,
-    KIND_SUBTITLE, SOURCE_ARR, SOURCE_PROBE, SOURCE_SIDECAR,
+    language_write_tick, FileLanguages, LanguageUpdate, MediaLanguageRepo, SqlxMediaLanguageRepo,
+    KIND_AUDIO, KIND_SUBTITLE, SOURCE_ARR, SOURCE_PROBE, SOURCE_SIDECAR,
 };
 pub use media_request::{
     match_request, MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo,

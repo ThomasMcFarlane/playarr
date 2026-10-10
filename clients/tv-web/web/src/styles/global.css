@@ -11288,6 +11288,11 @@ body[data-input-mode="remote"] .circle-focus-host[data-remote-active] .circle-fo
   cursor: pointer;
 }
 
+.tv-filter-language-skeleton {
+  min-height: 48px;
+  border-radius: var(--radius-control, 12px);
+}
+
 .ui-select-trigger {
   width: 100%;
 }

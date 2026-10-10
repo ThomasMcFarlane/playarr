@@ -14,6 +14,19 @@ pub type DbPool = sqlx::AnyPool;
 
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// `PRAGMA optimize` mask run when the pool opens its first connection: 0x10000 checks every
+/// table (not only the ones this connection used) and 0x2 runs `ANALYZE` where
+/// a table has none or has changed a lot. Without `sqlite_stat1` the planner
+/// guesses row counts and picked the slow join order for the language reads.
+const OPTIMIZE_ON_OPEN: &str = "PRAGMA optimize = 0x10002";
+
+/// Refreshes planner statistics where they have gone stale (`PRAGMA optimize`,
+/// cheap when nothing changed). Call about hourly from a maintenance task.
+pub async fn optimize(pool: &DbPool) -> Result<(), DbError> {
+    sqlx::query("PRAGMA optimize").execute(pool).await?;
+    Ok(())
+}
+
 /// Embedded SQLite migrations, read from `backend/migrations/sqlite` at
 /// *compile* time (the path is relative to this crate's `Cargo.toml`, i.e.
 /// `backend/crates/playarr-db/../../migrations/sqlite`). Adding a new
@@ -39,14 +52,31 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
     // SQLite permits one writer at a time. Without a busy timeout on every
     // pooled connection, routine background writes can turn a short
     // collision into SQLITE_BUSY failures across unrelated reads.
+    let read_only = database_url.contains("mode=ro");
+    // Only the pool's first connection runs the optimize: it can write (ANALYZE),
+    // and a connection opened later while a long write batch holds the lock would
+    // wait for it, which stalls reads that must not wait for writers.
+    let optimize_pending = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(!read_only));
     let options =
         AnyPoolOptions::new()
             .max_connections(10)
-            .after_connect(|connection, _metadata| {
+            .after_connect(move |connection, _metadata| {
                 let statement =
                     format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
+                let optimize_now =
+                    optimize_pending.swap(false, std::sync::atomic::Ordering::AcqRel);
                 Box::pin(async move {
                     sqlx::query(&statement).execute(&mut *connection).await?;
+                    if optimize_now {
+                        // Statistics are an optimisation: a failure (a busy writer, a
+                        // missing table on a fresh file) must not fail the connection.
+                        if let Err(error) = sqlx::query(OPTIMIZE_ON_OPEN)
+                            .execute(&mut *connection)
+                            .await
+                        {
+                            tracing::debug!(%error, "PRAGMA optimize on connect skipped");
+                        }
+                    }
                     Ok(())
                 })
             });
@@ -389,5 +419,37 @@ mod tests {
 
         assert!(path.exists(), "connect should have created the file");
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Opening a connection analyses tables that have no statistics yet, so the
+    /// planner knows their sizes; `optimize` keeps them current afterwards.
+    #[tokio::test]
+    async fn a_new_connection_gathers_planner_statistics_and_optimize_runs() {
+        let path = std::env::temp_dir().join(format!("playarr-pool-test-{}.db", Uuid::new_v4()));
+        let url = format!("sqlite://{}", path.display());
+        let pool = connect(&url).await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        for i in 0..300 {
+            sqlx::query("INSERT INTO media_file_language_state (media_file_id, source, scanned_ms) VALUES (?, 'arr', 1)")
+                .bind(format!("file-{i}"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        pool.close().await;
+
+        let pool = connect(&url).await.unwrap();
+        let analysed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'media_file_language_state'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(analysed > 0, "the table was not analysed on connect");
+        optimize(&pool).await.unwrap();
+        pool.close().await;
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
     }
 }
