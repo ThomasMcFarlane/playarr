@@ -13,6 +13,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- On-demand HLS now copies the source video (encoding only the audio) whenever the client can play the video codec at original quality, so a 1080p H.264 Matroska file in a browser is remuxed instead of re-encoded in real time; the re-encode missed the first-segment wait and played nothing (20.260).
+- On-demand transcodes use the libx264 `veryfast` preset with a keyframe on every segment boundary, roughly doubling throughput and making the first segment available after one segment length (20.260).
+- Android TV: an automatic retry after the decoder fallback stays on the converted stream instead of direct-playing the undecodable original again (20.260).
+- Web: the desktop browser claims HEVC only when Media Source Extensions can decode it, so Chrome on Linux and Firefox get a playable stream instead of copied HEVC (20.260).
+- Android TV and web: a session that plays the source video, including an original-quality HLS stream whose video the server copied, falls back once to an H.264 transcode when the device cannot decode it (20.260).
+- webOS, Tizen and VIDAA no longer claim HEVC until fragmented-MP4 HEVC HLS is verified on each shell, so HEVC sources reach them as an H.264 transcode (20.260).
+- Web: the HEVC probe falls back to ManagedMediaSource and then the video element when MediaSource is missing, as on iPhone Safari (20.260).
+- Samsung Tizen: the remote's media keys (play, pause, stop, rewind, fast-forward, previous, next) are registered again. Samsung's API writes to the list it is given, and Playarr passed a frozen list, so registration failed silently.
 - Fire TV: LEFT from Home reaches the nav rail on the first try, and a late On Deck answer no longer leaves Home with nothing focused (18.462).
 - Apple TV: libraries list playable titles in the web order (numbers by value, so 2 comes before 10) and open with the first title focused.
 - Tizen and webOS (Chromium 94): scrollbars match web. `scrollbar-width: none` areas hide their bar, and `scrollbar-color` areas draw the same thin themed bar instead of the grey classic one.
@@ -266,6 +274,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV: the library Filters drawer has the web View choice (list, screen, cover) and audio and subtitle language filters; entering a library grid lands on the first (or last focused) title; open drawers are modal.
 - Apple TV: holding Select on a media card opens its actions (Play, Add to Playlist, Mark as Watched or Unwatched) in the shared drawer and returns focus to the card; title pages show the cast; episode tiles show their own frame; Settings has the Artwork size choice (small, medium, large) and the colour theme choice works; Right from a settings row enters its panel.
 - Settings → Server lists the server group's members automatically and read-only, each with its first-priority client address, and updates live when a member joins, leaves or changes its client address. Users can no longer forget or edit the group; signing out clears the remembered group instead. New signed-in-only `GET /api/v1/peer-groups/self/members`.
 - Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
