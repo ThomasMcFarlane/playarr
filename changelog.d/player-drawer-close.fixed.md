@@ -1,0 +1,1 @@
+- Web: player Up next and health drawers use the shared Drawer theme tokens and close button (1.9978)

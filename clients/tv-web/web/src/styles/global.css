@@ -259,6 +259,29 @@
   color: #ff91aa;
 }
 
+/* The player page forces the dark tokens for its video chrome, but its side drawers are the shared Drawer: in the light
+   theme they take the light tokens (and focus ring) like every other panel. */
+:root:not([data-theme="dark"]) .player-page .tv-filter-drawer {
+  --bg: #f5f3f2;
+  --surface: #fbfaf9;
+  --surface-strong: #ffffff;
+  --surface-soft: #dfdcdd;
+  --ink: #382621;
+  --ink-max: #000;
+  --ink-soft: #443a40;
+  --ink-muted: #4d4248;
+  --line: rgba(56, 38, 33, 0.14);
+  --line-strong: rgba(56, 38, 33, 0.28);
+  --accent: #4d4248;
+  --accent-soft: #c5b8bd;
+  --on-accent: #ffffff;
+  --brand-ink: #821e36;
+  --danger: #722f34;
+  --danger-soft: #f2dfe1;
+  --success: #224c3a;
+  color: var(--ink);
+}
+
 /* Surfaces that stay dark in both themes (the player, end screen, playback health panel, media context drawer and PIN dialog)
    take the dark tokens, so their text meets the same AAA contrast in the light theme. */
 :root[data-theme="dark"],
@@ -3626,7 +3649,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   padding: 0.55rem;
   border-radius: 16px;
   background: transparent;
-  color: var(--player-ink);
+  color: var(--ink);
   text-align: left;
   transition:
     background-color 180ms ease,
@@ -3634,7 +3657,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-playlist-item:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--surface-soft);
   transform: scale(1.025);
 }
 
@@ -3649,8 +3672,8 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   place-items: center;
   overflow: hidden;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.42);
+  background: var(--surface-soft);
+  color: var(--ink-muted);
   font-size: 0.62rem;
 }
 
@@ -3687,7 +3710,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 }
 
 .player-playlist-copy > span {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ink-soft);
   font-size: 0.5rem;
 }
 
@@ -10073,45 +10096,25 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 /* Playback health panel content (docs/architecture/playback-health.md); the shell is the shared Drawer. */
 .playback-health-panel h3 { margin: 0; font-size: 1em; }
-.playback-health-panel .ui-btn {
-  border-color: rgba(255, 255, 255, 0.28);
-  color: inherit;
-  background: rgba(255, 255, 255, 0.08);
-}
-.playback-health-panel .ui-btn--primary {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.playback-health-panel .ui-btn:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.16);
-  color: inherit;
-}
-.playback-health-panel .ui-btn--primary:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--on-accent);
-}
 .playback-health-status { margin: 0; }
-.playback-health-status.is-error { color: #ffb4a8; }
+.playback-health-status.is-error { color: var(--danger); }
 .playback-health-findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
 .playback-health-findings li {
   display: grid;
   gap: 0.25rem;
   padding: 0.8rem 1rem;
-  border-left: 4px solid rgba(255, 255, 255, 0.4);
+  border-left: 4px solid var(--line-strong);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-soft);
 }
 .playback-health-findings li[data-severity="ok"] { border-left-color: #6fcf97; }
 .playback-health-findings li[data-severity="info"] { border-left-color: #7fb7ff; }
 .playback-health-findings li[data-severity="warning"] { border-left-color: #ffd27a; }
 .playback-health-findings li[data-severity="problem"] { border-left-color: #ff7a6b; }
-.playback-health-findings em { font-style: normal; color: #ffe2a8; }
+.playback-health-findings em { font-style: normal; color: var(--brand-ink); }
 .playback-health-facts { display: grid; gap: 0.5rem; margin: 0.8rem 0 0; }
 .playback-health-facts > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.2rem 1rem; }
-.playback-health-facts dt { color: rgba(246, 241, 243, 0.72); }
+.playback-health-facts dt { color: var(--ink-muted); }
 .playback-health-facts dd { margin: 0; display: grid; justify-items: end; text-align: right; overflow-wrap: anywhere; }
 .playback-health-facts small { opacity: 0.9; font-size: 0.8em; }
 .playback-health-facts [data-provenance="unknown"] dd { opacity: 0.9; }
@@ -10124,7 +10127,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--surface-soft);
   font-size: 0.78em;
   white-space: pre-wrap;
 }
@@ -10988,6 +10991,21 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
 
 html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-visible, [data-remote-active]) .tv-playlist-card-art.tv-title-card-art:not(.is-empty) {
   box-shadow: var(--card-glow) !important;
+}
+
+/*
+ * Circular focus target (owner 2026-10-10): a focusable circular avatar (profile picker, avatar presets) draws the focus
+ * treatment on the circle itself, never on its square tile. Put .circle-focus-host on the focusable control and
+ * .circle-focus-target on the circle; the cast headshots get the same result through the card art rules above.
+ */
+.circle-focus-host:focus-visible,
+body[data-input-mode="remote"] .circle-focus-host[data-remote-active] {
+  outline: 0;
+}
+
+.circle-focus-host:focus-visible .circle-focus-target,
+body[data-input-mode="remote"] .circle-focus-host[data-remote-active] .circle-focus-target {
+  box-shadow: 0 22px 52px rgba(31, 14, 20, 0.28), var(--card-glow) !important;
 }
 
 /* Shared Select (components/ui/Select.tsx): a field showing the chosen option that opens an inline list. 7:1 ink on

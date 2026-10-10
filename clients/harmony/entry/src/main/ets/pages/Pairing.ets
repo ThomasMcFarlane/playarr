@@ -20,10 +20,10 @@
  *
  * Four visible states (brief 9's own vocabulary): "checking" (the initial
  * `requestDeviceCode()` call is in flight), "waiting" (a code was issued and
- * `beginPolling()` is running), "expired" (the code timed out; the user must
- * ask for a new one) and "error" (a network failure, a server error, or the
- * approving device declined the request). `design/components/AsyncState.ets`
- * renders "checking" and "error"/"expired" (its `Loading` and `Error` kinds
+ * `beginPolling()` is running) and "error" (a network failure, a server
+ * error, or the approving device declined the request). An expired code is
+ * not a state: like web, the page silently requests a fresh code. `design/components/AsyncState.ets`
+ * renders "checking" and "error" (its `Loading` and `Error` kinds
  * respectively); "waiting" is this page's own layout, since it has real
  * content to show (the code, the address, the completion URL) alongside a
  * small `AsyncState` `Loading` spinner, not a single full-screen state.
@@ -78,7 +78,7 @@ const USER_CODE_LETTER_SPACING: number = 8;
 /** The four states this screen's own acceptance criteria name. "success" is
  * deliberately not a rendered state -- `handleOutcome` below navigates away
  * the same tick it is reached, so there is nothing meaningful to paint. */
-type PairingPhase = 'checking' | 'waiting' | 'expired' | 'error';
+type PairingPhase = 'checking' | 'waiting' | 'error';
 
 @Component
 struct Pairing {
@@ -169,8 +169,8 @@ struct Pairing {
       }
       this.cancelPolling = null;
       if (outcome.kind === 'expired') {
-        this.phase = 'expired';
-        this.errorMessage = 'This code expired. Request a new one.';
+        // Web parity (rows 14.770, 14.772): renew silently, no error, no button.
+        this.startPairing();
         return;
       }
       if (outcome.kind === 'access_denied') {
@@ -199,7 +199,7 @@ struct Pairing {
 
         if (this.phase === 'checking') {
           AsyncState({ kind: AsyncStateKind.Loading })
-        } else if (this.phase === 'expired' || this.phase === 'error') {
+        } else if (this.phase === 'error') {
           AsyncState({
             kind: AsyncStateKind.Error,
             message: this.errorMessage,

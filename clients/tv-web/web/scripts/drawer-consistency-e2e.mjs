@@ -17,7 +17,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { boot, opt } from "./e2e-common.mjs";
 
-const { check, open, finish } = await boot({ movies: 24, series: 12, canDownload: true, playlists: 3, playlistItems: 4 }, { realisticAuth: true });
+const { base, check, open, finish } = await boot({ movies: 24, series: 12, canDownload: true, playlists: 3, playlistItems: 4 }, { realisticAuth: true });
 const SHOTS = opt("shots", "");
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 const TOL = 0.5;
@@ -53,6 +53,15 @@ const MEASURE = () => {
     closeColor: cs?.color ?? null,
     bodyPadLeft: body ? body.getBoundingClientRect().left - p.left : null,
   };
+};
+
+/** The player over a stalled negotiation (no media needed): its control bar still has the Up next and health buttons. */
+const openPlayer = async (page, base) => {
+  await page.route(/\/api\/v1\/playback\//, () => new Promise(() => {}));
+  await page.goto(`${base}/player/mf-test?title=x`);
+  await page.waitForTimeout(2500);
+  await page.mouse.move(600, 400);
+  await page.waitForSelector("[data-player-health-button]", { timeout: 10000 });
 };
 
 const hold = async (page, selector) => {
@@ -132,6 +141,24 @@ const PANELS = [
     },
   },
   {
+    id: "player-up-next",
+    path: "/movies",
+    async open(page, base) {
+      await openPlayer(page, base);
+      await page.locator("[data-player-playlist-button]").click({ force: true });
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    id: "player-health",
+    path: "/movies",
+    async open(page, base) {
+      await openPlayer(page, base);
+      await page.locator("[data-player-health-button]").click({ force: true });
+      await page.waitForTimeout(700);
+    },
+  },
+  {
     id: "movie-playback-settings",
     path: "/movies",
     async open(page) {
@@ -153,7 +180,9 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
       const { context, page } = await open(spec.path, { width, height, theme });
       try {
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
-        if (spec.open) await spec.open(page);
+        if (spec.open) await spec.open(page, base);
+        // A spec that navigated (the player) reloads the app: apply the theme again.
+        await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
         await page.waitForSelector("aside[role='dialog']", { timeout: 8000 });
         await page.waitForTimeout(700);
         // The app applies the profile's stored theme once its preferences load, which can land after the first set.
