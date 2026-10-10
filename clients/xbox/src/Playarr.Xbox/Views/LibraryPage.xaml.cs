@@ -36,6 +36,12 @@ namespace Playarr.Xbox.Views
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+            if (e.Parameter is WorkKind kind && kind != _viewModel.SelectedKind)
+            {
+                // Opened from the nav rail's Series, Movies or Music item.
+                _viewModel.SelectKind(kind);
+            }
+
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
             Render();
         }
@@ -135,9 +141,6 @@ namespace Playarr.Xbox.Views
         }
 
         private void RetryButton_Click(object sender, RoutedEventArgs e) => _viewModel.Retry();
-
-        private void HomeNavButton_Click(object sender, RoutedEventArgs e) =>
-            App.Navigation.Navigate(typeof(HomePage));
 
         private static string DisplayNameFor(WorkKind kind) => kind switch
         {

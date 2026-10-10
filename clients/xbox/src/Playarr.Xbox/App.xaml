@@ -1,19 +1,54 @@
 <Application
     x:Class="Playarr.Xbox.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
 
     <Application.Resources>
-        <!--
-            No custom ResourceDictionary merged in yet — this app currently
-            relies entirely on the default UWP/XAML theme resources
-            (ThemeResource ApplicationPageBackgroundThemeBrush, the built-in
-            TitleTextBlockStyle/SubtitleTextBlockStyle/BodyTextBlockStyle
-            text styles, etc), used directly by Views/LoginPage.xaml and
-            Views/HomePage.xaml. A shared Styles.xaml is a natural addition
-            once more than one screen needs bespoke TV-legible typography,
-            a 10-foot-safe-area margin, or a focus-visual style — leave that
-            to the Screens phase, which will touch every page anyway.
-        -->
+        <ResourceDictionary>
+            <!--
+                Web TV dark tokens (clients/tv-web/web/src/styles/global.css, dark theme), the source of
+                truth for every client. Fonts are the web's embedded builds (docs/parity/fonts). The
+                Nunito Sans build's default weight is 200, so every text style sets its weight.
+            -->
+            <Color x:Key="PlayarrBgColor">#151315</Color>
+            <Color x:Key="PlayarrBrandColor">#CF3157</Color>
+            <SolidColorBrush x:Key="PlayarrBg" Color="#151315" />
+            <SolidColorBrush x:Key="PlayarrSurface" Color="#1B181B" />
+            <SolidColorBrush x:Key="PlayarrSurfaceStrong" Color="#211D21" />
+            <SolidColorBrush x:Key="PlayarrSurfaceSoft" Color="#312A30" />
+            <SolidColorBrush x:Key="PlayarrInk" Color="#F4F0F1" />
+            <SolidColorBrush x:Key="PlayarrInkSoft" Color="#CDC1C6" />
+            <SolidColorBrush x:Key="PlayarrInkMuted" Color="#C2B5BB" />
+            <SolidColorBrush x:Key="PlayarrLine" Color="#1CDFDCDD" />
+            <SolidColorBrush x:Key="PlayarrLineStrong" Color="#3BDFDCDD" />
+            <SolidColorBrush x:Key="PlayarrBrand" Color="#CF3157" />
+            <SolidColorBrush x:Key="PlayarrBrandInk" Color="#EAA6B6" />
+
+            <FontFamily x:Key="PlayarrFont">ms-appx:///Assets/Fonts/NunitoSans.ttf#Nunito Sans</FontFamily>
+            <FontFamily x:Key="PlayarrMonoFont">ms-appx:///Assets/Fonts/JetBrainsMono.ttf#JetBrains Mono</FontFamily>
+
+            <!-- Every page and control picks these up instead of the stock theme. -->
+            <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#151315" />
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/NunitoSans.ttf#Nunito Sans</FontFamily>
+
+            <Style x:Key="PlayarrPageTitle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource PlayarrFont}" />
+                <Setter Property="FontSize" Value="34" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource PlayarrInk}" />
+            </Style>
+            <Style x:Key="PlayarrRailTitle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource PlayarrFont}" />
+                <Setter Property="FontSize" Value="19" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource PlayarrInk}" />
+            </Style>
+            <Style TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource PlayarrFont}" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="Foreground" Value="{StaticResource PlayarrInk}" />
+            </Style>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

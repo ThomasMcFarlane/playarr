@@ -24,19 +24,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Top nav: shared shape, duplicated on HomePage; see that page's own copy. -->
-        <StackPanel
-            Grid.Row="0"
-            Orientation="Horizontal"
-            Spacing="24"
-            Margin="48,32,48,24"
-            VerticalAlignment="Center">
-            <TextBlock Text="Playarr" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" />
-            <Button x:Name="HomeNavButton" Content="Home" Click="HomeNavButton_Click" />
-            <Button x:Name="LibraryNavButton" Content="Library" IsEnabled="False" />
-        </StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="24" Margin="48,0,48,16">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="24" Margin="154,0,48,16">
             <StackPanel x:Name="KindTabsPanel" Orientation="Horizontal" Spacing="12" />
 
             <StackPanel Orientation="Horizontal" Spacing="12" Margin="32,0,0,0">
@@ -45,7 +34,7 @@
             </StackPanel>
         </StackPanel>
 
-        <Grid Grid.Row="2" Margin="48,0,48,48">
+        <Grid Grid.Row="2" Margin="154,0,48,48">
             <ProgressRing
                 x:Name="LoadingRing"
                 IsActive="False"

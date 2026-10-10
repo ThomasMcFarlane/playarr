@@ -23,12 +23,9 @@ namespace Playarr.Xbox.ViewModels
     /// </remarks>
     public sealed class HomeViewModel : ViewModelBase
     {
-        private const string RecentSort = "recent";
-        private const int RecentLimit = 30;
-
         private readonly XboxAppEnvironment _environment;
 
-        private IReadOnlyList<Work> _recentWorks = Array.Empty<Work>();
+        private IReadOnlyList<HomeRail> _rails = Array.Empty<HomeRail>();
         private bool _isLoading;
         private string? _errorMessage;
 
@@ -38,10 +35,10 @@ namespace Playarr.Xbox.ViewModels
             _ = LoadAsync();
         }
 
-        public IReadOnlyList<Work> RecentWorks
+        public IReadOnlyList<HomeRail> Rails
         {
-            get => _recentWorks;
-            private set => SetProperty(ref _recentWorks, value);
+            get => _rails;
+            private set => SetProperty(ref _rails, value);
         }
 
         public bool IsLoading
@@ -67,8 +64,9 @@ namespace Playarr.Xbox.ViewModels
 
             try
             {
-                var page = await _environment.ApiClient.BrowseCatalogAsync(sort: RecentSort, limit: RecentLimit);
-                RecentWorks = new List<Work>(page.Items);
+                // The same server-computed rails the web Home renders, in the same order.
+                var response = await _environment.ApiClient.GetHomeRailsAsync();
+                Rails = new List<HomeRail>(response.Rails);
             }
             catch (ApiException error)
             {

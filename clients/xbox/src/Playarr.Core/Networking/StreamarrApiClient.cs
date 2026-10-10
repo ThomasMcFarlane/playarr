@@ -47,6 +47,8 @@ namespace Playarr.Core.Networking
         /// <summary>Works similar to <paramref name="id"/> (<c>/api/v1/catalog/{id}/similar</c>), used for end-of-playback suggestions.</summary>
         Task<IList<Work>> GetSimilarWorksAsync(Guid id, int? limit = null, CancellationToken cancellationToken = default);
 
+        Task<HomeRailsResponse> GetHomeRailsAsync(CancellationToken cancellationToken = default);
+
         Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default);
 
         Task<IList<AvailableProfile>> ListProfilesAsync(CancellationToken cancellationToken = default);
@@ -192,6 +194,10 @@ namespace Playarr.Core.Networking
             return GetAsync<IList<Work>>(
                 $"/api/v1/catalog/{id:D}/similar", query, authenticated: true, cancellationToken);
         }
+
+        /// <summary><c>GET /api/v1/home/rails</c>: the caller's ordered, non-empty Home rails.</summary>
+        public Task<HomeRailsResponse> GetHomeRailsAsync(CancellationToken cancellationToken = default) =>
+            GetAsync<HomeRailsResponse>("/api/v1/home/rails", null, authenticated: true, cancellationToken);
 
         public Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default) =>
             GetAsync<IList<WorkKind>>("/api/v1/catalog/kinds", null, authenticated: true, cancellationToken);

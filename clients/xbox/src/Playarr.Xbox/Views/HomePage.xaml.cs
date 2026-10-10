@@ -15,7 +15,7 @@ namespace Playarr.Xbox.Views
     /// </summary>
     /// <remarks>
     /// Follows <c>Views/LoginPage.xaml.cs</c>'s six-point pattern. The one
-    /// addition: <see cref="RecentWorksList_ItemClick"/> reads the
+    /// addition: <see cref="RailItem_Click"/> reads the
     /// <see cref="Guid"/> that <see cref="CatalogTileFactory"/> stashed on
     /// each tile's <c>Tag</c> and navigates to <see cref="WorkDetailPage"/>
     /// directly -- a synchronous, one-shot user action with no ViewModel
@@ -62,22 +62,45 @@ namespace Playarr.Xbox.Views
             ErrorPanel.Visibility = hasError ? Visibility.Visible : Visibility.Collapsed;
             ErrorText.Text = _viewModel.ErrorMessage ?? string.Empty;
 
-            RecentWorksList.Visibility = _viewModel.IsLoading || hasError ? Visibility.Collapsed : Visibility.Visible;
+            RailsScroll.Visibility = _viewModel.IsLoading || hasError ? Visibility.Collapsed : Visibility.Visible;
 
-            // No per-property diffing -- rebuilt on every notification, same
-            // simplicity call as Views/LoginPage.xaml.cs's Render().
-            RecentWorksList.Items.Clear();
-            foreach (var work in _viewModel.RecentWorks)
+            // Rebuilt on every notification, same simplicity call as Views/LoginPage.xaml.cs's Render().
+            RailsPanel.Children.Clear();
+            foreach (var rail in _viewModel.Rails)
             {
-                var posterUrl = work.Image(ImageKind.Poster)?.Url;
-                var posterUri = string.IsNullOrEmpty(posterUrl)
-                    ? null
-                    : App.Environment.ApiClient.ResolveUrl(posterUrl);
-                RecentWorksList.Items.Add(CatalogTileFactory.CreateTile(work, posterUri));
+                RailsPanel.Children.Add(BuildRail(rail));
             }
         }
 
-        private void RecentWorksList_ItemClick(object sender, ItemClickEventArgs e)
+        private UIElement BuildRail(HomeRail rail)
+        {
+            var list = new ListView
+            {
+                SelectionMode = ListViewSelectionMode.None,
+                IsItemClickEnabled = true,
+                Height = 262,
+                Padding = new Thickness(0),
+            };
+            ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Hidden);
+            ScrollViewer.SetHorizontalScrollMode(list, ScrollMode.Enabled);
+            ScrollViewer.SetVerticalScrollMode(list, ScrollMode.Disabled);
+            list.ItemsPanel = (ItemsPanelTemplate)Windows.UI.Xaml.Markup.XamlReader.Load(
+                "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
+                "<ItemsStackPanel Orientation='Horizontal' /></ItemsPanelTemplate>");
+            list.ItemContainerStyle = CatalogTileFactory.CardContainerStyle;
+            list.ItemClick += RailItem_Click;
+            foreach (var work in rail.Items)
+            {
+                list.Items.Add(CatalogTileFactory.CreateLandscapeCard(work));
+            }
+
+            var section = new StackPanel { Spacing = 22 };
+            section.Children.Add(new TextBlock { Text = rail.Title, Style = (Style)Application.Current.Resources["PlayarrRailTitle"] });
+            section.Children.Add(list);
+            return section;
+        }
+
+        private void RailItem_Click(object sender, ItemClickEventArgs e)
         {
             if (e.ClickedItem is FrameworkElement tile && tile.Tag is Guid workId)
             {
@@ -86,8 +109,5 @@ namespace Playarr.Xbox.Views
         }
 
         private void RetryButton_Click(object sender, RoutedEventArgs e) => _viewModel.Retry();
-
-        private void LibraryNavButton_Click(object sender, RoutedEventArgs e) =>
-            App.Navigation.Navigate(typeof(LibraryPage));
     }
 }
