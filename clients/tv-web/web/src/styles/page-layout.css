@@ -159,6 +159,12 @@
   --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
 }
 
+/* The player's side drawers are the shared Drawer: in the light theme they take the ink ring like every other panel. */
+:root:not([data-theme="dark"]) .player-page .tv-filter-drawer {
+  --focus-ring-color: var(--ink);
+  --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
+}
+
 /*
  * Media cards (`.media-card`) never take a ring or a fill. On FOCUS (keyboard, D-pad: `:focus-visible`, and the
  * virtual remote marker `[data-remote-active]`) they lift with a soft shadow; hover keeps its own look. The lift is a

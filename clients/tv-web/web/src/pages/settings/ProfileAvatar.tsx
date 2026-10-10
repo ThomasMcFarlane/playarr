@@ -212,13 +212,14 @@ export function SettingsProfileAvatarPage() {
               <button
                 key={preset.id}
                 type="button"
-                className={`profile-avatar-preset${selected ? " is-active" : ""}`}
+                className={`profile-avatar-preset circle-focus-host${selected ? " is-active" : ""}`}
                 aria-label={t(`settings.profileAvatar.preset.${preset.id}`)}
                 aria-pressed={selected}
                 disabled={saving}
                 onClick={() => void selectPreset(preset.id)}
               >
                 <ProfileAvatar
+                  className="circle-focus-target"
                   preference={{ kind: "preset", preset: preset.id }}
                 />
               </button>
@@ -228,12 +229,12 @@ export function SettingsProfileAvatarPage() {
           {preference.kind === "custom" ? (
             <button
               type="button"
-              className="profile-avatar-preset is-active"
+              className="profile-avatar-preset circle-focus-host is-active"
               aria-label={t("settings.profileAvatar.customCurrent")}
               aria-pressed="true"
               onClick={() => canUpload && uploadInputRef.current?.click()}
             >
-              <ProfileAvatar preference={preference} />
+              <ProfileAvatar className="circle-focus-target" preference={preference} />
             </button>
           ) : null}
         </div>
