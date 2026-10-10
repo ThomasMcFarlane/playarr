@@ -263,3 +263,40 @@ Measured on the Android TV emulator (1920x1080, 160 dp) against the refreshed `d
 | household-blocked | 0.33% | 0.33% |
 
 Over 1%: dark film-detail, series-detail, calendar; light home, movies, series, film-detail, series-detail, calendar, settings-player (1.00), search is under 1%. Movies and series now pass in dark and sit at about 1.4% in light. Scrolled Home rail: the gutter fade passes in both themes (edge strength 1.1 dark, 1.9 light). The fixture library is too small to scroll the Movies and Series grids.
+
+## Live parity pass, 11 October 2026 (real server, device test account)
+
+The owner order of 11 October made the live web TV layout the reference for the Android TV app. Unlike the fixture runs above,
+this pass compared the Android TV emulator (1920x1080, 160 dp, dark, signed in as the device test account) with the live web
+TV layout (Playwright, 1920x1080, Android TV user agent, dark, the same account and server) at the same time, screen by screen.
+Captures are kept outside the repository (they show real library artwork). Navigation on the emulator is D-pad only where
+possible: a single `input tap` puts the emulator in touch mode, and Compose then shows no keyboard focus at all.
+
+Parity per screen, as the device wall computes it (100 minus the pixelmatch mismatch at threshold 0.1, live data, so artwork,
+clock and focus position differ between the two sides even where the layout matches):
+
+| Screen | Parity | Notes |
+| --- | ---: | --- |
+| home | 89.8 | hero copy, runtime line, poster-size cards and rail positions match; the first card's art is the resume frame on Android and the backdrop on web |
+| movies | 92.8 | header subtitle, total, natural title order, first card focused |
+| series | 91.2 | as movies |
+| music | 91.2 | as movies |
+| calendar-month | 97.0 | text lines with availability dots; the range label stays in the page (see below) |
+| calendar-week | 93.0 | agenda cards per day |
+| calendar-agenda | 96.6 | details panel, status pills, no source names |
+| search | 99.4 | empty state differs (see below) |
+| film-detail | 95.0 | ink play pill with "Resume from m:ss", balanced titles |
+| series-detail | 92.5 | Ask again, year range, episode stills, season rail position |
+| settings | 95.6 | subtitle, admin-only sections, artwork size, web segments (measured before #647; 97.9 after) |
+| filters | 95.0 | web Drawer |
+| profiles | 99.2 | selects and mark |
+| player-controls | 99.4 | chrome |
+| actions | 94.7 | web Drawer rows |
+
+Remaining differences:
+
+- Shared page package (owner-request gate, `docs/design/page-layout.md` 7.4): the search empty state (web's circular art beside
+  the title, the hint under the field) and the calendar range button in the header's Previous / Today / Next group need a change to
+  `PlayarrEmptyState` and the navigation label pill.
+- The title-actions drawer starts with Open, not Play: a bare work has no media file to start from the menu.
+- One sample hero title breaks one word later than web: Android's font metrics make the balanced second line wider.
