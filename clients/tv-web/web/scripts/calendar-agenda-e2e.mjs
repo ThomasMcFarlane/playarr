@@ -154,6 +154,84 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 72
     check(`${label}: after scrolling the top day heading is pinned at its sticky line under the header area (+-1px) with a background`, pinnedOk, JSON.stringify(detail.slice(0, 2)));
     check(`${label}: the focused entry never sits under the pinned heading`, clearOk, JSON.stringify(detail.slice(0, 2)));
     check(`${label}: the pinned heading changes as later days scroll up (next heading pushes the previous one)`, seen.size >= 2, JSON.stringify([...seen]));
+
+    // 3. The focused entry's lift and glow are never clipped by the scroller (nor hidden under the pinned heading), and the
+    //    fade under the pinned heading starts exactly at the heading's bottom edge with no unfaded strip.
+    const entryCount = await page.evaluate(() => document.querySelectorAll(".calendar-entry:not(.calendar-entry-skeleton)").length);
+    for (const [name, index] of [["first", 0], ["middle", Math.floor(entryCount / 2)], ["last", entryCount - 1]]) {
+      await page.evaluate(() => { const g = document.querySelector(".tv-title-grid"); g.style.scrollBehavior = "auto"; g.scrollTop = 0; g.style.scrollBehavior = ""; });
+      await page.waitForTimeout(200);
+      await page.evaluate(() => document.querySelector(".calendar-entry").focus({ preventScroll: true }));
+      for (let n = 0; n < 80; n += 1) {
+        const at = await page.evaluate(() => [...document.querySelectorAll(".calendar-entry:not(.calendar-entry-skeleton)")].indexOf(document.activeElement));
+        if (at >= index) break;
+        await page.keyboard.press("ArrowDown");
+        await page.waitForTimeout(160);
+      }
+      await page.waitForTimeout(1000);
+      const g = await page.evaluate(() => {
+        const el = document.activeElement;
+        const grid = document.querySelector(".tv-title-grid");
+        const gr = grid.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        // Extent of every shadow layer: spread + blur beyond the box, shifted by its offset.
+        const shadow = getComputedStyle(el).boxShadow;
+        const layers = shadow.split(/,(?![^(]*\))/).map((l) => l.trim()).filter((l) => l !== "none");
+        let ext = { l: 0, t: 0, r: 0, b: 0 };
+        for (const layer of layers) {
+          const nums = (layer.replace(/rgba?\([^)]*\)|color\([^)]*\)/g, "").match(/-?[\d.]+px/g) || []).map(parseFloat);
+          const [x = 0, y = 0, blur = 0, spread = 0] = nums;
+          const grow = blur + spread; // the full blur radius plus spread
+          ext = { l: Math.max(ext.l, grow - x), t: Math.max(ext.t, grow - y), r: Math.max(ext.r, grow + x), b: Math.max(ext.b, grow + y) };
+        }
+        const stick = gr.top + parseFloat(getComputedStyle(document.querySelector(".calendar-agenda-content .calendar-day > h3")).top);
+        const heads = [...document.querySelectorAll(".calendar-agenda-content .calendar-day > h3")].map((h) => h.getBoundingClientRect());
+        const pinned = heads.filter((h) => h.top <= stick + 1.5 && h.bottom > stick).pop();
+        return {
+          clip: { l: gr.left, t: pinned ? pinned.bottom : Math.max(gr.top, stick), r: gr.right, b: gr.bottom },
+          box: { l: r.left - ext.l, t: r.top - ext.t, r: r.right + ext.r, b: r.bottom + ext.b },
+        };
+      });
+      const inside = g.box.l >= g.clip.l - 0.5 && g.box.t >= g.clip.t - 0.5 && g.box.r <= g.clip.r + 0.5 && g.box.b <= g.clip.b + 0.5;
+      check(`${label}: the ${name} focused entry's lift and glow sit fully inside the scroller and clear of the pinned heading`, inside, JSON.stringify(g));
+    }
+    // Fade vs heading: scroll to the middle, find the pinned heading.
+    const readBand = () => page.evaluate(() => {
+      const grid = document.querySelector(".tv-title-grid");
+      const gr = grid.getBoundingClientRect();
+      const stick = gr.top + parseFloat(getComputedStyle(document.querySelector(".calendar-agenda-content .calendar-day > h3")).top);
+      const h = [...document.querySelectorAll(".calendar-agenda-content .calendar-day > h3")].map((x) => x.getBoundingClientRect()).filter((r) => Math.abs(r.top - stick) <= 1).pop();
+      const fade = document.querySelector(".calendar-agenda-fade").getBoundingClientRect();
+      const after = getComputedStyle(document.querySelector(".calendar-agenda-fade"), "::after");
+      const card = document.querySelector(".calendar-entry:not(.calendar-entry-skeleton)").getBoundingClientRect();
+      return { headBottom: h?.bottom ?? null, fadeTop: fade.top, fadeOpacity: after.opacity, x: Math.round(gr.left + 200) };
+    });
+    let band = null;
+    for (let top = 300; top < 3000; top += 37) {
+      await page.evaluate((t) => { const g = document.querySelector(".tv-title-grid"); g.style.scrollBehavior = "auto"; g.scrollTop = t; }, top);
+      await page.waitForTimeout(120);
+      band = await readBand();
+      if (band.headBottom !== null) break;
+    }
+    await page.waitForTimeout(300);
+    band = await readBand();
+    check(`${label}: the fade's top edge equals the pinned heading's bottom edge (+-1px)`, band.headBottom !== null && Math.abs(band.fadeTop - band.headBottom) <= 1 && band.fadeOpacity === "1", JSON.stringify(band));
+    if (band.headBottom !== null) {
+      const png = await page.screenshot();
+      const px = await page.evaluate(async ({ b64, x, y }) => {
+        const img = new Image();
+        img.src = "data:image/png;base64," + b64;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const at = (yy) => [...ctx.getImageData(x, Math.round(yy), 1, 1).data].slice(0, 3);
+        return { head: at(y - 3), below: [1, 2, 3].map((d) => at(y + d)) };
+      }, { b64: png.toString("base64"), x: band.x, y: band.headBottom });
+      const worst = Math.max(...px.below.flatMap((p) => p.map((v, i) => Math.abs(v - px.head[i]))));
+      check(`${label}: no unfaded content strip right under the pinned heading (worst channel delta ${worst} <= 14)`, worst <= 14, JSON.stringify(px));
+    }
     await context.close();
   }
 }

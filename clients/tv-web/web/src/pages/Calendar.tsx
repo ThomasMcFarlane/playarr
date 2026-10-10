@@ -1262,6 +1262,7 @@ export function CalendarPage() {
           scrollKey="calendar:list"
           refreshKey={`${items.length}:${loading}`}
           contentClassName="calendar-agenda-content"
+          gridProps={{ "data-tv-honour-scroll-padding": "" }}
         >
           {isPhoneWidth ? (
             <div className="calendar-header">
