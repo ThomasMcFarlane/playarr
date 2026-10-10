@@ -24,6 +24,12 @@ Depends and ETA may be empty (write a single space between the pipes). ETA is
 
 - Updating an existing row: the fragment holds the complete new row; it replaces the row with that number
   in place, in its current epic (a `section:` line is ignored and may be omitted).
+- Title guard: a fragment for an existing number must keep that row's title (lowercased, punctuation
+  stripped, word overlap of at least 0.5). Otherwise `--check` fails with `row <ref> title mismatch`,
+  because a different task reusing the number would silently overwrite an unrelated row. If the rename
+  is deliberate, add a leading `retitle: true` line. Two pending fragments for one number with different
+  titles fail the same way. `remove:` fragments are exempt.
+- Row numbers: use only the number the coordinator gives you. Never pick, guess or reuse one.
 - New row: the `section:` line is required; the row is appended to that epic's table. The name is
   matched against the current `## ` headings after dropping a leading `Active: `, `Planned: ` or epic
   number (`N. `) and ignoring case, so the bare name and `N. Name` both work, and known renamed headings map to their new names (the table is `SECTION_ALIASES` in
