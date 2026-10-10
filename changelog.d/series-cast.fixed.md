@@ -1,1 +1,0 @@
-- Series now show a cast rail: Sonarr exposes no cast, so the server reads each series' cast from the series metadata service Sonarr itself uses, and backfills series that have none on the next reconciliation pass (override the service URL with `PLAYARR_SERIES_CAST_URL`).
