@@ -92,64 +92,13 @@
   }
 }
 
-/* Media-item context drawer: long-press OK/Enter or right-click. */
+/* Media-item context drawer: long-press OK/Enter or right-click. The panel itself is the shared Drawer
+   (.tv-filter-drawer); this wrapper only catches clicks outside it and carries no look of its own. */
 .media-context-backdrop {
   position: fixed;
   inset: 0;
   z-index: var(--z-backdrop);
-  display: flex;
-  justify-content: flex-end;
-  background: linear-gradient(90deg, transparent 0 48%, rgba(7, 5, 8, 0.76) 100%);
-}
-
-.tv-filter-drawer.media-context-drawer {
-  position: relative;
-  flex: 0 0 auto;
-  align-self: stretch;
-  width: min(440px, calc(38 * var(--vw)));
-  min-width: 330px;
-  height: 100%;
-  padding: clamp(54px, calc(8 * var(--viewport-unit)), 96px) clamp(30px, calc(4 * var(--vw)), 58px);
-  color: #fff;
-  background:
-    linear-gradient(180deg, rgba(34, 25, 31, 0.98), rgba(12, 9, 12, 0.99));
-  box-shadow: -32px 0 90px rgba(0, 0, 0, 0.5);
-  will-change: transform, opacity;
-  animation: media-context-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.tv-filter-drawer.media-context-drawer {
-  align-content: start;
-  gap: clamp(26px, calc(4 * var(--viewport-unit)), 44px);
-}
-
-.tv-filter-drawer.media-context-drawer > header {
-  margin-bottom: 0;
-}
-
-.tv-filter-drawer.media-context-drawer .drawer-close {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.tv-filter-drawer.media-context-drawer .drawer-close:hover:not(:disabled) {
-  background: #fff;
-  color: #120e11;
-}
-
-.tv-filter-drawer.media-context-drawer > header p {
-  margin: 0 0 10px;
-  color: rgba(255, 255, 255, 0.56);
-  font-size: 0.76rem;
-  font-weight: 750;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.tv-filter-drawer.media-context-drawer > header h2 {
-  margin: 0;
-  font-size: clamp(1.7rem, calc(2.8 * var(--vw)), 2.8rem);
-  line-height: 1.05;
+  background: transparent;
 }
 
 .media-context-actions {
@@ -166,8 +115,8 @@
   padding: 12px 18px;
   border: 0;
   border-radius: 14px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.075);
+  color: var(--ink);
+  background: var(--surface-soft);
   text-align: left;
   transition:
     transform 180ms ease,
@@ -189,14 +138,14 @@
 }
 
 .media-context-actions button small {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ink-muted);
   font-size: 0.7rem;
   font-weight: 620;
 }
 
 .media-context-group-heading {
   margin: 10px 0 4px;
-  color: rgba(255, 255, 255, 0.52);
+  color: var(--ink-muted);
   font-size: 0.7rem;
   font-weight: 760;
   letter-spacing: 0.12em;
@@ -224,13 +173,13 @@
   margin-bottom: clamp(22px, calc(3 * var(--viewport-unit)), 36px);
   padding: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--ink-muted);
   font-size: 0.78rem;
   cursor: pointer;
 }
 
 .media-context-drawer .media-context-back:hover:not(:disabled) {
-  color: #fff;
+  color: var(--ink);
   transform: scale(1.04);
 }
 
@@ -240,7 +189,7 @@
   place-content: center;
   justify-items: center;
   gap: 0.65rem;
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--ink-muted);
   text-align: center;
 }
 
@@ -255,7 +204,7 @@
 }
 
 .media-context-actions button:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--line-strong);
   transform: scale(1.035);
 }
 
@@ -275,7 +224,7 @@
 }
 
 .playlist-context-form label {
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--ink-muted);
   font-size: 0.68rem;
   font-weight: 740;
   letter-spacing: 0.08em;
@@ -286,22 +235,11 @@
   width: 100%;
   min-height: 54px;
   padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.075);
-  color: #fff;
+  background: var(--surface-soft);
+  color: var(--ink);
   font: inherit;
-}
-
-.playlist-context-form .playlist-parent-dropdown {
-  --bg: rgba(255, 255, 255, 0.075);
-  --ink: #fff;
-  --ink-muted: rgba(255, 255, 255, 0.56);
-  --line: rgba(255, 255, 255, 0.11);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --surface-soft: rgba(255, 255, 255, 0.12);
-  --surface-strong: #2b2228;
-  --accent: var(--brand);
 }
 
 .playlist-context-form .btn {
@@ -311,7 +249,7 @@
 
 .playlist-context-confirm > p {
   margin-bottom: 1.2rem;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--ink-muted);
   font-size: 0.78rem;
   line-height: 1.55;
 }
@@ -321,32 +259,11 @@
   color: #ff91aa;
 }
 
-@keyframes media-context-enter {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@media (max-width: 760px) {
-  .tv-filter-drawer.media-context-drawer {
-    width: min(calc(88 * var(--vw)), 420px);
-    min-width: 0;
-  }
-}
-
 /* Surfaces that stay dark in both themes (the player, end screen, playback health panel, media context drawer and PIN dialog)
    take the dark tokens, so their text meets the same AAA contrast in the light theme. */
 :root[data-theme="dark"],
 .player-page,
 .end-screen,
-.playback-health-panel,
-.media-context-drawer,
 .profile-pin-dialog {
   --bg: #151315;
   --surface: #1b181b;
@@ -3813,107 +3730,30 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   color: rgba(255, 255, 255, 0.28);
 }
 
-.player-playlist-panel {
-  position: absolute;
-  z-index: var(--z-side-panel);
-  top: 0;
-  right: 0;
-  width: min(calc(34 * var(--vw)), 620px);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: clamp(26px, calc(4 * var(--viewport-unit)), 58px) clamp(22px, calc(2.6 * var(--vw)), 46px);
-  background:
-    linear-gradient(90deg, transparent 0, rgba(8, 6, 7, 0.82) 15%, rgba(8, 6, 7, 0.97) 42%),
-    rgba(8, 6, 7, 0.94);
-  color: var(--player-ink);
-  box-shadow: -36px 0 90px rgba(0, 0, 0, 0.44);
-  backdrop-filter: blur(28px) saturate(120%);
-  animation: player-panel-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes player-panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.player-playlist-panel > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: clamp(20px, calc(3 * var(--viewport-unit)), 38px);
-  padding-left: 0.5rem;
-}
-
-.player-playlist-panel > header p {
-  font-size: clamp(1.1rem, calc(1.55 * var(--vw)), 1.8rem);
-  font-weight: 620;
-  letter-spacing: -0.045em;
-}
-
-.player-playlist-panel > header span {
+.player-playlist-count {
   display: block;
   margin-top: 0.18rem;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.58rem;
-}
-
-.player-playlist-panel > header button {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--player-ink);
-  font-size: 1.4rem;
-  line-height: 1;
-  transition:
-    background-color 180ms ease,
-    transform 200ms ease;
-}
-
-.player-playlist-panel > header button:hover {
-  background: rgba(255, 255, 255, 0.14);
-  transform: scale(1.1);
+  color: var(--ink-muted);
 }
 
 .player-playlist-scroll {
-  min-height: 0;
   display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 0.65rem;
-  padding: 0.5rem 0.5rem 2rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-
-.player-playlist-scroll::-webkit-scrollbar {
-  display: none;
 }
 
 .player-playlist-season {
   position: sticky;
   z-index: 2;
-  top: -0.5rem;
+  top: 0;
   margin: 0.75rem 0 0.2rem;
   padding: 0.7rem 0.55rem 0.45rem;
   background: linear-gradient(
     to bottom,
-    rgba(8, 6, 7, 0.98) 62%,
-    rgba(8, 6, 7, 0)
+    var(--surface-strong) 62%,
+    transparent
   );
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ink-muted);
   font-size: 0.55rem;
   font-weight: 780;
   letter-spacing: 0.14em;
@@ -5054,7 +4894,7 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 
 .tv-filter-drawer > header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
@@ -5075,7 +4915,12 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   letter-spacing: -0.055em;
 }
 
+.tv-filter-drawer > header .drawer-heading {
+  min-width: 0;
+}
+
 .tv-filter-drawer > header > button {
+  flex: none;
   width: clamp(44px, calc(2.7 * var(--vw)), 48px);
   height: clamp(44px, calc(2.7 * var(--vw)), 48px);
   display: grid;
@@ -6033,33 +5878,6 @@ body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-
   }
 }
 
-.media-context-drawer .tv-empty-state-copy strong {
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.media-context-drawer .tv-empty-state-copy small {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.media-context-drawer .tv-empty-state-art {
-  color: #f06b89;
-}
-
-.media-context-drawer .tv-empty-state-art i {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: none;
-}
-
-.media-context-drawer .tv-empty-state.tone-error .tv-empty-state-copy strong,
-.media-context-drawer .tv-empty-state.tone-error .tv-empty-state-art {
-  color: #ff8da7;
-}
-
-.media-context-drawer .tv-empty-state.tone-error .tv-empty-state-copy small {
-  color: rgba(255, 166, 186, 0.72);
-}
-
 .tv-playlist-directory-card .tv-playlist-card-art {
   overflow: visible;
   background: transparent;
@@ -6534,7 +6352,6 @@ html body[data-input-mode] .tv-playlist-directory-card.tv-title-card:is(:focus-v
 
 .tv-playback-settings-drawer {
   z-index: var(--z-drawer);
-  width: min(430px, calc(32 * var(--vw)));
 }
 
 .tv-playback-settings-options {
@@ -9548,19 +9365,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     font-size: clamp(2rem, calc(11 * var(--vw)), 3.5rem);
   }
 
-  .media-context-backdrop {
-    justify-content: stretch;
-    background: rgba(7, 5, 8, 0.64);
-  }
-
-  .tv-filter-drawer.media-context-drawer {
-    width: 100%;
-    max-width: 430px;
-    min-width: 0;
-    padding: calc(var(--mobile-top-inset) + 22px) 20px
-      calc(24px + env(safe-area-inset-bottom));
-  }
-
   .update-toast {
     bottom: calc(var(--mobile-nav-height) + 10px);
     width: calc(100% - 24px);
@@ -9639,12 +9443,6 @@ body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-c
     max-height: calc(58 * var(--viewport-unit));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  .player-playlist-panel {
-    width: 100%;
-    padding: calc(var(--mobile-top-inset) + 18px) 14px
-      calc(18px + env(safe-area-inset-bottom));
   }
 
   .player-playlist-item {
@@ -9770,8 +9568,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-search-cop
   animation-duration: 320ms;
 }
 
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-filter-drawer,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-playlist-panel {
+html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-filter-drawer {
   animation-duration: 240ms;
 }
 
@@ -9788,7 +9585,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-rail-panel:not(.tv-library-grid-panel),
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-filter-drawer,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-playlist-panel,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-shell:not(.player-shell-placeholder)
   .player-overlay-status {
   backdrop-filter: blur(16px) saturate(116%);
@@ -10240,40 +10036,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   }
 }
 
-/* Playback health panel (docs/architecture/playback-health.md). Sits over the
-   always-dark player surface, so it uses fixed light-on-dark values. */
-.playback-health-panel {
-  position: absolute;
-  z-index: var(--z-health);
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(520px, calc(92 * var(--vw)));
-  display: grid;
-  align-content: start;
-  gap: 1.1rem;
-  padding: clamp(20px, calc(3 * var(--vw)), 40px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  color: #f6f1f3;
-  background: rgba(18, 14, 17, 0.96);
-  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.5);
-  font-size: clamp(0.9rem, calc(1.1 * var(--vw)), 1.1rem);
-}
-.playback-health-panel > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.playback-health-panel h2 { margin: 0; font-size: 1.35em; }
-.playback-health-panel h3 { margin: 0; font-size: 1em; color: rgba(246, 241, 243, 0.72); }
-.playback-health-panel header p { margin: 0 0 0.2rem; opacity: 0.9; font-size: 0.85em; }
-.playback-health-panel .drawer-body {
-  display: grid;
-  align-content: start;
-  gap: 1.1rem;
-}
+/* Playback health panel content (docs/architecture/playback-health.md); the shell is the shared Drawer. */
+.playback-health-panel h3 { margin: 0; font-size: 1em; }
 .playback-health-panel .ui-btn {
   border-color: rgba(255, 255, 255, 0.28);
   color: inherit;
@@ -10328,9 +10092,6 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   background: rgba(0, 0, 0, 0.45);
   font-size: 0.78em;
   white-space: pre-wrap;
-}
-@media (max-width: 640px) {
-  .playback-health-panel { width: calc(100 * var(--vw)); }
 }
 
 /* Phone remote and handoff (docs/architecture/remote-control.md) */
