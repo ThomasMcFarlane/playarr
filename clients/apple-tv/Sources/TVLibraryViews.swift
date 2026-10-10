@@ -1180,7 +1180,7 @@ struct TVSearchView: View {
 
     private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
         let w = displayPreferences.cardWidth
-        VStack(alignment: .leading, spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
                     .frame(width: w, height: w * 9 / 16)
