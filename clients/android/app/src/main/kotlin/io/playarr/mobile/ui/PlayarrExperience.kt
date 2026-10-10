@@ -270,6 +270,7 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -902,6 +903,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 
     fun reloadForProfile() {
+        // Libraries a screen has already asked for are reloaded for the new profile; otherwise a library opened as the
+        // first screen (a restored route) was left without data.
+        val openLibraries = (libraryJobs.keys + _libraries.value.keys).toSet()
         libraryJobs.values.forEach(Job::cancel)
         libraryJobs.clear()
         _availableKinds.value = null
@@ -916,6 +920,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _searchViews.value = emptyList()
         loadAvailableKinds()
         loadHome()
+        openLibraries.forEach(::loadLibrary)
         viewModelScope.launch {
             refreshCapabilities()
             refreshProfileAvatar()
@@ -992,6 +997,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                         if (page.size < LIBRARY_PAGE_SIZE) break
                     }
                     is PlayarrResult.Failure -> {
+                        // A cancelled load (profile reload) is not an error; the replacement load reports its own result.
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         // Keep whatever has loaded; only a failed first page is an error.
                         if (loaded.isEmpty()) {
                             _libraries.value = _libraries.value + (
