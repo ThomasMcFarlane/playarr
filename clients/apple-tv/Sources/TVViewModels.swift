@@ -346,7 +346,6 @@ final class TVPlayerViewModel {
             let resumeSeconds = saved.map {
                 Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000
             } ?? 0
-<<<<<<< HEAD
             // The stream needs the session like every API call (AVPlayer does not send it on its own).
             let headers = try await apiClient.playbackRequestHeaders()
             // A transcode session writes its playlist a moment after the server answers (404 until then); AVPlayer
@@ -354,9 +353,6 @@ final class TVPlayerViewModel {
             await Self.waitForPlaylist(streamURL, headers: headers)
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title,
                                                startPositionSeconds: resumeSeconds, httpHeaders: headers))
-=======
-            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title, startPositionSeconds: resumeSeconds))
->>>>>>> origin/main
             // `-PlayarrMuted` (shared test simulators, e.g. the device wall Mac): the player never makes a sound.
             if ProcessInfo.processInfo.arguments.contains("-PlayarrMuted") {
                 engine.isMuted = true
