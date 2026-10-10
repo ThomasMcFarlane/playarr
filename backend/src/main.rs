@@ -1933,6 +1933,13 @@ async fn boot_api(
     // API answers from the cache and never waits on an *arr instance.
     tokio::spawn(playarr_api::calendar_cache::run_refresher(state.clone()));
 
+    // Read the catalogue into memory now, so the first Home or Library request
+    // after a start does not pay for the scan.
+    {
+        let catalog = state.catalog.clone();
+        tokio::spawn(async move { catalog.warm_snapshot().await });
+    }
+
     let (router, _openapi) = playarr_api::build_router_with_tv(
         state,
         version_gate,

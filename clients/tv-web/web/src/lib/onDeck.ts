@@ -63,11 +63,6 @@ export async function loadOnDeck(client: OnDeckClient, sink: OnDeckSink): Promis
   const progressRows = await client.listWatchProgress();
   if (!sink.isActive()) return;
   sink.onProgress(progressRows);
-  const stacked = (await plansRequest).filter(isStackedPlan);
-  const plansByWork = new Map(stacked.map((plan) => [plan.series_work_id, plan]));
-  if (!sink.isActive()) return;
-  sink.onStackedPlans(plansByWork);
-
   const seenWorkIds = new Set<string>();
   const resumable = [...progressRows]
     .filter((progress) => progress.state === "part_watched")
@@ -78,20 +73,32 @@ export async function loadOnDeck(client: OnDeckClient, sink: OnDeckSink): Promis
       return true;
     })
     .slice(0, 10);
+  // The title details depend on the progress rows only, so they are asked for as soon as those arrive, in
+  // parallel with the resume plans (the slowest request on a busy server), not after them: a plan only
+  // chooses which episode of an already-fetched series leads. This takes the plans off the critical path.
+  const detailRequests = resumable.map((progress) =>
+    client.getWork(progress.work_id).then(
+      (detail) => ({ detail }),
+      () => null
+    )
+  );
+  const stacked = (await plansRequest).filter(isStackedPlan);
+  const plansByWork = new Map(stacked.map((plan) => [plan.series_work_id, plan]));
+  if (!sink.isActive()) return;
+  sink.onStackedPlans(plansByWork);
+
   const resolvedRows = await Promise.all(
-    resumable.map(async (progress): Promise<OnDeckEntry | null> => {
-      try {
-        const detail = await client.getWork(progress.work_id);
-        // A stacked series shows the plan's lead episode, not just the last one played.
-        const lead = plansByWork.get(progress.work_id)?.target;
-        const episode = isEpisodic(detail.work)
-          ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
-          : null;
-        if (isEpisodic(detail.work) && !episode) return null;
-        return { work: detail.work, progress, episode };
-      } catch {
-        return null;
-      }
+    resumable.map(async (progress, index): Promise<OnDeckEntry | null> => {
+      const resolved = await detailRequests[index];
+      if (!resolved) return null;
+      const { detail } = resolved;
+      // A stacked series shows the plan's lead episode, not just the last one played.
+      const lead = plansByWork.get(progress.work_id)?.target;
+      const episode = isEpisodic(detail.work)
+        ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
+        : null;
+      if (isEpisodic(detail.work) && !episode) return null;
+      return { work: detail.work, progress, episode };
     })
   );
   // Series that need a choice but have no part-watched episode still belong here.

@@ -22,6 +22,9 @@
 #![allow(clippy::double_must_use)]
 
 mod codec;
+mod snapshot;
+
+pub use snapshot::{Snapshot, SnapshotCache};
 
 /// A per-caller content restriction applied to every catalog read, on top
 /// of library access (`docs/architecture/household-controls.md`). The
@@ -690,6 +693,8 @@ pub struct CatalogService {
     /// availability/remote-only data, byte-for-byte inert for a single,
     /// ungrouped node.
     peer_availability: Option<PeerAvailabilitySources>,
+    /// In-memory copy of the catalogue's browse inputs (see [`snapshot`]).
+    snapshots: Arc<SnapshotCache>,
 }
 
 /// [`CatalogService::with_peer_leaf_availability`]'s two dependencies,
@@ -714,6 +719,7 @@ impl CatalogService {
         pool: DbPool,
         watch_progress_repo: Arc<dyn WatchProgressRepo>,
     ) -> Self {
+        let snapshots = SnapshotCache::new(work_repo.clone(), media_file_repo.clone());
         Self {
             work_repo,
             media_file_repo,
@@ -723,7 +729,25 @@ impl CatalogService {
             embedding_repo: None,
             language_repo: None,
             peer_availability: None,
+            snapshots,
         }
+    }
+
+    /// Reads the catalogue into memory ahead of the first request.
+    pub async fn warm_snapshot(&self) {
+        self.snapshots.warm().await;
+    }
+
+    /// Drops the in-memory catalogue copy so the next read rebuilds it. Writers
+    /// that publish a live library event need not call this.
+    pub fn invalidate_snapshot(&self) {
+        self.snapshots.invalidate();
+    }
+
+    /// Identifies the in-memory catalogue copy; it changes whenever the copy is
+    /// rebuilt, so a result derived from the catalogue can be keyed on it.
+    pub async fn snapshot_version(&self) -> Result<u64, CatalogError> {
+        Ok(self.snapshots.get().await?.version)
     }
 
     /// Opts this service into the audio/subtitle language index.
@@ -960,65 +984,81 @@ impl CatalogService {
         Ok(scored.into_iter().map(|(work, _, _)| work).collect())
     }
 
-    /// Every [`BrowseQuery`] filter except the language filter, unsorted.
-    async fn filtered_candidates(&self, query: &BrowseQuery) -> Result<Vec<Work>, CatalogError> {
+    /// Every [`BrowseQuery`] filter except the language filter, in `sort_title`
+    /// order. Reads the in-memory snapshot, so it costs no query and clones
+    /// no work.
+    async fn filtered_candidates(
+        &self,
+        query: &BrowseQuery,
+    ) -> Result<Vec<Arc<Work>>, CatalogError> {
+        let snapshot = self.snapshots.get().await?;
         let kinds: &[WorkKind] = match &query.kind {
             Some(kind) => std::slice::from_ref(kind),
             None => &ALL_KINDS,
         };
+        let cutoff = query
+            .release_window_days
+            .map(|days| chrono::Utc::now() - chrono::Duration::days(days));
+        let needs_sources =
+            query.source_instance_id.is_some() || query.allowed_source_instance_ids.is_some();
 
-        let mut candidates = Vec::new();
+        let mut candidates: Vec<Arc<Work>> = Vec::new();
         for kind in kinds {
-            candidates.extend(self.work_repo.list_by_kind(*kind, SCAN_LIMIT, 0).await?);
-        }
-
-        if query.available_only {
-            let playable_work_ids = self.media_file_repo.list_work_ids().await?;
-            candidates.retain(|work| playable_work_ids.contains(&work.id));
-        }
-        if let Some(genre) = query.genre.as_deref() {
-            candidates.retain(|w| w.genres.iter().any(|g| g.eq_ignore_ascii_case(genre)));
-        }
-        if let Some(tag) = query.tag.as_deref() {
-            candidates.retain(|w| w.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)));
-        }
-        if let Some(gate) = query.gate.as_ref() {
-            candidates.retain(|work| gate.0.permits(work));
-        }
-        if query.source_instance_id.is_some() || query.allowed_source_instance_ids.is_some() {
-            // One bulk query instead of a `list_by_work_id` per candidate
-            // (an N+1 that cost ~3 s on a 2.7k-title library).
-            let mut sources_by_work: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
-            for (work_id, source_id) in self.media_file_repo.list_work_source_instances().await? {
-                sources_by_work.entry(work_id).or_default().push(source_id);
-            }
-            candidates.retain(|work| {
-                let sources = sources_by_work
-                    .get(&work.id)
-                    .map(Vec::as_slice)
-                    .unwrap_or(&[]);
-                let matches_explicit_filter = query
-                    .source_instance_id
-                    .is_none_or(|wanted| sources.contains(&wanted));
-                let matches_allow_list = query
-                    .allowed_source_instance_ids
-                    .as_ref()
-                    .is_none_or(|allowed| sources.iter().any(|s| allowed.contains(s)));
-                matches_explicit_filter && matches_allow_list
-            });
-        }
-        if let Some(days) = query.release_window_days {
-            let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
-            candidates.retain(|w| w.release_date.is_some_and(|rd| rd >= cutoff));
+            candidates.extend(
+                snapshot
+                    .works(*kind)
+                    .iter()
+                    .filter(|work| {
+                        if query.available_only && !snapshot.is_playable(&work.id) {
+                            return false;
+                        }
+                        if let Some(genre) = query.genre.as_deref() {
+                            if !work.genres.iter().any(|g| g.eq_ignore_ascii_case(genre)) {
+                                return false;
+                            }
+                        }
+                        if let Some(tag) = query.tag.as_deref() {
+                            if !work.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)) {
+                                return false;
+                            }
+                        }
+                        if let Some(gate) = query.gate.as_ref() {
+                            if !gate.0.permits(work) {
+                                return false;
+                            }
+                        }
+                        if needs_sources {
+                            let sources = snapshot.sources_of(&work.id);
+                            let matches_explicit_filter = query
+                                .source_instance_id
+                                .is_none_or(|wanted| sources.contains(&wanted));
+                            let matches_allow_list = query
+                                .allowed_source_instance_ids
+                                .as_ref()
+                                .is_none_or(|allowed| sources.iter().any(|s| allowed.contains(s)));
+                            if !(matches_explicit_filter && matches_allow_list) {
+                                return false;
+                            }
+                        }
+                        if let Some(cutoff) = cutoff {
+                            if !work.release_date.is_some_and(|rd| rd >= cutoff) {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .cloned(),
+            );
         }
         Ok(candidates)
     }
 
     /// Every work matching `query`'s filters (library ceiling, household
-    /// gate, language, availability), unsorted and unpaginated, without the
-    /// per-page hydration [`Self::browse`] does -- the cheap candidate set
-    /// Home rails slice per user.
-    pub async fn visible_works(&self, query: &BrowseQuery) -> Result<Vec<Work>, CatalogError> {
+    /// gate, language, availability), in `sort_title` order for a single kind
+    /// and unpaginated, without the per-page hydration [`Self::browse`] does --
+    /// the cheap candidate set Home rails slice per user. The works are shared
+    /// with the in-memory snapshot; nothing is copied.
+    pub async fn visible_works(&self, query: &BrowseQuery) -> Result<Vec<Arc<Work>>, CatalogError> {
         let mut candidates = self.filtered_candidates(query).await?;
         self.apply_language_filter(&mut candidates, &query.language)
             .await?;
@@ -1050,7 +1090,7 @@ impl CatalogService {
     /// Retains only works matching `filter` (see [`LanguageFilter`]).
     async fn apply_language_filter(
         &self,
-        candidates: &mut Vec<Work>,
+        candidates: &mut Vec<Arc<Work>>,
         filter: &LanguageFilter,
     ) -> Result<(), CatalogError> {
         if filter.is_empty() {
@@ -1193,7 +1233,12 @@ impl CatalogService {
         let total = candidates.len() as i64;
         let offset = query.offset.max(0) as usize;
         let limit = query.limit.max(0) as usize;
-        let items: Vec<Work> = candidates.into_iter().skip(offset).take(limit).collect();
+        let items: Vec<Work> = candidates
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|work| work.as_ref().clone())
+            .collect();
 
         // Hydration (§4.3) is deliberately scoped to just this page's item
         // ids, not the full pre-pagination candidate set -- an
@@ -1231,7 +1276,7 @@ impl CatalogService {
         if progress.is_empty() {
             return Ok(HashMap::new());
         }
-        let totals = self.media_file_repo.count_by_work().await?;
+        let snapshot = self.snapshots.get().await?;
         let mut out: HashMap<Uuid, WorkWatch> = HashMap::new();
         for row in progress {
             let entry = out.entry(row.work_id).or_default();
@@ -1249,7 +1294,7 @@ impl CatalogService {
         }
         out.retain(|_, w| w.started);
         for (work_id, watch) in out.iter_mut() {
-            watch.total_files = totals.get(work_id).copied().unwrap_or(0);
+            watch.total_files = snapshot.file_count(work_id);
         }
         Ok(out)
     }
@@ -1544,12 +1589,12 @@ impl CatalogService {
             }
         }
 
-        let mut scored: Vec<(Work, MatchTier, f64)> = Vec::new();
+        let snapshot = self.snapshots.get().await?;
+        let mut scored: Vec<(Arc<Work>, MatchTier, f64)> = Vec::new();
         for kind in ALL_KINDS {
-            let candidates = self.work_repo.list_by_kind(kind, SCAN_LIMIT, 0).await?;
-            for work in candidates {
-                if let Some((tier, score)) = score_search_match(&work, &needle) {
-                    scored.push((work, tier, score));
+            for work in snapshot.works(kind) {
+                if let Some((tier, score)) = score_search_match(work, &needle) {
+                    scored.push((work.clone(), tier, score));
                 }
             }
         }
@@ -1569,14 +1614,9 @@ impl CatalogService {
                 .then_with(|| work_a.sort_title.cmp(&work_b.sort_title))
         });
 
-        let mut ranked: Vec<Work> = scored.into_iter().map(|(work, _, _)| work).collect();
+        let mut ranked: Vec<Arc<Work>> = scored.into_iter().map(|(work, _, _)| work).collect();
         self.apply_language_filter(&mut ranked, languages).await?;
 
-        let playable_work_ids = if available_only {
-            Some(self.media_file_repo.list_work_ids().await?)
-        } else {
-            None
-        };
         let mut matches: Vec<Work> = Vec::with_capacity(ranked.len().min(limit.max(1)));
         for work in ranked {
             if matches.len() >= limit {
@@ -1585,22 +1625,19 @@ impl CatalogService {
             if !access.permits(&work) {
                 continue;
             }
-            if playable_work_ids
-                .as_ref()
-                .is_some_and(|playable| !playable.contains(&work.id))
-            {
+            if available_only && !snapshot.is_playable(&work.id) {
                 continue;
             }
             if let Some(allowed) = allowed_source_instance_ids {
-                let files = self.media_file_repo.list_by_work_id(work.id).await?;
-                if !files
+                if !snapshot
+                    .sources_of(&work.id)
                     .iter()
-                    .any(|f| allowed.contains(&f.source_instance_id))
+                    .any(|source| allowed.contains(source))
                 {
                     continue;
                 }
             }
-            matches.push(work);
+            matches.push(work.as_ref().clone());
         }
 
         if let Ok(bytes) = serde_json::to_vec(&matches) {
@@ -2040,6 +2077,9 @@ impl CatalogService {
         .fetch_all(&self.pool)
         .await?;
 
+        // Every episode and every file of the series in two queries, not two per
+        // episode (a series with 300 episodes cost 600 statements).
+        let mut episodes_by_season = self.episodes_for_series(series_work_id).await?;
         let mut seasons = Vec::with_capacity(rows.len());
         for row in rows {
             let id = codec::parse_uuid(&row.try_get::<String, _>("id")?)?;
@@ -2054,27 +2094,42 @@ impl CatalogService {
                     &row.try_get::<String, _>("availability")?,
                 )?,
             };
-            let episodes = self.episodes_for_season(series_work_id, id).await?;
+            let episodes = episodes_by_season.remove(&id).unwrap_or_default();
             seasons.push(SeasonDetail { season, episodes });
         }
         Ok(seasons)
     }
 
-    async fn episodes_for_season(
+    /// Episodes of every season of a series, by season id, each with its
+    /// playable file (the lowest file id for the episode, as `find_by_leaf`).
+    async fn episodes_for_series(
         &self,
         series_work_id: Uuid,
-        season_id: Uuid,
-    ) -> Result<Vec<EpisodeDetail>, CatalogError> {
+    ) -> Result<HashMap<Uuid, Vec<EpisodeDetail>>, CatalogError> {
         let rows = sqlx::query(
-            "SELECT id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability \
-             FROM episodes WHERE season_id = ? ORDER BY episode_number ASC",
+            "SELECT id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability \
+             FROM episodes WHERE season_id IN (SELECT id FROM seasons WHERE series_work_id = ?) \
+             ORDER BY season_id, episode_number ASC",
         )
-        .bind(season_id.to_string())
+        .bind(series_work_id.to_string())
         .fetch_all(&self.pool)
         .await?;
 
-        let mut episodes = Vec::with_capacity(rows.len());
+        let mut files: HashMap<Uuid, playarr_model::MediaFile> = HashMap::new();
+        for file in self.media_file_repo.list_by_work_id(series_work_id).await? {
+            if let LeafRef::Episode(episode_id) = file.leaf_ref {
+                match files.get(&episode_id) {
+                    Some(kept) if kept.id <= file.id => {}
+                    _ => {
+                        files.insert(episode_id, file);
+                    }
+                }
+            }
+        }
+
+        let mut by_season: HashMap<Uuid, Vec<EpisodeDetail>> = HashMap::new();
         for row in rows {
+            let season_id = codec::parse_uuid(&row.try_get::<String, _>("season_id")?)?;
             let air_date = match row.try_get::<Option<String>, _>("air_date")? {
                 Some(raw) => Some(codec::parse_date(&raw)?),
                 None => None,
@@ -2100,18 +2155,16 @@ impl CatalogService {
                     &row.try_get::<String, _>("availability")?,
                 )?,
             };
-            let media_file = self
-                .media_file_for_leaf(series_work_id, LeafRef::Episode(id))
-                .await?;
-            let media_file_id = media_file.as_ref().map(|file| file.id);
+            let media_file = files.get(&id);
+            let media_file_id = media_file.map(|file| file.id);
             let runtime_ms = media_file.and_then(|file| file.duration_ms);
-            episodes.push(EpisodeDetail {
+            by_season.entry(season_id).or_default().push(EpisodeDetail {
                 episode,
                 media_file_id,
                 runtime_ms,
             });
         }
-        Ok(episodes)
+        Ok(by_season)
     }
 
     async fn albums_for_artist(

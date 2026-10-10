@@ -93,3 +93,20 @@ describe("loadOnDeck on a slow link", () => {
     expect(seen.entries).toHaveLength(1);
   });
 });
+
+describe("loadOnDeck critical path", () => {
+  it("asks for the title details as soon as progress arrives, without waiting for the resume plans", async () => {
+    const calls: string[] = [];
+    const client: OnDeckClient = {
+      listResumePlans: async () => (calls.push("plans:start"), await sleep(60), calls.push("plans:end"), [stackedPlan]),
+      listWatchProgress: async () => (await sleep(5), [progress]),
+      getWork: async () => (calls.push("detail:start"), series as never),
+    };
+    const { seen, sink } = collect();
+    await loadOnDeck(client, sink);
+    expect(calls.indexOf("detail:start")).toBeLessThan(calls.indexOf("plans:end"));
+    // The plan still decides the lead episode.
+    expect(seen.entries).toHaveLength(1);
+    expect(seen.plans?.get("w1")).toBeDefined();
+  });
+});
