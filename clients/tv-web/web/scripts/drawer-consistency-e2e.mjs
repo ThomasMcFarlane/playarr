@@ -17,10 +17,11 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { boot, opt } from "./e2e-common.mjs";
 
-const { check, open, finish } = await boot({ movies: 24, series: 12 });
+const { check, open, finish } = await boot({ movies: 24, series: 12, canDownload: true, playlists: 3, playlistItems: 4 }, { realisticAuth: true });
 const SHOTS = opt("shots", "");
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 const TOL = 0.5;
+const ONLY = opt("only", "");
 
 const MEASURE = () => {
   const roots = [...document.querySelectorAll("aside[role='dialog']")];
@@ -122,6 +123,15 @@ const PANELS = [
     },
   },
   {
+    id: "playlist-context-menu",
+    path: "/playlists",
+    async open(page) {
+      await page.waitForSelector(".tv-playlist-directory-card", { timeout: 15000 });
+      await page.click(".tv-playlist-directory-card", { button: "right" });
+      await page.waitForSelector(".playlist-context-drawer", { timeout: 8000 });
+    },
+  },
+  {
     id: "movie-playback-settings",
     path: "/movies",
     async open(page) {
@@ -138,6 +148,7 @@ for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   for (const theme of ["dark", "light"]) {
     const ref = {};
     for (const spec of PANELS) {
+      if (ONLY && spec.id !== "movies-filters" && !new RegExp(ONLY).test(spec.id)) continue;
       const label = `${spec.id} ${width}x${height} ${theme}`;
       const { context, page } = await open(spec.path, { width, height, theme });
       try {

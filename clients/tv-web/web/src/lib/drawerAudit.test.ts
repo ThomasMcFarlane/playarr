@@ -39,6 +39,19 @@ describe("drawer audit", () => {
     expect(text).toMatch(/Tab/);
   });
 
+  it("lets no panel restyle the shared shell (width, padding, background, header, close button)", () => {
+    const css = readFileSync(join(src, "styles/global.css"), "utf8");
+    for (const banned of [
+      /\.tv-filter-drawer\.media-context-drawer/,
+      /\.media-context-drawer\s+\.drawer-close/,
+      /\.playback-health-panel\s*\{/,
+      /\.player-playlist-panel/,
+      /\.tv-playback-settings-drawer\s*\{[^}]*width:/,
+    ]) {
+      expect(css, `${banned} restyles the shared Drawer shell`).not.toMatch(banned);
+    }
+  });
+
   it("drives page drawers from the URL panel state", () => {
     for (const file of ["pages/Library.tsx", "pages/Playlists.tsx"]) {
       expect(readFileSync(join(src, file), "utf8"), `${file} must use usePanelParam`).toMatch(/usePanelParam/);
