@@ -1287,6 +1287,9 @@ struct TVLibraryKindView: View {
     @State private var audioLangs: [String] = []
     @State private var subtitleLangs: [String] = []
     @State private var facets: LanguageFacets?
+    /// The title focus returns to when it re-enters the grid, and whether the next focus is such an entry.
+    @State private var lastFocusedID: UUID?
+    @State private var entryPending = true
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
     /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
@@ -1563,6 +1566,14 @@ struct TVLibraryKindView: View {
         // (the nav, the header); `.userInitiated` applies it on every entry, not only the first.
         .focusSection()
         .defaultFocus($selectedID, items.first?.id, priority: .userInitiated)
+        // Entering the grid from outside (nav, header) lands on the last focused title, else the first (web), never on
+        // the card that happens to sit level with the nav item.
+        .onChange(of: selectedID) { previous, current in
+            if let current { lastFocusedID = current }
+            guard previous == nil, let current, let target = lastFocusedID ?? items.first?.id, target != current else { return }
+            if previous == nil, entryPending { entryPending = false; selectedID = target }
+        }
+        .onChange(of: selectedID == nil) { _, left in if left { entryPending = true } }
         // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
         .mask(
             LinearGradient(
