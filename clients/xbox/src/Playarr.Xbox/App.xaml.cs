@@ -38,6 +38,8 @@ namespace Playarr.Xbox
         /// </summary>
         public static NavigationService Navigation { get; private set; } = null!;
 
+        private static Frame? RootFrame { get; set; }
+
         public App()
         {
             InitializeComponent();
@@ -54,14 +56,25 @@ namespace Playarr.Xbox
 
         protected override async void OnLaunched(LaunchActivatedEventArgs e)
         {
-            var rootFrame = Window.Current.Content as Frame;
+            var rootFrame = RootFrame;
 
             if (rootFrame is null)
             {
-                rootFrame = new Frame();
+                rootFrame = new Frame { FontFamily = (Windows.UI.Xaml.Media.FontFamily)Resources["PlayarrFont"] };
                 rootFrame.NavigationFailed += OnNavigationFailed;
+                RootFrame = rootFrame;
                 Navigation = new NavigationService(rootFrame);
-                Window.Current.Content = rootFrame;
+                Window.Current.Content = new ShellChrome(rootFrame).Root;
+
+                // Windows desktop: open at the web TV layout size (1920x1080) with the content drawn under the
+                // title bar, so the device-wall tile shows the app 1:1. Ignored on Xbox, which is always full screen.
+                Windows.UI.ViewManagement.ApplicationView.PreferredLaunchViewSize = new Windows.Foundation.Size(1920, 1080);
+                Windows.UI.ViewManagement.ApplicationView.PreferredLaunchWindowingMode =
+                    Windows.UI.ViewManagement.ApplicationViewWindowingMode.PreferredLaunchViewSize;
+                Windows.ApplicationModel.Core.CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = true;
+                var titleBar = Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().TitleBar;
+                titleBar.ButtonBackgroundColor = Windows.UI.Colors.Transparent;
+                titleBar.ButtonInactiveBackgroundColor = Windows.UI.Colors.Transparent;
 
                 SystemNavigationManager.GetForCurrentView().BackRequested += OnBackRequested;
             }
@@ -101,7 +114,7 @@ namespace Playarr.Xbox
         /// </summary>
         private void OnBackRequested(object sender, BackRequestedEventArgs e)
         {
-            if (Window.Current.Content is Frame { Content: Views.PlayerPage player } && player.TryHandleBack())
+            if (RootFrame is { Content: Views.PlayerPage player } && player.TryHandleBack())
             {
                 e.Handled = true;
                 return;
@@ -126,7 +139,7 @@ namespace Playarr.Xbox
             {
                 // XboxAppEnvironment persists eagerly; the only unsaved state
                 // is the playback position, flushed here inside the deferral.
-                if (Window.Current.Content is Frame { Content: Views.PlayerPage player })
+                if (RootFrame is { Content: Views.PlayerPage player })
                 {
                     await player.FlushProgressAsync();
                 }

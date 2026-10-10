@@ -1,1 +1,0 @@
-- Apple TV: the `-PlayarrMuted` launch argument keeps the player silent (shared test simulators).
