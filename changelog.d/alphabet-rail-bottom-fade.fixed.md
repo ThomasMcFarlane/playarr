@@ -1,0 +1,1 @@
+- Web: the Library A to Z rail now runs to the bottom of the stage like the grid and fades out with the shared soft edge mask (the top fades to nothing, so no letter is cut by a straight clip edge); a focused letter settles clear of the fade. Owner request 2026-10-10.
