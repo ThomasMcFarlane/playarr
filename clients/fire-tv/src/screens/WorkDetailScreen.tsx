@@ -9,7 +9,7 @@
  */
 import React, {useCallback, useMemo, useState} from 'react';
 import {Pressable, View} from 'react-native';
-import type {CreditResponse, EpisodeDetail, MediaChapter, PlaylistResponse, ResumePlan, SeasonDetail, Work, WorkDetail} from '@playarr-tv/api-client';
+import type {CreditResponse, EpisodeDetail, MediaChapter, ResumePlan, SeasonDetail, Work, WorkDetail} from '@playarr-tv/api-client';
 import {useAsyncData, useWorkDetail} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {episodeArtworkUrl, mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
@@ -24,7 +24,7 @@ import {yearRangeLabel} from '../lib/workYear';
 import {BalancedT, Box, T, u} from '../tv/kit';
 import {FocusRing} from '../tv/FocusRing';
 import {PageHeader} from '../tv/PageHeader';
-import {Sheet, SheetOption} from '../tv/Sheet';
+import {PlaylistSheet} from '../tv/PlaylistSheet';
 import {PlaybackSettingsDrawer, launchQuality} from './PlaybackSettingsDrawer';
 import type {MediaPlaybackOptions} from '@playarr-tv/api-client';
 import {RailFrost, Stage} from '../tv/Stage';
@@ -538,36 +538,6 @@ function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus, fo
   );
 }
 
-function PlaylistSheet({workId, onClose, onAdded}: {workId: string; onClose: () => void; onAdded: (name: string) => void}): React.ReactElement {
-  const client = useApiClient();
-  const {t} = useLanguage();
-  const {colour} = useTheme();
-  const lists = useAsyncData<PlaylistResponse[]>(() => client.listPlaylists(), [client]);
-  const [failed, setFailed] = useState(false);
-  const own = lists.status === 'ready' ? lists.data.filter((list) => !list.is_system) : [];
-  return (
-    <Sheet title={t('components.mediaContextMenu.addToPlaylist')} onClose={onClose}>
-      {own.map((list, index) => (
-        <SheetOption
-          key={list.id}
-          label={list.name}
-          hasTVPreferredFocus={index === 0}
-          onPress={() => {
-            client
-              .addPlaylistItem(list.id, {work_id: workId})
-              .then(() => onAdded(list.name))
-              .catch(() => setFailed(true));
-          }}
-        />
-      ))}
-      {failed ? (
-        <T size={12} weight={400} color={colour.accent}>
-          {t('pages.workDetail.playbackOptionsLoadError')}
-        </T>
-      ) : null}
-    </Sheet>
-  );
-}
 
 // ----------------------------------------------------------------------------------------------- tracks view
 function DetailBody(props: {

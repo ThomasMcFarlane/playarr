@@ -59,6 +59,8 @@ import {RailFrost, Stage} from '../tv/Stage';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {cardArtUrl, stageArtUrl} from '../tv/ArtOfWork';
 import {Sheet, SheetOption} from '../tv/Sheet';
+import {ActionsDrawer} from '../tv/ActionsDrawer';
+import {PlaylistSheet} from '../tv/PlaylistSheet';
 import {FilterDrawer, type DrawerChip, type DrawerSection} from '../tv/FilterDrawer';
 import {
   type ArtworkSize,
@@ -316,6 +318,8 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   const [subtitleLangs, setSubtitleLangs] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [languagePicker, setLanguagePicker] = useState<'audio' | 'subs' | null>(null);
+  const [actionsWork, setActionsWork] = useState<Work | null>(null);
+  const [playlistWork, setPlaylistWork] = useState<Work | null>(null);
   const [drawerFocused, setDrawerFocused] = useState(false);
   const [facets, setFacets] = useState<LanguageFacets | null>(null);
   const loadingMore = useRef(false);
@@ -505,6 +509,7 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
               progressReady: progressRows !== null,
               onFocus: () => setFocusIndex(index),
               onPress: () => navigation.navigate(detailRoute, {workId: work.id}),
+              onLongPress: () => setActionsWork(work),
             };
             return listView ? (
               <ListRow key={work.id} {...common} />
@@ -554,6 +559,18 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
           }
         />
       ) : null}
+      {actionsWork ? (
+        <ActionsDrawer
+          work={actionsWork}
+          onClose={() => setActionsWork(null)}
+          onOpen={() => navigation.navigate(detailRoute, {workId: actionsWork.id})}
+          onAddToPlaylist={() => {
+            setPlaylistWork(actionsWork);
+            setActionsWork(null);
+          }}
+        />
+      ) : null}
+      {playlistWork ? <PlaylistSheet workId={playlistWork.id} onClose={() => setPlaylistWork(null)} onAdded={() => setPlaylistWork(null)} /> : null}
       {filtersOpen && languagePicker ? (
         <Sheet title={languagePicker === 'audio' ? t('pages.library.audioLanguage') : t('pages.library.subtitleLanguage')} onClose={() => setLanguagePicker(null)}>
           <SheetOption
@@ -596,6 +613,8 @@ interface CardProps {
   progressReady: boolean;
   onFocus: () => void;
   onPress: () => void;
+  /** A long press (hold SELECT) opens the title actions, as web's long-press menu. */
+  onLongPress: () => void;
 }
 
 function LibraryCard(props: CardProps & {x: number; card: GridLayout}): React.ReactElement {
@@ -611,6 +630,7 @@ function LibraryCard(props: CardProps & {x: number; card: GridLayout}): React.Re
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
+      onLongPress={props.onLongPress}
       style={{position: 'absolute', left: u(x), top: u(y), width: u(card.cardW)}}
     >
       <MediaFocus variant="library" focused={selected} width={card.cardW} height={card.cardH} radius={12.48}>
@@ -642,6 +662,7 @@ function ListRow(props: CardProps): React.ReactElement {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
+      onLongPress={props.onLongPress}
       style={{position: 'absolute', left: u(GRID_X + 4), top: u(y + 0.9), width: u(1034), height: u(LIST_ROW_PITCH - 3), borderRadius: u(16), backgroundColor: selected ? mix(colour.surfaceSoft, 0.55) : 'transparent'}}
     >
       <View style={{position: 'absolute', left: u(5), top: u(8)}}>
