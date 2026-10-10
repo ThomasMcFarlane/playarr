@@ -318,7 +318,7 @@ final class TVPlayerViewModel {
             let saved = startFromBeginning ? nil : try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
-                containers: ["mp4", "mov", "m4v", "mkv"],
+                containers: ["mp4", "mov", "m4v"], // AVPlayer cannot open Matroska: the server remuxes it
                 videoCodecs: ["h264", "hevc"],
                 audioCodecs: ["aac", "ac3", "eac3"],
                 maxBitrateBps: 40_000_000,
@@ -447,7 +447,7 @@ final class TVPlayerViewModel {
     func loadInfo(mediaFileID: UUID) async {
         if let info = try? await apiClient.playbackInfo(
             mediaFileID: mediaFileID,
-            containers: ["mp4", "mov", "m4v", "mkv"],
+            containers: ["mp4", "mov", "m4v"], // AVPlayer cannot open Matroska: the server remuxes it
             videoCodecs: ["h264", "hevc"],
             audioCodecs: ["aac", "ac3", "eac3"],
             maxBitrateBps: 40_000_000,
