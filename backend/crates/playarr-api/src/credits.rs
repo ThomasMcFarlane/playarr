@@ -1,7 +1,7 @@
 //! Cast/crew for a catalog work, and the reverse lookup ("what has this
 //! person been in") -- see `playarr_model::person`'s module doc comment
-//! for the data-source rationale (Radarr movies only; Sonarr/Lidarr/
-//! Readarr works simply have no credits). [`CatalogViewer`]-gated, same as
+//! for the data-source rationale (Radarr movies, plus Sonarr series cast
+//! from the series metadata service; Lidarr/Readarr works have no credits). [`CatalogViewer`]-gated, same as
 //! every other catalog-reading endpoint in this crate.
 //!
 //! Routes:
@@ -76,7 +76,7 @@ async fn resolve_credit(state: &AppState, credit: Credit) -> Result<CreditRespon
 
 /// A work's cast and crew, in the source's own billing/department order
 /// -- empty (not 404) for a work with no credits, which is the normal
-/// case for every non-Radarr-sourced work (see this module's doc
+/// case for a music, book or not-yet-synced work (see this module's doc
 /// comment).
 #[utoipa::path(
     get,

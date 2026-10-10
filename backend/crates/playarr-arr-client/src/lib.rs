@@ -29,6 +29,7 @@ mod radarr;
 mod readarr;
 mod request_manager;
 mod seerr;
+mod skyhook;
 mod sonarr;
 mod whisparr;
 
@@ -57,6 +58,7 @@ pub use readarr::{
 };
 pub use request_manager::{NewRemoteRequest, RemoteRequest, RequestManagerClient, TitleInfo};
 pub use seerr::SeerrClient;
+pub use skyhook::{SeriesActor, SeriesCastClient, DEFAULT_SKYHOOK_URL};
 pub use sonarr::{
     SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrImage, SonarrMediaInfo, SonarrQuality,
     SonarrQualityInfo, SonarrRatings, SonarrRevision, SonarrSeries,
