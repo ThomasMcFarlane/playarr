@@ -7932,7 +7932,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                             automaticRecoveryUrl = activePlaybackUrl
                             recoverExpiredHlsSession(currentError.message)
                         } else if (shouldFallBackToTranscodeAfterDecodeFailure(
-                                activeDirectPlay,
+                                playarrPlaysSourceVideo(activeDirectPlay, _controls.value.activeQualityId),
                                 currentError.message,
                                 decoderFallbackAttempted,
                             )
@@ -8390,7 +8390,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         stallJob?.cancel()
         retryJob?.cancel()
         val resumeAt = if (playbackReached) currentSourcePositionMs() else null
-        val launchSettings = activeRequest?.launchSettings
+        val launchSettings = playarrAutoRetryLaunchSettings(activeRequest?.launchSettings, decoderFallbackAttempted)
         _state.value = ExperienceLoad.Loading
         retryJob = viewModelScope.launch {
             delay(delayMs)

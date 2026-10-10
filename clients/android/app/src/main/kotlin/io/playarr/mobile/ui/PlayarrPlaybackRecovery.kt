@@ -8,6 +8,26 @@ internal val PLAYER_AUTO_RETRY_DELAYS_MS: List<Long> = listOf(1_500L, 3_000L, 6_
 
 internal fun playarrAutoRetryDelayMs(attemptsSoFar: Int): Long? = PLAYER_AUTO_RETRY_DELAYS_MS.getOrNull(attemptsSoFar)
 
+/**
+ * The launch settings an automatic retry replays. Once the decoder fallback has
+ * switched to the converted stream, a retry must stay on that transcode: replaying
+ * the original launch would direct-play the source this device cannot decode again.
+ */
+internal fun playarrAutoRetryLaunchSettings(
+    current: PlayarrPlaybackLaunchSettings?,
+    decoderFallbackAttempted: Boolean,
+): PlayarrPlaybackLaunchSettings? = if (!decoderFallbackAttempted) {
+    current
+} else {
+    PlayarrPlaybackLaunchSettings(
+        qualityId = DECODE_FALLBACK_PROFILE,
+        profile = DECODE_FALLBACK_PROFILE,
+        forceTranscode = true,
+        audioStreamIndex = current?.audioStreamIndex,
+        subtitleTrackId = current?.subtitleTrackId,
+    )
+}
+
 /** Phone double-tap seek step (left half back, right half forward). */
 internal const val PLAYER_DOUBLE_TAP_SEEK_MS = 10_000L
 
