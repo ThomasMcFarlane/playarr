@@ -521,6 +521,17 @@ fn build_hls_args(
             // segments that Chrome/Safari still fail to append (Shaka 3014/3015).
             "-pix_fmt".to_string(),
             "yuv420p".to_string(),
+            // On-demand output must keep up with playback. libx264's default
+            // `medium` preset runs a 4K HEVC source at about a quarter of
+            // realtime on two threads, so the player stalls before the first
+            // segment (TASKS 20.260); `veryfast` roughly doubles throughput.
+            "-preset".to_string(),
+            "veryfast".to_string(),
+            // A keyframe on every segment boundary, so the first segment (and
+            // the playlist) lands after HLS_SEGMENT_SECONDS of output rather
+            // than at the encoder's default ~10 s GOP.
+            "-force_key_frames".to_string(),
+            format!("expr:gte(t,n_forced*{HLS_SEGMENT_SECONDS})"),
         ]),
     }
     args.extend([
@@ -1963,6 +1974,10 @@ mod tests {
                 "2",
                 "-pix_fmt",
                 "yuv420p",
+                "-preset",
+                "veryfast",
+                "-force_key_frames",
+                "expr:gte(t,n_forced*4)",
                 "-map",
                 "0:v:0",
                 "-map",
