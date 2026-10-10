@@ -677,6 +677,8 @@ export interface CalendarEntry {
   poster_url?: string | null;
   work_id?: string | null;
   average_lag_seconds?: number | null;
+  /** Episode (else series) or movie synopsis from the source; absent when it gave none. */
+  overview?: string | null;
   sources: CalendarEntrySource[];
   /**
    * Identity of the title for `requestTitle` and `addToWatchlist`; post it back

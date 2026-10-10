@@ -159,6 +159,8 @@ fn group_series_day(candidates: Vec<CalendarCandidate>) -> Vec<CalendarCandidate
                 let mut iter = members.into_iter();
                 let mut head = iter.next().expect("a group has members");
                 head.entry.subtitle = None;
+                // The head's synopsis is one episode's; a group is several, so it carries none.
+                head.entry.overview = None;
                 head.entry.has_file = list.iter().all(|m| m.has_file);
                 head.entry.monitored = list.iter().any(|m| m.monitored);
                 for other in iter {

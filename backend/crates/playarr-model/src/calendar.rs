@@ -78,6 +78,10 @@ pub struct CalendarEntry {
     /// Average seconds from air to library availability for the series.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub average_lag_seconds: Option<i64>,
+    /// Synopsis of the episode (the series' when the episode has none) or movie, as the source
+    /// reported it. Absent when the source gave none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overview: Option<String>,
     pub sources: Vec<CalendarEntrySource>,
     /// Identity of the title for the request and watchlist endpoints
     /// (`POST /api/v1/discover/request`, `POST /api/v1/watchlist`); clients send

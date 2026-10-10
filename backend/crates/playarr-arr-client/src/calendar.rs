@@ -25,6 +25,8 @@ pub struct SonarrCalendarSeries {
     #[serde(default, rename = "tvdbId")]
     pub tvdb_id: Option<i64>,
     #[serde(default)]
+    pub overview: Option<String>,
+    #[serde(default)]
     pub images: Vec<ArrCalendarImage>,
 }
 
@@ -40,6 +42,8 @@ pub struct SonarrCalendarEpisode {
     pub episode_number: i64,
     #[serde(default)]
     pub title: Option<String>,
+    #[serde(default)]
+    pub overview: Option<String>,
     #[serde(default, rename = "airDate")]
     pub air_date: Option<String>,
     #[serde(default, rename = "airDateUtc")]
@@ -69,6 +73,8 @@ pub struct RadarrCalendarMovie {
     pub has_file: bool,
     #[serde(default)]
     pub monitored: bool,
+    #[serde(default)]
+    pub overview: Option<String>,
     #[serde(default)]
     pub images: Vec<ArrCalendarImage>,
 }
