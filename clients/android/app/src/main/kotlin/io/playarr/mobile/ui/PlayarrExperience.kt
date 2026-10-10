@@ -384,6 +384,17 @@ internal val WebPink get() = WebAccent
 /** Clears the series' remembered resume answers (web "Ask again"); provided by the detail screen. */
 internal val LocalResumeAskAgain = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
 
+/**
+ * Web `--card-w` / `--card-w-cover` at 1920 x 1080: the Library grid column, 1033.44 dp of rail split into 3 (thumbnail)
+ * or 5 (cover) columns with 25.92 / 19.2 dp gaps, one column more for Small and one fewer for Large.
+ */
+internal fun tvPosterCardWidth(size: LibraryArtworkSize, cover: Boolean): Dp {
+    val step = when (size) { LibraryArtworkSize.Small -> 1; LibraryArtworkSize.Medium -> 0; LibraryArtworkSize.Large -> -1 }
+    val cols = (if (cover) 5 else 3) + step
+    val gap = if (cover) 19.2f else 25.92f
+    return ((1033.44f - (cols - 1) * gap) / cols).dp
+}
+
 /** Web kicker / eyebrow accent (`#cf3157`), distinct from the neutral palette accent. */
 internal val WebKicker = Color(0xFFCF3157)
 
@@ -3066,8 +3077,8 @@ internal fun ExperienceMediaRail(
                     // Web: Home cards are THE poster card, the Library grid card (owner request 2026-10-10): `--card-w`
                     // 327.2 dp and `--card-w-cover` 191.3 dp at 1920 x 1080.
                     width = when (homeView) {
-                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 327.2.dp else 179.4.dp
-                        PlayarrHomeViewPreference.Cover -> if (isTelevision) 191.3.dp else 118.dp
+                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) tvPosterCardWidth(LocalPlayarrDisplayPreferences.current.artworkSize, cover = false) else 179.4.dp
+                        PlayarrHomeViewPreference.Cover -> if (isTelevision) tvPosterCardWidth(LocalPlayarrDisplayPreferences.current.artworkSize, cover = true) else 118.dp
                     },
                     homeView = homeView,
                     webPhone = !isTelevision && homeView == PlayarrHomeViewPreference.Thumbnail,
@@ -3493,14 +3504,12 @@ private fun LibraryCoverCard(
 private fun LibraryFiltersDialog(
     kind: WorkKind,
     viewMode: LibraryViewMode,
-    artworkSize: LibraryArtworkSize,
     sortMode: String,
     descending: Boolean,
     languageSelection: LanguageSelection,
     languageFacets: LanguageFacets?,
     onLanguageSelection: (LanguageSelection) -> Unit,
     onViewMode: (LibraryViewMode) -> Unit,
-    onArtworkSize: (LibraryArtworkSize) -> Unit,
     onSortMode: (String) -> Unit,
     onDescending: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -3530,20 +3539,6 @@ private fun LibraryFiltersDialog(
                             LibraryViewMode.Screen -> PlayarrString.LibraryViewScreen
                             LibraryViewMode.Cover -> PlayarrString.LibraryViewCover
                             LibraryViewMode.CoverFlow -> PlayarrString.LibraryViewCoverFlow
-                        },
-                    )
-                }
-                LibraryFilterChoices(
-                    playarrString(PlayarrString.LibraryArtworkSize),
-                    LibraryArtworkSize.entries,
-                    artworkSize,
-                    onArtworkSize,
-                ) {
-                    playarrString(
-                        when (it) {
-                            LibraryArtworkSize.Small -> PlayarrString.LibrarySizeSmall
-                            LibraryArtworkSize.Medium -> PlayarrString.LibrarySizeMedium
-                            LibraryArtworkSize.Large -> PlayarrString.LibrarySizeLarge
                         },
                     )
                 }
@@ -3727,7 +3722,8 @@ private fun ExperienceLibraryScreen(
             tvGrid.onRightEdge = { runCatching { letterFocus.requestFocus() }.getOrDefault(false) }
             var filtersOpen by remember { mutableStateOf(false) }
             val viewMode = library.view
-            val artworkSize = library.size
+            // Web: one artwork size for every poster and thumbnail, set in Settings > Appearance (not per library).
+            val artworkSize = LocalPlayarrDisplayPreferences.current.artworkSize
             val sortMode = if (library.sort == LibrarySort.DateAdded) "recent" else "title"
             val descending = library.descending
             val filteredWorks = remember(state.value, activeLetter, sortMode, descending, matchingIds) {
@@ -3860,14 +3856,12 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                 LibraryFiltersDialog(
                     kind = kind,
                     viewMode = viewMode,
-                    artworkSize = artworkSize,
                     sortMode = sortMode,
                     descending = descending,
                     languageSelection = languageSelection,
                     languageFacets = languageFacets,
                     onLanguageSelection = { viewModel.setLanguageSelection(kind, it) },
                     onViewMode = { updateLibrary(library.copy(view = it)) },
-                    onArtworkSize = { updateLibrary(library.copy(size = it)) },
                     onSortMode = {
                         updateLibrary(library.copy(sort = if (it == "title") LibrarySort.Title else LibrarySort.DateAdded))
                         if (it != "title") activeLetter = "#"

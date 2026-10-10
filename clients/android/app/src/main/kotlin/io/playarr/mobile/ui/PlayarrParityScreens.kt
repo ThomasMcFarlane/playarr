@@ -4489,6 +4489,21 @@ private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
         ),
         selected = display.homeView,
     ) { display.setHomeView(it) }
+    Spacer(Modifier.height(30.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
+    Spacer(Modifier.height(32.dp))
+    Text(playarrString(PlayarrString.LibraryArtworkSize), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Spacer(Modifier.height(9.dp))
+    Text(playarrString(PlayarrString.SettingsArtworkSizeDescription), color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp)
+    Spacer(Modifier.height(17.dp))
+    TvSegmented(
+        choices = listOf(
+            LibraryArtworkSize.Small to playarrString(PlayarrString.LibrarySizeSmall).replaceFirstChar { it.titlecase() },
+            LibraryArtworkSize.Medium to playarrString(PlayarrString.LibrarySizeMedium).replaceFirstChar { it.titlecase() },
+            LibraryArtworkSize.Large to playarrString(PlayarrString.LibrarySizeLarge).replaceFirstChar { it.titlecase() },
+        ),
+        selected = display.artworkSize,
+    ) { display.setArtworkSize(it) }
 }
 
 @Composable
