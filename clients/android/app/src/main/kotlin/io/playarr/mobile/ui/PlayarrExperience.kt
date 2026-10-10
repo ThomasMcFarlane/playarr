@@ -2813,7 +2813,7 @@ private fun ExperienceHomeScreen(
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
-                    preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
                     onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
@@ -3917,7 +3917,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
-                    preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
                     onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
@@ -4123,7 +4123,7 @@ private fun ExperienceSearchScreen(
             onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
             onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
             canDownload = canDownload,
-            preferredMediaFileId = viewModel.progress.value.firstOrNull { it.workId == work.id }?.mediaFileId,
+            preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
             onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
         )
     }
