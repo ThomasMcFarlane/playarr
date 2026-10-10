@@ -103,7 +103,7 @@ Legend: ✅ the vendor supports it. ❌ the vendor does not offer it (none found
 | Fire TV | `npm test -- --ci` in `clients/fire-tv`; `scripts/parity/fire-tv/capture.sh` | CI; real device |
 | iOS and tvOS tests | Actions > Apple Simulator tests; iOS tests on pull requests | `macos-latest` |
 | Apple parity | Actions > Apple parity > Run workflow | `macos-latest` |
-| tvOS live simulator | `tvos-live-sim.yml` (hosted) or the MacBook launchd agent `app.playarr.sim-live` | `macos-latest`; MacBook |
+| tvOS live simulator | the MacBook launchd agent `app.playarr.sim-live`, reached over ssh (no repository workflow) | MacBook |
 | Simulator VNC | `scripts/sim-vnc/sim_vnc.py`; tests `python3 scripts/sim-vnc/test_sim_vnc.py` | MacBook, runner |
 | Roku | `make deploy` in `clients/roku`; `scripts/parity/roku/capture.mjs` | real device |
 | Xbox core | `dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj` in `clients/xbox` | CI, local |
