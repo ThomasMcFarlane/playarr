@@ -709,7 +709,7 @@ token instead):
 | `GET /api/v1/peer/libraries?since=` | complete `source_instances` rows + `group_libraries`; connection secrets are confined to this authenticated, signed peer endpoint |
 | `GET /api/v1/peer/availability?since=` | this peer's own `peer_leaf_availability`-shaped rows, derived live from its own `MediaFileRepo` |
 | `GET /api/v1/peer/routing-rules?since=` | `routing_rules` rows |
-| `POST /api/v1/peer/sync-push` | applies the caller's incremental entity pages through the normal pull merge rules |
+| `POST /api/v1/peer/sync-push` | applies the caller's incremental entity pages through the normal pull merge rules. The `availability` page may be left out ("unchanged") when the receiver's last answer named, in `availability_digest`, the digest of the sender's current inventory; the sender repeats the full inventory every ten minutes. A receiver without the field never names a digest, so it always gets the rows |
 
 Each response is `{rows: [...], server_time: <next cursor>}`: a standard
 cursor-polling shape, `server_time` persisted into `peer_sync_state.cursor`

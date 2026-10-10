@@ -25,13 +25,26 @@ pub struct PushSyncRequest {
     pub accounts: account_sync::AccountsResponse,
     pub invites: account_sync::InvitesResponse,
     pub libraries: account_sync::LibrariesResponse,
-    pub availability: availability_sync::AvailabilityResponse,
+    /// The sender's whole inventory. Left out ("unchanged") only when the
+    /// receiver told the sender, in its answer to an earlier push, that it
+    /// already holds the snapshot with `availability_digest`; a receiver that
+    /// predates this field never says so, so it always gets the rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub availability: Option<availability_sync::AvailabilityResponse>,
+    /// [`availability_sync::wire_digest`] of the sender's current inventory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub availability_digest: Option<String>,
     pub routing_rules: routing_sync::RoutingRulesResponse,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushSyncResponse {
     pub accepted_at: DateTime<Utc>,
+    /// [`availability_sync::wire_digest`] of the inventory this node now holds
+    /// for the sender, if the sender declared one. Absent from a receiver that
+    /// predates the field, which tells the sender to keep sending rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub availability_digest: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -100,14 +113,25 @@ pub async fn apply_push(
         conflict_log_repo,
     )
     .await?;
-    availability_sync::apply_availability_response(
-        request.availability,
-        source_peer_id,
-        work_repo,
-        availability_repo,
-        sync_state_repo,
-    )
-    .await?;
+    let held_digest = match request.availability {
+        Some(availability) => {
+            availability_sync::apply_availability_snapshot(
+                availability,
+                request.availability_digest.clone(),
+                source_peer_id,
+                work_repo,
+                availability_repo,
+                sync_state_repo,
+            )
+            .await?;
+            request.availability_digest.clone()
+        }
+        // "Unchanged": nothing to apply. The answer says which snapshot is
+        // held, so a sender whose digest differs sends the rows next time.
+        None => availability_sync::held_wire_digest(sync_state_repo, source_peer_id)
+            .await
+            .map_err(availability_sync::AvailabilitySyncError::from)?,
+    };
     routing_sync::apply_routing_rules_response(
         request.routing_rules,
         source_peer_id,
@@ -120,5 +144,6 @@ pub async fn apply_push(
 
     Ok(PushSyncResponse {
         accepted_at: Utc::now(),
+        availability_digest: held_digest,
     })
 }

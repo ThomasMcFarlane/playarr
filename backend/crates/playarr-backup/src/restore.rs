@@ -342,6 +342,7 @@ async fn apply_policy_conn(
         for table in [
             "peer_media_inventory",
             "peer_leaf_availability",
+            "peer_leaf_snapshot",
             "peer_source_instances",
             "peer_sync_state",
             "sync_conflict_log",
