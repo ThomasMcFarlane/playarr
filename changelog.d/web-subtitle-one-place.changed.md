@@ -1,0 +1,1 @@
+- Web: the page header subtitle always sits directly under the title, on every page including Settings and its sections; it no longer jumps beside the title on pages with a short title.

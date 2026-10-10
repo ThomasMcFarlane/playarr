@@ -68,7 +68,7 @@ describe("SettingsIndexPage", () => {
     const markup = renderSettingsRoute("/settings");
 
     expect(markup).toContain('class="settings-options-list"');
-    expect(markup).toContain('class="tv-library-heading page-header"');
+    expect(markup).toContain('class="tv-library-heading page-header has-subtitle"');
     expect(markup).toContain(
       'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
