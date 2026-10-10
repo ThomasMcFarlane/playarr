@@ -8,6 +8,7 @@ import {Animated, Easing, Pressable, View} from 'react-native';
 import LinearGradient from '@amazon-devices/react-linear-gradient';
 import type {WatchProgress} from '@playarr-tv/api-client';
 import {ArtworkImage} from '../components/ArtworkImage';
+import {focusNode} from '../platform';
 import {useTheme} from '../theme/ThemeProvider';
 import {EdgeFade, TRACK_GUTTER} from './EdgeFade';
 import {Box, T, u} from './kit';
@@ -22,7 +23,8 @@ const CARD_H = 150.8;
 const CARD_PITCH = 293;
 const TRACK_PITCH = 314.8;
 /** Where the focused track's heading sits. */
-const FOCUS_Y = 410;
+// Web: the focused track's heading sits at 358 px (series page, Season 1 with an episode focused).
+const FOCUS_Y = 358;
 
 export interface TrackItem {
   id: string;
@@ -142,8 +144,15 @@ export function TrackStack(props: TrackStackProps): React.ReactElement {
 
 function TrackCard({item, x, token, selected, preferred, onFocus}: {item: TrackItem; x: number; token: string | undefined; selected: boolean; preferred: boolean; onFocus: () => void}): React.ReactElement {
   const {colour} = useTheme();
+  // hasTVPreferredFocus only wins while nothing else holds focus; the detail page mounts its buttons first, so the
+  // next-up episode takes focus explicitly once it exists (owner rule: a series page opens on the next item to play).
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    if (preferred) focusNode(ref);
+  }, [preferred]);
   return (
     <Pressable
+      ref={ref}
       accessibilityRole="button"
       accessibilityLabel={item.title}
       hasTVPreferredFocus={preferred}

@@ -20,6 +20,7 @@ import {snapshotFromWork, useWatchlistToggle} from '../lib/watchlist';
 import {Icon} from '../shell/icons';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
+import {yearRangeLabel} from '../lib/workYear';
 import {BalancedT, Box, T, u} from '../tv/kit';
 import {PageHeader} from '../tv/PageHeader';
 import {Sheet, SheetOption} from '../tv/Sheet';
@@ -75,12 +76,6 @@ function formatClock(positionMs: number): string {
   const minutes = totalMinutes % 60;
   const hours = Math.floor(totalMinutes / 60);
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${totalMinutes}:${pad(seconds)}`;
-}
-
-function releaseYear(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : String(date.getUTCFullYear());
 }
 
 function formatDetailDate(value: string, language: string): string | null {
@@ -226,7 +221,7 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
         : t('pages.workDetail.dateAdded');
   const runtimeText =
     runtimeLabel(runtimeMs, t) ?? (playMediaFileId ? t('pages.workDetail.loadingRuntime') : t('pages.workDetail.runtimeUnavailable'));
-  const year = releaseYear(work.release_date);
+  const year = yearRangeLabel(work);
   const dateText = dateValue ? formatDetailDate(dateValue, language) : null;
   const meta: Array<{key: string; text: string; lead?: boolean}> = [
     {key: 'lead', text: episodic ? seasonLabel : t('pages.workDetail.kindMovie'), lead: true},

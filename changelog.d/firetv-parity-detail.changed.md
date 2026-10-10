@@ -1,0 +1,1 @@
+- Fire TV: a series page opens on the next-up episode at web's track position, and title years show web's release-year range ("2011–2017" for an ended series) (18.462).
