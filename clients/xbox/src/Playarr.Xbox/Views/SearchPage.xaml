@@ -17,52 +17,89 @@
         ItemsSource/DataTemplate, so it stays consistent with "no x:Bind,
         no Binding anywhere in this project" (see SearchPage.xaml.cs).
     -->
-    <Grid Padding="48">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <!-- Web TV search (1920x1080): header, 595x80 pill field, helper text, empty state centred in the right half. -->
+    <Grid>
+        <Button
+            x:Name="BackButton"
+            Width="50"
+            Height="50"
+            CornerRadius="25"
+            Margin="154,56,0,0"
+            Padding="0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            BorderBrush="{StaticResource PlayarrLineStrong}"
+            BorderThickness="1"
+            Click="BackButton_Click">
+            <FontIcon Glyph="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+        </Button>
+        <TextBlock Text="Search" Style="{StaticResource PlayarrPageTitle}" Margin="228,57,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
 
-        <TextBlock
-            Grid.Row="0"
-            Text="Search"
-            Style="{StaticResource TitleTextBlockStyle}"
-            Margin="0,0,0,24" />
-
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <Grid
+            Width="595"
+            Height="84"
+            Margin="152,169,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            CornerRadius="42"
+            Background="{StaticResource PlayarrSurfaceStrong}"
+            BorderBrush="{StaticResource PlayarrLineStrong}"
+            BorderThickness="1">
+            <FontIcon Glyph="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="18" Margin="30,0,0,0" HorizontalAlignment="Left" Foreground="{StaticResource PlayarrInkSoft}" />
             <TextBox
                 x:Name="QueryBox"
-                Width="480"
-                PlaceholderText="Search movies, series…"
+                Margin="56,0,24,0"
+                VerticalAlignment="Center"
+                FontSize="18"
+                Background="Transparent"
+                BorderThickness="0"
+                PlaceholderText="Search your libraries and playlists"
                 InputScope="Search"
+                TextChanged="QueryBox_TextChanged"
                 KeyUp="QueryBox_KeyUp" />
-            <Button x:Name="SearchButton" Content="Search" Click="SearchButton_Click" />
-            <ProgressRing x:Name="SearchingRing" IsActive="False" Width="32" Height="32" />
-        </StackPanel>
-
+        </Grid>
+        <TextBlock
+            Text="Find any available movie, series, artist or playlist."
+            Width="270"
+            Margin="153,302,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            FontSize="13.5"
+            LineHeight="21"
+            TextWrapping="WrapWholeWords"
+            Foreground="{StaticResource PlayarrInkSoft}" />
+        <ProgressRing x:Name="SearchingRing" IsActive="False" Width="32" Height="32" Margin="783,162,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
         <TextBlock
             x:Name="ErrorText"
-            Grid.Row="2"
-            Margin="0,12,0,0"
-            Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+            Margin="783,162,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Style="{StaticResource PlayarrRailTitle}"
             Visibility="Collapsed" />
 
-        <Grid Grid.Row="3" Margin="0,24,0,0">
-            <TextBlock
-                x:Name="EmptyStateText"
-                Text="No results yet — try a search above."
-                Style="{StaticResource BodyTextBlockStyle}"
-                Opacity="0.7"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Top" />
+        <StackPanel
+            x:Name="EmptyStatePanel"
+            Orientation="Horizontal"
+            Spacing="42"
+            Margin="1163,313,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top">
+            <Border Width="131" Height="131" CornerRadius="65.5" BorderBrush="{StaticResource PlayarrLineStrong}" BorderThickness="1" Background="{StaticResource PlayarrSurface}">
+                <FontIcon Glyph="&#xE71F;" FontFamily="Segoe MDL2 Assets" FontSize="30" Foreground="{StaticResource PlayarrBrand}" />
+            </Border>
+            <TextBlock x:Name="EmptyStateText" Text="Start typing to search." FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
 
-            <GridView
-                x:Name="ResultsGrid"
-                IsItemClickEnabled="True"
-                SelectionMode="None"
-                ItemClick="ResultsGrid_ItemClick" />
-        </Grid>
+        <GridView
+            x:Name="ResultsGrid"
+            Width="1080"
+            Margin="783,0,0,0"
+            Padding="0,162,0,48"
+            HorizontalAlignment="Left"
+            IsItemClickEnabled="True"
+            SelectionMode="None"
+            ScrollViewer.VerticalScrollBarVisibility="Hidden"
+            ItemClick="ResultsGrid_ItemClick" />
     </Grid>
 </Page>

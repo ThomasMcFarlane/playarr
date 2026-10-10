@@ -18,6 +18,22 @@
     -->
     <!-- Web TV Home: rails start at the web's x (881 px) under the shell clock; one row per server rail. -->
     <Grid>
+        <!-- Web Home hero: the focused title, very large and faint, behind the left of the rails. -->
+        <TextBlock
+            x:Name="HeroTitle"
+            Width="700"
+            Margin="337,282,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            FontSize="150"
+            FontWeight="Bold"
+            LineHeight="135"
+            CharacterSpacing="-20"
+            TextWrapping="WrapWholeWords"
+            MaxLines="2"
+            Opacity="0.07"
+            IsHitTestVisible="False" />
+
         <ProgressRing
             x:Name="LoadingRing"
             IsActive="False"
