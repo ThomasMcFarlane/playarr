@@ -134,16 +134,13 @@ struct TVHomeView: View {
                 LazyHStack(alignment: .top, spacing: 24.9) {
                     ForEach(works) { work in
                         let focus = HomeRailCardFocus(rail: id, workID: work.id)
-                        NavigationLink {
-                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                        } label: {
+                        TVCardButton(work: work) {
                             TVWebHomeCard(work: work, apiClient: environment.apiClient, focused: focusedCard == focus,
                                           progress: id == "r0" ? viewModel?.progress[work.id] : nil)
                         }
                         .buttonStyle(TVFocusableCardButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCard, equals: focus)
-                        .tvLongPressActions(work)
                     }
                 }
                 .padding(.leading, Self.cardBleed)
@@ -1148,9 +1145,7 @@ struct TVSearchView: View {
                 ForEach(model.results) { work in
                     // Web: the first hit is not lifted until the remote moves onto the results.
                     let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
-                    NavigationLink {
-                        TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                    } label: {
+                    TVCardButton(work: work) {
                         searchResultCard(work, focused: selected)
                             // Pinned web search focus: translateY(-6px) scale(1.015) over 230 ms, cubic-bezier(0.16, 1, 0.3, 1).
                             .scaleEffect(selected ? 1.015 : 1)
@@ -1159,7 +1154,6 @@ struct TVSearchView: View {
                     }
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
-                    .tvLongPressActions(work)
                     .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                     .focusEffectDisabled()
                 }
@@ -1552,13 +1546,7 @@ struct TVLibraryKindView: View {
         artIncludesDot: Bool
     ) -> some View {
         let isSelected = selected?.id == work.id
-        return NavigationLink {
-            if playlistCounts[work.id] != nil {
-                TVLibraryKindView(kindLabel: work.title, emptyMessage: "This playlist is empty.", playlistID: work.id)
-            } else {
-                TVWorkDetailView(work: work, apiClient: environment.apiClient)
-            }
-        } label: {
+        return TVCardButton(work: work, route: playlistCounts[work.id] != nil ? .playlist(id: work.id, name: work.title) : nil) {
             // SPA `.tv-title-card-copy { padding-top: 0.72rem; gap }` +
             // `strong { font-size: clamp(0.54rem, 0.6vw, 0.74rem) → ~11.5 @ 1920,
             // font-weight: 610, letter-spacing: -0.015em }`.
@@ -1622,7 +1610,6 @@ struct TVLibraryKindView: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
-        .tvLongPressActions(work)
         .disabled(parityMode) // not .focusable: on a Button it adds a second, inert focus target
         .focusEffectDisabled(parityMode)
         .onMoveCommand { direction in

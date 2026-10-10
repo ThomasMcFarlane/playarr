@@ -522,20 +522,43 @@ extension EnvironmentValues {
     }
 }
 
-extension View {
-    /// Select held for 650 ms opens the card's actions (web long press); a short press keeps the card's own action.
-    func tvLongPressActions(_ work: Work) -> some View {
-        modifier(TVLongPressActions(work: work))
+/// A pushed page of the stage (shell navigation path).
+enum TVRoute: Hashable {
+    case work(Work)
+    case playlist(id: UUID, name: String)
+}
+
+struct TVOpenRouteKey: EnvironmentKey {
+    static let defaultValue: (TVRoute) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var openRoute: (TVRoute) -> Void {
+        get { self[TVOpenRouteKey.self] }
+        set { self[TVOpenRouteKey.self] = newValue }
     }
 }
 
-private struct TVLongPressActions: ViewModifier {
+/// A media card's button: Select opens the title; holding Select for 650 ms opens its actions instead (web long
+/// press), and the release that follows does not also open the title.
+struct TVCardButton<Label: View>: View {
     let work: Work
+    var route: TVRoute? = nil
+    @ViewBuilder var label: () -> Label
     @Environment(\.openActions) private var openActions
+    @Environment(\.openRoute) private var openRoute
+    @State private var longPressed = false
 
-    func body(content: Content) -> some View {
-        // Exclusive (not simultaneous): a long press must not also open the card on release.
-        content.onLongPressGesture(minimumDuration: 0.65) { openActions(work) }
+    var body: some View {
+        Button {
+            if longPressed { longPressed = false } else { openRoute(route ?? .work(work)) }
+        } label: {
+            label()
+        }
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.65).onEnded { _ in
+            longPressed = true
+            openActions(work)
+        })
     }
 }
 
