@@ -1,0 +1,7 @@
+- On-demand HLS now copies the source video (encoding only the audio) whenever the client can play the video codec at original quality, so a 1080p H.264 Matroska file in a browser is remuxed instead of re-encoded in real time; the re-encode missed the first-segment wait and played nothing (20.260).
+- On-demand transcodes use the libx264 `veryfast` preset with a keyframe on every segment boundary, roughly doubling throughput and making the first segment available after one segment length (20.260).
+- Android TV: an automatic retry after the decoder fallback stays on the converted stream instead of direct-playing the undecodable original again (20.260).
+- Web: the desktop browser claims HEVC only when Media Source Extensions can decode it, so Chrome on Linux and Firefox get a playable stream instead of copied HEVC (20.260).
+- Android TV and web: a session that plays the source video, including an original-quality HLS stream whose video the server copied, falls back once to an H.264 transcode when the device cannot decode it (20.260).
+- webOS, Tizen and VIDAA no longer claim HEVC until fragmented-MP4 HEVC HLS is verified on each shell, so HEVC sources reach them as an H.264 transcode (20.260).
+- Web: the HEVC probe falls back to ManagedMediaSource and then the video element when MediaSource is missing, as on iPhone Safari (20.260).

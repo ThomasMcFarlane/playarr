@@ -55,6 +55,17 @@ class PlayarrPlaybackTimelineTest {
         assertEquals(true, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES", false))
         assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_DECODING_FAILED", true))
         assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(false, "ERROR_CODE_DECODING_FAILED", false))
+        // An original-quality HLS session with copied video (activeDirectPlay=false) still falls back;
+        // a forced transcode (any other quality) does not.
+        val copied = playarrPlaysSourceVideo(activeDirectPlay = false, activeQualityId = "original")
+        assertEquals(true, shouldFallBackToTranscodeAfterDecodeFailure(copied, "ERROR_CODE_DECODING_FAILED", false))
+        assertEquals(false, playarrPlaysSourceVideo(activeDirectPlay = false, activeQualityId = DECODE_FALLBACK_PROFILE))
+        assertEquals(true, playarrPlaysSourceVideo(activeDirectPlay = true, activeQualityId = null))
+        assertEquals(
+            true,
+            java.io.File("src/main/kotlin/io/playarr/mobile/ui/PlayarrExperience.kt").readText()
+                .contains("playarrPlaysSourceVideo(activeDirectPlay, _controls.value.activeQualityId)"),
+        )
         assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED", false))
     }
 

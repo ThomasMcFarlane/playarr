@@ -111,3 +111,28 @@ export function humanNegotiationMessage(err: unknown, fallback: string): string 
   }
   return /^API request failed/i.test(fallback) ? "Playback could not be started." : fallback;
 }
+
+/**
+ * Media-decode failures, as opposed to network ones: Shaka's MediaSource
+ * append failures (3014, 3015), the `<video>` element's own error (3016),
+ * content the browser cannot play (4032), or the element's MEDIA_ERR_DECODE
+ * and MEDIA_ERR_SRC_NOT_SUPPORTED on a native source.
+ */
+const DECODE_ERROR_CODES = new Set(["3014", "3015", "3016", "4032", "MEDIA_3", "MEDIA_4"]);
+
+/** The server profile a decode failure falls back to: H.264 every browser and TV decodes. */
+export const DECODE_FALLBACK_PROFILE = "h264-1080p-8mbps";
+
+/**
+ * True when a session that plays the source video (direct play, or HLS whose
+ * video the server copied) failed to decode, so the player should ask once for
+ * a forced H.264 transcode at the same position instead of showing the error.
+ * A forced transcode already is the converted stream, so it never falls back.
+ */
+export function shouldFallBackToTranscodeAfterDecodeError(
+  error: ReconnectEngineError | undefined,
+  options: { forceTranscode: boolean; alreadyAttempted: boolean }
+): boolean {
+  if (!error || options.forceTranscode || options.alreadyAttempted) return false;
+  return DECODE_ERROR_CODES.has(error.code);
+}
