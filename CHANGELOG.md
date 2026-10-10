@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV: library cards open the title on Select and show the card focus glow; the Playlists tab lists your playlists; Back on a top-level page returns Home and pops pushed pages first; Left into the nav lands on the active tab; the nav ends with the profile tile (Who's watching, Settings from the gear) instead of a Settings group; settings rows use the web focus look and the panel follows focus.
 - Samsung Tizen and LG webOS packages start again: they define the web build's debug-mirror constant, whose absence threw a ReferenceError at launch.
 - LG webOS: the app's own fonts now apply instead of the system font that the webOS user-agent style sets on every element.
 - Tizen and webOS (Chromium 94): every `color-mix()` colour now renders as on web, through rgba() over per-token channel properties, instead of being dropped when a var() was involved (hero scrims, rail panels, focus glow).
