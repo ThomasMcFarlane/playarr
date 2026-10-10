@@ -403,9 +403,110 @@
   display: block;
 }
 
-/* Selected cards use the shared card shadow, never a ring or a white border (page-layout.css owns the lift). */
-.calendar-entry.is-selected {
-  box-shadow: var(--card-shadow-focus);
+/*
+ * A selected card that does not hold focus (the details panel, the nav or the action column has it) shows no ring, glow or
+ * lift: the ring and the shadow belong to focus alone (:focus-visible and the remote marker, page-layout.css). Selected
+ * only marks the row with a firmer outline, like the Library's selected row.
+ */
+.calendar-entry.is-selected,
+.calendar-chip.is-selected {
+  border-top-color: var(--line-strong);
+  border-right-color: var(--line-strong);
+  border-bottom-color: var(--line-strong);
+}
+
+/*
+ * Agenda day headings stick to the top of the list scroller while their entries scroll under them; the next heading
+ * pushes the previous one up (each heading lives in its own day section). The heading carries the page background and no
+ * box. The scroller's own top fade would dim the pinned heading, so it is off here and the fade is drawn below the heading
+ * instead (the .calendar-agenda-fade marker, shown once content has scrolled). The scroller's scroll-padding keeps the focused
+ * entry (revealed by the app's smooth scroll, which honours scroll-padding) clear of the heading.
+ */
+.tv-title-grid:has(> .calendar-agenda-content) {
+  --agenda-heading-h: 2.75rem;
+  --agenda-heading-base: var(--surface);
+  --agenda-panel-frost: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--tv-rail-frost) 68%, transparent) 12%,
+    color-mix(in srgb, var(--tv-rail-frost) 88%, transparent) 34%,
+    color-mix(in srgb, var(--tv-rail-frost) 96%, transparent) 62%,
+    var(--tv-rail-frost) 100%
+  );
+  /* Nothing shows above the pinned heading (the header area); no top ramp, so the heading itself is not faded. */
+  --edge-fade-start-size: 0px;
+  --edge-fade-start-floor: 0;
+  scroll-padding-top: calc(var(--library-rail-top) + var(--agenda-heading-h) + 12px);
+}
+
+/* Beats the header-clear inset (page-layout.css): everything above the pinned heading is fully masked. */
+.tv-title-grid[data-fade-axis="y"][data-fade-start]:has(> .calendar-agenda-content) {
+  --fade-start-inset: var(--library-rail-top);
+  --fade-start-floor: 0;
+}
+
+:root[data-theme="dark"] .tv-title-grid:has(> .calendar-agenda-content) {
+  --agenda-heading-base: var(--bg);
+  --agenda-panel-frost: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--tv-rail-frost) 72%, transparent) 12%,
+    color-mix(in srgb, var(--tv-rail-frost) 90%, transparent) 34%,
+    color-mix(in srgb, var(--tv-rail-frost) 97%, transparent) 62%,
+    var(--tv-rail-frost) 100%
+  );
+}
+
+.calendar-agenda-content .calendar-day > h3 {
+  position: sticky;
+  top: var(--library-rail-top);
+  z-index: 3;
+  box-sizing: border-box;
+  height: var(--agenda-heading-h);
+  margin: 0;
+  /* The panel's own left-to-right frost, anchored to the viewport (the panel is the right 65%), over the page background:
+     opaque enough to hide the entries scrolling under it, with no visible band edge. */
+  background-image: var(--agenda-panel-frost);
+  background-color: var(--agenda-heading-base);
+  background-attachment: fixed;
+  background-size: calc(65 * var(--vw)) calc(100 * var(--viewport-unit));
+  background-position: right top;
+  background-repeat: no-repeat;
+}
+
+.calendar-agenda-content .calendar-day > h3 + ul,
+.calendar-agenda-content .calendar-day > h3 + .calendar-day-empty {
+  margin-top: 0.4rem;
+}
+
+.calendar-agenda-fade {
+  position: sticky;
+  top: calc(var(--library-rail-top) + var(--agenda-heading-h));
+  z-index: 2;
+  height: 0;
+  /* Takes no room: cancels the day list's flex gap (.calendar-days, 2rem). */
+  margin-bottom: -2rem;
+  pointer-events: none;
+}
+
+.calendar-agenda-fade::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--page-edge-fade-size);
+  /* A plain colour ramp (the shared mask is the only mask in the app): the panel's frost over the page background. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--tv-rail-frost) 80%, var(--agenda-heading-base)),
+    color-mix(in srgb, var(--tv-rail-frost) 80%, transparent) 40%,
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.tv-title-grid[data-fade-start] .calendar-agenda-fade::after {
+  opacity: 1;
 }
 
 .calendar-entry-skeleton {
