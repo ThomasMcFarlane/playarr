@@ -25,27 +25,16 @@ export function SettingsAppearancePage() {
           <div className="appearance-setting-heading">
             <h3>{t("settings.appearance.colourThemeLabel")}</h3>
           </div>
-          <div
-            className="theme-choice"
-            role="group"
-            aria-label={t("settings.appearance.colourThemeLabel")}
-          >
-            {THEME_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`theme-choice-button${preference === option ? " is-active" : ""}`}
-                onClick={() => {
-                  if (option === preference) return;
-                  setPreference(option);
-                  showToast(t("settings.appearance.themeSaved"));
-                }}
-                aria-pressed={preference === option}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel={t("settings.appearance.colourThemeLabel")}
+            value={preference}
+            options={THEME_OPTIONS.map((option) => ({ value: option, label: option }))}
+            onChange={(option) => {
+              if (option === preference) return;
+              setPreference(option);
+              showToast(t("settings.appearance.themeSaved"));
+            }}
+          />
         </div>
 
         <div className="appearance-setting">
@@ -53,29 +42,22 @@ export function SettingsAppearancePage() {
             <h3>{t("settings.appearance.homeViewTitle")}</h3>
             <p>{t("settings.appearance.homeViewDescription")}</p>
           </div>
-          <div
-            className="theme-choice home-view-choice"
-            role="group"
-            aria-label={t("settings.appearance.homeViewAriaLabel")}
-          >
-            {HOME_VIEW_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`theme-choice-button${homeView === option ? " is-active" : ""}`}
-                onClick={() => {
-                  if (option === homeView) return;
-                  setHomeView(option);
-                  showToast(t("settings.appearance.homeViewSaved"));
-                }}
-                aria-pressed={homeView === option}
-              >
-                {option === "cover"
+          <SegmentedControl
+            ariaLabel={t("settings.appearance.homeViewAriaLabel")}
+            value={homeView}
+            options={HOME_VIEW_OPTIONS.map((option) => ({
+              value: option,
+              label:
+                option === "cover"
                   ? t("settings.appearance.homeViewCover")
-                  : t("settings.appearance.homeViewThumbnail")}
-              </button>
-            ))}
-          </div>
+                  : t("settings.appearance.homeViewThumbnail"),
+            }))}
+            onChange={(option) => {
+              if (option === homeView) return;
+              setHomeView(option);
+              showToast(t("settings.appearance.homeViewSaved"));
+            }}
+          />
         </div>
 
         <div className="appearance-setting">
