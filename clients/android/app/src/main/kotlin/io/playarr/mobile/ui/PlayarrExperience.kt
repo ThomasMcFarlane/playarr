@@ -7642,7 +7642,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                             automaticRecoveryUrl = activePlaybackUrl
                             recoverExpiredHlsSession(currentError.message)
                         } else if (shouldFallBackToTranscodeAfterDecodeFailure(
-                                activeDirectPlay,
+                                playarrPlaysSourceVideo(activeDirectPlay, _controls.value.activeQualityId),
                                 currentError.message,
                                 decoderFallbackAttempted,
                             )
