@@ -248,6 +248,9 @@ export interface TvGeometryTokens {
   homeRailsWidth: number;
   homeRailsInsetLeft: number;
   homeRailsTop: number;
+  homeRailsHeadingGap: number;
+  homeRailsListHeight: number;
+  homeRailsRowGap: number;
 
   // Utility/clock row.
   utilityRowTop: number;
@@ -357,6 +360,10 @@ export const TvGeometry: TvGeometryTokens = {
   homeRailsWidth: 1190,
   homeRailsInsetLeft: 152,
   homeRailsTop: 402,
+  // Web rail pitch is 366: heading 26 + gap 30 + card 213 + 97 between rails.
+  homeRailsHeadingGap: 30,
+  homeRailsListHeight: 236,
+  homeRailsRowGap: 74,
 
   utilityRowTop: 56,
   utilityRowHeight: 50,
@@ -371,7 +378,8 @@ export const TvGeometry: TvGeometryTokens = {
   railItemGapHome: 25,
   railItemGapTitle: 23,
   railHeadingSize: 17.664,
-  railHeadingWeight: 610,
+  // ArkUI takes weights in steps of 100; web uses 610.
+  railHeadingWeight: 600,
   libraryGridColumns: 3,
   libraryGridRowGap: 36,
   libraryGridColumnGap: 28,
@@ -403,7 +411,8 @@ export const TvGeometry: TvGeometryTokens = {
   navTileRadius: 16,
   navTileIconSize: 20,
   navTileLabelSize: 8.832,
-  navTileLabelWeight: 680,
+  // ArkUI takes weights in steps of 100; web uses 680.
+  navTileLabelWeight: 700,
   // Web TV library group (Home, Series, Movies, Music) top edge; the Downloads/Search group sits above it on web.
   navGroupTop: 286,
   navGroupShadowOffsetY: 14,

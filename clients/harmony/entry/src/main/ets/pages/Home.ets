@@ -781,10 +781,12 @@ export struct Home {
   @Builder
   private tvRailsSlot(): void {
 
-    Column({ space: tv(TvGeometry.homeRailsColumnRowGap) }) {
+    Column({ space: tv(TvGeometry.homeRailsRowGap) }) {
       if (this.continueWatchingItems.length > 0) {
         MediaRail({
           railId: 'home-continue-watching-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'Continue Watching',
           items: this.continueWatchingItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -795,6 +797,8 @@ export struct Home {
       if (this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'New Movies',
           items: this.newMovieItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -805,6 +809,8 @@ export struct Home {
       if (this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'New Series',
           items: this.newSeriesItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -815,6 +821,8 @@ export struct Home {
       if (this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'More Movies',
           items: this.moreMovieItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -825,6 +833,8 @@ export struct Home {
       if (this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'More Series',
           items: this.moreSeriesItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {

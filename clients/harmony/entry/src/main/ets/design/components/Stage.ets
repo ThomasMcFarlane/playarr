@@ -291,16 +291,21 @@ export struct Stage {
     .translate({ x: -tv(COPY_ENTRY_TRANSLATE_X) * (1 - this.copyEntry) })
   }
 
-  // Web TV Home has no panel behind the rails: a plain full-height column (`.tv-home-rails`).
+  // Web TV Home has no panel behind the rails: a plain, natively scrollable full-height column (`.tv-home-rails`).
   @Builder
   private railPanelLayer(): void {
-    Column() {
-      this.railsSlot()
+    Scroll() {
+      Column() {
+        this.railsSlot()
+      }
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: tv(TvGeometry.homeRailsInsetLeft), top: tv(TvGeometry.homeRailsTop), bottom: tv(TvGeometry.homeRailsTop) })
     }
     .width(tv(TvGeometry.homeRailsWidth))
     .height('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding({ left: tv(TvGeometry.homeRailsInsetLeft), top: tv(TvGeometry.homeRailsTop) })
+    .align(Alignment.TopStart)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
     .position({ x: tv(TvGeometry.homeRailsLeft), y: 0 })
     .opacity(this.railsEntry)
     .translate({ x: tv(RAILS_ENTRY_TRANSLATE_X) * (1 - this.railsEntry) })

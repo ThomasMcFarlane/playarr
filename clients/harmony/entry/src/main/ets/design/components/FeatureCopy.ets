@@ -30,13 +30,14 @@ import type { RgbaColor } from '../../core/Tokens';
 // Web TV stage copy (`.tv-provider`, `.details-panel-title`, `.tv-preview-meta`, `.tv-preview-overview`),
 // measured from the live web DOM at 1920x1080.
 const KICKER_FONT_SIZE: number = 12.288;
-const KICKER_FONT_WEIGHT: number = 860;
+// ArkUI takes weights in steps of 100 (other values fall back to 400); web uses 860 and 560.
+const KICKER_FONT_WEIGHT: number = 900;
 const KICKER_LETTER_SPACING: number = KICKER_FONT_SIZE * 0.08;
 // Dark theme kicker pink on web; light theme keeps the brand pink.
 const KICKER_COLOR_DARK: RgbaColor = { r: 234, g: 166, b: 182, a: 1 };
 
 const HERO_TITLE_FONT_SIZE: number = 69.12;
-const HERO_TITLE_FONT_WEIGHT: number = 560;
+const HERO_TITLE_FONT_WEIGHT: number = 600;
 const HERO_TITLE_LETTER_SPACING: number = HERO_TITLE_FONT_SIZE * -0.072;
 const HERO_TITLE_LINE_HEIGHT: number = 62;
 const HERO_TITLE_MAX_WIDTH: number = 373;
