@@ -1,0 +1,1 @@
+- Web: the Filters panel body scrolls with keyboard and D-pad focus (smooth, both directions) with the shared edge fades; language filters are one searchable multi-select per filter instead of toggle pills; the View filter is one row of equal segments (shared `SegmentedControl`). Rows 1.9961, 1.9962, 1.9963.

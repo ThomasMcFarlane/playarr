@@ -17,7 +17,7 @@ import {
   FilterSection,
   FiltersDrawer,
   MasterDetail,
-  MultiSelect,
+  ToggleChips,
   PageLayout,
   type PageHeaderProps,
   SkeletonBlock,
@@ -1142,7 +1142,7 @@ export function CalendarPage() {
           />
         </FilterSection>
         <FilterSection title={t("pages.calendar.filterType")}>
-          <MultiSelect
+          <ToggleChips
             ariaLabel={t("pages.calendar.filterLabel")}
             options={CALENDAR_TYPE_PARAMS.map((value) => ({ value, label: t(TYPE_KEYS[value]) }))}
             selected={filters.types}
@@ -1151,7 +1151,7 @@ export function CalendarPage() {
         </FilterSection>
         {sourceOptions.length > 0 ? (
           <FilterSection title={t("pages.calendar.filterSource")}>
-            <MultiSelect
+            <ToggleChips
               ariaLabel={t("pages.calendar.filterSource")}
               options={sourceOptions}
               selected={filters.sources}
@@ -1160,7 +1160,7 @@ export function CalendarPage() {
           </FilterSection>
         ) : null}
         <FilterSection title={t("pages.calendar.filterStatus")}>
-          <MultiSelect
+          <ToggleChips
             ariaLabel={t("pages.calendar.filterStatus")}
             options={CALENDAR_STATUSES.map((value) => ({ value, label: t(STATUS_KEYS[value]) }))}
             selected={filters.statuses}
@@ -1183,7 +1183,7 @@ export function CalendarPage() {
           />
         </FilterSection>
         <FilterSection title={t("pages.calendar.filterMonitored")}>
-          <MultiSelect
+          <ToggleChips
             ariaLabel={t("pages.calendar.filterMonitored")}
             options={[{ value: "monitored", label: t("pages.calendar.monitoredOnly") }]}
             selected={new Set(filters.monitoredOnly ? ["monitored"] : [])}

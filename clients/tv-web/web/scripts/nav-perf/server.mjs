@@ -89,6 +89,11 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
         ],
       });
     }
+    if (p === "/api/v1/catalog/languages") {
+      const names = { en: "English", ja: "Japanese", fr: "French", de: "German", es: "Spanish", it: "Italian", ko: "Korean", pt: "Portuguese", ru: "Russian", th: "Thai", zh: "Chinese", nl: "Dutch", sv: "Swedish", pl: "Polish" };
+      const facets = Object.entries(names).map(([code, name], i) => ({ code, name, count: 20 - i }));
+      return json(res, { audio: facets, subtitle: facets });
+    }
     if (p === "/api/v1/catalog/search") {
       const term = (q.get("q") ?? "").toLowerCase();
       const items = [...catalogue.movie, ...catalogue.series]

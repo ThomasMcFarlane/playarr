@@ -5106,12 +5106,194 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   display: grid;
   align-content: start;
   gap: clamp(22px, calc(2.8 * var(--viewport-unit)), 34px);
+  /* The body is the scroller: the header and footer stay put, a focused control settles clear of the shared edge
+     fades (scroll-padding; smoothScrollIntoView honours it, not scroll-margin). The side padding keeps focus rings
+     and the hover scale of edge controls from being clipped. */
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-inline: -10px;
+  padding: 4px 10px;
+  scroll-padding-block: var(--page-edge-fade-size);
+}
+
+.drawer > .drawer-body::-webkit-scrollbar {
+  display: none;
+}
+
+.tv-filter-drawer.drawer {
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-auto-rows: auto;
 }
 
 .drawer > .drawer-footer {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+/* Shared MultiSelect (components/ui/MultiSelect.tsx): token field plus an inline searchable checkbox list. Targets
+   are 44px or taller; text is --ink / --ink-muted. */
+.ui-multiselect {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ui-multiselect-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 64%, transparent);
+}
+
+.ui-multiselect-token,
+.ui-multiselect-trigger {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 10px;
+  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.74rem);
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.ui-multiselect-token {
+  min-width: 44px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.ui-multiselect-token:hover {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.ui-multiselect-trigger {
+  flex: 1 1 8rem;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.ui-multiselect-chevron {
+  color: var(--ink-muted);
+  transition: transform 180ms ease;
+}
+
+.ui-multiselect-trigger[aria-expanded="true"] .ui-multiselect-chevron {
+  transform: rotate(180deg);
+}
+
+.ui-multiselect-popup {
+  display: grid;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  overflow: hidden;
+}
+
+.ui-multiselect-search {
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem 0.8rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.74rem);
+}
+
+.ui-multiselect-search::placeholder {
+  color: var(--ink-muted);
+}
+
+.ui-multiselect-list {
+  max-height: min(260px, calc(34 * var(--viewport-unit)));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0.3rem;
+  scroll-padding-block: 0.3rem;
+}
+
+.ui-multiselect-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: clamp(0.56rem, calc(0.62 * var(--vw)), 0.74rem);
+  cursor: pointer;
+}
+
+.ui-multiselect-option.is-active,
+.ui-multiselect-option:hover {
+  background: var(--surface-soft);
+}
+
+.ui-multiselect-option.is-active {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.ui-multiselect-option.is-selected .ui-multiselect-label {
+  font-weight: 720;
+}
+
+.ui-multiselect-box {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 5px;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.ui-multiselect-option.is-selected .ui-multiselect-box {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.ui-multiselect-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-multiselect-hint {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+
+.ui-multiselect-empty {
+  padding: 0.9rem 0.6rem;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.ui-multiselect-trigger:focus-visible,
+.ui-multiselect-token:focus-visible,
+.ui-multiselect-search:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
 }
 
 .tv-filter-choice-grid {
@@ -5125,8 +5307,10 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
 .tv-segmented button {
   flex-direction: column;
   gap: 0.2rem;
-  padding: 0.35rem 0.3rem;
+  padding: 0.25rem 0.3rem;
   min-width: 0;
+  height: clamp(44px, calc(3.6 * var(--vw)), 56px);
+  overflow: hidden;
 }
 
 .tv-segmented button strong {
