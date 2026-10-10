@@ -9,22 +9,24 @@
 //   changelog.d/<slug>.<category>.md   bullets ("- ...") appended to `### <Category>` under
 //                                      `## [Unreleased]`. Categories: added changed fixed removed
 //                                      security deprecated documentation performance testing.
-//   tasks.d/<row-number>.md            optional first line `section: <heading text of a "## " section>`
-//                                      (required when the row is new; ignored when the row exists, which stays in its epic;
-//                                      old names resolve through an alias table, an unknown one fails, and
-//                                      `section-new: <name>` is how to create an epic on purpose), then one or more table rows
+//   tasks.d/<row-number>.md            optional first line `section: <epic>` (the bare epic name or `N. Name`, as in
+//                                      the "## N. Name" heading; required when the row is new; ignored when the row
+//                                      exists, which stays in its epic; old names resolve through an alias table, an
+//                                      unknown one fails, and `section-new: <name>` is how to create an epic on
+//                                      purpose: it takes the highest epic number + 1), then one or more table rows
 //                                      `| 330 | Task | todo | owner | branch | depends | ETA | Notes |` (the eight
 //                                      canonical columns; the former five-column row is still accepted and
 //                                      converted). A row whose number already exists replaces it
 //                                      in place; a new row is appended to the end of that section's
-//                                      table (the section is created at the top if missing).
+//                                      table. Depends hold `<epic>.<task>` references; a bare row ID that is on the
+//                                      board is rewritten to its reference when the fragment folds.
 //                                      A line `remove: <row-number>` deletes that row from the board
 //                                      (a fragment may hold only remove lines; a missing row is an error).
 //
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveSection, HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta } from './lib/board.mjs';
+import { resolveSection, HEADER_LINE, SEPARATOR_LINE, canonicalCells, formatRow, parseCells, isSeparator, rowProblems, openRowEta, parseEpicHeading, stripEpicNumber, nextEpicNumber, epicByRow, normaliseDepends, dependsProblems, normaliseSection } from './lib/board.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -60,10 +62,22 @@ for (const f of clFiles) {
 function checkBoard(text) {
   const out = [];
   const ids = new Set();
+  const all = text.split('\n');
+  const epics = epicByRow(all);
+  const nums = new Map();
   let inTable = false;
-  text.split('\n').forEach((l, i) => {
+  let heading = null;
+  all.forEach((l, i) => {
     const at = `line ${i + 1}`;
+    if (l.startsWith('## ')) { heading = { text: l.slice(3), at, seen: false }; return; }
     if (!l.startsWith('|')) { inTable = false; return; }
+    if (heading && !heading.seen) {
+      heading.seen = true;
+      const e = parseEpicHeading(heading.text);
+      if (!e) out.push(`${heading.at}: epic heading "## ${heading.text}" must be numbered: "## <N>. <Epic name>"`);
+      else if (nums.has(e.num)) out.push(`${heading.at}: epic number ${e.num} is used twice (also line ${nums.get(e.num)})`);
+      else nums.set(e.num, heading.at.slice(5));
+    }
     if (/ {2,}\||\| {2,}/.test(l)) out.push(`${at}: padded cell (two or more spaces next to a pipe)`);
     if (!inTable) {
       inTable = true;
@@ -74,6 +88,7 @@ function checkBoard(text) {
     const c = parseCells(l);
     if (!c || c.length !== 8) { out.push(`${at}: row must have eight columns`); return; }
     for (const pr of rowProblems(c)) out.push(`${at}: row ${c[0]}: ${pr}`);
+    for (const pr of dependsProblems(c[5], epics)) out.push(`${at}: row ${c[0]}: ${pr}`);
     const e = openRowEta(c, now);
     if (e.error) out.push(`${at}: row ${c[0]}: ${e.error}`);
     if (e.warning) warnings.push(`warning: TASKS.md ${at}: row ${c[0]}: ${e.warning}`);
@@ -116,18 +131,26 @@ for (const f of tkFiles) {
 // Applies the task fragments to the board lines (replace in place, append, create a section, remove) and
 // returns the new lines. `fail(message)` reports a fragment that cannot apply and the fragment is skipped.
 function applyTasks(lines, fail) {
-  for (const { f, n, section: wanted, sectionNew, row, remove } of tkFrags) {
+  for (const { f, n, section: wanted, sectionNew, cells, remove } of tkFrags) {
     const idx = lines.findIndex((l) => new RegExp(`^\\|\\s*${n}\\s*\\|`).test(l));
     if (remove) {
       if (idx < 0) { fail(`tasks.d/${f}: cannot remove row ${n}: no such row`); continue; }
       lines.splice(idx, 1);
       continue;
     }
+    // Bare row IDs in Depends become `<epic>.<task>` references (fragments written before the numbered epics).
+    const epics = epicByRow(lines);
+    const row = formatRow([cells[0], cells[1], cells[2], cells[3], cells[4], normaliseDepends(cells[5], epics), cells[6], cells[7]]);
     // An existing row stays in its current epic: its `section:` line is ignored.
     if (idx >= 0) { lines[idx] = row; continue; }
     if (!wanted) { fail(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); continue; }
-    let section = wanted;
-    if (!sectionNew) {
+    const nameOnly = stripEpicNumber(wanted);
+    let section = nameOnly;
+    if (sectionNew) {
+      const heads = lines.filter((l) => l.startsWith('## ')).map((l) => l.slice(3));
+      const have = heads.find((h) => normaliseSection(h) === normaliseSection(nameOnly));
+      section = have ?? `${nextEpicNumber(lines)}. ${nameOnly}`;
+    } else {
       const r = resolveSection(wanted, lines.filter((l) => l.startsWith('## ')).map((l) => l.slice(3)));
       if (r.error) { fail(`tasks.d/${f}: row ${n}: ${r.error}`, true); continue; }
       section = r.heading;
@@ -164,6 +187,11 @@ if (check) {
     if (e.error) err(`tasks.d/${fr.f}: row ${fr.n}: ${e.error}`);
     if (e.warning) warnings.push(`warning: tasks.d/${fr.f}: row ${fr.n}: ${e.warning}`);
     if (fr.cells[2] === 'in_review' && !/(#|PR\s+)\d+/.test(fr.cells[7])) err(`tasks.d/${fr.f}: status is in_review but Notes name no PR number (write "PR open: #123")`);
+    const bareDeps = fr.cells[5].split(',').map((t) => t.trim()).filter((t) => /^(?:\d+|[A-Z]+-\d+)$/.test(t));
+    if (bareDeps.length) {
+      const epics = fs.existsSync(boardFile) ? epicByRow(fs.readFileSync(boardFile, 'utf8').split('\n')) : new Map();
+      for (const t of bareDeps) if (epics.has(t)) warnings.push(`warning: tasks.d/${fr.f}: row ${fr.n}: Depends "${t}" is a bare ID; write ${epics.get(t)}.${t} (the fold rewrites it)`);
+    }
     if (!fr.section && !onBoard.has(fr.n)) err(`tasks.d/${fr.f}: row ${fr.n} is not on the board, so the fragment needs a "section:" line`);
   }
   // The board as it will be once the fragments fold, so a fragment may fix a row the current board gets wrong.
