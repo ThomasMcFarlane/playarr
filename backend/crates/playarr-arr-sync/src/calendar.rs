@@ -29,7 +29,9 @@ pub struct CalendarCandidate {
 
 /// A synopsis with its surrounding whitespace trimmed, or `None` when blank.
 fn non_empty(text: Option<&str>) -> Option<String> {
-    text.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string)
+    text.map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
 }
 
 /// Fetches and normalises one instance's calendar for the inclusive window.
@@ -498,7 +500,11 @@ mod tests {
         mount(
             &server,
             "/api/v3/calendar",
-            json!([ep(1, 1, json!("Episode synopsis.")), ep(2, 2, json!("")), blank_series]),
+            json!([
+                ep(1, 1, json!("Episode synopsis.")),
+                ep(2, 2, json!("")),
+                blank_series
+            ]),
         )
         .await;
         let inst = instance(SourceKind::Sonarr, "TV", server.uri());

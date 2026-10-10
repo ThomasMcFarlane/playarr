@@ -673,12 +673,20 @@ async fn cold_calendar_carries_overviews_without_extra_statements() {
     let with = |kind: &str| {
         entries
             .iter()
-            .filter(|e| e["media_kind"] == kind && e["overview"].as_str().is_some_and(|o| o.starts_with("Synopsis of")))
+            .filter(|e| {
+                e["media_kind"] == kind
+                    && e["overview"]
+                        .as_str()
+                        .is_some_and(|o| o.starts_with("Synopsis of"))
+            })
             .count()
     };
     assert!(with("movie") > 0, "movie entries keep their overview");
     assert!(with("episode") > 0, "episode entries keep their overview");
-    assert!(statements <= BOUND, "cold calendar ran {statements} statements");
+    assert!(
+        statements <= BOUND,
+        "cold calendar ran {statements} statements"
+    );
 }
 
 /// A cached calendar is answered with no statement beyond authentication.
