@@ -444,7 +444,7 @@ struct TVWorkDetailView: View {
                                 }
                             }
                             .buttonStyle(TVFocusableCardButtonStyle())
-                            .focusable(!frozen)
+                            .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
                         }
                     }
                     .padding(.trailing, 80)

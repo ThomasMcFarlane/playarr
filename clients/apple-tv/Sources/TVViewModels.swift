@@ -19,16 +19,45 @@ final class TVHomeViewModel {
     private(set) var works: [Work] = []
     /// Server-computed Home shelves (same source as the web Home).
     private(set) var rails: [HomeRail] = []
+    /// Web `loadOnDeck`: part-watched titles, most recent first (at most 10), with their progress (0...1).
+    private(set) var onDeck: [Work] = []
+    private(set) var progress: [UUID: Double] = [:]
     private let apiClient: PlayarrAPIClient
 
     init(apiClient: PlayarrAPIClient) {
         self.apiClient = apiClient
     }
 
+    /// shortcut: series that need a Resume choice (stacked resume plans) are not added; add them with the plans API.
+    private func loadOnDeck() async {
+        guard let rows = try? await apiClient.listWatchProgress() else { return }
+        var seen = Set<UUID>()
+        let recent = rows.filter { $0.state == .partWatched }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .filter { seen.insert($0.workID).inserted }
+            .prefix(10)
+        progress = Dictionary(recent.map { ($0.workID, $0.durationMS > 0 ? Double($0.positionMS) / Double($0.durationMS) : 0) },
+                              uniquingKeysWith: { first, _ in first })
+        let api = apiClient
+        let works = await withTaskGroup(of: (Int, Work?).self) { group in
+            for (index, row) in recent.enumerated() {
+                group.addTask { (index, try? await api.fetchWork(id: row.workID).work) }
+            }
+            var found: [(Int, Work)] = []
+            for await (index, work) in group { if let work { found.append((index, work)) } }
+            return found.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+        onDeck = works
+    }
+
     func load() async {
-        state = .loading
-        if TVParityLaunch.isLive {
-            rails = (try? await apiClient.fetchHomeRails()) ?? []
+        if state != .loaded { state = .loading } // a reload keeps the rails on screen (no blank flash)
+        // The web Home builds every rail from the server's shelves: when they load, nothing else is needed.
+        if TVParityLaunch.requestedScreen == nil, let fetched = try? await apiClient.fetchHomeRails(), !fetched.isEmpty {
+            rails = fetched
+            state = .loaded
+            await loadOnDeck()
+            return
         }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.

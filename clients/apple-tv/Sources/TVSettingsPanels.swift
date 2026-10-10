@@ -164,7 +164,7 @@ struct TVSettingsPanel: View {
                     .frame(width: side, height: side)
                 }
                 .buttonStyle(TVFocusableCardButtonStyle())
-                .focusable(!TVParityLaunch.frozen)
+                .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
                 .frame(width: side, height: side)
                 .offset(x: centreX - side / 2, y: centreY - side / 2)
             }
