@@ -3715,8 +3715,10 @@ private fun ExperienceLibraryScreen(
         ExperienceLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
-            state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
-        ) {}
+            // Television: skeletons with the final geometry (owner rule), never a centred "Loading" screen.
+            state = if (isTelevision) null else PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
+            body = if (isTelevision) PlayarrPageBody.Bleed else PlayarrPageBody.Panel,
+        ) { if (isTelevision) TvLibrarySkeleton(playarrString(PlayarrString.LibraryLoading, "label" to plural)) }
         is ExperienceLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
@@ -4747,6 +4749,38 @@ private fun MediaContextDialog(
     downloadCandidates?.let { candidates ->
         DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
     }
+}
+
+
+/** The TV library while its first page loads: hero copy at the left, the poster grid in the rail panel (web `SkeletonState`). */
+@Composable
+private fun TvLibrarySkeleton(loadingLabel: String) {
+    Box(Modifier.fillMaxSize().background(WebSurface).semantics { contentDescription = loadingLabel }) {
+        Column(Modifier.padding(start = playarrPageMetrics(true).start, top = 259.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PlayarrSkeleton(Modifier.size(110.dp, 14.dp))
+            PlayarrSkeleton(Modifier.size(340.dp, 54.dp))
+            PlayarrSkeleton(Modifier.size(240.dp, 54.dp))
+            Spacer(Modifier.height(12.dp))
+            repeat(4) { PlayarrSkeleton(Modifier.size(330.dp, 13.dp)) }
+        }
+        Column(
+            Modifier.width(1190.4.dp).fillMaxHeight().align(Alignment.CenterEnd).background(webRailSurfaceBrush())
+                .padding(start = 51.3.dp, top = 140.dp, end = 105.7.dp),
+            verticalArrangement = Arrangement.spacedBy(27.dp),
+        ) {
+            repeat(4) {
+                Row(horizontalArrangement = Arrangement.spacedBy(25.92.dp)) {
+                    repeat(3) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PlayarrSkeleton(Modifier.size(327.2.dp, 184.dp), RoundedCornerShape(12.48.dp))
+                            PlayarrSkeleton(Modifier.size(140.dp, 11.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 /** Web drawer action row: 68 dp, 14 dp radius, `--surface-soft`, a 19.52 px crimson glyph in a 42 dp slot, a bold 19.2 px label; focus is the ring. */
