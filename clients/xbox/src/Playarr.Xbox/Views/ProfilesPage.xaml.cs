@@ -156,6 +156,7 @@ namespace Playarr.Xbox.Views
             // Synchronous, one-shot: nothing to await, nothing to persist
             // server-side yet (see ProfilesViewModel's remarks) -- just move
             // on to HomePage.
+            ShellChrome.ProfileName = ((AvailableProfile)((Button)sender).Tag).DisplayName;
             App.Navigation.Navigate(typeof(HomePage));
         }
 

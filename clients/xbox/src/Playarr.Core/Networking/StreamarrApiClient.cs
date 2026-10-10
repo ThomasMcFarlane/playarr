@@ -193,6 +193,10 @@ namespace Playarr.Core.Networking
                 $"/api/v1/catalog/{id:D}/similar", query, authenticated: true, cancellationToken);
         }
 
+        /// <summary><c>GET /api/v1/home/rails</c>: the caller's ordered, non-empty Home rails.</summary>
+        public Task<HomeRailsResponse> GetHomeRailsAsync(CancellationToken cancellationToken = default) =>
+            GetAsync<HomeRailsResponse>("/api/v1/home/rails", null, authenticated: true, cancellationToken);
+
         public Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default) =>
             GetAsync<IList<WorkKind>>("/api/v1/catalog/kinds", null, authenticated: true, cancellationToken);
 
