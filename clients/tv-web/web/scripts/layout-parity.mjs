@@ -229,7 +229,7 @@ async function bandShot(page) {
     return {
       bottom: Math.max(hr.bottom, ...pills) + 2,
       left: parseFloat(getComputedStyle(header).left) || 0,
-      masks: [...header.querySelectorAll("h1, .page-header-detail")].map(rect),
+      masks: [...header.querySelectorAll("h1, .page-header-detail, [data-range-button]")].map(rect),
       dpr: devicePixelRatio,
     };
   });

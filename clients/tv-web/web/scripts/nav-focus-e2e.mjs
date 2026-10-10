@@ -168,7 +168,7 @@ for (const [route, label] of starts) {
   await page.keyboard.press("Escape");
   await settle(page, 300);
   const info = await focusInfo(page);
-  check("Calendar period picker: BACK closes it and returns to the range button", /action-pill/.test(info?.cls ?? ""), JSON.stringify(info));
+  check("Calendar period picker: BACK closes it and returns to the range button", info?.cls?.includes("ui-btn") && (await page.evaluate(() => document.activeElement?.matches("[data-range-button]"))), JSON.stringify(info));
   await context.close();
 }
 

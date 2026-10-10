@@ -515,11 +515,9 @@
 }
 
 .period-picker-panel {
-  /* Opens beside the range button in the shell action column. */
+  /* Hangs below the date switcher button; PeriodPicker sets top and right from the button's rectangle. */
   position: fixed;
   z-index: var(--z-popover);
-  top: var(--shell-action-column-top);
-  right: calc(var(--directory-controls-edge) + var(--directory-controls-width) + 12px);
   display: flex;
   gap: 0.5rem;
   padding: 0.6rem;
@@ -575,11 +573,6 @@
 @media (max-width: 760px) {
   .calendar-nav-inline {
     display: flex;
-  }
-
-  .period-picker-panel {
-    top: calc(var(--mobile-top-inset, 14px) + 56px);
-    right: 12px;
   }
 }
 

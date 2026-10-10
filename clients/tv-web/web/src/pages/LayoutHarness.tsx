@@ -25,6 +25,7 @@ export function parseHarnessActions(spec: string, open = false): PageAction[] {
               id: "navigation",
               label: "Navigation",
               items: [
+                { id: "range", label: "Oct 2026", onSelect: noop, buttonProps: { "data-range-button": true }, popover: { open: false, controls: "harness-range-popover" } },
                 { id: "prev", label: "Previous", icon: "prev", onSelect: noop },
                 { id: "today", label: "Today", onSelect: noop },
                 { id: "next", label: "Next", icon: "next", onSelect: noop },
