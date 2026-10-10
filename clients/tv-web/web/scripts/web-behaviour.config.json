@@ -50,7 +50,8 @@
     "drawer-close": "runs in the `web layout parity` job",
     "nav-mobile-stage-e2e": "runs in the `web layout parity` job (nav shard, with the other nav-*-e2e scripts)",
     "a11y-aaa-pages": "runs in the `web a11y` job (axe AAA over the pages, with its own baseline)",
-    "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate"
+    "nav-remount-audit": "diagnostic probe (prints per-flow remount/flash numbers) and the helper module of nav-remount-e2e, which is the gate",
+    "settings-language-select-e2e": "reached main early via board PR #568; listed in the gate with 1.9981 in integration batch 12"
   },
   "tracked": {},
   "seconds": {
