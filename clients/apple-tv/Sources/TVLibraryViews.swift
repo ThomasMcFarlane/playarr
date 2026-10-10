@@ -1702,7 +1702,7 @@ struct TVLibraryKindView: View {
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
-            while !page.items.isEmpty, items.count < (total ?? Int.max) {
+            while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
                 let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
                 items += next.items
