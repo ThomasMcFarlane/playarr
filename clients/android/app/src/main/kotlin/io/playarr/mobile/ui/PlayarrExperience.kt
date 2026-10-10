@@ -3114,7 +3114,8 @@ internal fun ExperienceMediaRail(
                     onSelected = { onSelected(work) },
                     onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
-                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
+                    // Web Home: a frame thumbnail only for an episode (and an artist's track); films keep their backdrop.
+                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId?.takeIf { work.kind == WorkKind.Artist },
                     stackCount = onDeck?.resumePlan?.takeIf { it.isStacked }?.options?.size ?: 0,
                     webTvStyle = isTelevision,
                     displayTitle = episode?.title?.takeIf(String::isNotBlank)
