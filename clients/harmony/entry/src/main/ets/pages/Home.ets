@@ -735,6 +735,15 @@ export struct Home {
     }
   }
 
+  /** Web TV Home: the hero shows the focused card's work. */
+  private focusHero(item: HomeCardItem): void {
+    if (this.hero !== undefined && this.hero.id === item.id) {
+      return;
+    }
+    this.hero = item;
+    this.loadHeroArtwork(item.id);
+  }
+
   private openDetail(workId: string): void {
     const detailParams: DetailRouteParams = { workId: workId };
     pushRoute(getNavStack(), ROUTES.Detail, detailParams);
@@ -771,6 +780,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
         .nextFocus({ up: this.topRailFocusUpId })
     } else {
@@ -784,6 +796,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
     }
   }
