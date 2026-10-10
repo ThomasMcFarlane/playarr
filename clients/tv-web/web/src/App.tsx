@@ -144,6 +144,9 @@ export interface AppShellOutletContext {
   startPlayerSession: (session: ActivePlayerSession) => void;
 }
 
+/** The library kinds nearly every server has: their nav tiles stand in as skeletons until the kinds answer arrives. */
+const NAV_PLACEHOLDER_KINDS: ReadonlySet<WorkKind> = new Set<WorkKind>(["series", "movie", "artist"]);
+
 const NAV_ICONS: Record<string, ComponentType> = {
   "/downloads": DownloadsIcon,
   "/search": SearchIcon,
@@ -524,7 +527,7 @@ function AppShell() {
 
       {!isPlayerRoute && (
         <nav className="app-nav" aria-label={t("shell.nav.ariaLabel")}>
-          {availableWorkKinds !== null && NAV_GROUPS.map((group) => (
+          {NAV_GROUPS.map((group) => (
             <div
               className={`app-nav-group app-nav-group-${group.id}`}
               key={group.id}
@@ -532,10 +535,24 @@ function AppShell() {
               {group.items
                 .filter(
                   (item) =>
-                    (!item.workKind || availableWorkKinds?.has(item.workKind)) &&
+                    // Entries that wait on the library-kinds answer keep their place as skeleton tiles on a first
+                    // visit (nothing cached yet), so the rail is never blank while that read is in flight. Only the
+                    // core kinds do: a rare kind (sites) adds its tile once the answer is in.
+                    (!item.workKind ||
+                      (availableWorkKinds === null
+                        ? NAV_PLACEHOLDER_KINDS.has(item.workKind)
+                        : availableWorkKinds.has(item.workKind))) &&
                     (!item.requiresDownload || (canDownload === true && downloadStorageAvailable === true))
                 )
-                .map(({ to, labelKey, end, Icon }) => (
+                .map(({ to, labelKey, end, Icon, workKind }) =>
+                  workKind && availableWorkKinds === null ? (
+                    <span key={to} className="app-nav-link app-nav-link-placeholder" aria-hidden="true">
+                      <span className="app-nav-icon">
+                        <span className="skeleton app-nav-skeleton" />
+                      </span>
+                      <span className="app-nav-label">{t(labelKey)}</span>
+                    </span>
+                  ) : (
                   <NavLink
                     key={to}
                     to={to}
@@ -553,7 +570,8 @@ function AppShell() {
                     </span>
                     <span className="app-nav-label">{t(labelKey)}</span>
                   </NavLink>
-                ))}
+                  )
+                )}
               {group.id === "library" && hasFolderRoots ? (
                 <NavLink
                   to="/folders"

@@ -4953,6 +4953,23 @@ body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
   height: 20px;
 }
 
+/* A nav entry that waits on the library-kinds answer (first visit, nothing cached): a skeleton tile with the real
+   tile's geometry (its label is rendered transparent so the height matches), never focusable or announced. */
+.app-nav-link-placeholder {
+  pointer-events: none;
+  user-select: none;
+}
+
+.app-nav-link-placeholder .app-nav-label {
+  color: transparent;
+}
+
+.app-nav-skeleton {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
 .app-nav-link:focus-visible::after {
   transform: scaleX(0);
 }
