@@ -1,1 +1,1 @@
-- Fire TV: a series page opens on the next-up episode at web's track position, and title years show web's release-year range ("2011–2017" for an ended series) (18.462).
+- Fire TV: a series page opens on the next-up episode at web's track position, and title years show web's release-year range ("2011–2017" for an ended series) ; cast is web's circular person card; detail pills keep their fill and show the control ring on focus (18.462).
