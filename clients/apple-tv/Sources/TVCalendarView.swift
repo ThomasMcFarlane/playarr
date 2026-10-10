@@ -191,12 +191,12 @@ struct TVCalendarView: View {
                     Spacer().frame(height: 18.3)
                 }
             }
-            .padding(.top, 162)
+            .padding(.top, 162 - 130)
             .padding(.bottom, 200)
         }
-        .scrollClipDisabled()
+        // The list starts under the header row so the header controls stay reachable with UP (focus search).
         .mask(Self.topFade)
-        .placed(x: 783.4, y: 0, w: 1033.4 + 30, h: 1080, alignment: .topLeading)
+        .placed(x: 783.4, y: 130, w: 1033.4 + 30, h: 950, alignment: .topLeading)
     }
 
     private func dayHeading(_ day: String, today: String) -> some View {
@@ -218,8 +218,7 @@ struct TVCalendarView: View {
 
     /// Web scroll edge fade at the top: content fades out before the header line.
     static let topFade = LinearGradient(
-        stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 120 / 1080),
-                .init(color: .black, location: 160 / 1080), .init(color: .black, location: 1)],
+        stops: [.init(color: .clear, location: 0), .init(color: .black, location: 30 / 950), .init(color: .black, location: 1)],
         startPoint: .top, endPoint: .bottom
     )
 
@@ -339,6 +338,7 @@ struct TVCalendarView: View {
                         }
                         .scrollClipDisabled()
                         .frame(width: 440, height: 1080 - 208 - 40, alignment: .topLeading)
+                        .mask(Self.topFade)
                     }
                     .frame(width: 440, alignment: .topLeading)
                     .focusSection()
@@ -346,10 +346,10 @@ struct TVCalendarView: View {
             }
             .padding(.leading, 153.6)
             .padding(.trailing, 120)
-            .padding(.top, 174)
+            .padding(.top, 174 - 140)
         }
         .scrollClipDisabled()
-        .placed(x: 0, y: 0, w: 1920, h: 1080, alignment: .topLeading)
+        .placed(x: 0, y: 140, w: 1920, h: 940, alignment: .topLeading)
     }
 
     // MARK: Month
