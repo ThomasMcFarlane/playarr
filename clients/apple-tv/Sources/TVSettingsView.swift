@@ -6,6 +6,7 @@ struct TVSettingsView: View {
     @State private var serverError: String?
     @State private var pairingTask: Task<Void, Never>?
     @State private var selectedSection = TVParityLaunch.liveSettingsSection ?? 0
+    @FocusState private var focusedSection: Int?
 
     private let sections: [(number: String, title: String, description: String, width: CGFloat)] = [
         ("01", "Appearance", "Choose this device's theme and home screen artwork.", 369.2),
@@ -75,12 +76,18 @@ struct TVSettingsView: View {
                             .placed(x: selected ? 432.6 : 427.6, y: 30.3, w: 20.8, h: 31.2)
                     }
                     .frame(width: 480.4, height: 91.9, alignment: .topLeading)
+                    .modifier(TVNavItemFocusFill(fill: DesignTokens.Color.backgroundRaised, cornerRadius: 0))
                 }
-                .buttonStyle(.plain)
+                // Web settings menu: the focused row gets the selected fill and opens its panel; no system platter.
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .focused($focusedSection, equals: index)
                 .disabled(TVParityLaunch.frozen) // not .focusable: on a Button it adds a second, inert focus target
-                .focusEffectDisabled(TVParityLaunch.frozen)
+                .focusEffectDisabled()
                 .placed(x: 153.6, y: top, w: 480.4, h: 91.9)
             }
+
+            Color.clear.frame(width: 0, height: 0)
+                .onChange(of: focusedSection) { _, index in if let index { selectedSection = index } }
 
             if selectedSection != 0, selectedSection != 4 || TVParityLaunch.frozen {
                 TVSettingsPanel(section: selectedSection)

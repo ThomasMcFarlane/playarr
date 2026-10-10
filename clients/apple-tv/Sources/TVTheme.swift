@@ -725,13 +725,15 @@ struct TVNavProfile {
     var open: () -> Void
 }
 
-/// A nav item's focus: the active-tab fill (web TV nav), driven by the system focus.
-private struct TVNavItemFocusFill: ViewModifier {
+/// A row or nav item's focus: the selected fill (web TV), driven by the system focus; no ring, no platter.
+struct TVNavItemFocusFill: ViewModifier {
+    var fill: Color = DesignTokens.Color.textPrimary.opacity(0.09)
+    var cornerRadius: CGFloat = 16
     @Environment(\.isFocused) private var isFocused
     func body(content: Content) -> some View {
         content.background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isFocused ? DesignTokens.Color.textPrimary.opacity(0.09) : .clear)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(isFocused ? fill : .clear)
         )
     }
 }
