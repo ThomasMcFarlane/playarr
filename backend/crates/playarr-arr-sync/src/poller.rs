@@ -129,7 +129,24 @@ pub struct ReconciliationPoller {
     /// strictly sequential; [`Self::with_write_queue`] raises it so the
     /// concurrent writes land in the same queue batch.
     write_concurrency: usize,
+    /// Backfill passes started by this process; the clock for `backfill_backoff`.
+    backfill_pass: std::sync::atomic::AtomicU64,
+    /// Works whose last backfill left them still incomplete (the source has no
+    /// runtime, no files, or no languages to give): consecutive failures and the
+    /// pass before which they are not retried. Cleared on success.
+    backfill_backoff: std::sync::Mutex<HashMap<Uuid, BackfillBackoff>>,
 }
+
+/// Retry state for a work whose backfill did not complete.
+#[derive(Clone, Copy)]
+struct BackfillBackoff {
+    failures: u32,
+    retry_at_pass: u64,
+}
+
+/// Longest wait between retries of an incomplete backfill, in passes (about a
+/// day at the default five-minute poll).
+const MAX_BACKFILL_BACKOFF_PASSES: u64 = 288;
 
 impl ReconciliationPoller {
     #[allow(clippy::too_many_arguments)]
@@ -159,7 +176,45 @@ impl ReconciliationPoller {
             live_events: None,
             seen_file_counts: std::sync::Mutex::new(HashMap::new()),
             write_concurrency: 1,
+            backfill_pass: std::sync::atomic::AtomicU64::new(0),
+            backfill_backoff: std::sync::Mutex::new(HashMap::new()),
         }
+    }
+
+    fn backfill_due(&self, work_id: Uuid) -> bool {
+        let pass = self
+            .backfill_pass
+            .load(std::sync::atomic::Ordering::Relaxed);
+        self.backfill_backoff
+            .lock()
+            .expect("backfill backoff lock")
+            .get(&work_id)
+            .is_none_or(|b| pass >= b.retry_at_pass)
+    }
+
+    /// Records the outcome of a backfill attempt: success clears the work's
+    /// backoff, failure doubles its wait (2, 4, 8 ... passes, capped).
+    fn note_backfill_outcome(&self, work_id: Uuid, complete: bool) {
+        let pass = self
+            .backfill_pass
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let mut map = self.backfill_backoff.lock().expect("backfill backoff lock");
+        if complete {
+            map.remove(&work_id);
+            return;
+        }
+        let failures = map
+            .get(&work_id)
+            .map_or(0, |b| b.failures)
+            .saturating_add(1);
+        let wait = (1u64 << failures.min(10)).min(MAX_BACKFILL_BACKOFF_PASSES);
+        map.insert(
+            work_id,
+            BackfillBackoff {
+                failures,
+                retry_at_pass: pass + wait,
+            },
+        );
     }
 
     /// Sends this poller's own writes (`MediaSync`'s season, episode, album,
@@ -193,7 +248,10 @@ impl ReconciliationPoller {
             .insert(arr_source_id, remote);
         match previous {
             Some(previous) => remote > previous,
-            None => match self.media_sync.media_file_count(work_id).await {
+            // The source counts episodes with a file, so compare with synced
+            // episodes, not file rows: a multi-episode file is one row, which
+            // made every restart look like a fresh import for such series.
+            None => match self.media_sync.synced_episode_count(work_id).await {
                 Ok(local) => local < remote as usize,
                 Err(err) => {
                     tracing::warn!(
@@ -822,6 +880,8 @@ impl ReconciliationPoller {
             return;
         }
         let total = candidates.len();
+        self.backfill_pass
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         tracing::info!(
             source_instance_id = %self.source_instance_id,
             total,
@@ -918,6 +978,9 @@ impl ReconciliationPoller {
                 || (self.source_kind == SourceKind::Lidarr
                     && availability == Availability::Unknown));
         if needs_duration || should_backfill_missing {
+            if !self.backfill_due(work_id) {
+                return;
+            }
             if needs_duration {
                 tracing::info!(
                     source_instance_id = %self.source_instance_id,
@@ -932,6 +995,17 @@ impl ReconciliationPoller {
                 );
             }
             self.sync_media_file(work_id, arr_source_id).await;
+            // A sync that left the work incomplete (the source reports no
+            // runtime, file or languages) backs off instead of asking the
+            // source again on every pass.
+            let complete = match (
+                self.media_sync.has_any_media_file(work_id).await,
+                self.media_sync.has_missing_duration(work_id).await,
+            ) {
+                (Ok(has_files), Ok(missing)) => has_files && !missing,
+                _ => false,
+            };
+            self.note_backfill_outcome(work_id, complete);
         }
     }
 }
@@ -2392,14 +2466,8 @@ mod tests {
         queue.shutdown().await;
     }
 
-    /// Same, for the webhook-triggered targeted refetch (Sonarr `Download`).
-    /// Sonarr's `episodeFileCount` counts episodes with a file, so a
-    /// multi-episode file leaves the synced rows permanently below it. That
-    /// must not make every pass refetch the series (it did in the first cut
-    /// of the new-episode fix: 42 series on one server re-synced every five minutes).
-    #[tokio::test]
-    async fn a_permanent_count_gap_does_not_resync_the_series_on_every_pass() {
-        let server = MockServer::start().await;
+    /// A two-part episode: one file holds episodes 1 and 2, and the source counts 2.
+    async fn mount_two_part_series(server: &MockServer) {
         let episode = |id: i64, number: i64| {
             serde_json::json!({
                 "id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
@@ -2416,7 +2484,7 @@ mod tests {
                     "statistics": { "episodeFileCount": 2 }
                 }])),
             )
-            .mount(&server)
+            .mount(server)
             .await;
         Mock::given(method("GET"))
             .and(path("/api/v3/episode"))
@@ -2424,7 +2492,7 @@ mod tests {
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!([episode(10, 1), episode(11, 2)])),
             )
-            .mount(&server)
+            .mount(server)
             .await;
         Mock::given(method("GET"))
             .and(path("/api/v3/episodefile"))
@@ -2437,8 +2505,19 @@ mod tests {
                 },
                 "mediaInfo": { "videoCodec": "x264", "runTime": "00:42:00.500" }
             }])))
-            .mount(&server)
+            .mount(server)
             .await;
+    }
+
+    /// Same, for the webhook-triggered targeted refetch (Sonarr `Download`).
+    /// Sonarr's `episodeFileCount` counts episodes with a file, so a
+    /// multi-episode file leaves the synced rows permanently below it. That
+    /// must not make every pass refetch the series (it did in the first cut
+    /// of the new-episode fix: 42 series on one server re-synced every five minutes).
+    #[tokio::test]
+    async fn a_permanent_count_gap_does_not_resync_the_series_on_every_pass() {
+        let server = MockServer::start().await;
+        mount_two_part_series(&server).await;
         let (poller, _files, _events, _) = series_import_poller(&server).await;
 
         for _ in 0..4 {
@@ -2451,10 +2530,95 @@ mod tests {
             .iter()
             .filter(|r| r.url.path() == "/api/v3/episodefile")
             .count();
-        // Insert pass, plus one first-sighting check after the insert; never again.
+        // The insert pass lists files once; no later pass lists them again.
+        assert_eq!(file_listings, 1, "series refetched: {file_listings}");
+    }
+
+    /// A restart forgets the last seen counts. The first sighting must compare
+    /// with synced episodes, not file rows, or every multi-episode series looks
+    /// freshly imported after each restart ("source reports new files").
+    #[tokio::test]
+    async fn a_restart_does_not_resync_series_with_multi_episode_files() {
+        let server = MockServer::start().await;
+        mount_two_part_series(&server).await;
+        let (poller, _files, _events, _) = series_import_poller(&server).await;
+        poller.reconcile_all().await.unwrap();
+        for _ in 0..3 {
+            poller.seen_file_counts.lock().unwrap().clear(); // simulated restart
+            poller.reconcile_all().await.unwrap();
+        }
+        let file_listings = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|r| r.url.path() == "/api/v3/episodefile")
+            .count();
+        assert_eq!(file_listings, 1, "series refetched after restart");
+    }
+
+    /// A work that stays incomplete after a sync (here: an old file row the
+    /// source never reports, so it never gets language state) is retried with
+    /// growing gaps, not on every pass.
+    #[tokio::test]
+    async fn an_incomplete_backfill_backs_off_instead_of_retrying_every_pass() {
+        let server = MockServer::start().await;
+        mount_two_part_series(&server).await;
+        let pool = test_pool().await;
+        let files: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+        let works: Arc<dyn WorkRepo> = Arc::new(playarr_db::repo::SqlxWorkRepo::new(pool.clone()));
+        let instance = Uuid::new_v4();
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let poller = ReconciliationPoller::new(
+            instance,
+            SourceKind::Sonarr,
+            ArrClient::Sonarr(SonarrClient::new(server.uri(), "test-api-key")),
+            Duration::from_secs(3600),
+            works,
+            files.clone(),
+            pool.clone(),
+            Arc::new(SingleNodeCoordinator::new()) as Arc<dyn ClusterCoordinator>,
+            rx,
+        )
+        .with_language_repo(Arc::new(playarr_db::SqlxMediaLanguageRepo::new(pool)));
+        poller.reconcile_all().await.unwrap();
+        let work = poller
+            .work_repo
+            .find_by_external_ref(&ExternalProvider::Tvdb, "222")
+            .await
+            .unwrap()
+            .expect("series synced");
+        files
+            .upsert_by_source(&playarr_model::MediaFile {
+                id: Uuid::new_v4(),
+                work_id: work.id,
+                leaf_ref: playarr_model::media::LeafRef::Work,
+                path: std::path::PathBuf::from("/tv/Two/old.mkv"),
+                container: "mkv".into(),
+                codec: "x264".into(),
+                bitrate: None,
+                duration_ms: Some(0),
+                size_bytes: 1,
+                source_instance_id: instance,
+                source_file_id: Some("gone".into()),
+            })
+            .await
+            .unwrap();
+
+        for _ in 0..40 {
+            poller.reconcile_all().await.unwrap();
+        }
+        let file_listings = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|r| r.url.path() == "/api/v3/episodefile")
+            .count();
+        // 1 insert + attempts at passes ~1, 3, 7, 15, 31: well under 40.
         assert!(
-            file_listings <= 2,
-            "series refetched on every pass: {file_listings}"
+            (2..=8).contains(&file_listings),
+            "backfill retried too often: {file_listings}"
         );
     }
 
