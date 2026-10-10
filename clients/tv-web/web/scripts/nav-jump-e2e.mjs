@@ -46,7 +46,7 @@ const RECORD = () => {
     w.__j.frames.push({
       t: Math.round(performance.now() - w.__j.t0),
       skeleton: Boolean(main?.querySelector(".skeleton-state")),
-      cards: document.querySelectorAll(".tv-title-card").length,
+      cards: document.querySelectorAll(".tv-title-grid .tv-title-card").length, // the Library grid only: a detail page's "more like this" rail is made of title cards too
       libIndex: act?.closest?.("[data-library-index]")?.getAttribute("data-library-index") ?? act?.getAttribute?.("data-library-index") ?? null,
       gridTop: grid ? grid.scrollTop : null,
       gridH: grid ? grid.scrollHeight : null,
@@ -89,7 +89,7 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
       await page.waitForTimeout(1500);
       const before = await page.evaluate(() => {
         const a = document.activeElement;
-        return { index: Number(a?.closest?.("[data-library-index]")?.getAttribute("data-library-index") ?? -1), cards: document.querySelectorAll(".tv-title-card").length, top: document.querySelector(".tv-title-grid")?.scrollTop ?? 0 };
+        return { index: Number(a?.closest?.("[data-library-index]")?.getAttribute("data-library-index") ?? -1), cards: document.querySelectorAll(".tv-title-grid .tv-title-card").length, top: document.querySelector(".tv-title-grid")?.scrollTop ?? 0 };
       });
       check(`library deep ${size}: scrolled past the first page`, before.index >= 200, JSON.stringify(before));
       await page.evaluate(RECORD);
