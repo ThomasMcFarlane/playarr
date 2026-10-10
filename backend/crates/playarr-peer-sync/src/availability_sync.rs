@@ -90,6 +90,68 @@ pub struct AvailabilityResponse {
     pub server_time: String,
 }
 
+/// A short fingerprint of a whole availability snapshot as it travels: the row
+/// count and an order-independent combination of one hash per row. Every field
+/// counts except `updated_at`, which records when the sender derived the
+/// snapshot and moves on every derivation without the inventory changing.
+///
+/// A sender uses it to learn that the receiver already holds exactly this
+/// snapshot (the receiver echoes the digest it holds) and leaves the rows out
+/// of the next push; a receiver that is told "unchanged" with a digest it does
+/// not hold ignores it and answers with what it does hold, so the sender
+/// sends the rows again. It only has to tell two snapshots of one signed peer
+/// apart.
+pub fn wire_digest(rows: &[AvailabilityRow]) -> String {
+    use sha2::{Digest, Sha256};
+    let sum = rows.iter().fold(0u128, |acc, row| {
+        // Exhaustive on purpose: a field added to the wire row must be either
+        // hashed or explicitly left out here, never silently ignored.
+        let AvailabilityRow {
+            media_file_id,
+            source_instance_id,
+            path,
+            provider,
+            external_id,
+            leaf_selector,
+            group_library_id,
+            availability,
+            container,
+            codec,
+            bitrate,
+            size_bytes,
+            duration_ms,
+            updated_at: _,
+            title,
+            kind,
+            release_date,
+        } = row;
+        let encoded = serde_json::to_vec(&(
+            media_file_id,
+            source_instance_id,
+            path,
+            provider,
+            external_id,
+            leaf_selector,
+            group_library_id,
+            availability,
+            container,
+            codec,
+            bitrate,
+            size_bytes,
+            duration_ms,
+            title,
+            kind,
+            release_date,
+        ))
+        .unwrap_or_default();
+        let digest = Sha256::digest(&encoded);
+        let mut head = [0u8; 16];
+        head.copy_from_slice(&digest[..16]);
+        acc.wrapping_add(u128::from_be_bytes(head))
+    });
+    format!("{}-{sum:032x}", rows.len())
+}
+
 /// Lowercased, trimmed title -- see this module's own doc comment for why
 /// this isn't full NFKC normalization.
 fn normalized_title(title: &str) -> String {
@@ -237,7 +299,11 @@ pub async fn sync_availability(
     .await
 }
 
-/// Applies an availability snapshot delivered by either pull or push transport.
+/// Applies an availability snapshot delivered by either pull or push
+/// transport. The [`wire_digest`] of the rows is computed here, whatever the
+/// transport or the sender declared, and recorded by the repository together
+/// with the rows, so the digest a push is answered with always describes what
+/// is stored.
 pub async fn apply_availability_response(
     response: AvailabilityResponse,
     peer_node_id: Uuid,
@@ -246,6 +312,8 @@ pub async fn apply_availability_response(
     sync_state_repo: &Arc<dyn playarr_db::PeerSyncStateRepo>,
 ) -> Result<usize, AvailabilitySyncError> {
     const ENTITY: &str = "availability";
+    let started = std::time::Instant::now();
+    let wire = wire_digest(&response.rows);
     let matches = resolve_local_works(work_repo, &response.rows).await?;
     let resolved: Vec<_> = response.rows.iter().zip(matches).collect();
     // The endpoint deliberately returns a complete live inventory even when
@@ -276,9 +344,17 @@ pub async fn apply_availability_response(
         });
         applied += 1;
     }
+    let resolved_in = started.elapsed();
     availability_repo
-        .replace_for_peer(peer_node_id, &snapshot)
+        .replace_for_peer_with_wire_digest(peer_node_id, &snapshot, &wire)
         .await?;
+    tracing::debug!(
+        %peer_node_id,
+        rows = applied,
+        resolve_ms = resolved_in.as_millis() as u64,
+        replace_ms = (started.elapsed() - resolved_in).as_millis() as u64,
+        "availability snapshot applied"
+    );
 
     sync_state_repo
         .upsert(&playarr_db::PeerSyncState {
@@ -720,6 +796,224 @@ mod tests {
             t.elapsed()
         );
         assert_eq!(one_by_one, batched);
+    }
+
+    // ---- wire_digest / apply_availability_snapshot (row 9952) ----
+
+    #[test]
+    fn wire_digest_ignores_order_and_updated_at_but_not_content() {
+        let rows: Vec<_> = (0..5)
+            .map(|i| {
+                availability_row(
+                    ExternalProvider::Tmdb,
+                    &format!("{i}"),
+                    WorkKind::Movie,
+                    "T",
+                )
+            })
+            .collect();
+        let digest = wire_digest(&rows);
+        assert!(digest.starts_with("5-"), "{digest}");
+
+        let mut reordered = rows.clone();
+        reordered.reverse();
+        assert_eq!(wire_digest(&reordered), digest);
+
+        let mut later = rows.clone();
+        for row in &mut later {
+            row.updated_at += chrono::Duration::seconds(60);
+        }
+        assert_eq!(
+            wire_digest(&later),
+            digest,
+            "updated_at moves every derivation"
+        );
+
+        let mut moved = rows.clone();
+        moved[2].size_bytes = Some(1);
+        assert_ne!(wire_digest(&moved), digest);
+        let mut renamed = rows.clone();
+        renamed[4].title = "Other".to_string();
+        assert_ne!(wire_digest(&renamed), digest);
+        assert_ne!(wire_digest(&rows[..4]), digest);
+        assert_ne!(
+            wire_digest(&[rows[0].clone(), rows[0].clone()]),
+            wire_digest(&[rows[0].clone()]),
+            "a repeated row does not cancel out"
+        );
+    }
+
+    /// Row 9952 review: the digest a receiver holds is computed from the rows
+    /// it stored, whichever transport delivered them, so a pull never wipes
+    /// it and a push never trusts a declared one.
+    #[tokio::test]
+    async fn the_held_digest_follows_the_stored_rows_on_every_transport() {
+        sqlx::any::install_default_drivers();
+        let pool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
+        let work_repo: Arc<dyn WorkRepo> =
+            Arc::new(playarr_db::repo::SqlxWorkRepo::new(pool.clone()));
+        let availability: Arc<dyn PeerLeafAvailabilityRepo> = Arc::new(
+            playarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(pool.clone()),
+        );
+        let state: Arc<dyn playarr_db::PeerSyncStateRepo> =
+            Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool));
+        let peer = Uuid::new_v4();
+        let mut rows = vec![availability_row(
+            ExternalProvider::Tmdb,
+            "1",
+            WorkKind::Movie,
+            "Sample",
+        )];
+        let response = |rows: &Vec<AvailabilityRow>| AvailabilityResponse {
+            rows: rows.clone(),
+            server_time: "cursor".to_string(),
+        };
+        assert_eq!(availability.held_wire_digest(peer).await.unwrap(), None);
+        // Alternate pull-style and push-style applications of the same rows
+        // (both go through the one function): the digest stays put.
+        for _ in 0..3 {
+            apply_availability_response(response(&rows), peer, &work_repo, &availability, &state)
+                .await
+                .unwrap();
+            assert_eq!(
+                availability.held_wire_digest(peer).await.unwrap(),
+                Some(wire_digest(&rows))
+            );
+        }
+        // New content moves it with the rows.
+        rows.push(availability_row(
+            ExternalProvider::Tmdb,
+            "2",
+            WorkKind::Movie,
+            "Other",
+        ));
+        apply_availability_response(response(&rows), peer, &work_repo, &availability, &state)
+            .await
+            .unwrap();
+        assert_eq!(
+            availability.held_wire_digest(peer).await.unwrap(),
+            Some(wire_digest(&rows))
+        );
+    }
+
+    /// Timing evidence (run with `--release --ignored --nocapture`): what one
+    /// received availability snapshot of `BENCH_ROWS` rows costs on a file
+    /// database with the production pragmas, phase by phase: parsing the
+    /// request body, then applying it for the first time, unchanged, and with
+    /// a few rows changed.
+    #[tokio::test]
+    #[ignore]
+    async fn bench_apply_availability_response() {
+        let env = |name: &str, default: usize| {
+            std::env::var(name)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(default)
+        };
+        let rows_n = env("BENCH_ROWS", 50_000);
+        let path = std::env::temp_dir().join(format!("playarr-bench-{}.db", Uuid::new_v4()));
+        let pool = playarr_db::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
+        let work_repo: Arc<dyn WorkRepo> =
+            Arc::new(playarr_db::repo::SqlxWorkRepo::new(pool.clone()));
+        for i in 0..2_000 {
+            work_repo
+                .upsert(&work(
+                    Uuid::new_v4(),
+                    WorkKind::Movie,
+                    vec![ExternalRef {
+                        provider: ExternalProvider::Tmdb,
+                        external_id: format!("{i}"),
+                    }],
+                    &format!("Sample Movie {i}"),
+                ))
+                .await
+                .unwrap();
+        }
+        let availability: Arc<dyn PeerLeafAvailabilityRepo> = Arc::new(
+            playarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(pool.clone()),
+        );
+        let state: Arc<dyn playarr_db::PeerSyncStateRepo> =
+            Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone()));
+        let mut rows: Vec<AvailabilityRow> = (0..rows_n)
+            .map(|i| {
+                let mut row = availability_row(
+                    ExternalProvider::Tmdb,
+                    &format!("{}", i / 10),
+                    WorkKind::Movie,
+                    &format!("Sample Movie {}", i / 10),
+                );
+                row.path = format!("/srv/media/series/Sample Series {}/Season 01/Sample Series {} - S01E{:02} - Episode Title.mkv", i / 10, i / 10, i % 10);
+                row
+            })
+            .collect();
+        let response = AvailabilityResponse {
+            rows: rows.clone(),
+            server_time: "cursor".to_string(),
+        };
+        let body = serde_json::to_vec(&response).unwrap();
+        let t = std::time::Instant::now();
+        let parsed: AvailabilityResponse = serde_json::from_slice(&body).unwrap();
+        println!(
+            "{rows_n} rows: body {} KiB, parse {:?}",
+            body.len() / 1024,
+            t.elapsed()
+        );
+        let t = std::time::Instant::now();
+        let digest = wire_digest(&parsed.rows);
+        println!(
+            "wire_digest of {rows_n} rows (sender, once per derivation): {:?}",
+            t.elapsed()
+        );
+        let peer = Uuid::new_v4();
+        let t = std::time::Instant::now();
+        apply_availability_response(parsed.clone(), peer, &work_repo, &availability, &state)
+            .await
+            .unwrap();
+        println!("first apply: {:?}", t.elapsed());
+        for round in 0..3 {
+            let t = std::time::Instant::now();
+            apply_availability_response(parsed.clone(), peer, &work_repo, &availability, &state)
+                .await
+                .unwrap();
+            println!("unchanged apply {round}: {:?}", t.elapsed());
+        }
+        for row in rows.iter_mut().step_by(1_000) {
+            row.size_bytes = Some(7);
+        }
+        let t = std::time::Instant::now();
+        apply_availability_response(
+            AvailabilityResponse {
+                rows,
+                server_time: "cursor".to_string(),
+            },
+            peer,
+            &work_repo,
+            &availability,
+            &state,
+        )
+        .await
+        .unwrap();
+        println!(
+            "apply with {} changed rows: {:?}",
+            rows_n / 1_000,
+            t.elapsed()
+        );
+        // A push that leaves the rows out only reads the held digest.
+        let t = std::time::Instant::now();
+        let held = availability.held_wire_digest(peer).await.unwrap();
+        println!(
+            "unchanged push, rows left out: {:?} (held {held:?}; sender digest {digest})",
+            t.elapsed()
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[tokio::test]
