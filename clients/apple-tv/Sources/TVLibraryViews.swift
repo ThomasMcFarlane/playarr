@@ -1045,7 +1045,6 @@ struct TVSearchView: View {
                 searchPreview(work)
             }
             searchResultRow(model)
-            otherSources
         }
     }
 
@@ -1150,12 +1149,14 @@ struct TVSearchView: View {
         }
     }
 
+    /// Web `.tv-search-results`: a 3-column grid from x 825.6, y 172.8 (327.2 x 184 art, pitch 353.1 x 251.2) in the
+    /// right rail, scrolling under a top edge fade; other sources follow the results.
     private func searchResultRow(_ model: TVSearchViewModel) -> some View {
-        // Normal cards 320.6 x 180.3, pitch 346.65, first at x 825.55; the focused card scales 1.04.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 26.05) {
-                ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
-                    // Web: the first hit is not scaled until the remote moves onto the results.
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(327.2), spacing: 25.9), count: 3),
+                      alignment: .leading, spacing: 251.2 - 184 - 11.5 - 20) {
+                ForEach(model.results) { work in
+                    // Web: the first hit is not lifted until the remote moves onto the results.
                     let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
                     NavigationLink {
                         TVWorkDetailView(work: work, apiClient: environment.apiClient)
@@ -1169,23 +1170,33 @@ struct TVSearchView: View {
                     .buttonStyle(TVFocusableCardButtonStyle())
                     .focused($focusedWorkID, equals: work.id)
                     .disabled(frozen) // not .focusable: on a Button it adds a second, inert focus target
-                    .focusEffectDisabled(frozen)
+                    .focusEffectDisabled()
                 }
             }
-            .padding(.leading, 96.45)
-            .padding(.top, 20)
-            .padding(.trailing, 80)
+            .padding(.leading, 825.6 - 729.6)
+            .padding(.top, 172.8)
+            otherSources
+                .padding(.leading, 825.6 - 729.6)
+                .padding(.top, 36)
+                .padding(.bottom, 120)
         }
-        .frame(width: 1190.4 - 96.45 + 96.45, height: 300, alignment: .topLeading)
-        .placed(x: 729.6, y: 172.8 - 20, w: 1190.4, h: 300, alignment: .topLeading)
+        .mask(
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 40 / 1080),
+                        .init(color: .black, location: 92 / 1080), .init(color: .black, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
+        .placed(x: 729.6, y: 0, w: 1190.4, h: 1080, alignment: .topLeading)
     }
 
     private func searchResultCard(_ work: Work, focused: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 TVWorkArt(work: work, apiClient: environment.apiClient)
-                    .frame(width: 320.6, height: 180.3)
+                    .frame(width: 327.2, height: 184)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    .modifier(TVCardFocusGlow(focused: focused, cornerRadius: 12.5))
                     // Focused search shadow: 0 22px 52px rgba(31, 14, 20, 0.28); the rest shadow is the card default.
                     .shadow(
                         color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(focused ? 0.28 : 0),
@@ -1199,35 +1210,34 @@ struct TVSearchView: View {
             }
             ZStack(alignment: .topLeading) {
                 Text(work.title)
-                    .font(TVTheme.font(size: 12.29, weight: .semibold))
+                    .font(TVTheme.font(size: 11.904, css: 610))
+                    .tracking(-0.18)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
-                    .placed(x: 1.6, y: 0, w: 246.8, h: 18.4)
+                    .placed(x: 1.9, y: 0, w: 260.8, h: 18.4)
                 Text(
                     ([work.kind.rawValue.capitalized] + [work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 })
                         .joined(separator: " \u{00B7} ").uppercased()
                 )
-                    .font(TVTheme.font(size: 8.45, weight: .bold))
+                    .font(TVTheme.font(size: 8.448, css: 720))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .placed(x: 259.6, y: 5, w: 61, h: 12.7, alignment: .trailing)
+                    .placed(x: 327.2 - 120, y: 3, w: 120, h: 12.7, alignment: .trailing)
             }
-            .frame(width: 320.6, height: 20, alignment: .topLeading)
-            .padding(.top, 11.2)
+            .frame(width: 327.2, height: 20, alignment: .topLeading)
+            .padding(.top, 11.5)
         }
-        .frame(width: 320.6, alignment: .topLeading)
+        .frame(width: 327.2, alignment: .topLeading)
     }
 
     private var otherSources: some View {
-        ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("OTHER SOURCES")
                 .font(TVTheme.font(size: 10.88, weight: .bold))
                 .tracking(0.76)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 418.4, w: 1013.8, h: 16.3)
             Text("Nothing found in other sources.")
                 .font(TVTheme.font(size: 11.52, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 825.6, y: 446.7, w: 1013.8, h: 17.3)
         }
     }
 
