@@ -529,6 +529,24 @@ impl MediaSync {
         Ok(self.media_file_repo.list_by_work_id(work_id).await?.len())
     }
 
+    /// How many episode rows a series has. Sync only creates an episode when
+    /// the source reports a file for it, so this is the local counterpart of
+    /// Sonarr's `episodeFileCount` (which counts episodes with a file). Unlike
+    /// [`Self::media_file_count`] it is not thrown off by multi-episode files.
+    pub async fn synced_episode_count(
+        &self,
+        series_work_id: Uuid,
+    ) -> Result<usize, MediaSyncError> {
+        let (count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM episodes e JOIN seasons s ON s.id = e.season_id \
+             WHERE s.series_work_id = ?",
+        )
+        .bind(series_work_id.to_string())
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count.max(0) as usize)
+    }
+
     /// Returns whether a work needs a file-level refresh because at least
     /// one existing file predates persisted runtimes. This makes the
     /// scheduled reconciliation pass a bounded backfill for established
