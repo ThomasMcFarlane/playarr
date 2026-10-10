@@ -28,6 +28,7 @@ namespace Playarr.Xbox.Views
         public SearchPage()
         {
             InitializeComponent();
+            ResultsGrid.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
             _viewModel = new SearchViewModel(App.Environment);
         }
 
@@ -61,20 +62,17 @@ namespace Playarr.Xbox.Views
                 : Visibility.Visible;
 
             var results = _viewModel.Results;
-            EmptyStateText.Visibility = results.Count == 0 && !_viewModel.IsSearching
+            EmptyStatePanel.Visibility = results.Count == 0 && !_viewModel.IsSearching
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            EmptyStateText.Text = string.IsNullOrWhiteSpace(QueryBox.Text) ? "Start typing to search." : "No results.";
 
             // No per-property diffing -- rebuilt on every notification, the
             // same simplicity call as Views/LoginPage.xaml.cs's Render().
             ResultsGrid.Items.Clear();
             foreach (var work in results)
             {
-                var posterUrl = work.Image(ImageKind.Poster)?.Url;
-                var posterUri = string.IsNullOrEmpty(posterUrl)
-                    ? null
-                    : App.Environment.ApiClient.ResolveUrl(posterUrl);
-                ResultsGrid.Items.Add(CatalogTileFactory.CreateTile(work, posterUri));
+                ResultsGrid.Items.Add(CatalogTileFactory.CreateLandscapeCard(work, caption: false));
             }
         }
 
@@ -86,7 +84,10 @@ namespace Playarr.Xbox.Views
             }
         }
 
-        private void SearchButton_Click(object sender, RoutedEventArgs e)
+        private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
+
+        // Web searches as you type.
+        private void QueryBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             _viewModel.Query = QueryBox.Text;
             _viewModel.Search();
