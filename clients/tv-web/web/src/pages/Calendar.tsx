@@ -358,6 +358,7 @@ export function DaySections({
   );
   return (
     <div className={`calendar-days calendar-days-${showEmpty ? "week" : "agenda"}`}>
+      {showEmpty ? null : <div className="calendar-agenda-fade" aria-hidden="true" />}
       {days
         .filter((group) => loading || showEmpty || group.entries.length > 0)
         .map((group, index) => {
