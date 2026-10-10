@@ -1136,6 +1136,8 @@ struct TVLibraryKindView: View {
     @State private var items: [Work] = []
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
+    /// The server's count for the header ("1,754 titles"); nil when it skipped the count.
+    @State private var total: Int?
 
     private var parityMode: Bool { TVParityLaunch.frozen }
 
@@ -1167,9 +1169,8 @@ struct TVLibraryKindView: View {
 
                 TVPageHeader(
                     title: kindLabel,
-                    detail: items.isEmpty ? nil : "\(items.count) \(collectionNoun.lowercased())"
+                    detail: items.isEmpty ? nil : "\((total ?? items.count).formatted()) \(collectionNoun.lowercased())"
                 )
-                .offset(y: 11) // centred on the 72 pt Filters tile
                 .zIndex(10)
 
                 if let selected {
@@ -1568,22 +1569,21 @@ struct TVLibraryKindView: View {
             didLoad = true
             return
         }
+        let api = environment.apiClient
         do {
-            let page = try await environment.apiClient.browseCatalog(
-                kind: workKind,
-                genre: nil,
-                tag: nil,
-                sort: "title",
-                limit: 48,
-                offset: 0
-            )
+            // First screenful fast, then the rest of the library in the background (the web pages the whole grid).
+            let page = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 48, offset: 0)
             items = page.items
+            total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
+            while !page.items.isEmpty, items.count < (total ?? Int.max) {
+                let next = try await api.browseCatalog(kind: workKind, genre: nil, tag: nil, sort: "title", limit: 500, offset: items.count)
+                if next.items.isEmpty { break }
+                items += next.items
+            }
         } catch {
-            items = TVParityFixtures.libraryWorks(kind: workKind)
-            selectedID = items.first?.id
-            didLoad = true
+            didLoad = true // keep what loaded; never show fixture titles to a real user
         }
     }
 }

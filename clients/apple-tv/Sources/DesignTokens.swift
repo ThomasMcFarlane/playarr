@@ -32,11 +32,13 @@ enum DesignTokens {
         static let surfaceStrong = adaptive(light: 0xffffff, dark: 0x211d21)
         static let surfaceSoft = adaptive(light: 0xdfdcdd, dark: 0x312a30)
         static let ink = adaptive(light: 0x382621, dark: 0xf4f0f1)
-        static let inkSoft = adaptive(light: 0x675961, dark: 0xc5b8bd)
-        static let inkMuted = adaptive(light: 0xa5969e, dark: 0x887a82)
+        static let inkSoft = adaptive(light: 0x443a40, dark: 0xcdc1c6)
+        static let inkMuted = adaptive(light: 0x4d4248, dark: 0xc2b5bb)
+        /// The pre-AAA muted ink, kept only for hairlines and borders (web borders did not change).
+        static let line = adaptive(light: 0xa5969e, dark: 0x887a82)
         static let accentSoft = adaptive(light: 0xc5b8bd, dark: 0x675961)
         /// `--accent` and `--on-accent` (primary buttons).
-        static let accent = adaptive(light: 0x675961, dark: 0xdfdcdd)
+        static let accent = adaptive(light: 0x4d4248, dark: 0xdfdcdd)
         static let onAccent = adaptive(light: 0xffffff, dark: 0x211d21)
         /// Settings panel chrome measured on the web: form fields and cards, hairlines, control borders.
         static let fieldFill = adaptive(light: 0xd7d4d4, dark: 0x383438)
@@ -50,8 +52,10 @@ enum DesignTokens {
         static let checkFill = adaptive(light: 0x0075ff, dark: 0x99c8ff)
         static let checkMark = adaptive(light: 0xffffff, dark: 0x43474b)
         static let brandPink = SwiftUI.Color(red: 0xcf / 255, green: 0x31 / 255, blue: 0x57 / 255) // #cf3157
-        static let danger = adaptive(light: 0xa8464c, dark: 0xee9297)
-        static let success = adaptive(light: 0x347559, dark: 0x7fc09d)
+        static let danger = adaptive(light: 0x722f34, dark: 0xf1a4a8)
+        static let success = adaptive(light: 0x224c3a, dark: 0x8ac5a5)
+        /// `--brand-ink`: the shared small subtitle (page subtitle, media kicker, panel eyebrow).
+        static let brandInk = adaptive(light: 0x821e36, dark: 0xeaa6b6)
     }
 
     /// *arr design-tokens package (ui-tv shells).
@@ -90,7 +94,7 @@ enum DesignTokens {
         static let stateError = Stage.danger
         static let stateInfo = Arr.brandPrimary
         static let stateQueue = Arr.brandPrimary
-        static let borderDefault = Stage.inkMuted.opacity(0.4)
+        static let borderDefault = Stage.line.opacity(0.4)
         static let shadow = SwiftUI.Color.black
     }
 

@@ -72,9 +72,7 @@ struct TVWorkDetailView: View {
 
             TVPageHeader(
                 title: detail.work.kind == .series ? "Series" : "Movies",
-                detail: detail.work.title,
-                detailGap: 47,
-                uppercaseDetail: false
+                detail: detail.work.title
             )
 
             switch detail.children {
@@ -106,9 +104,9 @@ struct TVWorkDetailView: View {
 
     private func kicker(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(TVTheme.font(size: 12.29, weight: .heavy))
+            .font(TVTheme.font(size: 12.29, css: 820))
             .tracking(0.98)
-            .foregroundStyle(DesignTokens.Color.brandPrimary)
+            .foregroundStyle(DesignTokens.Stage.brandInk)
             .placed(x: 153.6, y: 259.2, w: 455, h: 18.4)
     }
 
@@ -192,7 +190,8 @@ struct TVWorkDetailView: View {
         let episodeY = bottom + 19.5
         let metaY = episodeY + 24.3 + 26.9
         let lagY = metaY + 22.3
-        let synopsisY = lagY + 28.8 + 21.6
+        // Web renders no lag line at all without samples (AvailabilityLagNote): the synopsis moves up.
+        let synopsisY = lagText == nil ? metaY + 15.8 + 21.6 : lagY + 28.8 + 21.6
         var parts: [(String, Bool)] = [(season.map { $0.season.title ?? "Season \($0.season.seasonNumber)" } ?? "Series", true)]
         if let code { parts.append((code, false)) }
         let runtimeMs = episode?.runtimeMs ?? episode?.episode.runtimeMinutes.map { Int64($0) * 60_000 }
@@ -204,7 +203,8 @@ struct TVWorkDetailView: View {
         }
         if let genre = work.genres.first { parts.append((genre, false)) }
         let synopsis = episode?.episode.overview ?? work.overview ?? ""
-        let buttonsY = synopsisY + 20.3 + 12
+        let synopsisLines = synopsis.isEmpty ? 0 : min(5, max(1, TVTextWrap.lines(synopsis, weight: 400, size: 12.864, kern: 0, width: 336).count))
+        let buttonsY = synopsisY + 20.3 * CGFloat(synopsisLines) + 12
         return ZStack(alignment: .topLeading) {
             kicker(code ?? work.kind.rawValue)
             titleBlock(lines)
@@ -217,17 +217,20 @@ struct TVWorkDetailView: View {
                     .placed(x: 153.6, y: episodeY, w: 309.2, h: 24.3)
             }
             metaRow(parts).placed(x: 153.6, y: metaY, h: 15.8)
-            Text(lagText)
-                .font(TVTheme.font(size: 19.2, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .lineLimit(1)
-                .placed(x: 153.6, y: lagY, w: 455, h: 28.8)
+            if let lagText {
+                Text(lagText)
+                    .font(TVTheme.font(size: 19.2, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                    .placed(x: 153.6, y: lagY, w: 455, h: 28.8)
+            }
             if !synopsis.isEmpty {
                 Text(synopsis)
                     .font(TVTheme.font(size: 12.86, weight: .regular))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .lineLimit(4)
-                    .placed(x: 153.6, y: synopsisY, w: 313.3, h: 20.3)
+                    .lineLimit(5)
+                    .frame(width: 336, alignment: .leading)
+                    .placed(x: 153.6, y: synopsisY, w: 336, h: 20.3 * CGFloat(synopsisLines), alignment: .topLeading)
             }
             seriesStart(detail, ordered: ordered, x: 153.6, y: buttonsY)
             actionPill("Add to watchlist", glyph: "+", x: 325.6, y: buttonsY, width: 142)
@@ -235,10 +238,8 @@ struct TVWorkDetailView: View {
         }
     }
 
-    private var lagText: String {
-        guard let lag = viewModel.availabilityLag, let seconds = lag.averageSeconds else {
-            return "No availability data yet"
-        }
+    private var lagText: String? {
+        guard let lag = viewModel.availabilityLag, let seconds = lag.averageSeconds else { return nil }
         let days = Double(seconds) / 86_400
         if days >= 1 {
             let value = (days * 10).rounded() / 10
