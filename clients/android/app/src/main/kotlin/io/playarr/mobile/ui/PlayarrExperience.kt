@@ -5870,7 +5870,7 @@ private fun VideoDetailCopy(
                 } else {
                     (work.genres.firstOrNull() ?: work.kind.playarrSingularLabel()).uppercase(language.locale)
                 },
-                color = WebKicker,
+                color = PlayarrWebTheme.palette.brandInk,
                 fontSize = 12.288.sp,
                 fontWeight = FontWeight(820),
                 letterSpacing = 0.983.sp,
@@ -5895,7 +5895,7 @@ private fun VideoDetailCopy(
                 chips.forEachIndexed { index, item ->
                     Text(
                         item,
-                        color = if (index == 0) WebInkSoft else WebInkMuted,
+                        color = WebInkSoft,
                         fontSize = 10.56.sp,
                         lineHeight = 15.84.sp,
                         fontWeight = if (index == 0) FontWeight(680) else FontWeight.Normal,
@@ -5909,7 +5909,7 @@ private fun VideoDetailCopy(
                     ?: playarrString(
                         if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
                     ),
-                color = WebInkMuted,
+                color = WebInkSoft,
                 fontSize = 12.864.sp,
                 lineHeight = 20.325.sp,
                 maxLines = 5,
@@ -6077,7 +6077,8 @@ private fun VideoDetailActions(
         )
     }
     if (television) {
-        val playLabel = if (smartPlan != null) {
+        // Web `movieActionLabel`: a film says "Resume from m:ss" or "Play"; only series use the smart plan's label.
+        val playLabel = if (smartPlan != null && work.kind != WorkKind.Movie) {
             playarrString(smartPlan.buttonLabel())
         } else if (progress?.state == WatchState.PartWatched) {
             playarrString(PlayarrString.DetailResumeFrom, "position" to formatPlayarrPlayerTime(progress.positionMs))
@@ -6089,7 +6090,8 @@ private fun VideoDetailActions(
                 label = playLabel,
                 glyph = "\u25B6",
                 primary = true,
-                ink = episode != null || work.kind != WorkKind.Movie,
+                // Web `.tv-detail-play`: the ink pill for films and series alike.
+                ink = true,
                 onClick = {
                     val target = smartPlan?.target
                     when {
@@ -6681,7 +6683,7 @@ internal fun MovieDetailBrowser(
             if (chapters.isNotEmpty()) {
                 WebMediaTrack(
                     title = playarrString(PlayarrString.DetailChapters),
-                    count = playarrString(PlayarrString.DetailSceneMarkersCount, "count" to chapters.size),
+                    count = playarrString(PlayarrString.DetailChaptersCount, "count" to chapters.size),
                     state = tvRails.rowState(chaptersRail),
                 ) {
                     itemsIndexed(chapters, key = { _, it -> it.index }) { chapterIndex, chapter ->
