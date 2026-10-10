@@ -1,0 +1,1 @@
+- Arr sync: when a source replaces a file (a quality upgrade gets a new file id) or deletes it, the old media file row is now removed on the next sync of that work; a viewer's resume position and playback choices move to the replacement file. Previously the old row stayed forever, never got language state, and kept its work in the every-pass backfill.

@@ -605,6 +605,29 @@ impl MediaFileRepo for EventingMediaFileRepo {
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError> {
         self.inner.mark_missing_durations_scanned(work_id).await
     }
+    async fn prune_superseded_files(
+        &self,
+        work_id: Uuid,
+        source_instance_id: Uuid,
+        keep_source_file_ids: &[String],
+    ) -> Result<usize, DbError> {
+        let removed = self
+            .inner
+            .prune_superseded_files(work_id, source_instance_id, keep_source_file_ids)
+            .await?;
+        if removed > 0 {
+            self.events
+                .publish_all([NewLiveEvent::for_library(
+                    kind::LIBRARY,
+                    "work",
+                    work_id,
+                    &["files"],
+                    Some(source_instance_id),
+                )])
+                .await;
+        }
+        Ok(removed)
+    }
     async fn find_by_source(
         &self,
         source_instance_id: Uuid,

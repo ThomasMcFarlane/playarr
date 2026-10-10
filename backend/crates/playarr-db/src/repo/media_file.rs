@@ -92,6 +92,21 @@ pub trait MediaFileRepo: Send + Sync {
     /// ffprobe, without making every scheduled reconciliation retry them.
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError>;
 
+    /// Removes `work_id`'s rows from `source_instance_id` whose source file id
+    /// is not in `keep_source_file_ids` -- files the source has replaced (an
+    /// upgrade gets a new file id, and `upsert_by_source` keys on it, so the
+    /// old row would otherwise stay forever) or deleted. Callers pass the
+    /// source's full current file listing and never an empty one. A user's
+    /// resume position and playback choices on a removed row move to the
+    /// surviving row for the same leaf; its language rows are removed. Returns
+    /// how many rows were removed.
+    async fn prune_superseded_files(
+        &self,
+        work_id: Uuid,
+        source_instance_id: Uuid,
+        keep_source_file_ids: &[String],
+    ) -> Result<usize, DbError>;
+
     /// Insert-or-update keyed by `(source_instance_id, source_file_id)`
     /// rather than `MediaFile::id`: `arr-sync` calls this on every re-sync
     /// poll/webhook, and at that point it only knows the source app's own
@@ -397,6 +412,91 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             })
         })
         .await
+    }
+
+    async fn prune_superseded_files(
+        &self,
+        work_id: Uuid,
+        source_instance_id: Uuid,
+        keep_source_file_ids: &[String],
+    ) -> Result<usize, DbError> {
+        if keep_source_file_ids.is_empty() {
+            return Ok(0);
+        }
+        // Nothing to do (the common case) costs one read, no write.
+        let rows = sqlx::query(
+            "SELECT id, leaf_ref, source_file_id FROM media_files \
+             WHERE work_id = ? AND source_instance_id = ? AND source_file_id IS NOT NULL",
+        )
+        .bind(work_id.to_string())
+        .bind(source_instance_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        let keep: std::collections::HashSet<&str> =
+            keep_source_file_ids.iter().map(String::as_str).collect();
+        let mut stale: Vec<(String, String)> = Vec::new(); // (id, leaf_ref)
+        let mut survivors: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new(); // leaf_ref -> id
+        for row in &rows {
+            let id: String = row.try_get("id")?;
+            let leaf_ref: String = row.try_get("leaf_ref")?;
+            let source_file_id: String = row.try_get("source_file_id")?;
+            if keep.contains(source_file_id.as_str()) {
+                survivors.entry(leaf_ref).or_insert(id);
+            } else {
+                stale.push((id, leaf_ref));
+            }
+        }
+        if stale.is_empty() {
+            return Ok(0);
+        }
+        let plan = Arc::new(
+            stale
+                .into_iter()
+                .map(|(id, leaf_ref)| {
+                    let survivor = survivors.get(&leaf_ref).cloned();
+                    (id, survivor)
+                })
+                .collect::<Vec<_>>(),
+        );
+        let removed = plan.len();
+        write(self.queue.as_ref(), &self.pool, move |conn| {
+            let plan = plan.clone();
+            Box::pin(async move {
+                for (stale_id, survivor) in plan.iter() {
+                    if let Some(survivor) = survivor {
+                        // Keep a viewer's place and choices; skip a user who
+                        // already has their own on the surviving file.
+                        for table in ["watch_progress", "user_media_playback_preferences"] {
+                            let sql = format!(
+                                "UPDATE {table} SET media_file_id = ? WHERE media_file_id = ? \
+                                 AND NOT EXISTS (SELECT 1 FROM {table} other \
+                                   WHERE other.user_id = {table}.user_id AND other.media_file_id = ?)"
+                            );
+                            sqlx::query(&sql)
+                                .bind(survivor.clone())
+                                .bind(stale_id.clone())
+                                .bind(survivor.clone())
+                                .execute(&mut *conn)
+                                .await?;
+                        }
+                    }
+                    for sql in [
+                        "DELETE FROM media_file_languages WHERE media_file_id = ?",
+                        "DELETE FROM media_file_language_state WHERE media_file_id = ?",
+                        "DELETE FROM media_files WHERE id = ?",
+                    ] {
+                        sqlx::query(sql)
+                            .bind(stale_id.clone())
+                            .execute(&mut *conn)
+                            .await?;
+                    }
+                }
+                Ok(())
+            })
+        })
+        .await?;
+        Ok(removed)
     }
 
     async fn find_by_source(
@@ -825,5 +925,97 @@ mod tests {
             Err(DbError::NotFound)
         ));
         queue.shutdown().await;
+    }
+
+    /// An upgrade gives the file a new source id, so the old row stays unless
+    /// pruned. Pruning moves the viewer's place to the new row, drops the old
+    /// row's language rows, leaves another instance's rows alone, and never
+    /// acts on an empty listing.
+    #[tokio::test]
+    async fn prune_superseded_files_replaces_old_rows_and_keeps_progress() {
+        let pool = test_sqlite_pool().await;
+        let work_id = Uuid::new_v4();
+        insert_work(&pool, work_id).await;
+        let repo = SqlxMediaFileRepo::new(pool.clone());
+        let instance = Uuid::new_v4();
+        let leaf = LeafRef::Episode(Uuid::new_v4());
+        let old = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("1")))
+            .await
+            .unwrap();
+        let new = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, instance, Some("2")))
+            .await
+            .unwrap();
+        let other_instance = repo
+            .upsert_by_source(&sample_media_file(work_id, leaf, Uuid::new_v4(), Some("1")))
+            .await
+            .unwrap();
+        let user = Uuid::new_v4().to_string();
+        let policy = Uuid::new_v4().to_string();
+        for sql in [
+            format!("INSERT INTO policies (id, name) VALUES ('{policy}', 'p')"),
+            format!(
+                "INSERT INTO users (id, username, display_name, password_hash, policy_id, created_at, disabled) \
+                 VALUES ('{user}', 'u', 'U', 'x', '{policy}', '2024-01-01T00:00:00.000Z', 0)"
+            ),
+            format!(
+                "INSERT INTO watch_progress (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
+                 VALUES ('{user}', '{}', 5, 10, 'in_progress', '2024-01-01T00:00:00.000Z')",
+                old.id
+            ),
+            format!(
+                "INSERT INTO media_file_language_state (media_file_id, source, scanned_ms) VALUES ('{}', 'arr', 1)",
+                old.id
+            ),
+        ] {
+            sqlx::query(&sql).execute(&pool).await.unwrap();
+        }
+
+        assert_eq!(
+            repo.prune_superseded_files(work_id, instance, &[])
+                .await
+                .unwrap(),
+            0,
+            "an empty listing must not remove anything"
+        );
+        assert_eq!(repo.list_by_work_id(work_id).await.unwrap().len(), 3);
+
+        let removed = repo
+            .prune_superseded_files(work_id, instance, &["2".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(removed, 1);
+        let ids: Vec<Uuid> = repo
+            .list_by_work_id(work_id)
+            .await
+            .unwrap()
+            .iter()
+            .map(|f| f.id)
+            .collect();
+        assert!(!ids.contains(&old.id));
+        assert!(ids.contains(&new.id) && ids.contains(&other_instance.id));
+        let progress: (String,) =
+            sqlx::query_as("SELECT media_file_id FROM watch_progress WHERE user_id = ?")
+                .bind(&user)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(progress.0, new.id.to_string());
+        let state: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM media_file_language_state WHERE media_file_id = ?",
+        )
+        .bind(old.id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(state.0, 0);
+        // Idempotent: nothing left to prune.
+        assert_eq!(
+            repo.prune_superseded_files(work_id, instance, &["2".to_string()])
+                .await
+                .unwrap(),
+            0
+        );
     }
 }

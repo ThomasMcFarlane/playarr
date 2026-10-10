@@ -529,6 +529,26 @@ impl MediaSync {
         Ok(self.media_file_repo.list_by_work_id(work_id).await?.len())
     }
 
+    /// Drops this source's rows for `work_id` that the source no longer lists
+    /// (replaced by an upgrade, or deleted): see
+    /// [`MediaFileRepo::prune_superseded_files`]. Skipped for an empty listing
+    /// so a source hiccup cannot wipe a work's files.
+    async fn prune_superseded(
+        &self,
+        work_id: Uuid,
+        source_instance_id: Uuid,
+        listed_file_ids: Vec<String>,
+    ) -> Result<(), MediaSyncError> {
+        let removed = self
+            .media_file_repo
+            .prune_superseded_files(work_id, source_instance_id, &listed_file_ids)
+            .await?;
+        if removed > 0 {
+            tracing::info!(%work_id, removed, "removed media file rows the source replaced or deleted");
+        }
+        Ok(())
+    }
+
     /// Returns whether a work needs a file-level refresh because at least
     /// one existing file predates persisted runtimes. This makes the
     /// scheduled reconciliation pass a bounded backfill for established
@@ -651,6 +671,8 @@ impl MediaSync {
             media_info.and_then(|m| m.subtitles.as_deref()),
         )
         .await;
+        self.prune_superseded(work_id, source_instance_id, vec![file.id.to_string()])
+            .await?;
 
         if let Some(credit_repo) = &self.credit_repo {
             self.sync_radarr_credits(credit_repo.as_ref(), client, work_id, movie_id)
@@ -747,6 +769,7 @@ impl MediaSync {
         let files = client.list_episode_files(series_id).await?;
         let files_by_id: HashMap<i64, SonarrEpisodeFile> =
             files.into_iter().map(|f| (f.id, f)).collect();
+        let listed_file_ids: Vec<String> = files_by_id.keys().map(i64::to_string).collect();
 
         let mut metadata_changed = false;
         for episode in episodes {
@@ -813,6 +836,8 @@ impl MediaSync {
             self.announce_series_changed(series_work_id, source_instance_id)
                 .await;
         }
+        self.prune_superseded(series_work_id, source_instance_id, listed_file_ids)
+            .await?;
         Ok(())
     }
 
@@ -833,6 +858,7 @@ impl MediaSync {
         let files = client.list_episode_files(series_id).await?;
         let files_by_id: HashMap<i64, WhisparrEpisodeFile> =
             files.into_iter().map(|f| (f.id, f)).collect();
+        let listed_file_ids: Vec<String> = files_by_id.keys().map(i64::to_string).collect();
 
         let mut metadata_changed = false;
         for episode in episodes {
@@ -908,6 +934,8 @@ impl MediaSync {
             self.announce_series_changed(series_work_id, source_instance_id)
                 .await;
         }
+        self.prune_superseded(series_work_id, source_instance_id, listed_file_ids)
+            .await?;
         Ok(())
     }
 
@@ -929,6 +957,7 @@ impl MediaSync {
             .into_iter()
             .map(|file| (file.id, file))
             .collect::<HashMap<_, _>>();
+        let listed_file_ids: Vec<String> = files_by_id.keys().map(i64::to_string).collect();
 
         for track in tracks {
             if !track.has_file || track.track_file_id <= 0 {
@@ -996,6 +1025,8 @@ impl MediaSync {
             };
             self.media_file_repo.upsert_by_source(&media_file).await?;
         }
+        self.prune_superseded(artist_work_id, source_instance_id, listed_file_ids)
+            .await?;
         Ok(())
     }
 
@@ -1010,6 +1041,7 @@ impl MediaSync {
     ) -> Result<(), MediaSyncError> {
         let books = client.list_books_for_author(author_id).await?;
         let files = client.list_book_files(author_id).await?;
+        let listed_file_ids: Vec<String> = files.iter().map(|f| f.id.to_string()).collect();
         let books_by_id: HashMap<i64, ReadarrBook> = books.into_iter().map(|b| (b.id, b)).collect();
 
         for file in files {
@@ -1039,6 +1071,8 @@ impl MediaSync {
             };
             self.media_file_repo.upsert_by_source(&media_file).await?;
         }
+        self.prune_superseded(author_work_id, source_instance_id, listed_file_ids)
+            .await?;
         Ok(())
     }
 
@@ -1436,6 +1470,50 @@ mod tests {
         assert_eq!(files[0].source_file_id.as_deref(), Some("30"));
         assert_eq!(files[0].source_instance_id, instance_id);
         assert_eq!(files[0].duration_ms, Some(10_200_000));
+    }
+
+    /// A quality upgrade replaces the movie file under a new source file id.
+    /// The old row must not linger (it never gets language state, so the work
+    /// stayed "incomplete" and was re-synced on every pass).
+    #[tokio::test]
+    async fn sync_radarr_upgrade_replaces_the_old_file_row() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "movie").await;
+        let sync = media_sync(pool.clone());
+        let instance_id = Uuid::new_v4();
+        let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool));
+
+        for file_id in [30, 31] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/api/v3/movie/1"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "id": 1, "title": "Orbit", "sortTitle": "orbit", "tmdbId": 949,
+                    "monitored": true, "hasFile": true, "path": "/movies/Orbit",
+                    "movieFile": {
+                        "id": file_id, "movieId": 1,
+                        "relativePath": format!("Orbit-{file_id}.mkv"),
+                        "path": format!("/movies/Orbit/Orbit-{file_id}.mkv"),
+                        "size": 1_000i64,
+                        "quality": {
+                            "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                            "revision": { "version": 1, "real": 0, "isRepack": false }
+                        },
+                        "mediaInfo": { "videoCodec": "x264", "runTime": "2:00:00" }
+                    }
+                })))
+                .mount(&server)
+                .await;
+            let client = ArrClient::Radarr(RadarrClient::new(server.uri(), "test-key"));
+            sync.sync_work(&client, work_id, 1, instance_id)
+                .await
+                .unwrap();
+        }
+
+        let files = media_file_repo.list_by_work_id(work_id).await.unwrap();
+        assert_eq!(files.len(), 1, "the replaced file's row was left behind");
+        assert_eq!(files[0].source_file_id.as_deref(), Some("31"));
+        assert!(!sync.has_missing_duration(work_id).await.unwrap());
     }
 
     #[tokio::test]
