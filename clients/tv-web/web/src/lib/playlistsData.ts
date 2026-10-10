@@ -106,6 +106,8 @@ export interface LoadPlaylistTracksOptions {
   signal?: AbortSignal;
   /** Background prefetch asks for "low" so it never delays what the screen is waiting on. */
   priority?: "high" | "low" | "auto";
+  /** Marks every stored read as one the query cache drops last (a warmed section: see `FetchQueryOptions.keep`). */
+  keep?: boolean;
 }
 
 export interface LoadedPlaylistTracks {
@@ -125,12 +127,13 @@ export async function loadPlaylistTracks(
   client: ApiClient,
   options: LoadPlaylistTracksOptions = {}
 ): Promise<LoadedPlaylistTracks> {
-  const { signal, priority } = options;
+  const { signal, priority, keep } = options;
   const isCancelled = () => options.isCancelled?.() === true || signal?.aborted === true;
   const playlists = await client.queries.fetch(LIST_KEY, (flight) => client.listPlaylists({ signal: flight, priority }), {
     tags: PLAYLIST_TAGS,
     ttlMs: ITEMS_TTL_MS,
     signal,
+    keep,
   });
   let failures = 0;
   let firstFailure: unknown;
@@ -146,7 +149,7 @@ export async function loadPlaylistTracks(
         return await client.queries.fetch(
           itemsKey(playlist.id),
           (flight) => client.listPlaylistItems(playlist.id, { signal: flight, priority }),
-          { tags: PLAYLIST_TAGS, ttlMs: ITEMS_TTL_MS, signal }
+          { tags: PLAYLIST_TAGS, ttlMs: ITEMS_TTL_MS, signal, keep }
         );
       } catch (error) {
         noteFailure(error);
@@ -164,7 +167,7 @@ export async function loadPlaylistTracks(
         return await client.queries.fetch(
           workKey(workId),
           (flight) => client.getWork(workId, { signal: flight, priority }),
-          { tags: WORK_TAGS, ttlMs: WORK_TTL_MS, signal }
+          { tags: WORK_TAGS, ttlMs: WORK_TTL_MS, signal, keep }
         );
       } catch (error) {
         noteFailure(error);
@@ -188,5 +191,5 @@ export async function loadPlaylistTracks(
 /** Warms the directory so the Playlists page paints from the cache. Cancel through `signal`. */
 export function prefetchPlaylists(client: ApiClient, signal?: AbortSignal): void {
   if (!client.queries.enabled) return;
-  void loadPlaylistTracks(client, { signal, priority: "low" }).catch(() => undefined);
+  void loadPlaylistTracks(client, { signal, priority: "low", keep: true }).catch(() => undefined);
 }

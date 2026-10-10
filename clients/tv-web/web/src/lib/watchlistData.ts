@@ -11,18 +11,18 @@ export function peekWatchlist(client: ApiClient): WatchlistEntry[] | undefined {
 /** Reads the watchlist through the query cache; the screen revalidates, the prefetch only warms. */
 export function loadWatchlist(
   client: ApiClient,
-  options: { ttlMs?: number; signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {}
+  options: { ttlMs?: number; signal?: AbortSignal; priority?: "high" | "low" | "auto"; keep?: boolean } = {}
 ): Promise<WatchlistEntry[]> {
-  const { ttlMs, signal, priority } = options;
+  const { ttlMs, signal, priority, keep } = options;
   return client.queries.fetch(
     WATCHLIST_KEY,
     async (flight) => (await client.listWatchlist({ signal: flight, priority })).items,
-    { tags: WATCHLIST_TAGS, ttlMs, signal }
+    { tags: WATCHLIST_TAGS, ttlMs, signal, keep }
   );
 }
 
 /** Warms the watchlist so the page paints its rows from the cache. Cancel through `signal`. */
 export function prefetchWatchlist(client: ApiClient, signal?: AbortSignal): void {
   if (!client.queries.enabled) return;
-  void loadWatchlist(client, { ttlMs: 15_000, signal, priority: "low" }).catch(() => undefined);
+  void loadWatchlist(client, { ttlMs: 15_000, signal, priority: "low", keep: true }).catch(() => undefined);
 }
