@@ -6,6 +6,7 @@ import io.playarr.shared.designsystem.page.PlayarrPageBody
 import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
+import io.playarr.shared.designsystem.page.PlayarrEmptyArt
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
 import io.playarr.shared.designsystem.page.PlayarrPageState
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
@@ -3113,7 +3114,8 @@ internal fun ExperienceMediaRail(
                     onSelected = { onSelected(work) },
                     onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
-                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
+                    // Web Home: a frame thumbnail only for an episode (and an artist's track); films keep their backdrop.
+                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId?.takeIf { work.kind == WorkKind.Artist },
                     stackCount = onDeck?.resumePlan?.takeIf { it.isStacked }?.options?.size ?: 0,
                     webTvStyle = isTelevision,
                     displayTitle = episode?.title?.takeIf(String::isNotBlank)
@@ -3713,8 +3715,10 @@ private fun ExperienceLibraryScreen(
         ExperienceLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
-            state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
-        ) {}
+            // Television: skeletons with the final geometry (owner rule), never a centred "Loading" screen.
+            state = if (isTelevision) null else PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
+            body = if (isTelevision) PlayarrPageBody.Bleed else PlayarrPageBody.Panel,
+        ) { if (isTelevision) TvLibrarySkeleton(playarrString(PlayarrString.LibraryLoading, "label" to plural)) }
         is ExperienceLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
@@ -4409,6 +4413,13 @@ private fun TelevisionSearchBody(
                 }
             }
         }
+        if (query.isBlank() && !filtersOpen) {
+            // Web `.tv-search-prompt`: the hint under the field while nothing is typed.
+            Text(
+                playarrString(PlayarrString.SearchEmptyPrompt), color = WebInkSoft, fontSize = 13.824.sp, lineHeight = 21.427.sp,
+                style = WebTextStyle, modifier = Modifier.offset(x = 153.6.dp, y = 303.dp).width(282.dp),
+            )
+        }
         if (showPreview && !filtersOpen) {
             Column(Modifier.offset(x = 153.6.dp, y = 362.dp).width(517.6.dp)) {
                 val kicker = if (selectedWork != null) {
@@ -4454,11 +4465,12 @@ private fun TelevisionSearchBody(
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                     is ExperienceLoad.Failed -> PlayarrErrorState(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query.isBlank()) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                        // Web: the idle title beside the search art; the prompt sits under the search field.
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchIdleTitle), art = PlayarrEmptyArt.Search))
                     } else if (mediaFilter == PlayarrSearchMediaType.Game) {
                         DiscoveryExtrasSection(query = query.trim(), gamesOnly = true, navController = navController, modifier = Modifier.fillMaxSize())
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription), PlayarrEmptyArt.Search))
                     } else {
                         // Web `data-tv-grid` with `data-tv-grid-edge-left=".tv-search input"`: index navigation over three columns, LEFT in
                         // the first column goes to the search field.
@@ -4737,6 +4749,38 @@ private fun MediaContextDialog(
     downloadCandidates?.let { candidates ->
         DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
     }
+}
+
+
+/** The TV library while its first page loads: hero copy at the left, the poster grid in the rail panel (web `SkeletonState`). */
+@Composable
+private fun TvLibrarySkeleton(loadingLabel: String) {
+    Box(Modifier.fillMaxSize().background(WebSurface).semantics { contentDescription = loadingLabel }) {
+        Column(Modifier.padding(start = playarrPageMetrics(true).start, top = 259.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PlayarrSkeleton(Modifier.size(110.dp, 14.dp))
+            PlayarrSkeleton(Modifier.size(340.dp, 54.dp))
+            PlayarrSkeleton(Modifier.size(240.dp, 54.dp))
+            Spacer(Modifier.height(12.dp))
+            repeat(4) { PlayarrSkeleton(Modifier.size(330.dp, 13.dp)) }
+        }
+        Column(
+            Modifier.width(1190.4.dp).fillMaxHeight().align(Alignment.CenterEnd).background(webRailSurfaceBrush())
+                .padding(start = 51.3.dp, top = 140.dp, end = 105.7.dp),
+            verticalArrangement = Arrangement.spacedBy(27.dp),
+        ) {
+            repeat(4) {
+                Row(horizontalArrangement = Arrangement.spacedBy(25.92.dp)) {
+                    repeat(3) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PlayarrSkeleton(Modifier.size(327.2.dp, 184.dp), RoundedCornerShape(12.48.dp))
+                            PlayarrSkeleton(Modifier.size(140.dp, 11.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 /** Web drawer action row: 68 dp, 14 dp radius, `--surface-soft`, a 19.52 px crimson glyph in a 42 dp slot, a bold 19.2 px label; focus is the ring. */

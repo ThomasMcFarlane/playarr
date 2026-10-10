@@ -858,10 +858,26 @@ struct TVHeaderPill: View {
     let label: String
     let symbol: String
     let width: CGFloat
+    /// The header control variant (web `ui-btn--secondary`): a 50-high text capsule (the calendar range and Today).
+    var control = false
 
     static let height: CGFloat = 72
 
     var body: some View {
+        if control {
+            Text(label)
+                .font(TVTheme.font(size: 14.72, css: 720))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .lineLimit(1)
+                .frame(width: width, height: 50)
+                .background(Capsule().fill(DesignTokens.Color.backgroundElevated))
+                .overlay(Capsule().stroke(DesignTokens.Stage.line.opacity(0.35), lineWidth: 1))
+        } else {
+            tile
+        }
+    }
+
+    private var tile: some View {
         VStack(spacing: 5.6) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .regular))

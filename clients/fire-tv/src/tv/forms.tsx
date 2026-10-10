@@ -3,6 +3,7 @@ import React, {useState} from 'react';
 import {Pressable, TextInput, View, type TextInputProps} from 'react-native';
 import {mix} from '../theme/color';
 import {sans} from '../theme/fonts';
+import {FocusRing} from './FocusRing';
 import {useTheme} from '../theme/ThemeProvider';
 import {Box, T, u} from './kit';
 
@@ -106,13 +107,10 @@ export interface SegmentedProps<Id extends string> {
 }
 
 /** `theme-choice`: joined buttons separated by 1px, the active one inverted and enlarged. */
-export function Segmented<Id extends string>({options, value, onChange, accessibilityLabel}: SegmentedProps<Id>): React.ReactElement {
-  const {colour} = useTheme();
+export function Segmented<Id extends string>({options, value, onChange, accessibilityLabel, w = 1042.3}: SegmentedProps<Id> & {w?: number}): React.ReactElement {
+  // Web's shared segmented control on TV: the full panel width, equal 56 px tiles 7.7 px apart.
   return (
-    <View
-      accessibilityLabel={accessibilityLabel}
-      style={{flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: colour.line, borderWidth: 1, borderColor: colour.line}}
-    >
+    <View accessibilityLabel={accessibilityLabel} style={{flexDirection: 'row', width: u(w)}}>
       {options.map((option, index) => (
         <SegmentButton key={option.id} label={option.label} active={option.id === value} gap={index > 0} onPress={() => onChange(option.id)} />
       ))}
@@ -123,7 +121,6 @@ export function Segmented<Id extends string>({options, value, onChange, accessib
 function SegmentButton({label, active, gap, onPress}: {label: string; active: boolean; gap: boolean; onPress: () => void}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
-  const lit = active || focused;
   return (
     <Pressable
       accessibilityRole="button"
@@ -132,18 +129,20 @@ function SegmentButton({label, active, gap, onPress}: {label: string; active: bo
       onBlur={() => setFocused(false)}
       onPress={onPress}
       style={{
-        height: u(48),
-        marginLeft: gap ? u(1) : 0,
-        paddingHorizontal: u(18.4),
+        flex: 1,
+        height: u(56),
+        marginLeft: gap ? u(7.7) : 0,
+        borderRadius: u(12),
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: lit ? colour.ink : colour.bg,
-        transform: [{scale: lit ? 1.04 : 1}],
+        backgroundColor: active ? colour.ink : colour.surfaceSoft,
+        transform: [{scale: active || focused ? 1.025 : 1}],
       }}
     >
-      <T size={11.52} weight={720} color={lit ? colour.bg : colour.inkMuted}>
+      <T size={10.56} weight={900} color={active ? colour.bg : colour.inkMuted}>
         {label}
       </T>
+      {focused ? <FocusRing radius={12} /> : null}
     </Pressable>
   );
 }

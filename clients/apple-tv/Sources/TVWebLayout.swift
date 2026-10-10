@@ -417,21 +417,6 @@ struct TVRingButtonStyle: ButtonStyle {
     }
 }
 
-/// A shell action column tile (Filters, Calendar link) that opens its side panel.
-struct TVActionTile: View {
-    let label: String
-    let symbol: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            TVHeaderPill(label: label, symbol: symbol, width: TVShellActionColumn.width)
-        }
-        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
-        .focusEffectDisabled()
-    }
-}
-
 /// The one shared right-side panel (web `.tv-filter-drawer`): 360 wide, full height from the first frame, kicker,
 /// title and close button, then the page's sections. Menu closes it; focus stays inside while it is open.
 struct TVDrawer<Content: View>: View {
@@ -708,5 +693,47 @@ struct TVMultiSelectSection: View {
     private var summary: String {
         if selection.isEmpty { return "Any language" }
         return selection.map { code in options.first { $0.code == code }?.displayName ?? code }.joined(separator: ", ")
+/// Web `.status-pill`: one status per entry, tinted by its tone (14% over the surface, 60% border), ink text.
+struct TVStatusPill: View {
+    enum Tone { case available, upcoming, missing, neutral }
+    let tone: Tone
+
+    var body: some View {
+        let colour = TVCalendarView.toneColour(tone)
+        Text(label)
+            .font(TVTheme.font(size: 13.44, css: 750))
+            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .padding(.horizontal, 10.4)
+            .frame(height: 26.6)
+            .background(Capsule().fill(colour.opacity(0.14)).background(Capsule().fill(DesignTokens.Stage.surface)))
+            .overlay(Capsule().stroke(colour.opacity(0.6), lineWidth: 1))
+            .fixedSize()
+    }
+
+    private var label: String {
+        switch tone {
+        case .available: return "Available"
+        case .upcoming: return "Upcoming"
+        case .missing: return "Missing"
+        case .neutral: return "Not tracked"
+        }
+    }
+}
+
+/// Opens a title the calendar only knows by id: loads it, then shows the normal detail page.
+struct TVWorkDetailLoader: View {
+    let workID: UUID
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var work: Work?
+
+    var body: some View {
+        Group {
+            if let work {
+                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+            } else {
+                DesignTokens.Color.backgroundElevated.ignoresSafeArea()
+            }
+        }
+        .task(id: workID) { work = try? await environment.apiClient.fetchWork(id: workID).work }
     }
 }

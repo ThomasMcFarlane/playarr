@@ -14,7 +14,7 @@ import {ArtworkImage} from '../components/ArtworkImage';
 import {useLanguage} from '../i18n/LanguageProvider';
 import {ROUTES, type RouteName} from '../navigation/routes';
 import {Icon} from '../shell/icons';
-import {mix} from '../theme/color';
+import {blend, mix} from '../theme/color';
 import {sans} from '../theme/fonts';
 import {useTheme} from '../theme/ThemeProvider';
 import {EdgeFade} from '../tv/EdgeFade';
@@ -33,10 +33,11 @@ const DEBOUNCE_MS = 350;
 const COLUMNS = 3;
 const GRID_X = 825.6;
 const GRID_Y = 172.8;
-const COL_PITCH = 346.6;
-const ROW_PITCH = 247.45;
-const ART_W = 320.6;
-const ART_H = 180.3;
+// The web's bigger search cards: 327.2 x 184 art, 353.1 px apart across and 251.2 px down.
+const COL_PITCH = 353.1;
+const ROW_PITCH = 251.2;
+const ART_W = 327.2;
+const ART_H = 184;
 const GRID_CLIP_TOP = 150;
 
 export interface SearchScreenNavigation {
@@ -93,6 +94,8 @@ export function SearchScreen({navigation}: SearchScreenProps): React.ReactElemen
     state.status === 'ready' ? (results.length === 1 ? t('pages.search.resultCountOne', {count: 1}) : t('pages.search.resultCountOther', {count: results.length})) : state.status === 'empty' ? t('pages.search.zeroResults') : undefined;
   const artKind = selected ? preferredArtworkKind(selected, ['backdrop', 'poster']) : undefined;
   const dark = scheme === 'dark';
+  // The web details panel's --dp-soft: ink 88% over the surface.
+  const soft = blend(colour.ink, colour.surface, 0.88);
   const visibleFrom = Math.max(0, (row - 1) * COLUMNS);
   const visibleTo = (row + 4) * COLUMNS;
 
@@ -104,18 +107,18 @@ export function SearchScreen({navigation}: SearchScreenProps): React.ReactElemen
       <View
         style={{
           position: 'absolute',
-          left: u(149.2),
-          top: u(172.2),
-          width: u(598.8),
-          height: u(77.1),
+          left: u(153.6),
+          top: u(172.8),
+          width: u(590),
+          height: u(76),
           borderRadius: 999,
-          borderWidth: 1,
-          borderColor: inputFocused ? mix('#cf3157', 0.72) : mix(colour.lineStrong, 0.76),
+          // Focused: the web's control focus ring (ink, no fill change).
+          borderWidth: inputFocused ? 2 : 1,
+          borderColor: inputFocused ? colour.ink : mix(colour.lineStrong, 0.76),
           backgroundColor: mix(colour.surfaceStrong, 0.88),
           flexDirection: 'row',
           alignItems: 'center',
           paddingLeft: u(24),
-          transform: [{scale: inputFocused ? 1.015 : 1}],
         }}
       >
         <Icon name="search" size={u(24)} color={colour.inkMuted} strokeWidth={1.8} />
@@ -149,31 +152,32 @@ export function SearchScreen({navigation}: SearchScreenProps): React.ReactElemen
       </View>
 
       {selected ? (
-        <Box x={153.6} y={362} w={552.6}>
-          <T size={9.984} weight={800} ls={0.7987} lh={15} color="#cf3157" upper>
+        // The web's details panel at the search stage's size (eyebrow, 49.92 px title, meta, five-line synopsis).
+        <Box x={153.6} y={286.6} w={552.6}>
+          <T size={12.288} weight={860} ls={0.983} lh={18.4} color={dark ? '#eaa6b6' : '#821e36'} upper>
             {`${kindLabel(selected)}${year(selected) ? ` · ${year(selected)}` : ''}`}
           </T>
-          <View style={{marginTop: u(8.8)}}>
-            <BalancedT key={selected.id} width={374.4} size={48} weight={560} ls={-2.88} lh={47} color={colour.ink}>
+          <View style={{marginTop: u(25.9)}}>
+            <BalancedT key={selected.id} width={419.2} size={49.92} weight={560} ls={-2.995} lh={47.4} color={colour.ink}>
               {selected.title}
             </BalancedT>
           </View>
-          <View style={{marginTop: u(14.4), flexDirection: 'row'}}>
+          <View style={{marginTop: u(27), flexDirection: 'row'}}>
             {year(selected) ? (
-              <View style={{marginRight: u(11.6)}}>
-                <T size={10.368} weight={400} lh={15.6} color={colour.inkMuted}>
+              <View style={{marginRight: u(12.8)}}>
+                <T size={13.056} weight={600} lh={19.6} color={soft}>
                   {year(selected)}
                 </T>
               </View>
             ) : null}
             {selected.genres.length > 0 ? (
-              <T size={10.368} weight={400} lh={15.6} color={colour.inkMuted}>
+              <T size={13.056} weight={600} lh={19.6} color={soft}>
                 {selected.genres.slice(0, 2).join(' · ')}
               </T>
             ) : null}
           </View>
-          <View style={{marginTop: u(17.6), width: u(552.6)}}>
-            <T size={12.288} weight={400} lh={19} color={colour.inkMuted} lines={4}>
+          <View style={{marginTop: u(21.6), width: u(348.1)}}>
+            <T size={13.824} weight={600} lh={21.84} color={soft} lines={5}>
               {selected.overview ?? t('pages.search.noSynopsis')}
             </T>
           </View>
@@ -274,9 +278,9 @@ function ResultCard(props: {
           <WatchState progress={props.progress} showUnwatched={props.progressReady} />
         </View>
       </MediaFocus>
-      <View style={{marginTop: u(11.2), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: u(1.6)}}>
-        <View style={{width: u(253.5)}}>
-          <T size={12.288} weight={650} lh={18.4} color={colour.ink} lines={1}>
+      <View style={{marginTop: u(11.5), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: u(1.9)}}>
+        <View style={{width: u(259.5)}}>
+          <T size={11.904} weight={610} ls={-0.179} lh={17.9} color={colour.ink} lines={1}>
             {work.title}
           </T>
         </View>

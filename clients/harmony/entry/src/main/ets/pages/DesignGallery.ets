@@ -570,7 +570,6 @@ struct DesignGallery {
               'A short synopsis paragraph previewing FeatureCopy inside the Stage ' +
               'hero, clamped to five lines maximum on the TV profile so long copy ' +
               'never overruns the title panel.',
-            onPlay: () => {},
             railsSlot: (): void => {
               this.stageRailsSlot();
             },

@@ -53,15 +53,8 @@
  * `Stage`'s `keyArt` prop, which this same change widens from `ResourceStr`
  * alone to also accept the resulting `image.PixelMap` -- see that file's own
  * updated doc comment on `keyArt` for why that widening was necessary and
- * safe. `Stage`'s hero renders no synopsis in the source design
- * (`design/components/FeatureCopy.ets`'s own doc comment), so `synopsis` is
- * always passed as `''`.
- *
- * The primary play action resumes playback directly (`ROUTES.Player`, using
- * the continue-watching row's OWN `media_file_id`/`position_ms`, brief 4.12)
- * only when the hero actually came from continue-watching; otherwise it
- * opens `ROUTES.Detail` instead, since a bare catalogue `Work` (new/more
- * movies or series) carries no resolved `media_file_id` of its own to play.
+ * safe. As on web TV Home, the hero shows the work's synopsis and there is no
+ * play button on the stage: selecting a card opens it.
  *
  * ## Rails (`design/components/MediaRail.ets`) and cards
  * (`design/components/PosterCard.ets`)
@@ -120,6 +113,8 @@ import { MediaRail } from '../design/components/MediaRail';
 import type { MediaRailItem } from '../design/components/MediaRail';
 import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
+import { PlayarrLogo } from '../design/components/PlayarrLogo';
+import { Clock } from '../design/components/Clock';
 import { NavPill } from '../design/components/NavPill';
 import type { NavPillItem } from '../design/components/NavPill';
 import { PosterCard } from '../design/components/PosterCard';
@@ -129,6 +124,7 @@ import {
   getContinueWatching,
   getCatalog,
   getCatalogKinds,
+  getHomeRails,
 } from '../data/CatalogRepository';
 import type { ContinueWatchingEntry } from '../data/CatalogRepository';
 import {
@@ -142,7 +138,7 @@ import type { WorkKind } from '../core/Types/Catalog';
 import type { Work } from '../core/Types/Work';
 
 import { ROUTES } from '../navigation/Routes';
-import type { DetailRouteParams, LibraryRouteParams, PlayerRouteParams } from '../navigation/Routes';
+import type { DetailRouteParams, LibraryRouteParams } from '../navigation/Routes';
 import { normaliseResumeMs } from '../core/EndOfPlayback.ts';
 import { getNavStack, pushRoute, replaceRoute } from '../navigation/NavStack';
 
@@ -228,6 +224,8 @@ interface HomeCardItem {
   subtitle: string;
   genres: string[];
   releaseDate: string | null;
+  /** The work's synopsis, `''` when the server has none (web shows it in the TV Home hero). */
+  overview: string;
   /** Continue-watching fraction in `[0, 1]`, or `-1` to hide the progress
    * bar (`PosterCard.ets`'s own convention). */
   progress: number;
@@ -254,6 +252,12 @@ function releaseYearLabel(releaseDate: string | null): string {
   return String(new Date(releaseDate).getFullYear());
 }
 
+/** Web TV card caption: "Movie · 2014" (kind, then release year when known). */
+function cardCaption(kind: WorkKind, releaseDate: string | null): string {
+  const year = releaseYearLabel(releaseDate);
+  return year.length > 0 ? `${workKindKicker(kind)} · ${year}` : workKindKicker(kind);
+}
+
 /** The hero kicker: the featured work's OWN kind, singular ("Movie",
  * "Series", ...) -- distinct from `catalogKindNavLabel` below, which names a
  * whole LIBRARY SECTION rather than one work. */
@@ -276,6 +280,31 @@ function workKindKicker(kind: WorkKind): string {
 /** Nav tile label for a `getCatalogKinds()` kind -- names the library
  * section it opens (brief 9: "Nav destinations are driven by GET
  * /api/v1/catalog/kinds"), plural, distinct from `workKindKicker` above. */
+/** Web's library nav order (`PRODUCT_NAV_GROUPS`): Series, Movies, Sites, Music; anything else after. */
+const NAV_KIND_ORDER: WorkKind[] = ['series', 'movie', 'site', 'artist'];
+
+function navKindRank(kind: WorkKind): number {
+  const rank = NAV_KIND_ORDER.indexOf(kind);
+  return rank < 0 ? NAV_KIND_ORDER.length : rank;
+}
+
+/** The web nav icon for a nav id (generated from web `NavIcons.tsx`); the logo only for kinds web has no icon for. */
+function navIconFor(id: string): ResourceStr {
+  if (id === HOME_NAV_ID) {
+    return $r('app.media.nav_home');
+  }
+  if (id === 'series') {
+    return $r('app.media.nav_series');
+  }
+  if (id === 'movie') {
+    return $r('app.media.nav_movies');
+  }
+  if (id === 'artist') {
+    return $r('app.media.nav_music');
+  }
+  return PLACEHOLDER_NAV_ICON;
+}
+
 function catalogKindNavLabel(kind: WorkKind): string {
   if (kind === 'movie') {
     return 'Movies';
@@ -292,6 +321,13 @@ function catalogKindNavLabel(kind: WorkKind): string {
   return 'Books';
 }
 
+/** One server-curated Home rail (`GET /api/v1/home/rails`), as web TV Home renders it. */
+interface HomeServerRail {
+  id: string;
+  title: string;
+  items: HomeCardItem[];
+}
+
 /** Builds one rail's card list from a plain catalogue `Work[]` (the new/more
  * movies/series rails). `isTopRail` is decided once, by the caller, for the
  * WHOLE rail -- see `HomeCardItem.applyTopRailFocus`'s own doc comment. */
@@ -302,9 +338,10 @@ function buildCardItems(works: Work[], isTopRail: boolean): HomeCardItem[] {
       id: work.id,
       kind: work.kind,
       title: work.title,
-      subtitle: releaseYearLabel(work.release_date),
+      subtitle: cardCaption(work.kind, work.release_date),
       genres: work.genres,
       releaseDate: work.release_date,
+      overview: work.overview ?? '',
       progress: -1,
       applyTopRailFocus: isTopRail,
       artwork: undefined,
@@ -325,9 +362,10 @@ function buildContinueWatchingCardItems(entries: ContinueWatchingEntry[], isTopR
       id: entry.work.id,
       kind: entry.work.kind,
       title: entry.work.title,
-      subtitle: releaseYearLabel(entry.work.release_date),
+      subtitle: cardCaption(entry.work.kind, entry.work.release_date),
       genres: entry.work.genres,
       releaseDate: entry.work.release_date,
+      overview: entry.work.overview ?? '',
       progress: fraction,
       applyTopRailFocus: isTopRail,
       artwork: undefined,
@@ -348,6 +386,7 @@ function patchOneCardArtwork(item: HomeCardItem, pixelMap: image.PixelMap): Home
     title: item.title,
     subtitle: item.subtitle,
     genres: item.genres,
+    overview: item.overview,
     releaseDate: item.releaseDate,
     progress: item.progress,
     applyTopRailFocus: item.applyTopRailFocus,
@@ -391,14 +430,14 @@ function heroKeyArtFor(hero: HomeCardItem | undefined): ResourceStr | image.Pixe
   if (hero !== undefined && hero.artwork !== undefined) {
     return hero.artwork;
   }
-  return PLACEHOLDER_NAV_ICON;
+  return '';
 }
 
 function heroKickerFor(hero: HomeCardItem | undefined): string {
   if (hero === undefined) {
     return '';
   }
-  return workKindKicker(hero.kind);
+  return hero.genres.length > 0 ? `${workKindKicker(hero.kind)} · ${hero.genres[0]}` : workKindKicker(hero.kind);
 }
 
 function heroTitleFor(hero: HomeCardItem | undefined): string {
@@ -408,26 +447,13 @@ function heroTitleFor(hero: HomeCardItem | undefined): string {
   return hero.title;
 }
 
-/** A single combined meta line ("2024 - Drama, Thriller"), hyphen-joined
- * (never an em dash, project-wide rule) -- year and up to two genres, each
- * omitted if unavailable. Empty array (hiding the row entirely, per
- * `FeatureCopy.ets`'s own doc comment) when neither is available. */
+/** Web's TV Home meta line is the runtime; list works carry no runtime, so the release year stands in. */
 function heroMetaLinesFor(hero: HomeCardItem | undefined): string[] {
   if (hero === undefined) {
     return [];
   }
-  const parts: string[] = [];
   const year = releaseYearLabel(hero.releaseDate);
-  if (year.length > 0) {
-    parts.push(year);
-  }
-  if (hero.genres.length > 0) {
-    parts.push(hero.genres.slice(0, 2).join(', '));
-  }
-  if (parts.length === 0) {
-    return [];
-  }
-  return [parts.join(' - ')];
+  return year.length > 0 ? [year] : [];
 }
 
 @Component
@@ -441,6 +467,9 @@ export struct Home {
   @State private newSeriesItems: HomeCardItem[] = [];
   @State private moreMovieItems: HomeCardItem[] = [];
   @State private moreSeriesItems: HomeCardItem[] = [];
+  /** Server rails for the TV Home (web's rails); empty when the call failed, and the TV Home then shows
+   * the catalogue rails above instead. */
+  @State private serverRails: HomeServerRail[] = [];
 
   @State private hero: HomeCardItem | undefined = undefined;
   /** Only non-null when `this.hero` came from continue-watching -- see this
@@ -483,6 +512,7 @@ export struct Home {
     const moreMoviesPromise = getCatalog({ kind: 'movie', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const moreSeriesPromise = getCatalog({ kind: 'series', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const kindsPromise = getCatalogKinds();
+    const homeRailsPromise = getHomeRails();
 
     const continueWatchingResult = await continueWatchingPromise;
     const newMoviesResult = await newMoviesPromise;
@@ -490,6 +520,7 @@ export struct Home {
     const moreMoviesResult = await moreMoviesPromise;
     const moreSeriesResult = await moreSeriesPromise;
     const kindsResult = await kindsPromise;
+    const homeRailsResult = await homeRailsPromise;
 
     // A genuine connectivity failure across every rail-shaped call -- see
     // this file's header comment on why this is a distinct, deliberate
@@ -518,10 +549,12 @@ export struct Home {
     const moreMovieWorks: Work[] = moreMoviesResult.kind === 'ok' ? moreMoviesResult.value.items : [];
     const moreSeriesWorks: Work[] = moreSeriesResult.kind === 'ok' ? moreSeriesResult.value.items : [];
 
-    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: PLACEHOLDER_NAV_ICON, label: 'Home' }];
+    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: navIconFor(HOME_NAV_ID), label: 'Home' }];
     if (kindsResult.kind === 'ok') {
-      for (const kind of kindsResult.value) {
-        navRailItems.push({ id: kind, icon: PLACEHOLDER_NAV_ICON, label: catalogKindNavLabel(kind) });
+      const kinds: WorkKind[] = kindsResult.value.slice();
+      kinds.sort((a: WorkKind, b: WorkKind): number => navKindRank(a) - navKindRank(b));
+      for (const kind of kinds) {
+        navRailItems.push({ id: kind, icon: navIconFor(kind), label: catalogKindNavLabel(kind) });
       }
     }
     this.navItems = navRailItems;
@@ -571,6 +604,17 @@ export struct Home {
     this.newSeriesItems = buildCardItems(newSeriesWorks, topRailKey === TOP_RAIL_NEW_SERIES);
     this.moreMovieItems = buildCardItems(moreMovieWorks, topRailKey === TOP_RAIL_MORE_MOVIES);
     this.moreSeriesItems = buildCardItems(moreSeriesWorks, topRailKey === TOP_RAIL_MORE_SERIES);
+    const serverRails: HomeServerRail[] = [];
+    if (homeRailsResult.kind === 'ok') {
+      for (const rail of homeRailsResult.value.rails) {
+        if (rail.items.length > 0) {
+          // The first server rail carries the up-focus wiring when there is no On deck rail above it.
+          const isTopRail = continueWatchingEntries.length === 0 && serverRails.length === 0;
+          serverRails.push({ id: rail.id, title: rail.title, items: buildCardItems(rail.items, isTopRail) });
+        }
+      }
+    }
+    this.serverRails = serverRails;
 
     this.hero =
       this.continueWatchingItems[0] ??
@@ -607,6 +651,16 @@ export struct Home {
     const hero = this.hero;
     if (hero !== undefined) {
       this.loadHeroArtwork(hero.id);
+    }
+    for (const rail of this.serverRails) {
+      const railId = rail.id;
+      this.loadRailArtwork(
+        (): HomeCardItem[] => this.serverRailItems(railId),
+        (items: HomeCardItem[]): void => {
+          this.serverRails = this.serverRails.map((current: HomeServerRail): HomeServerRail =>
+            current.id === railId ? { id: current.id, title: current.title, items: items } : current);
+        }
+      );
     }
     this.loadRailArtwork(
       (): HomeCardItem[] => this.continueWatchingItems,
@@ -645,6 +699,11 @@ export struct Home {
    * resolves -- never a stale snapshot, since `getOneCardArtwork` re-reads
    * `getItems()` fresh inside its own (single, synchronous-until-`await`)
    * continuation. */
+  private serverRailItems(railId: string): HomeCardItem[] {
+    const rail = this.serverRails.find((candidate: HomeServerRail): boolean => candidate.id === railId);
+    return rail !== undefined ? rail.items : [];
+  }
+
   private loadRailArtwork(getItems: () => HomeCardItem[], setItems: (items: HomeCardItem[]) => void): void {
     const items = getItems();
     for (const item of items) {
@@ -676,33 +735,17 @@ export struct Home {
     }
   }
 
-  private openDetail(workId: string): void {
-    const detailParams: DetailRouteParams = { workId: workId };
-    pushRoute(getNavStack(), ROUTES.Detail, detailParams);
+  /** Web TV Home: the hero shows the focused card's work. */
+  private focusHero(item: HomeCardItem): void {
+    if (this.hero !== undefined && this.hero.id === item.id) {
+      return;
+    }
+    this.hero = item;
+    this.loadHeroArtwork(item.id);
   }
 
-  /** Resumes playback directly when the hero came from continue-watching
-   * (using ITS OWN `media_file_id`/`position_ms`, brief 4.12); otherwise
-   * opens Detail, since a bare catalogue `Work` has no resolved playable
-   * file of its own. See this file's header comment. */
-  private handleHeroPlay(): void {
-    const hero = this.hero;
-    if (hero === undefined) {
-      return;
-    }
-    const heroId = hero.id;
-    const resumeMediaFileId = this.heroResumeMediaFileId;
-    if (resumeMediaFileId !== null) {
-      const resumeStartPositionMs = this.heroResumeStartPositionMs;
-      const playerParams: PlayerRouteParams = {
-        mediaFileId: resumeMediaFileId,
-        workId: heroId,
-        startPositionMs: resumeStartPositionMs,
-      };
-      pushRoute(getNavStack(), ROUTES.Player, playerParams);
-      return;
-    }
-    const detailParams: DetailRouteParams = { workId: heroId };
+  private openDetail(workId: string): void {
+    const detailParams: DetailRouteParams = { workId: workId };
     pushRoute(getNavStack(), ROUTES.Detail, detailParams);
   }
 
@@ -737,6 +780,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
         .nextFocus({ up: this.topRailFocusUpId })
     } else {
@@ -750,6 +796,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
     }
   }
@@ -788,20 +837,36 @@ export struct Home {
   @Builder
   private tvRailsSlot(): void {
 
-    Column({ space: tv(TvGeometry.homeRailsColumnRowGap) }) {
+    Column({ space: tv(TvGeometry.homeRailsRowGap) }) {
       if (this.continueWatchingItems.length > 0) {
         MediaRail({
           railId: 'home-continue-watching-tv',
-          heading: 'Continue Watching',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
+          heading: 'On deck',
           items: this.continueWatchingItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
             this.tvCardItemBuilder(item, index, activeRailFactor);
           },
         })
       }
-      if (this.newMovieItems.length > 0) {
+      ForEach(this.serverRails, (rail: HomeServerRail) => {
+        MediaRail({
+          railId: `home-${rail.id}-tv`,
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
+          heading: rail.title,
+          items: rail.items,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
+        })
+      }, (rail: HomeServerRail): string => rail.id)
+      if (this.serverRails.length === 0 && this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'New Movies',
           items: this.newMovieItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -809,9 +874,11 @@ export struct Home {
           },
         })
       }
-      if (this.newSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'New Series',
           items: this.newSeriesItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -819,9 +886,11 @@ export struct Home {
           },
         })
       }
-      if (this.moreMovieItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'More Movies',
           items: this.moreMovieItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -829,9 +898,11 @@ export struct Home {
           },
         })
       }
-      if (this.moreSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-tv',
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
           heading: 'More Series',
           items: this.moreSeriesItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
@@ -928,10 +999,7 @@ export struct Home {
         kicker: heroKickerFor(this.hero),
         title: heroTitleFor(this.hero),
         metaLines: heroMetaLinesFor(this.hero),
-        synopsis: '',
-        onPlay: ((): void => {
-      this.handleHeroPlay();
-    }),
+        synopsis: this.hero !== undefined ? this.hero.overview : '',
         // Arrow wrapper keeps `this` = Home; a bare method reference runs with Stage as `this`.
         railsSlot: (): void => {
           this.tvRailsSlot();
@@ -944,6 +1012,15 @@ export struct Home {
       this.handleNavSelect(id);
     }),
       })
+      // Web TV shell chrome: the logo above the rail and the clock row.
+      PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+        .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Row() {
+        Clock()
+      }
+      .height(tv(TvGeometry.utilityRowHeight))
+      .alignItems(VerticalAlign.Center)
+      .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
     }
     .width('100%')
     .height('100%')

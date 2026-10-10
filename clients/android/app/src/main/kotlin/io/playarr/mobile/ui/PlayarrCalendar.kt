@@ -187,6 +187,13 @@ private fun ExperienceCalendarScreen(
     val navigation = PlayarrPageAction.Navigation(
         id = "calendar-period",
         items = listOf(
+            // Web: the date range button opens the jump picker and sits first in the Previous / Today / Next group.
+            PlayarrNavItem(
+                "range",
+                calendarRangeLabelShort(state.mode, state.anchor, state.window, language.locale),
+                null,
+                onClick = { jumpOpen = true },
+            ),
             PlayarrNavItem("previous", playarrString(PlayarrString.CalendarPrevious), PlayarrActionIcon.Prev, onClick = holder::previous),
             // Web TV: Today holds the autofocus ring on entry.
             PlayarrNavItem("today", playarrString(PlayarrString.CalendarToday), null, primary = true, modifier = Modifier.tvContentDefaultFocus(), onClick = holder::goToToday),
@@ -205,10 +212,6 @@ private fun ExperienceCalendarScreen(
     ) {
         if (!isTelevision) {
             PhoneCalendarHeader(state, language.locale, holder) { jumpOpen = true }
-        } else if (state.mode != CalendarViewMode.Agenda) {
-            // shortcut: web puts the range button in the header's Previous / Today / Next group; the shared navigation
-            // pill has a fixed width (page package, owner-request gate), so the range stays in the page until it can grow.
-            CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         }
         when (val load = state.load) {
             is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth()) { PlayarrErrorState(load.message, holder::load) }
@@ -611,22 +614,6 @@ internal fun TvCalendarAgenda(
             // and the day list starts under the header. Both panes end at the bottom of the screen.
             val detailsTop = 259.dp
             val listTop = 168.dp
-            // shortcut: the range label stays here until the shared header navigation pill can size to its label (web puts it there).
-            val title = remember(state.window, state.mode, state.anchor, locale) { calendarRangeLabelShort(state.mode, state.anchor, state.window, locale) }
-            Row(
-                Modifier.offset(x = playarrPageMetrics(true).start, y = 160.dp).height(50.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    title, color = WebInkSoft, fontSize = 14.4.sp, fontWeight = FontWeight(720), style = WebTextStyle, maxLines = 1,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-                val ink = WebInkSoft
-                androidx.compose.foundation.Canvas(Modifier.size(width = 9.dp, height = 8.dp)) {
-                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close() }
-                    drawPath(path, ink)
-                }
-            }
             val detailScroll = rememberScrollState()
             Column(
                 Modifier.offset(x = playarrPageMetrics(true).start, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))

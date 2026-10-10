@@ -1354,7 +1354,7 @@ struct TVLibraryKindView: View {
                     .zIndex(20)
 
                 if playlistID == nil, !listsPlaylists {
-                    TVActionTile(label: "Filters", symbol: "line.3.horizontal.decrease") { filtersOpen = true }
+                    filterLauncher
                         .disabled(filtersOpen)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         // The shell action column (page-layout spec, rule 2.3): right edge 12.48 px, top 151.2 px, 62 wide.
@@ -1709,6 +1709,15 @@ struct TVLibraryKindView: View {
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
         .disabled(parityMode)
+        .focusEffectDisabled()
+    }
+
+    /// Web `.page-filters-button`: the shared TVHeaderPill tile in the shell action column; opens the Filters drawer.
+    private var filterLauncher: some View {
+        Button { filtersOpen = true } label: {
+            TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: TVShellActionColumn.width)
+        }
+        .buttonStyle(TVRingButtonStyle(cornerRadius: 14))
         .focusEffectDisabled()
     }
 

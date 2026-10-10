@@ -419,6 +419,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV: a series page opens on the next-up episode at web's track position, and title years show web's release-year range ("2011–2017" for an ended series) ; cast is web's circular person card; detail pills keep their fill and show the control ring on focus (18.462).
+- Fire TV: Settings shows the open section as the shared page subtitle, uses web's full-width segmented tiles, and lists Request latency for admins only, as web (18.462).
+- Fire TV: page subtitles sit under the title in the web's one subtitle style; Search uses the web's field, details panel and bigger result cards; balanced titles never break inside a word; a direction key with nothing focused lands on the nav rail (18.462).
 - Fire TV: Home uses the web's bigger cards (327 px art on a 352 px pitch), its rail geometry and profile tile, and its stage wash, so Home matches the web TV layout (18.462).
 - Calendar: no Request button in any calendar view, and the "not in your catalogue" and "request provider" messages are gone from the calendar details. The request-unavailable reason shown elsewhere now reads "Requests are not available for this title yet".
 - Web: the shared multi-select is a plain checkbox list driven only by D-pad or arrow keys (no search box or on-screen keyboard); the Calendar Filters lose the duplicate Source filter and the date range (old links keep working). Rows 1.9984, 1.9985.
