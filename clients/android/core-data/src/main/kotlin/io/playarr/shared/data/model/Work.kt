@@ -113,6 +113,9 @@ data class Work(
     val releaseDate: Instant? = null,
     @Serializable(with = InstantIsoSerializer::class)
     val addedAt: Instant,
+    /** Set by the server once the source reports a series as ended; web shows "2011–2019" from it. */
+    @Serializable(with = InstantIsoSerializer::class)
+    val endDate: Instant? = null,
     /** Whether Playarr Server should actively track/request missing children of this work. */
     val monitored: Boolean,
     val availability: Availability,

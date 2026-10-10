@@ -5926,7 +5926,8 @@ private fun VideoDetailCopy(
 ) {
     val language = LocalPlayarrLanguage.current
     val episodeNumber = episode?.episode?.episodeNumber
-    val year = work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year
+    // Web `yearRangeLabel`: "2011", or "2011–2019" for an ended series that closed in a later year.
+    val year = playarrYearRange(work.releaseDate, work.endDate)
     if (isTelevision) {
         // Web `.tv-detail-copy` (455 dp column at y 259.2): kicker, 9ch title, meta chips, synopsis.
         val dateFormat = PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC)
@@ -9509,6 +9510,12 @@ private fun PlayarrNotFoundArtwork(modifier: Modifier = Modifier) {
 private fun Work.playarrKindYearLabel(): String {
     val kindLabel = kind.playarrSingularLabel()
     return playarrKindYear(releaseDate)?.let { "$kindLabel · $it" } ?: kindLabel
+}
+
+internal fun playarrYearRange(releaseDate: java.time.Instant?, endDate: java.time.Instant?): String? {
+    val start = playarrKindYear(releaseDate) ?: return null
+    val end = playarrKindYear(endDate)
+    return if (end != null && end > start) "$start\u2013$end" else start.toString()
 }
 
 internal fun playarrKindYear(releaseDate: java.time.Instant?): Int? =
