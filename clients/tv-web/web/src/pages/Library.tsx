@@ -55,6 +55,7 @@ import {
 } from "../lib/languageFilters";
 import { ListPanel } from "../components/tv/ListPanel";
 import { useDwellPrefetch } from "../lib/prefetch";
+import { retryTransient } from "../lib/retryTransient";
 import { createPreviewStore } from "../lib/previewStore";
 import { gridNeighbours } from "../lib/detailNeighbours";
 import { useFocusedDetailsController } from "../lib/useFocusedDetails";
@@ -360,7 +361,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     setRefreshing(hasVisibleItems || Boolean(stored));
 
     client.queries
-      .fetch(cacheKey, () => client.browseCatalog(firstPageParams), { tags: ["catalog"] })
+      .fetch(cacheKey, () => retryTransient(() => client.browseCatalog(firstPageParams)), { tags: ["catalog"] })
       .then((page) => {
         if (cancelled || generation !== generationRef.current) return;
         const head = orderWorks(page.items, sort, order);
