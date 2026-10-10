@@ -1,0 +1,1 @@
+- Calendar month view: the day number now sits on the cell's bottom row with "+N more" beside it (one 44px target), so "+N more" is no longer clipped at 1280x720 and other TV sizes and a day with several entries still shows at least one. `calendar-layout.mjs` asserts the row, the day number and every entry lie inside their cell at 1920, 1366 and 1280 in both themes.
