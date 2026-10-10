@@ -32,12 +32,13 @@ export function SettingsServerPage() {
   const [addServerState, setAddServerState] = useState<AddServerState>({ status: "idle" });
   const [testState, setTestState] = useState<ConnectionTestState>({ status: "idle" });
   // The server group is configured by the admin and shown read-only: fetched
-  // when the page opens and again on every live account/admin change (or the
-  // fallback poll), so a member added or removed by the admin appears without a
-  // reload. The same group's addresses already feed failover through the
-  // login/refresh `peer_addresses`; this list only displays them.
+  // when the page opens and again on the server's `account` / `server_group`
+  // live event (a member joined, left or changed its client address) or the
+  // fallback poll, so the list updates without a reload. The same group's
+  // addresses already feed failover through the login/refresh
+  // `peer_addresses`; this list only displays them.
   const [group, setGroup] = useState<ServerGroupMembers | undefined>(undefined);
-  const groupRevision = useLiveRevision({ areas: ["account", "admin"] });
+  const groupRevision = useLiveRevision({ areas: ["serverGroup"] });
   useEffect(() => {
     let cancelled = false;
     client
@@ -54,12 +55,13 @@ export function SettingsServerPage() {
   }, [client, groupRevision]);
   const normaliseUrl = (url: string) => url.trim().replace(/\/+$/, "").toLowerCase();
   const connectedUrls = new Set(connectedServers.map((server) => normaliseUrl(server.url)));
+  // The answering server (`is_self`) is the primary row; it may be reached at a
+  // URL other than its listed one, so it is never matched by URL.
   const groupOnlyMembers = (group?.members ?? []).filter(
-    (member) => !member.urls.some((url) => connectedUrls.has(normaliseUrl(url)))
+    (member) => !member.is_self && !connectedUrls.has(normaliseUrl(member.url))
   );
-  const primaryInGroup = (group?.members ?? []).some((member) =>
-    member.urls.some((url) => connectedUrls.has(normaliseUrl(url)))
-  );
+  // `group_name` is null only for a standalone server.
+  const primaryInGroup = group?.group_name != null;
 
   async function handleAddServer(event: React.FormEvent) {
     event.preventDefault();
@@ -126,12 +128,10 @@ export function SettingsServerPage() {
             </div>
           ))}
           {groupOnlyMembers.map((member) => (
-            <div className="connected-server" key={member.peer_node_id} data-server-group-member="">
+            <div className="connected-server" key={`${member.name}|${member.url}`} data-server-group-member="">
               <div>
                 <strong>{member.name}</strong>
-                {member.urls.map((url) => (
-                  <small key={url}>{url}</small>
-                ))}
+                <small>{member.url}</small>
               </div>
               <div className="connected-server-primary">
                 <span className="connected-server-badge">{t("settings.server.groupBadge")}</span>

@@ -863,11 +863,7 @@ export const th: Translations = {
     "เซิร์ฟเวอร์ในกลุ่มนี้ถูกเพิ่มโดยผู้ดูแลระบบโดยอัตโนมัติ และไม่สามารถเปลี่ยนแปลงที่นี่ได้",
   "settings.server.primaryBadge": "หลัก",
   "settings.server.disconnect": "ตัดการเชื่อมต่อ",
-  "settings.server.forgetServer": "ลืมเซิร์ฟเวอร์นี้",
-  "settings.server.forgetServerHint":
-    "ลบที่อยู่ทั้งหมดที่จดจำไว้สำหรับกลุ่มเซิร์ฟเวอร์ของบัญชีนี้ คุณอาจถูกขอที่อยู่เซิร์ฟเวอร์อีกครั้งในครั้งถัดไป",
   "settings.server.serverDisconnectedToast": "ตัดการเชื่อมต่อเซิร์ฟเวอร์แล้ว",
-  "settings.server.serverGroupForgottenToast": "ลืมที่อยู่เซิร์ฟเวอร์ที่จดจำไว้แล้ว",
   "settings.server.serverConnectedToast": "เชื่อมต่อเซิร์ฟเวอร์แล้ว",
   "settings.server.addAnotherServer": "เพิ่มเซิร์ฟเวอร์อื่น",
   "settings.server.changeAppHost": "เปลี่ยนโฮสต์ของแอป",

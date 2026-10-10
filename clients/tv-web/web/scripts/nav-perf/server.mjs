@@ -67,11 +67,11 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     }
     if (p === "/api/v1/peer-groups/self/members") {
       return json(res, serverGroup
-        ? { group_id: "11111111-1111-4111-8111-111111111111", group_name: "Test Group", members: [
-            { peer_node_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Server A", is_self: true, urls: ["https://server-a.example.test"] },
-            { peer_node_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", name: "Server B", is_self: false, urls: ["https://server-b.example.test"] },
+        ? { group_name: "Test Group", members: [
+            { name: "Server A", is_self: true, url: "https://server-a.example.test" },
+            { name: "Server B", is_self: false, url: "https://server-b.example.test" },
           ] }
-        : { group_id: null, group_name: null, members: [] });
+        : { group_name: null, members: [] });
     }
     if (p === "/api/v1/catalog/kinds") return json(res, ["movie", "series", "artist"]);
     if (p === "/api/v1/catalog") {

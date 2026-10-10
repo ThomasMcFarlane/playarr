@@ -13,14 +13,15 @@ use chrono::{DateTime, Utc};
 use playarr_model::discovery::WatchlistItem;
 use playarr_model::media::LeafRef;
 use playarr_model::{
-    DownloadStatus, DownloadTicket, ExternalProvider, MediaFile, Playlist, PlaylistItem,
-    WatchProgress, WatchState, Work, WorkKind,
+    DownloadStatus, DownloadTicket, ExternalProvider, MediaFile, PeerNode, PeerNodeStatus,
+    Playlist, PlaylistItem, WatchProgress, WatchState, Work, WorkKind,
 };
 use uuid::Uuid;
 
 use super::live_event::{kind, LiveEventPublisher, NewLiveEvent};
 use super::{
-    DownloadTicketRepo, MediaFileRepo, PlaylistRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
+    DownloadTicketRepo, MediaFileRepo, PeerNodeRepo, PlaylistRepo, WatchProgressRepo,
+    WatchlistRepo, WorkRepo,
 };
 use crate::error::DbError;
 
@@ -642,6 +643,156 @@ impl MediaFileRepo for EventingMediaFileRepo {
             self.emit_files(&persisted).await;
         }
         Ok(persisted)
+    }
+}
+
+/// Publishes one account-wide `account` / `server_group` event when a peer
+/// write changes what signed-in users see in their server group list
+/// (`GET /api/v1/peer-groups/self/members`): a member joined or left, became
+/// active or inactive, or changed its name or client-reachable addresses.
+/// Heartbeat writes (`last_seen_at`, sync errors) stay silent.
+pub struct EventingPeerNodeRepo {
+    inner: Arc<dyn PeerNodeRepo>,
+    events: LiveEventPublisher,
+}
+
+impl EventingPeerNodeRepo {
+    pub fn new(inner: Arc<dyn PeerNodeRepo>, events: LiveEventPublisher) -> Self {
+        Self { inner, events }
+    }
+}
+
+/// What the end-user group list is built from.
+fn visible_membership(node: &PeerNode) -> (bool, &str, Vec<(i32, &str)>) {
+    let mut urls: Vec<(i32, &str)> = node
+        .addresses
+        .iter()
+        .filter(|address| address.client_reachable)
+        .map(|address| (address.priority, address.url.as_str()))
+        .collect();
+    urls.sort();
+    (
+        node.status == PeerNodeStatus::Active,
+        node.name.as_str(),
+        urls,
+    )
+}
+
+#[async_trait]
+impl PeerNodeRepo for EventingPeerNodeRepo {
+    async fn upsert(&self, node: &PeerNode) -> Result<(), DbError> {
+        let before = self.inner.get(node.id).await?;
+        self.inner.upsert(node).await?;
+        let changed = before.as_ref().map(visible_membership) != Some(visible_membership(node));
+        if changed {
+            self.events
+                .publish(NewLiveEvent {
+                    user_id: None,
+                    kind: kind::ACCOUNT,
+                    entity: "server_group",
+                    entity_id: Some("self".to_string()),
+                    changed: vec!["members"],
+                    source_instance_id: None,
+                })
+                .await;
+        }
+        Ok(())
+    }
+    async fn get(&self, id: Uuid) -> Result<Option<PeerNode>, DbError> {
+        self.inner.get(id).await
+    }
+    async fn list_all(&self) -> Result<Vec<PeerNode>, DbError> {
+        self.inner.list_all().await
+    }
+    async fn list_others(&self) -> Result<Vec<PeerNode>, DbError> {
+        self.inner.list_others().await
+    }
+}
+
+#[cfg(test)]
+mod peer_node_event_tests {
+    use playarr_model::PeerAddress;
+
+    use super::*;
+    use crate::codec::format_datetime;
+    use crate::pool::test_sqlite_pool;
+    use crate::repo::SqlxPeerNodeRepo;
+
+    #[tokio::test]
+    async fn publishes_only_when_the_visible_membership_changes() {
+        let pool = test_sqlite_pool().await;
+        let group_id = Uuid::new_v4();
+        sqlx::query("INSERT INTO peer_groups (id, name, created_at) VALUES (?, ?, ?)")
+            .bind(group_id.to_string())
+            .bind("test group")
+            .bind(format_datetime(Utc::now()))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let events = LiveEventPublisher::from_pool(pool.clone());
+        let repo = EventingPeerNodeRepo::new(
+            Arc::new(SqlxPeerNodeRepo::new(pool.clone())),
+            events.clone(),
+        );
+        let group_events = || async {
+            events
+                .repo()
+                .list_after(0, 100)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|e| e.kind == kind::ACCOUNT && e.entity == "server_group")
+                .count()
+        };
+        let now = Utc::now();
+        let mut node = PeerNode {
+            id: Uuid::new_v4(),
+            group_id,
+            name: "east".to_string(),
+            addresses: vec![PeerAddress {
+                url: "https://east.example.com".to_string(),
+                priority: 0,
+                label: "wan".to_string(),
+                client_reachable: true,
+            }],
+            public_key: "key".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: None,
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        };
+
+        repo.upsert(&node).await.unwrap();
+        assert_eq!(group_events().await, 1, "a new member is announced");
+
+        node.last_seen_at = Some(Utc::now());
+        node.last_sync_error = Some("timeout".to_string());
+        node.addresses.push(PeerAddress {
+            url: "https://east-lan.example.com".to_string(),
+            priority: 1,
+            label: "lan".to_string(),
+            client_reachable: false,
+        });
+        repo.upsert(&node).await.unwrap();
+        assert_eq!(
+            group_events().await,
+            1,
+            "heartbeats and internal addresses stay silent"
+        );
+
+        node.addresses[0].url = "https://east2.example.com".to_string();
+        repo.upsert(&node).await.unwrap();
+        assert_eq!(
+            group_events().await,
+            2,
+            "a client address change is announced"
+        );
+
+        node.status = PeerNodeStatus::Left;
+        repo.upsert(&node).await.unwrap();
+        assert_eq!(group_events().await, 3, "a member leaving is announced");
     }
 }
 

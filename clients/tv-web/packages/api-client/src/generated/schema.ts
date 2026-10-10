@@ -6964,25 +6964,19 @@ export interface components {
         };
         /**
          * @description One member of the signed-in user's server group, as an end user may see
-         *     it: a display name and the addresses clients reach it at. Nothing else
-         *     (no keys, sync state or internal addresses).
+         *     it: a display name and the one address clients should reach it at.
+         *     Nothing else (no ids, keys, sync state or other addresses).
          */
         ServerGroupMember: {
             /** @description True for the node that answered this request. */
             is_self: boolean;
             name: string;
-            /** Format: uuid */
-            peer_node_id: string;
-            /** @description Client-reachable addresses, priority-ordered (lower first). */
-            urls: string[];
+            /** @description The member's first-priority client-reachable address. */
+            url: string;
         };
         /** @description The server group the signed-in user's server belongs to. */
         ServerGroupMembers: {
-            /**
-             * Format: uuid
-             * @description `None` for a standalone deployment.
-             */
-            group_id?: string | null;
+            /** @description `None` only for a standalone deployment. */
             group_name?: string | null;
             /**
              * @description Active members that have at least one client-reachable address.

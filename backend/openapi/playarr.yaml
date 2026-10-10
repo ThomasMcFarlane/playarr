@@ -15308,43 +15308,32 @@ components:
       type: object
       description: |-
         One member of the signed-in user's server group, as an end user may see
-        it: a display name and the addresses clients reach it at. Nothing else
-        (no keys, sync state or internal addresses).
+        it: a display name and the one address clients should reach it at.
+        Nothing else (no ids, keys, sync state or other addresses).
       required:
-      - peer_node_id
       - name
       - is_self
-      - urls
+      - url
       properties:
         is_self:
           type: boolean
           description: True for the node that answered this request.
         name:
           type: string
-        peer_node_id:
+        url:
           type: string
-          format: uuid
-        urls:
-          type: array
-          items:
-            type: string
-          description: Client-reachable addresses, priority-ordered (lower first).
+          description: The member's first-priority client-reachable address.
     ServerGroupMembers:
       type: object
       description: The server group the signed-in user's server belongs to.
       required:
       - members
       properties:
-        group_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-          description: '`None` for a standalone deployment.'
         group_name:
           type:
           - string
           - 'null'
+          description: '`None` only for a standalone deployment.'
         members:
           type: array
           items:

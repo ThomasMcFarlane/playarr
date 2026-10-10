@@ -16,6 +16,8 @@ export type LiveArea =
   | "downloads"
   | "household"
   | "account"
+  /** The read-only server group list (Settings → Server). */
+  | "serverGroup"
   | "admin";
 
 export interface Invalidation {
@@ -46,6 +48,8 @@ export function mapChangeToInvalidations(event: Pick<LiveChangeEvent, "type" | "
     case "household":
       return [{ area: "household", key }];
     case "account":
+      // A member joined, left or changed its client address: only the group list shows it.
+      if (event.entity === "server_group") return [{ area: "serverGroup" }];
       // Policy and library-access changes alter what the catalogue returns.
       return [{ area: "account" }, { area: "household" }, { area: "catalog" }];
     case "admin":

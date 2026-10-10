@@ -860,11 +860,7 @@ export const ja: Translations = {
     "このグループのサーバーは管理者が自動で追加します。ここでは変更できません。",
   "settings.server.primaryBadge": "プライマリ",
   "settings.server.disconnect": "切断",
-  "settings.server.forgetServer": "このサーバーを記憶から削除",
-  "settings.server.forgetServerHint":
-    "このアカウントのサーバーグループとして記憶しているアドレスをすべて消去します。次回、サーバーアドレスの入力を求められることがあります。",
   "settings.server.serverDisconnectedToast": "サーバーを切断しました。",
-  "settings.server.serverGroupForgottenToast": "記憶していたサーバーアドレスを削除しました。",
   "settings.server.serverConnectedToast": "サーバーに接続しました。",
   "settings.server.addAnotherServer": "サーバーを追加",
   "settings.server.changeAppHost": "アプリのホストを変更",

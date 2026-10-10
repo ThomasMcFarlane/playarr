@@ -925,23 +925,21 @@ pub async fn address_bundle_handler(
 }
 
 /// One member of the signed-in user's server group, as an end user may see
-/// it: a display name and the addresses clients reach it at. Nothing else
-/// (no keys, sync state or internal addresses).
+/// it: a display name and the one address clients should reach it at.
+/// Nothing else (no ids, keys, sync state or other addresses).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct ServerGroupMember {
-    pub peer_node_id: Uuid,
     pub name: String,
     /// True for the node that answered this request.
     pub is_self: bool,
-    /// Client-reachable addresses, priority-ordered (lower first).
-    pub urls: Vec<String>,
+    /// The member's first-priority client-reachable address.
+    pub url: String,
 }
 
 /// The server group the signed-in user's server belongs to.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct ServerGroupMembers {
-    /// `None` for a standalone deployment.
-    pub group_id: Option<Uuid>,
+    /// `None` only for a standalone deployment.
     pub group_name: Option<String>,
     /// Active members that have at least one client-reachable address.
     /// Empty for a standalone deployment.
@@ -970,7 +968,6 @@ pub async fn server_group_members_handler(
         .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?;
     let Some(group_id) = identity.and_then(|identity| identity.group_id) else {
         return Ok(Json(ServerGroupMembers {
-            group_id: None,
             group_name: None,
             members: Vec::new(),
         }));
@@ -989,27 +986,21 @@ pub async fn server_group_members_handler(
         .iter()
         .filter(|node| node.status == PeerNodeStatus::Active)
         .filter_map(|node| {
-            let urls: Vec<String> =
+            let first =
                 client_reachable_addresses(node.addresses.iter().map(|address| (node.id, address)))
                     .into_iter()
-                    .map(|entry| entry.url)
-                    .collect();
-            (!urls.is_empty()).then(|| ServerGroupMember {
-                peer_node_id: node.id,
+                    .next()?;
+            Some(ServerGroupMember {
                 name: node.name.clone(),
                 is_self: node.is_self,
-                urls,
+                url: first.url,
             })
         })
         .collect();
-    members.sort_by(|a, b| {
-        a.name
-            .cmp(&b.name)
-            .then(a.peer_node_id.cmp(&b.peer_node_id))
-    });
+    members.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.url.cmp(&b.url)));
     Ok(Json(ServerGroupMembers {
-        group_id: Some(group_id),
-        group_name: group.map(|group| group.name),
+        // A grouped node always reports a name, even if its group row is missing.
+        group_name: Some(group.map(|group| group.name).unwrap_or_default()),
         members,
     }))
 }
@@ -1672,7 +1663,7 @@ mod tests {
             .await
             .unwrap();
         let body: ServerGroupMembers = serde_json::from_slice(&bytes).unwrap();
-        assert!(body.group_id.is_none() && body.members.is_empty());
+        assert!(body.group_name.is_none() && body.members.is_empty());
 
         let response = router.oneshot(members_request(None)).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -1710,7 +1701,15 @@ mod tests {
         east.name = "east".to_string();
         east.is_self = false;
         east.status = PeerNodeStatus::Active;
-        east.addresses = vec![address("https://east.example.com", true)];
+        // Only the first-priority client-reachable address is returned.
+        east.addresses = vec![
+            PeerAddress {
+                priority: 5,
+                ..address("https://east-backup.example.com", true)
+            },
+            address("https://east.example.com", true),
+            address("https://east-lan.example.com", false),
+        ];
         state.app.peer_node_repo.upsert(&east).await.unwrap();
         let mut hidden = east.clone();
         hidden.id = Uuid::new_v4();
@@ -1732,23 +1731,29 @@ mod tests {
             .await
             .unwrap();
         let raw = String::from_utf8(bytes.to_vec()).unwrap();
-        assert!(!raw.contains("public_key") && !raw.contains("lan.example.com"));
+        for leaked in [
+            "public_key",
+            "lan.example.com",
+            "east-backup",
+            "peer_node_id",
+            "group_id",
+        ] {
+            assert!(!raw.contains(leaked), "{leaked} leaked: {raw}");
+        }
         let body: ServerGroupMembers = serde_json::from_str(&raw).unwrap();
         assert_eq!(body.group_name.as_deref(), Some("Home Group"));
         assert_eq!(
             body.members,
             vec![
                 ServerGroupMember {
-                    peer_node_id: east.id,
                     name: "east".to_string(),
                     is_self: false,
-                    urls: vec!["https://east.example.com".to_string()],
+                    url: "https://east.example.com".to_string(),
                 },
                 ServerGroupMember {
-                    peer_node_id: founded.self_node.id,
                     name: "home".to_string(),
                     is_self: true,
-                    urls: vec!["https://home.example.com".to_string()],
+                    url: "https://home.example.com".to_string(),
                 },
             ]
         );
