@@ -1569,9 +1569,12 @@ struct TVLibraryKindView: View {
         // Entering the grid from outside (nav, header) lands on the last focused title, else the first (web), never on
         // the card that happens to sit level with the nav item.
         .onChange(of: selectedID) { previous, current in
-            if let current { lastFocusedID = current }
-            guard previous == nil, let current, let target = lastFocusedID ?? items.first?.id, target != current else { return }
-            if previous == nil, entryPending { entryPending = false; selectedID = target }
+            guard let current else { return }
+            if previous == nil, entryPending, let target = lastFocusedID ?? items.first?.id {
+                entryPending = false
+                if target != current { selectedID = target; return }
+            }
+            lastFocusedID = current
         }
         .onChange(of: selectedID == nil) { _, left in if left { entryPending = true } }
         // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
@@ -1827,7 +1830,6 @@ struct TVLibraryKindView: View {
             let page = try await api.browseCatalog(kind: workKind, sort: sort, order: order, audioLang: audioLangs, subtitleLang: subtitleLangs, limit: 48, offset: 0)
             items = page.items
             total = page.total.map(Int.init)
-            selectedID = items.first?.id
             didLoad = true
             items = Self.ordered(items, sort: sort, order: order)
             while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
@@ -1871,7 +1873,6 @@ extension TVLibraryKindView {
             items = cards
         }
         total = items.count
-        selectedID = items.first?.id
     }
 
     private static func works(_ ids: [UUID], api: PlayarrAPIClient) async -> [Work] {
