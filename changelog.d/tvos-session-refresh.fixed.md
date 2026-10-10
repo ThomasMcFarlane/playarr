@@ -1,0 +1,1 @@
+- Apple TV: the app stays signed in after it has been idle for more than 15 minutes; it refreshes the expired access token instead of showing the sign-in code.
