@@ -72,8 +72,10 @@ struct TVSettingsView: View {
             Color.clear.frame(width: 0, height: 0)
                 .onChange(of: focusedSection) { _, index in if let index { selectedSection = index } }
 
+            // Focus sections: Right from any row enters the panel even where no control sits level with the row.
             if selectedSection != 0, selectedSection != 4 || TVParityLaunch.frozen {
                 TVSettingsPanel(section: selectedSection)
+                    .focusSection()
             }
 
             // Detail panel at x 773.8 (`.settings-detail-panel`).
@@ -84,6 +86,7 @@ struct TVSettingsView: View {
             }
             .frame(width: 995, alignment: .topLeading)
             .pinned(x: 773.8, y: selectedSection == 0 ? 0 : 210, w: 995, alignment: .topLeading)
+            .focusSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
