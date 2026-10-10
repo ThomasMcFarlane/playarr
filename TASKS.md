@@ -54,6 +54,7 @@ Steps only the repository owner can perform.
 | 9980 | Web: Settings menu items cropped on the left (and other vertical menus) | in_progress | settings-crop worker | fix/settings-menu-crop | | 2026-10-11 01:00 ICT | Code pushed on settings-menu-crop (awaiting integration): Settings options use the shared card focus (lift, shadow, glow) and Watchlist/Downloads/Requests lists get --list-glow-room; settings-menu-e2e fails on main |
 | 9987 | Web: remaining toggle-button choice lists (playlists, keep-until, track pickers) use shared Select/SegmentedControl | in_progress | settings-select worker | settings-language-select | | 2026-10-11 02:30 ICT | Owner consistency rule: one shared control per pattern. Follows 1.9981. |
 | 9983 | Web: checkboxes trap keyboard/D-pad focus (Settings -> Your data and elsewhere) | in_progress | checkbox-focus worker | checkbox-focus-trap | | 2026-10-11 01:30 ICT | Owner bug 10 Oct 2026: arrows cannot leave a focused checkbox. Fix in the shared arrow-navigation policy; audit of every checkbox in the web app. |
+| 9982 | Web: Settings → Server lists the server group's members automatically (read-only for end users) | in_progress | server-group worker | settings-server-group | | 2026-10-11 02:30 ICT | Owner request 2026-10-10: group members come from the admin server group, end users cannot configure them |
 
 ## 2. Server performance and security (2026-10-03)
 
