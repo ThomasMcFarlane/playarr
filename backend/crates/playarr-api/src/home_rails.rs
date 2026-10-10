@@ -17,6 +17,7 @@
 //! rails or views (a generation counter in the key); a short TTL covers
 //! catalogue syncs.
 
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -172,9 +173,15 @@ fn clamp_limit(config: &HomeRailConfig) -> usize {
         .clamp(1, MAX_RAIL_LIMIT) as usize
 }
 
-pub(crate) fn recently_added(works: &[Work], limit: usize) -> Vec<Work> {
-    let mut items: Vec<&Work> = works.iter().collect();
+/// The work behind either an owned or a shared handle.
+fn wk<W: Borrow<Work>>(w: &W) -> &Work {
+    w.borrow()
+}
+
+pub(crate) fn recently_added<W: Borrow<Work> + Clone>(works: &[W], limit: usize) -> Vec<W> {
+    let mut items: Vec<&W> = works.iter().collect();
     items.sort_by(|a, b| {
+        let (a, b) = ((*a).borrow(), (*b).borrow());
         b.added_at
             .cmp(&a.added_at)
             .then(a.sort_title.cmp(&b.sort_title))
@@ -184,12 +191,17 @@ pub(crate) fn recently_added(works: &[Work], limit: usize) -> Vec<Work> {
 
 /// Available works already released, newest release first. Works with no
 /// release date are left out (they cannot be ranked by it).
-pub(crate) fn recently_released(works: &[Work], now: DateTime<Utc>, limit: usize) -> Vec<Work> {
-    let mut items: Vec<&Work> = works
+pub(crate) fn recently_released<W: Borrow<Work> + Clone>(
+    works: &[W],
+    now: DateTime<Utc>,
+    limit: usize,
+) -> Vec<W> {
+    let mut items: Vec<&W> = works
         .iter()
-        .filter(|w| w.release_date.is_some_and(|d| d <= now))
+        .filter(|w| (*w).borrow().release_date.is_some_and(|d| d <= now))
         .collect();
     items.sort_by(|a, b| {
+        let (a, b) = ((*a).borrow(), (*b).borrow());
         b.release_date
             .cmp(&a.release_date)
             .then(a.sort_title.cmp(&b.sort_title))
@@ -207,23 +219,23 @@ fn weighted_score(score: f64, votes: u32) -> f64 {
 }
 
 /// Highest-rated titles the user has never started.
-pub(crate) fn top_unwatched(
-    works: &[Work],
+pub(crate) fn top_unwatched<W: Borrow<Work> + Clone>(
+    works: &[W],
     watch: &HashMap<Uuid, WorkWatch>,
     limit: usize,
-) -> Vec<Work> {
-    let mut ranked: Vec<(f64, &Work)> = works
+) -> Vec<W> {
+    let mut ranked: Vec<(f64, &W)> = works
         .iter()
-        .filter(|w| !watch.get(&w.id).is_some_and(|x| x.started))
+        .filter(|w| !watch.get(&(*w).borrow().id).is_some_and(|x| x.started))
         .filter_map(|w| {
-            let (score, votes) = score_from_tags(&w.tags)?;
+            let (score, votes) = score_from_tags(&(*w).borrow().tags)?;
             Some((weighted_score(score, votes), w))
         })
         .collect();
     ranked.sort_by(|a, b| {
         b.0.partial_cmp(&a.0)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then(a.1.sort_title.cmp(&b.1.sort_title))
+            .then(a.1.borrow().sort_title.cmp(&b.1.borrow().sort_title))
     });
     ranked
         .into_iter()
@@ -234,24 +246,27 @@ pub(crate) fn top_unwatched(
 
 /// Series the user started, has not finished, and has not touched for
 /// `stale_days`; the most recently dropped first.
-pub(crate) fn rediscover_series(
-    works: &[Work],
+pub(crate) fn rediscover_series<W: Borrow<Work> + Clone>(
+    works: &[W],
     watch: &HashMap<Uuid, WorkWatch>,
     now: DateTime<Utc>,
     stale_days: u32,
     limit: usize,
-) -> Vec<Work> {
+) -> Vec<W> {
     let cutoff = now - chrono::Duration::days(i64::from(stale_days));
-    let mut items: Vec<(DateTime<Utc>, &Work)> = works
+    let mut items: Vec<(DateTime<Utc>, &W)> = works
         .iter()
         .filter_map(|w| {
-            let state = watch.get(&w.id)?;
+            let state = watch.get(&(*w).borrow().id)?;
             let last = state.last_activity?;
             (state.started && state.total_files > 0 && !state.is_complete() && last <= cutoff)
                 .then_some((last, w))
         })
         .collect();
-    items.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.sort_title.cmp(&b.1.sort_title)));
+    items.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then(a.1.borrow().sort_title.cmp(&b.1.borrow().sort_title))
+    });
     items
         .into_iter()
         .take(limit)
@@ -264,41 +279,42 @@ pub(crate) fn rediscover_series(
 /// watched some but not all of, then movies left part-watched for
 /// `stale_days`. Franchises the user touched most recently come first and
 /// each franchise's entries run in release order.
-pub(crate) fn rediscover_movies(
-    works: &[Work],
+pub(crate) fn rediscover_movies<W: Borrow<Work> + Clone>(
+    works: &[W],
     watch: &HashMap<Uuid, WorkWatch>,
     now: DateTime<Utc>,
     stale_days: u32,
     min_size: u32,
     limit: usize,
-) -> Vec<Work> {
-    let mut groups: HashMap<String, Vec<&Work>> = HashMap::new();
+) -> Vec<W> {
+    let mut groups: HashMap<String, Vec<&W>> = HashMap::new();
     for work in works {
-        if let Some((id, _)) = collection_from_tags(&work.tags) {
+        if let Some((id, _)) = collection_from_tags(&wk(work).tags) {
             groups.entry(id).or_default().push(work);
         }
     }
-    let mut franchises: Vec<(DateTime<Utc>, Vec<&Work>)> = groups
+    let mut franchises: Vec<(DateTime<Utc>, Vec<&W>)> = groups
         .into_values()
         .filter(|members| members.len() as u32 >= min_size.max(1))
         .filter_map(|members| {
-            let watched: Vec<&&Work> = members
+            let watched: Vec<&&W> = members
                 .iter()
-                .filter(|w| watch.get(&w.id).is_some_and(|x| x.is_complete()))
+                .filter(|w| watch.get(&wk(**w).id).is_some_and(|x| x.is_complete()))
                 .collect();
             let last = members
                 .iter()
-                .filter_map(|w| watch.get(&w.id).and_then(|x| x.last_activity))
+                .filter_map(|w| watch.get(&wk(*w).id).and_then(|x| x.last_activity))
                 .max()?;
-            let mut unwatched: Vec<&Work> = members
+            let mut unwatched: Vec<&W> = members
                 .iter()
                 .copied()
-                .filter(|w| !watch.get(&w.id).is_some_and(|x| x.started))
+                .filter(|w| !watch.get(&wk(*w).id).is_some_and(|x| x.started))
                 .collect();
             if watched.is_empty() || unwatched.is_empty() {
                 return None;
             }
             unwatched.sort_by(|a, b| {
+                let (a, b) = ((*a).borrow(), (*b).borrow());
                 a.release_date
                     .cmp(&b.release_date)
                     .then(a.sort_title.cmp(&b.sort_title))
@@ -308,28 +324,28 @@ pub(crate) fn rediscover_movies(
         .collect();
     franchises.sort_by_key(|f| std::cmp::Reverse(f.0));
 
-    let mut out: Vec<Work> = Vec::new();
+    let mut out: Vec<W> = Vec::new();
     let mut seen: HashSet<Uuid> = HashSet::new();
     for (_, members) in franchises {
         for work in members {
-            if seen.insert(work.id) {
+            if seen.insert(wk(work).id) {
                 out.push(work.clone());
             }
         }
     }
 
     let cutoff = now - chrono::Duration::days(i64::from(stale_days));
-    let mut stale: Vec<(DateTime<Utc>, &Work)> = works
+    let mut stale: Vec<(DateTime<Utc>, &W)> = works
         .iter()
         .filter_map(|w| {
-            let state = watch.get(&w.id)?;
+            let state = watch.get(&wk(w).id)?;
             let last = state.last_activity?;
             (state.started && !state.is_complete() && last <= cutoff).then_some((last, w))
         })
         .collect();
     stale.sort_by_key(|s| std::cmp::Reverse(s.0));
     for (_, work) in stale {
-        if seen.insert(work.id) {
+        if seen.insert(wk(work).id) {
             out.push(work.clone());
         }
     }
@@ -338,14 +354,20 @@ pub(crate) fn rediscover_movies(
 }
 
 /// Works belonging to the season, newest additions first.
-pub(crate) fn seasonal_items(works: &[Work], rule: &SeasonalRule, limit: usize) -> Vec<Work> {
-    let mut items: Vec<&Work> = works
+pub(crate) fn seasonal_items<W: Borrow<Work> + Clone>(
+    works: &[W],
+    rule: &SeasonalRule,
+    limit: usize,
+) -> Vec<W> {
+    let mut items: Vec<&W> = works
         .iter()
         .filter(|w| {
+            let w = (*w).borrow();
             seasonal::rule_matches(rule, &w.title, w.overview.as_deref(), &w.genres, &w.tags)
         })
         .collect();
     items.sort_by(|a, b| {
+        let (a, b) = ((*a).borrow(), (*b).borrow());
         b.added_at
             .cmp(&a.added_at)
             .then(a.sort_title.cmp(&b.sort_title))
@@ -356,6 +378,18 @@ pub(crate) fn seasonal_items(works: &[Work], rule: &SeasonalRule, limit: usize) 
 // ---------------------------------------------------------------------------
 // Cache
 // ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct StoredRails {
+    catalog_version: u64,
+    response: HomeRailsResponse,
+}
+
+#[derive(Serialize)]
+struct StoredRailsRef<'a> {
+    catalog_version: u64,
+    response: &'a HomeRailsResponse,
+}
 
 /// Per-user rails cache over the shared [`CacheAndPubSub`].
 pub struct HomeRailsCache {
@@ -378,15 +412,28 @@ impl HomeRailsCache {
         format!("home_rails:{generation}:{user}:{lang}")
     }
 
-    async fn get(&self, user: Uuid, lang: &str) -> Option<HomeRailsResponse> {
+    /// The cached rails, if they were computed from catalogue snapshot
+    /// `catalog_version` (a rebuilt snapshot means the catalogue changed).
+    async fn get(&self, user: Uuid, lang: &str, catalog_version: u64) -> Option<HomeRailsResponse> {
         let key = Self::key(user, lang, &self.generation().await);
         let bytes = self.cache.get(&key).await.ok()??;
-        serde_json::from_slice(&bytes).ok()
+        let stored: StoredRails = serde_json::from_slice(&bytes).ok()?;
+        (stored.catalog_version == catalog_version).then_some(stored.response)
     }
 
-    async fn put(&self, user: Uuid, lang: &str, response: &HomeRailsResponse) {
+    async fn put(
+        &self,
+        user: Uuid,
+        lang: &str,
+        catalog_version: u64,
+        response: &HomeRailsResponse,
+    ) {
         let key = Self::key(user, lang, &self.generation().await);
-        if let Ok(bytes) = serde_json::to_vec(response) {
+        let stored = StoredRailsRef {
+            catalog_version,
+            response,
+        };
+        if let Ok(bytes) = serde_json::to_vec(&stored) {
             let _ = self.cache.set(&key, bytes, Some(RAILS_CACHE_TTL)).await;
         }
     }
@@ -543,7 +590,7 @@ async fn compute_rails(
     let now = Utc::now();
 
     // One visible-works scan per library any enabled rail needs.
-    let mut works: HashMap<WorkKind, Vec<Work>> = HashMap::new();
+    let mut works: HashMap<WorkKind, Vec<Arc<Work>>> = HashMap::new();
     for kind in ordered.iter().filter_map(|r| r.library) {
         if works.contains_key(&kind) {
             continue;
@@ -576,13 +623,13 @@ async fn compute_rails(
     let mut out = Vec::new();
     for rail in ordered {
         let limit = clamp_limit(&rail.config);
-        let empty: Vec<Work> = Vec::new();
+        let empty: Vec<Arc<Work>> = Vec::new();
         let pool = rail.library.and_then(|k| works.get(&k)).unwrap_or(&empty);
         let stale_days = rail.config.stale_days.unwrap_or(DEFAULT_STALE_DAYS);
         let mut season: Option<String> = None;
         let mut season_key: Option<String> = None;
 
-        let items: Vec<Work> = match rail.kind {
+        let items: Vec<Arc<Work>> = match rail.kind {
             HomeRailKind::RecentlyAdded => recently_added(pool, usize::MAX),
             HomeRailKind::RecentlyReleased => recently_released(pool, now, usize::MAX),
             HomeRailKind::TopUnwatched => top_unwatched(pool, &watch, usize::MAX),
@@ -633,6 +680,7 @@ async fn compute_rails(
                     .filter(|w| {
                         view.criteria.kind.is_some() || rail.library.is_none_or(|lib| w.kind == lib)
                     })
+                    .map(Arc::new)
                     .collect()
             }
         };
@@ -667,7 +715,7 @@ async fn compute_rails(
             title,
             title_key,
             view_id: rail.view_id,
-            items,
+            items: items.into_iter().map(|work| (*work).clone()).collect(),
             total,
         });
     }
@@ -693,8 +741,14 @@ pub async fn home_rails_handler(
 ) -> Result<Json<HomeRailsResponse>, ApiError> {
     let lang = resolve_lang(params.lang.as_deref(), &headers);
     let cacheable = params.on.is_none();
+    // The rails are derived from the in-memory catalogue snapshot; a rebuilt
+    // snapshot (an import, a metadata change) makes any cached copy stale.
+    let catalog_version = state.catalog.snapshot_version().await?;
     let cached = if cacheable {
-        state.home_rails_cache.get(viewer.user_id, lang).await
+        state
+            .home_rails_cache
+            .get(viewer.user_id, lang, catalog_version)
+            .await
     } else {
         None
     };
@@ -711,7 +765,7 @@ pub async fn home_rails_handler(
             if cacheable {
                 state
                     .home_rails_cache
-                    .put(viewer.user_id, lang, &response)
+                    .put(viewer.user_id, lang, catalog_version, &response)
                     .await;
             }
             response

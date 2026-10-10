@@ -29,6 +29,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+# The snapshot rebuild is single-flight (`sync::Mutex`) and refreshes in the background.
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
 
 [dev-dependencies]
 # Test-only: an in-process, SQL-backed `WorkRepo` double (see `tests` module)

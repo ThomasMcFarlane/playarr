@@ -93,3 +93,35 @@ describe("loadOnDeck on a slow link", () => {
     expect(seen.entries).toHaveLength(1);
   });
 });
+
+describe("loadOnDeck critical path", () => {
+  it("asks for the title details as soon as progress arrives, without waiting for the resume plans", async () => {
+    const calls: string[] = [];
+    const client: OnDeckClient = {
+      listResumePlans: async () => (calls.push("plans:start"), await sleep(60), calls.push("plans:end"), [stackedPlan]),
+      listWatchProgress: async () => (await sleep(5), [progress]),
+      getWork: async () => (calls.push("detail:start"), series as never),
+    };
+    const { seen, sink } = collect();
+    await loadOnDeck(client, sink);
+    expect(calls.indexOf("detail:start")).toBeLessThan(calls.indexOf("plans:end"));
+    // The plan still decides the lead episode.
+    expect(seen.entries).toHaveLength(1);
+    expect(seen.plans?.get("w1")).toBeDefined();
+  });
+});
+
+describe("loadOnDeck bad rows", () => {
+  it("drops only the row whose detail is malformed", async () => {
+    const second = { ...progress, work_id: "w2", media_file_id: "g1", updated_at: "2026-10-04T00:00:00Z" } as WatchProgress;
+    const client: OnDeckClient = {
+      listResumePlans: async () => [],
+      listWatchProgress: async () => [progress, second],
+      // The first title's detail has no usable `work`; reading it throws.
+      getWork: async (id) => (id === "w1" ? ({ work: null, children: {} } as never) : ({ work: { id: "w2", kind: "movie", title: "Test Movie A" }, children: {} } as never)),
+    };
+    const { seen, sink } = collect();
+    await loadOnDeck(client, sink);
+    expect(seen.entries?.map((e) => e.work.title)).toEqual(["Test Movie A"]);
+  });
+});

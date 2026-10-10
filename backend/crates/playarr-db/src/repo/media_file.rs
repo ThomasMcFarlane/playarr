@@ -100,6 +100,19 @@ pub trait MediaFileRepo: Send + Sync {
     /// update that's the pre-existing row (with its original `id`), not
     /// `media_file` as passed in.
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError>;
+
+    /// The file currently held under a source's own file id, if any. The
+    /// default scans every file; the SQL repo answers from the unique index.
+    async fn find_by_source(
+        &self,
+        source_instance_id: Uuid,
+        source_file_id: &str,
+    ) -> Result<Option<MediaFile>, DbError> {
+        Ok(self.list_all().await?.into_iter().find(|f| {
+            f.source_instance_id == source_instance_id
+                && f.source_file_id.as_deref() == Some(source_file_id)
+        }))
+    }
 }
 
 /// Owned bind values for a `media_files` insert, so a queued write can run
@@ -384,6 +397,15 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             })
         })
         .await
+    }
+
+    async fn find_by_source(
+        &self,
+        source_instance_id: Uuid,
+        source_file_id: &str,
+    ) -> Result<Option<MediaFile>, DbError> {
+        self.find_by_source_key(source_instance_id, source_file_id)
+            .await
     }
 
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError> {
