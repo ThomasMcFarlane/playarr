@@ -17,61 +17,109 @@
         rather than through an ItemsSource/DataTemplate, matching
         SearchPage's identical judgment call for its result tiles.
     -->
+    <!--
+        Web TV title page (1920x1080): backdrop behind the left half under a dark scrim, Back plus the library name
+        with the title as subtitle, then genre eyebrow, large title, meta row, synopsis and the action pills. Seasons and
+        episodes sit in the right column from x=881, where the web shows its rails.
+    -->
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <Image
+            x:Name="BackdropImage"
+            Width="960"
+            HorizontalAlignment="Left"
+            Stretch="UniformToFill"
+            Opacity="0.35" />
+        <Rectangle Width="960" HorizontalAlignment="Left">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#99151315" Offset="0" />
+                    <GradientStop Color="#FF151315" Offset="1" />
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
 
-        <Grid Grid.Row="0" Height="380">
-            <Image
-                x:Name="BackdropImage"
-                Stretch="UniformToFill"
-                Opacity="0.55" />
-
-            <StackPanel VerticalAlignment="Bottom" Padding="48,0,48,24" Spacing="8">
-                <TextBlock
-                    x:Name="TitleText"
-                    Style="{StaticResource TitleTextBlockStyle}" />
-                <TextBlock
-                    x:Name="GenresText"
-                    Style="{StaticResource BodyTextBlockStyle}"
-                    Opacity="0.8" />
-                <Button
-                    x:Name="PlayButton"
-                    Content="Play"
-                    Click="PlayButton_Click" />
-            </StackPanel>
-
-            <ProgressRing
-                x:Name="LoadingRing"
-                IsActive="False"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center" />
+        <Button
+            x:Name="BackButton"
+            Width="50"
+            Height="50"
+            CornerRadius="25"
+            Margin="154,56,0,0"
+            Padding="0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            BorderBrush="{StaticResource PlayarrLineStrong}"
+            BorderThickness="1"
+            Click="BackButton_Click">
+            <FontIcon Glyph="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+        </Button>
+        <StackPanel Margin="228,57,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <TextBlock x:Name="LibraryText" Style="{StaticResource PlayarrPageTitle}" />
             <TextBlock
-                x:Name="ErrorText"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
-                Visibility="Collapsed" />
-        </Grid>
+                x:Name="SubtitleText"
+                FontSize="11"
+                FontWeight="Bold"
+                CharacterSpacing="120"
+                Foreground="{StaticResource PlayarrBrandInk}"
+                Margin="0,6,0,0" />
+        </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Padding="48,24,48,48">
-            <StackPanel Spacing="24">
-                <TextBlock
-                    x:Name="OverviewText"
-                    TextWrapping="Wrap"
-                    Style="{StaticResource BodyTextBlockStyle}" />
-
-                <StackPanel x:Name="SeriesPanel" Spacing="16" Visibility="Collapsed">
-                    <StackPanel
-                        x:Name="SeasonsPanel"
-                        Orientation="Horizontal"
-                        Spacing="8" />
-                    <StackPanel
-                        x:Name="EpisodesPanel"
-                        Spacing="4" />
+        <StackPanel Width="560" Margin="154,258,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <TextBlock
+                x:Name="EyebrowText"
+                FontSize="12"
+                FontWeight="Bold"
+                CharacterSpacing="120"
+                Foreground="{StaticResource PlayarrBrandInk}" />
+            <TextBlock
+                x:Name="TitleText"
+                FontSize="64"
+                FontWeight="SemiBold"
+                CharacterSpacing="-30"
+                LineHeight="64"
+                TextWrapping="WrapWholeWords"
+                MaxLines="3"
+                Margin="0,22,0,0" />
+            <TextBlock x:Name="MetaText" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PlayarrInkSoft}" Margin="0,26,0,0" />
+            <TextBlock
+                x:Name="OverviewText"
+                Width="330"
+                HorizontalAlignment="Left"
+                FontSize="12.5"
+                LineHeight="20.5"
+                TextWrapping="WrapWholeWords"
+                MaxLines="5"
+                TextTrimming="WordEllipsis"
+                Foreground="{StaticResource PlayarrInkSoft}"
+                Margin="0,24,0,0" />
+            <Button
+                x:Name="PlayButton"
+                Width="160"
+                Height="66"
+                CornerRadius="33"
+                Margin="0,36,0,0"
+                Background="{StaticResource PlayarrSurfaceStrong}"
+                BorderBrush="{StaticResource PlayarrLine}"
+                BorderThickness="1"
+                FocusVisualPrimaryBrush="White"
+                FocusVisualPrimaryThickness="3"
+                FocusVisualSecondaryThickness="0"
+                Click="PlayButton_Click">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="11" />
+                    <TextBlock Text="Play" FontSize="12" FontWeight="SemiBold" />
                 </StackPanel>
+            </Button>
+
+            <ProgressRing x:Name="LoadingRing" IsActive="False" HorizontalAlignment="Left" Width="40" Height="40" />
+            <TextBlock x:Name="ErrorText" Style="{StaticResource PlayarrRailTitle}" Visibility="Collapsed" />
+        </StackPanel>
+
+        <ScrollViewer Margin="881,140,0,0" Padding="0,0,48,48" VerticalScrollBarVisibility="Hidden">
+            <StackPanel x:Name="SeriesPanel" Spacing="22" Visibility="Collapsed">
+                <TextBlock Text="Episodes" Style="{StaticResource PlayarrRailTitle}" />
+                <StackPanel x:Name="SeasonsPanel" Orientation="Horizontal" Spacing="8" />
+                <StackPanel x:Name="EpisodesPanel" Spacing="4" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

@@ -363,17 +363,20 @@ namespace Playarr.Core.Models
         /// <summary>"Movie · 2019" or "Series · 2011–2019"; the bare kind label when no year is known.</summary>
         public static string KindWithYear(Work work)
         {
-            var label = work.Kind switch
-            {
-                WorkKind.Movie => "Movie",
-                WorkKind.Series => "Series",
-                WorkKind.Artist => "Artist",
-                WorkKind.Author => "Author",
-                _ => string.Empty,
-            };
+            var label = KindLabel(work.Kind);
             var years = YearRange(work);
             return years == null ? label : label.Length == 0 ? years : $"{label} \u00b7 {years}";
         }
+
+        /// <summary>Singular kind label ("Movie", "Series"); empty for kinds the web does not label.</summary>
+        public static string KindLabel(WorkKind kind) => kind switch
+        {
+            WorkKind.Movie => "Movie",
+            WorkKind.Series => "Series",
+            WorkKind.Artist => "Artist",
+            WorkKind.Author => "Author",
+            _ => string.Empty,
+        };
 
         private static int? YearOf(string? value)
         {
