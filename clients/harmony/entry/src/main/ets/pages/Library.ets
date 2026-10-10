@@ -457,11 +457,19 @@ export struct Library {
    * one is found; with none, the last loaded title. */
   private async jumpToLetter(letter: string): Promise<void> {
     let index = firstIndexAtOrAfter(this.loadedLetters(), letter, this.order);
-    while (index < 0 && this.hasMore && !this.isLoadingMore) {
-      const before = this.items.length;
-      await this.loadPage(before);
-      if (this.items.length === before) {
-        break;
+    // Bounded: a whole catalogue is at most a few dozen pages.
+    for (let attempt = 0; index < 0 && this.hasMore && attempt < JUMP_MAX_ATTEMPTS; attempt++) {
+      if (this.isLoadingMore) {
+        // A scroll-triggered page is already on its way; wait for it rather than give up.
+        await new Promise<void>((resolve: () => void): void => {
+          setTimeout(resolve, JUMP_WAIT_MS);
+        });
+      } else {
+        const before = this.items.length;
+        await this.loadPage(before);
+        if (this.items.length === before) {
+          break;
+        }
       }
       index = firstIndexAtOrAfter(this.loadedLetters(), letter, this.order);
     }
@@ -913,6 +921,9 @@ export struct Library {
 }
 
 // Web `.tv-library-heading`: round Back (50, surfaceStrong at 0.7), title 33.6/580, pink count 12.288/820.
+const JUMP_MAX_ATTEMPTS: number = 200;
+const JUMP_WAIT_MS: number = 100;
+
 const TV_BACK_SIZE: number = 50;
 const TV_BACK_GLYPH_SIZE: number = 17.28;
 const TV_BACK_BG_ALPHA: number = 0.7;
