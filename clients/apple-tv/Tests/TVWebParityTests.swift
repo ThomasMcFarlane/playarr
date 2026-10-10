@@ -4,6 +4,16 @@ import XCTest
 
 /// Locks the pieces of the web parity work that are pure functions.
 final class TVWebParityTests: XCTestCase {
+    /// Web `orderWorks`: numeric, case-insensitive order on the sort title ("2" before "10").
+    func testLibraryTitleOrderIsNumericLikeTheWeb() {
+        func work(_ title: String) -> Work {
+            Work(id: UUID(), kind: .movie, title: title, sortTitle: title, addedAt: Date(), monitored: false, availability: .available)
+        }
+        let titles = ["Title 10", "title 2", "Title 1"].map(work)
+        XCTAssertEqual(TVLibraryKindView.ordered(titles, sort: "title", order: "asc").map(\.title), ["Title 1", "title 2", "Title 10"])
+        XCTAssertEqual(TVLibraryKindView.ordered(titles, sort: "title", order: "desc").map(\.title), ["Title 10", "title 2", "Title 1"])
+    }
+
     /// Same values as the web's `defaultProfileAvatarPreset` (hash of the user id modulo six presets).
     /// Every client renders the account's server preference; the id hash is only the fallback when none is set.
     func testAvatarSourceFollowsTheServerPreference() throws {

@@ -1532,6 +1532,8 @@ struct TVLibraryKindView: View {
             .padding(.trailing, padR)
         }
         .frame(width: gridWidth)
+        // Web: the first title is focused when the page opens.
+        .defaultFocus($selectedID, items.first?.id)
         // Web scroll edge fade: content leaving the top fades out before the header line (owner rule).
         .mask(
             LinearGradient(
@@ -1719,6 +1721,21 @@ struct TVLibraryKindView: View {
         return TVWebFormat.year(work.releaseDate) ?? ""
     }
 
+    /// Web `orderWorks`: titles compare like a person reads them (numbers by value, case and accents ignored: "2"
+    /// before "10"), on the sort title; date added by date.
+    static func ordered(_ works: [Work], sort: String, order: String) -> [Work] {
+        let ascending = order != "desc"
+        if sort == "date_added" {
+            return works.sorted { ascending ? $0.addedAt < $1.addedAt : $0.addedAt > $1.addedAt }
+        }
+        return works.sorted {
+            let a = $0.sortTitle.isEmpty ? $0.title : $0.sortTitle
+            let b = $1.sortTitle.isEmpty ? $1.title : $1.sortTitle
+            let result = a.compare(b, options: [.numeric, .caseInsensitive, .diacriticInsensitive], locale: .current)
+            return ascending ? result == .orderedAscending : result == .orderedDescending
+        }
+    }
+
     @MainActor
     private func loadItems() async {
         // Offline parity: deterministic fixture catalogue (SPA-matching titles).
@@ -1740,10 +1757,11 @@ struct TVLibraryKindView: View {
             total = page.total.map(Int.init)
             selectedID = items.first?.id
             didLoad = true
+            items = Self.ordered(items, sort: sort, order: order)
             while workKind != nil, !page.items.isEmpty, items.count < (total ?? Int.max) {
                 let next = try await api.browseCatalog(kind: workKind, sort: sort, order: order, limit: 500, offset: items.count)
                 if next.items.isEmpty { break }
-                items += next.items
+                items = Self.ordered(items + next.items, sort: sort, order: order)
             }
         } catch {
             didLoad = true // keep what loaded; never show fixture titles to a real user
