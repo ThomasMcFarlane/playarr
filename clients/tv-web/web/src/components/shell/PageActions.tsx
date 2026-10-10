@@ -13,6 +13,8 @@ export interface NavigationItem {
   icon?: ActionIcon;
   onSelect: () => void;
   buttonProps?: DataAttributes;
+  /** A text item that opens a panel (the calendar's date range): reports `aria-expanded` and `aria-controls`. */
+  panel?: { open: boolean; controls: string; buttonRef?: Ref<HTMLButtonElement> };
 }
 
 export type PageAction =
@@ -69,7 +71,14 @@ function renderAction(action: PageAction): ReactNode {
             item.icon ? (
               <ActionPill key={item.id} shape="icon" icon={item.icon} label={item.label} onClick={item.onSelect} buttonProps={item.buttonProps} />
             ) : (
-              <Button key={item.id} variant="secondary" onClick={item.onSelect} {...item.buttonProps}>
+              <Button
+                key={item.id}
+                ref={item.panel?.buttonRef}
+                variant="secondary"
+                onClick={item.onSelect}
+                {...(item.panel ? { "aria-haspopup": "dialog" as const, "aria-expanded": item.panel.open, "aria-controls": item.panel.controls } : {})}
+                {...item.buttonProps}
+              >
                 {item.label}
               </Button>
             )

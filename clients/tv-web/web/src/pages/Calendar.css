@@ -515,11 +515,11 @@
 }
 
 .period-picker-panel {
-  /* Opens beside the range button in the shell action column. */
+  /* Opens under the range button in the header group, right-aligned to the page edge. */
   position: fixed;
   z-index: var(--z-popover);
-  top: var(--shell-action-column-top);
-  right: calc(var(--directory-controls-edge) + var(--directory-controls-width) + 12px);
+  top: calc(var(--page-header-top) + var(--page-control-height) + 10px);
+  right: var(--page-end);
   display: flex;
   gap: 0.5rem;
   padding: 0.6rem;
