@@ -7,7 +7,7 @@
  * focus; the entry's left border shows availability; every scrolling area fades at the edges where content continues.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {focusNode} from '../platform';
+import {focusNode, useDefaultFocus} from '../platform';
 import {Pressable, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
 import {useAsyncData} from '@playarr-tv/api-client/react';
@@ -208,6 +208,7 @@ function TodayPill({label, onPress, settled}: {label: string; onPress: () => voi
   // whatever it last resolved, so Today takes focus again once the first load settles.
   const ref = useRef<View>(null);
   const settledOnce = useRef(false);
+  useDefaultFocus(ref);
   useEffect(() => {
     if (settledOnce.current) return; // later reloads (a view or filter change) must not pull focus out of a drawer
     if (settled) settledOnce.current = true;

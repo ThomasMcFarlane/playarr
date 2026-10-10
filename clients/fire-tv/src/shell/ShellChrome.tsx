@@ -2,8 +2,8 @@
  * The shell chrome every signed-in screen sits in, drawn at the web TV layout's measurements (1920x1080 CSS px, from the
  * web client's DOM): the logo, the clock, the three-group left rail and the profile chip with the app version.
  */
-import React, {useEffect, useMemo, useState} from 'react';
-import {focusNode, getFocusedTag, TvFocusScope, useRemoteKey} from '../platform';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {focusDefaultTarget, focusNode, getFocusedTag, TvFocusScope, useRemoteKey} from '../platform';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {WorkKind} from '@playarr-tv/api-client';
 import {ProfileAvatar} from '../components/ProfileAvatar';
@@ -100,12 +100,18 @@ function RailLink({
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
   const lit = active || focused;
+  // A stable callback: an inline ref function is detached and re-attached on every commit, and its setState then
+  // re-rendered the rail without end (the JS thread froze and the remote went dead).
+  const activeRefCallback = useCallback(
+    (node: unknown) => {
+      if (active && node) onActiveNode(node);
+    },
+    [active, onActiveNode],
+  );
   const ink = lit ? colour.ink : colour.inkMuted;
   return (
     <Pressable
-      ref={(node) => {
-        if (active && node) onActiveNode(node);
-      }}
+      ref={activeRefCallback}
       accessibilityRole="button"
       accessibilityLabel={item.label}
       accessibilityState={{selected: active}}
@@ -152,10 +158,11 @@ function Rail({
   const [activeNode, setActiveNode] = useState<unknown>(null);
   const activeRef = useMemo(() => ({current: activeNode}), [activeNode]);
   // Vega drops focus when the focused view unmounts (a list re-rendered by late data), and then the D-pad does nothing.
-  // The web never loses focus, so a direction key with nothing focused lands on the rail's own item.
+  // The web never loses focus, so a direction key with nothing focused lands on the page default or the rail's item.
   useRemoteKey((key, raw) => {
     if (raw.eventKeyAction !== 0 || !['up', 'down', 'left', 'right'].includes(key)) return;
-    if (!getFocusedTag()) focusNode(activeRef);
+    // The page's own default first (web data-tv-focus-default), else the rail's item.
+    if (!getFocusedTag() && !focusDefaultTarget()) focusNode(activeRef);
   });
   return (
     <TvFocusScope trap={['up', 'down']} destinations={[activeRef]} style={{position: 'absolute', left: 0, top: 0, width: sw(128), height: sw(1080)}}>

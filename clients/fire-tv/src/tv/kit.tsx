@@ -114,9 +114,11 @@ export function useColours(): ReturnType<typeof useTheme> {
  * that keeps that number (the web balances its big titles, so "2 Fast 2 Furious" breaks as "2 Fast / 2 Furious").
  * Vega has no balancing, so the width is searched by re-laying the text out, which settles within a few frames.
  */
+const MAX_BALANCE_PASSES = 6;
+
 export function BalancedT({width, children, ...text}: Omit<TProps, 'onTextLayout'> & {width: number}): React.ReactElement {
   // `good` is the narrowest width whose layout was acceptable so far; the loop narrows to the widest line each pass.
-  const [state, setState] = useState<{w: number; good: number; lines: number | null; done: boolean}>({w: width, good: width, lines: null, done: false});
+  const [state, setState] = useState<{w: number; good: number; lines: number | null; done: boolean; passes: number}>({w: width, good: width, lines: null, done: false, passes: 0});
   const onTextLayout = (event: NativeSyntheticEvent<TextLayoutEventData>): void => {
     if (state.done) return;
     const found = event.nativeEvent.lines;
@@ -126,7 +128,7 @@ export function BalancedT({width, children, ...text}: Omit<TProps, 'onTextLayout
       if (current.done) return current;
       if (current.lines === null) {
         // First layout at the full width: remember the line count; one line needs no balancing.
-        return found.length <= 1 ? {...current, lines: found.length, done: true} : {w: Math.max(1, widest - 1), good: width, lines: found.length, done: false};
+        return found.length <= 1 ? {...current, lines: found.length, done: true} : {w: Math.max(1, widest - 1), good: width, lines: found.length, done: false, passes: 1};
       }
       // Narrower than the longest word, RN breaks inside it ("Leonard" / "o") without adding a line, so a line that does
       // not end in a space also ends the search; the result is the last acceptable width.
@@ -138,7 +140,9 @@ export function BalancedT({width, children, ...text}: Omit<TProps, 'onTextLayout
         return head.length > 0 && next.length > 0 && !/\s$/.test(line.text) && source.includes(head + next[0]);
       });
       if (found.length > current.lines || midWord || widest <= 4) return {...current, w: current.good, done: true};
-      return {...current, good: current.w, w: Math.max(1, widest - 1)};
+      // Each pass is a full layout round trip (~0.3 s on a Vega stick); a few are enough to balance a title.
+      if (current.passes >= MAX_BALANCE_PASSES) return {...current, done: true};
+      return {...current, good: current.w, w: Math.max(1, widest - 1), passes: current.passes + 1};
     });
   };
   return (

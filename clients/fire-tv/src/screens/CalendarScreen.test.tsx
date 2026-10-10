@@ -8,7 +8,7 @@ import {CalendarScreen} from './CalendarScreen';
 
 (globalThis as unknown as {React: typeof React}).React = React;
 
-jest.mock('../platform/focus', () => ({TvFocusScope: ({children}: {children: unknown}) => children, focusNode: jest.fn()}));
+jest.mock('../platform/focus', () => ({TvFocusScope: ({children}: {children: unknown}) => children, focusNode: jest.fn(), useDefaultFocus: jest.fn(), focusDefaultTarget: jest.fn(), getFocusedTag: jest.fn()}));
 jest.mock('../navigation/backPolicy', () => ({useTvBackNavigation: jest.fn(), useBackLayer: jest.fn()}));
 jest.mock('@amazon-devices/react-navigation__native', () => ({useNavigation: () => ({navigate: jest.fn()})}));
 
