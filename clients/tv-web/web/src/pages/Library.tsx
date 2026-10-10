@@ -297,7 +297,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [selectedId, setSelectedId] = useState<string | null>(seed?.items[0]?.id ?? null);
   const [refreshing, setRefreshing] = useState(Boolean(seed));
   const [activeLetter, setActiveLetter] = useState(seed?.items[0] ? workLetter(seed.items[0]) : "#");
-  const [languageFacets, setLanguageFacets] = useState<LanguageFacets | null>(null);
+  // null while the lists load, "error" when they could not be read.
+  const [languageFacets, setLanguageFacets] = useState<LanguageFacets | "error" | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   // Expand-only virtual mount: grow DOM prefix as focus moves, never shrink.
   const [mountedEnd, setMountedEnd] = useState(INITIAL_MOUNTED);
@@ -503,7 +504,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         if (!cancelled) setLanguageFacets(facets);
       })
       .catch(() => {
-        if (!cancelled) setLanguageFacets(null);
+        if (!cancelled) setLanguageFacets("error");
       });
     return () => {
       cancelled = true;
@@ -534,6 +535,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       { replace: true }
     );
   }
+
+  const loadedFacets = languageFacets === "error" ? null : languageFacets;
 
   function languageOptions(
     facets: LanguageFacets["audio"] | undefined,
@@ -1152,15 +1155,28 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
           {(
             [
-              ["audio", t("pages.library.audioLanguage"), languageFacets?.audio, audioLangs],
-              ["subs", t("pages.library.subtitleLanguage"), languageFacets?.subtitle, subtitleLangs],
+              ["audio", t("pages.library.audioLanguage"), loadedFacets?.audio, audioLangs],
+              ["subs", t("pages.library.subtitleLanguage"), loadedFacets?.subtitle, subtitleLangs],
             ] as const
           ).map(([which, heading, facets, selected]) => {
             const options = languageOptions(facets, [...selected]);
             return (
               <FilterSection key={which} title={heading} data-language-filter={which}>
                 {options.length === 0 ? (
-                  <p>{t("pages.library.noLanguages")}</p>
+                  languageFacets === null ? (
+                    <div
+                      className="skeleton tv-filter-language-skeleton"
+                      role="status"
+                      aria-busy="true"
+                      aria-label={t("pages.library.loadingLanguages")}
+                    />
+                  ) : (
+                    <p>
+                      {languageFacets === "error"
+                        ? t("pages.library.languagesUnavailable")
+                        : t("pages.library.noLanguages")}
+                    </p>
+                  )
                 ) : (
                   <MultiSelect
                     ariaLabel={heading}

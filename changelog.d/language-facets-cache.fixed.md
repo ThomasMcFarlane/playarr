@@ -1,0 +1,2 @@
+- Filters panel: the audio and subtitle language lists no longer say "No languages indexed yet" while they load. Each list shows a skeleton, then the languages, and a failed load says so instead of claiming the index is empty.
+- Server: the `(work, language)` pairs behind the language filters and `GET /api/v1/catalog/languages` are kept in memory (stale-while-revalidate, refreshed in the background) and read once at start, so the Filters language lists no longer wait 20 to 30 s for two slow distinct reads on a large library.

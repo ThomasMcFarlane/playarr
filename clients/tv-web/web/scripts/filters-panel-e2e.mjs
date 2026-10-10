@@ -5,9 +5,13 @@
 //   2. Audio and subtitle languages are ONE multi-select each (no toggle pills): opens by keyboard, filters by typing,
 //      toggles two languages with Enter, closes on Escape with focus back on the field, same ?audio= query param.
 //   3. The View control is one row of equal segments, the same height as the other panel choice buttons.
+//   4. While the language lists load (slow on a big library) the panel shows a skeleton per list, never "No languages
+//      indexed yet"; the lists replace the skeletons when they arrive (row 1.9977).
 // 1920x1080 and 1280x720.   node scripts/filters-panel-e2e.mjs [--no-build] [--dist dir] [--shots dir]
 import { mkdirSync } from "node:fs";
-import { boot, opt } from "./e2e-common.mjs";
+import { boot, opt, root } from "./e2e-common.mjs";
+import { join } from "node:path";
+import { startServer } from "./nav-perf/server.mjs";
 
 const { check, open, finish } = await boot({ movies: 24, series: 12 });
 const shots = opt("shots", "");
@@ -72,8 +76,27 @@ async function walkPanel(page, tag) {
 
 }
 
+const slow = await startServer({ distDir: opt("dist", join(root, "dist")), movies: 8, series: 2, languagesDelayMs: 2500 });
 for (const [width, height] of [[1920, 1080], [1280, 720]]) {
   const tag = `${width}x${height}`;
+  {
+    const { context: slowContext, page: slowPage } = await open("/movies?panel=filters", { width, height, server: slow });
+    await slowPage.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });
+    await slowPage.waitForTimeout(600);
+    const loading = await slowPage.evaluate(() => ({
+      skeletons: document.querySelectorAll("[data-language-filter] .tv-filter-language-skeleton[aria-busy='true']").length,
+      claimsEmpty: /No languages indexed yet/.test(document.querySelector(".tv-filter-drawer")?.textContent ?? ""),
+    }));
+    check(`${tag}: language lists show a skeleton each while loading`, loading.skeletons === 2, JSON.stringify(loading));
+    check(`${tag}: no "No languages indexed yet" while the lists load`, !loading.claimsEmpty);
+    await slowPage.waitForSelector("[data-language-filter] .ui-multiselect", { timeout: 8000 });
+    const loaded = await slowPage.evaluate(() => ({
+      skeletons: document.querySelectorAll(".tv-filter-language-skeleton").length,
+      fields: document.querySelectorAll("[data-language-filter] .ui-multiselect").length,
+    }));
+    check(`${tag}: the lists replace the skeletons`, loaded.skeletons === 0 && loaded.fields === 2, JSON.stringify(loaded));
+    await slowContext.close();
+  }
   const { context, page, errors } = await open("/movies?panel=filters", { width, height });
   try {
     await page.waitForSelector(".tv-filter-drawer .drawer-body section", { timeout: 8000 });

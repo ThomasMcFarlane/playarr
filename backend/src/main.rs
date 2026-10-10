@@ -1939,7 +1939,10 @@ async fn boot_api(
     // after a start does not pay for the scan.
     {
         let catalog = state.catalog.clone();
-        tokio::spawn(async move { catalog.warm_snapshot().await });
+        tokio::spawn(async move {
+            catalog.warm_snapshot().await;
+            catalog.warm_languages().await;
+        });
     }
 
     let (router, _openapi) = playarr_api::build_router_with_tv(
