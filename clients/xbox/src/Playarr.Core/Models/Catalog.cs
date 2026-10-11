@@ -212,6 +212,8 @@ namespace Playarr.Core.Models
 
         [JsonProperty("runtime_minutes")] public int? RuntimeMinutes { get; set; }
 
+        [JsonProperty("images")] public IList<ImageAsset> Images { get; set; } = new List<ImageAsset>();
+
         [JsonProperty("monitored")] public bool Monitored { get; set; }
 
         [JsonProperty("availability")] public Availability Availability { get; set; }
