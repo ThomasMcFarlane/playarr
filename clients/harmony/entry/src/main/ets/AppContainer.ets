@@ -54,7 +54,9 @@ import { window } from '@kit.ArkUI';
 import { resolveClientPlatform } from './core/AppConfig.ts';
 import { DeviceProfile } from './core/DeviceProfile.ts';
 
-import { initSettingsStore } from './auth/SettingsStore';
+import { getThemeOverride, initSettingsStore, setThemeOverride } from './auth/SettingsStore';
+import type { ThemeOverride } from './auth/SettingsStore';
+import { setThemeModeSetting } from './design/Theme';
 import { ServerDirectory } from './auth/ServerDirectory';
 import { SessionManager } from './auth/SessionManager';
 import { PlayarrClient } from './net/PlayarrClient';
@@ -103,6 +105,8 @@ export async function bootstrapAppContainer(context: common.Context, windowStage
 
   await directory.initialize();
   await session.initialize();
+  // The theme choice persists (web keeps it in storage); restore it before pages render with the default.
+  setThemeModeSetting(await getThemeOverride());
   session.startProactiveRefreshTimer();
 }
 
@@ -133,4 +137,11 @@ export function getPlayarrClient(): PlayarrClient {
  * `auth/DeviceAuthService.ets` itself. */
 export function getDeviceAuthService(): DeviceAuthService {
   return requireInstance(deviceAuthServiceInstance, 'getDeviceAuthService');
+}
+
+/** Settings > Appearance > Colour theme: apply at once and keep it for the next start. Pages may not import
+ * `auth/`, so the persistence goes through here. */
+export async function saveThemeChoice(mode: ThemeOverride): Promise<void> {
+  setThemeModeSetting(mode);
+  await setThemeOverride(mode);
 }

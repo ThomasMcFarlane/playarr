@@ -21,6 +21,9 @@ const CHOICE_GAP: number = 8;
 const CHOICE_RADIUS: number = 12;
 const CHOICE_LABEL_SIZE: number = 10.56;
 const SECTION_GAP: number = 30;
+const LARGE_HEADING_SIZE: number = 26.4;
+const LARGE_HEADING_LETTER_SPACING: number = -0.924;
+const LARGE_HEADING_GAP: number = 16;
 // Web inactive choice: surface-soft at 0.64.
 const INACTIVE_BG_ALPHA: number = 0.64;
 
@@ -29,6 +32,9 @@ export struct ChoiceSegments {
   @Prop heading: string = '';
   @Prop choices: Choice[] = [];
   @Prop selected: string = '';
+  /** Settings panels (web `.appearance-setting`): a 26.4 px heading over choices across `width`. */
+  @Prop large: boolean = false;
+  @Prop width: number = SECTION_WIDTH;
   onChoose: (value: string) => void = () => {};
 
   @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
@@ -37,17 +43,25 @@ export struct ChoiceSegments {
 
   private choiceWidth(): number {
     const count = Math.max(1, this.choices.length);
-    return (SECTION_WIDTH - CHOICE_GAP * (count - 1)) / count;
+    return (this.width - CHOICE_GAP * (count - 1)) / count;
   }
 
   build() {
-    Column({ space: tv(HEADING_GAP) }) {
-      Text(this.heading)
-        .fontSize(tv(HEADING_SIZE))
-        .fontWeight(FontWeight.Bold)
-        .letterSpacing(tv(HEADING_LETTER_SPACING))
-        .textCase(TextCase.UpperCase)
-        .fontColor(toResourceColor(activeColors().inkSoft))
+    Column({ space: tv(this.large ? LARGE_HEADING_GAP : HEADING_GAP) }) {
+      if (this.large) {
+        Text(this.heading)
+          .fontSize(tv(LARGE_HEADING_SIZE))
+          .fontWeight(FontWeight.Medium)
+          .letterSpacing(tv(LARGE_HEADING_LETTER_SPACING))
+          .fontColor(toResourceColor(activeColors().ink))
+      } else {
+        Text(this.heading)
+          .fontSize(tv(HEADING_SIZE))
+          .fontWeight(FontWeight.Bold)
+          .letterSpacing(tv(HEADING_LETTER_SPACING))
+          .textCase(TextCase.UpperCase)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+      }
       Row({ space: tv(CHOICE_GAP) }) {
         ForEach(this.choices, (choice: Choice) => {
           Text(choice.label)

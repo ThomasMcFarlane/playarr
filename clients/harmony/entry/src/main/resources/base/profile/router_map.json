@@ -65,6 +65,12 @@
       "pageSourceFile": "src/main/ets/pages/Search.ets",
       "buildFunction": "SearchBuilder",
       "data": {}
+    },
+    {
+      "name": "Settings",
+      "pageSourceFile": "src/main/ets/pages/Settings.ets",
+      "buildFunction": "SettingsBuilder",
+      "data": {}
     }
   ]
 }
