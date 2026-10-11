@@ -108,3 +108,32 @@ export function trapFocusWithin(ref: React.RefObject<unknown>, trapped: boolean)
 export function getFocusedTag(): number | undefined {
   return FocusManager.getFocused();
 }
+
+/**
+ * The page's default focus target (web's `data-tv-focus-default`): the view that takes focus when a direction key finds
+ * nothing focused (Vega drops focus when the focused view unmounts). The most recently registered mounted target wins.
+ */
+const defaultTargets: Array<React.RefObject<unknown>> = [];
+
+export function useDefaultFocus(ref: React.RefObject<unknown>, active = true): void {
+  React.useEffect(() => {
+    if (!active) return undefined;
+    defaultTargets.push(ref);
+    return () => {
+      const index = defaultTargets.lastIndexOf(ref);
+      if (index >= 0) defaultTargets.splice(index, 1);
+    };
+  }, [ref, active]);
+}
+
+/** Focuses the registered default target; false when there is none (the caller falls back). */
+export function focusDefaultTarget(): boolean {
+  for (let i = defaultTargets.length - 1; i >= 0; i--) {
+    const ref = defaultTargets[i]!;
+    if (nodeTag(ref) !== null) {
+      focusNode(ref);
+      return true;
+    }
+  }
+  return false;
+}
