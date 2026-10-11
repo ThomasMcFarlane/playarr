@@ -423,7 +423,7 @@ struct Profiles {
         .enabled(false)
       }
       .alignItems(VerticalAlign.Top)
-      .margin({ top: tv(TV_CHOICES_TOP - 262) })
+      .margin({ top: tv(TV_CHOICES_TOP - 242) })
       }
       .width('100%')
       .alignItems(HorizontalAlign.Center)

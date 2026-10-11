@@ -57,7 +57,7 @@
 import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../Theme';
 import type { ThemeModeSetting } from '../Theme';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
-import { AvatarPresets, BRAND_PINK_SOFT, Radii } from '../../core/Tokens';
+import { AvatarPresets, BRAND_PINK_SOFT } from '../../core/Tokens';
 import type { AvatarPreset } from '../../core/Tokens';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from './FocusLift';
 
@@ -210,12 +210,13 @@ export struct ProfileAvatar {
     }
     .width(this.diameter)
     .height(this.diameter)
-    .borderRadius(Radii.circleFull)
+    // Half the diameter, not '50%': ArkUI flattened the sides of the percentage form.
+    .borderRadius(this.diameter / 2)
     .clip(true)
     .border({
       width: RING_WIDTH,
       color: toResourceColorWithAlpha(BRAND_PINK_SOFT, this.ringOpacity()),
-      radius: Radii.circleFull,
+      radius: this.diameter / 2,
     })
     .scale({ x: this.avatarScale(), y: this.avatarScale() })
     .focusable(true)
