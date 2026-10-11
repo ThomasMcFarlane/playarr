@@ -60,6 +60,7 @@ import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
 import { AvatarPresets, BRAND_PINK_SOFT } from '../../core/Tokens';
 import type { AvatarPreset } from '../../core/Tokens';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from './FocusLift';
+import { CircleShape } from '@kit.ArkUI';
 
 /** Brief 5.11 gradient recipe literals -- see this file's header comment
  * for why these (and not a `core/Tokens.ts` field) are the source. */
@@ -210,9 +211,9 @@ export struct ProfileAvatar {
     }
     .width(this.diameter)
     .height(this.diameter)
-    // Half the diameter, not '50%': ArkUI flattened the sides of the percentage form.
     .borderRadius(this.diameter / 2)
-    .clip(true)
+    // A circle clip: the rounded-rect clip left the drawing's sides flat in the Previewer.
+    .clipShape(new CircleShape({ width: this.diameter, height: this.diameter }))
     .border({
       width: RING_WIDTH,
       color: toResourceColorWithAlpha(BRAND_PINK_SOFT, this.ringOpacity()),
