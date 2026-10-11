@@ -1,0 +1,4 @@
+- Fire TV client: the release calendar has the week and month views, the filters drawer (view, type, status, monitored only) and the calendar link drawer with its QR code; entry cards, the details and the period picker follow the web.
+- Fire TV client: Movies, Series and Music have the Filters drawer (list, screen and cover views, sort and order, audio and subtitle language filters); a film's page has the Playback settings drawer (quality, audio, subtitles) and plays at the saved quality.
+- Fire TV client: the artist page has the album cover flow and the track list; headshots crop as the web's do.
+- Fire TV client: Back closes one layer at a time even when other screens stay mounted under the top one.

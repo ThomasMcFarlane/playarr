@@ -1,62 +1,47 @@
 /**
- * RN port of `clients/tv-web/web/src/pages/MusicDetail.tsx` -- backs
- * `ROUTES.musicDetail`, reached whenever `LibraryScreen`/`SearchScreen`/
- * `WorkDetailScreen`/`PlaylistsScreen` open a work whose `kind === "artist"`
- * (design doc §7: "/music/:id -> MusicDetail.tsx | Albums/tracks + inline
- * music player").
+ * An artist's page at the web TV layout's measurements (`clients/tv-web/web/src/pages/MusicDetail.tsx`): the stage with the
+ * artist's art, the selected album's copy on the left, a cover flow of the albums (the selected cover raised and the others
+ * turned away, as the web's `perspective: 1200px` transforms do) and the selected album's track list below it.
  *
- * Scope narrowing, in the same spirit as `WorkDetailScreen.tsx`'s own top
- * comment: tv-web's version (970 lines) builds a full 3D "cover flow" album
- * carousel (`AlbumCoverFlow`, with its own circular-offset maths and
- * keyboard-driven rotation) as its primary browsing surface. That is a
- * genuinely DOM/CSS-3D-transform-shaped piece of UI with no direct Vega
- * equivalent to port -- `Animated`'s 2D transform model does not give the
- * same perspective/rotateY effect tv-web's CSS does, and building an
- * accurate 3D-carousel-on-Fabric from scratch is its own component-design
- * task, not a faithful "port" of the existing one. This screen instead
- * lists albums as a plain horizontal rail (the same `PosterCard`-shaped
- * interaction every other screen in this task uses) -- less visually
- * elaborate, but the actual functionality design doc §7 asks for (browse
- * albums, see a selected album's tracks) works identically either way.
- *
- * What IS ported faithfully: `useWorkDetail` (verbatim reuse, same as
- * `WorkDetailScreen`), the `artistChildren`/`playableTracks`/
- * `formatDuration`/`albumLabel` helpers (copied near-verbatim from tv-web's
- * own module-level functions -- these are plain, DOM-free data shaping over
- * `AlbumDetail`/`TrackDetail`, not UI, so there is no reason to write them
- * differently here), and per-track playback via the same injected
- * `onPlay(mediaFileId)` callback `WorkDetailScreen` uses, for the identical
- * reason stated there: `PlayerScreen.tsx` does not exist in this worktree
- * yet.
+ * LEFT and RIGHT move through the albums, DOWN reaches the tracks. The cover flow here has no reflection filter or
+ * brightness filter (Vega has neither): the covers beside the selected one are dimmed with a veil and the reflection is a
+ * flipped copy under a gradient.
  */
-import React, {useMemo, useState} from 'react';
-import {ActivityIndicator, FlatList, Image, Pressable, ScrollView, Text, View} from 'react-native';
-import type {Album, AlbumDetail, Track, TrackDetail, Work, WorkDetail} from '@playarr-tv/api-client';
-import {useWorkDetail} from '@playarr-tv/api-client/react';
+import React, {useMemo, useRef, useState} from 'react';
+import {Animated, Easing, Pressable, View} from 'react-native';
+import type {Album, AlbumDetail, TrackDetail, WatchProgress, Work, WorkDetail} from '@playarr-tv/api-client';
+import {useAsyncData, useWorkDetail} from '@playarr-tv/api-client/react';
+import LinearGradient from '@amazon-devices/react-linear-gradient';
 import {useApiClient} from '../api/ApiClientProvider';
-import {albumArtworkUrl, artworkAuthHeaders} from '../api/artworkUrl';
-import {CAPABILITIES} from '../platform/capabilities';
-import {colour} from '../theme/tokens';
-import {layout, text} from '../theme/styles';
-import {sh, sw} from '../theme/scale';
-import {useAccessToken} from './LibraryScreen';
+import {albumArtworkUrl} from '../api/artworkUrl';
+import {ArtworkImage} from '../components/ArtworkImage';
+import {useLanguage} from '../i18n/LanguageProvider';
 import type {RouteName} from '../navigation/routes';
+import {mix} from '../theme/color';
+import {useTheme} from '../theme/ThemeProvider';
+import {EdgeFade} from '../tv/EdgeFade';
+import {BalancedT, Box, T, u} from '../tv/kit';
+import {PageHeader} from '../tv/PageHeader';
+import {RailFrost, Stage} from '../tv/Stage';
+import {stageArtUrl} from '../tv/ArtOfWork';
+import {useScrollReveal} from '../tv/useScrollReveal';
+import {useAccessToken} from './LibraryScreen';
 
-/** Narrows `WorkDetailSchema.children` to its `Artist` variant -- see `WorkDetailScreen.tsx`'s `seriesSeasons` for the sibling `Series` narrowing and the shared reasoning behind why this file has its own copy rather than a shared helper. */
+/** Narrows `WorkDetailSchema.children` to its `Artist` variant. */
 function artistChildren(children: WorkDetail['children']): AlbumDetail[] {
   return typeof children === 'object' && children !== null && 'Artist' in children ? children.Artist : [];
 }
 
-/** Only tracks with a resolved `MediaFile` (i.e. actually synced) are playable -- mirrors tv-web's own filter exactly. */
+/** Only tracks with a resolved `MediaFile` (actually synced) are playable. */
 function playableTracks(album: AlbumDetail): TrackDetail[] {
   return album.tracks.filter((track) => track.media_file_id != null);
 }
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds || seconds <= 0) return 'Duration unavailable';
+export function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return '';
   const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+  const rest = Math.round(seconds % 60);
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
 function albumLabel(album: Album): string {
@@ -74,212 +59,271 @@ export interface MusicDetailRouteParams {
 export interface MusicDetailScreenProps {
   route: {params: MusicDetailRouteParams};
   navigation: MusicDetailScreenNavigation;
-  /** See `WorkDetailScreen.tsx`'s identical prop for why this is injected rather than a `navigation.navigate` call. */
+  /** Starts playback of a track's media file through the shell's player. */
   onPlay?: (mediaFileId: string) => void;
 }
 
-const ALBUM_COVER_SIZE = sw(200);
+// ---------------------------------------------------------------------------------------------------- measurements
+const FLOW_CENTRE_X = 1324.9;
+const FLOW_CENTRE_Y = 307.5;
+const CARD = 260;
+const TRACK_X = 783.8;
+const TRACK_W = 1081.9;
+const TRACK_Y = 749.2;
+const TRACK_H = 56.2;
+const TRACK_PITCH = 63.2;
+const TRACKS_CLIP_TOP = 735;
 
-function AlbumCover({
-  album,
-  artistWorkId,
-  baseUrl,
-  accessToken,
-  selected,
-  onSelect,
-}: {
-  album: Album;
-  artistWorkId: string;
-  baseUrl: string;
-  accessToken: string | undefined;
-  selected: boolean;
-  onSelect: () => void;
-}): JSX.Element {
-  const [focused, setFocused] = useState(false);
-  const artworkKind = album.images.some((image) => image.kind === 'poster') ? 'poster' : undefined;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${album.title}`}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onPress={onSelect}
-      style={{width: ALBUM_COVER_SIZE, marginRight: sw(20)}}
-    >
-      <View
-        style={{
-          width: ALBUM_COVER_SIZE,
-          height: ALBUM_COVER_SIZE,
-          borderRadius: 10,
-          overflow: 'hidden',
-          backgroundColor: colour.surface,
-          borderWidth: focused || selected ? 3 : 0,
-          borderColor: selected ? colour.accent : colour.focusRing,
-        }}
-      >
-        {artworkKind && CAPABILITIES.artworkRequestHeaders ? (
-          <Image
-            source={{
-              uri: albumArtworkUrl(baseUrl, artistWorkId, album.id, artworkKind),
-              headers: artworkAuthHeaders(accessToken),
-            }}
-            style={{width: '100%', height: '100%'}}
-            resizeMode="cover"
-          />
-        ) : null}
-      </View>
-      <Text style={[text.body, {color: selected ? colour.ink : colour.inkSoft, marginTop: sh(8)}]} numberOfLines={1}>
-        {album.title}
-      </Text>
-      <Text style={[text.caption, {color: colour.inkMuted}]}>{albumLabel(album)}</Text>
-    </Pressable>
-  );
+/** Places from `selected` to `index` going the short way round the albums (the flow wraps, as the web's does). */
+export function circularOffset(index: number, selected: number, count: number): number {
+  if (count <= 1) return 0;
+  const forward = (index - selected + count) % count;
+  const backward = forward - count;
+  return Math.abs(forward) <= Math.abs(backward) ? forward : backward;
 }
 
-function TrackRow({
-  track,
-  index,
-  onPlay,
-}: {
-  track: Track;
-  index: number;
-  onPlay: (() => void) | undefined;
-}): JSX.Element {
-  const [focused, setFocused] = useState(false);
-  const playable = Boolean(onPlay);
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Play ${track.title}`}
-      accessibilityState={{disabled: !playable}}
-      disabled={!playable}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onPress={onPlay}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: sh(10),
-        paddingHorizontal: sw(16),
-        borderRadius: 8,
-        marginBottom: sh(4),
-        backgroundColor: focused ? colour.surfaceSoft : 'transparent',
-        borderWidth: focused ? 2 : 0,
-        borderColor: colour.focusRing,
-        opacity: playable ? 1 : 0.5,
-      }}
-    >
-      <Text style={[text.caption, {color: colour.inkMuted, width: sw(36)}]}>{index + 1}</Text>
-      <Text style={[text.body, {color: colour.ink, flex: 1}]} numberOfLines={1}>
-        {track.title}
-      </Text>
-      <Text style={[text.caption, {color: colour.inkMuted}]}>{formatDuration(track.duration_seconds)}</Text>
-    </Pressable>
-  );
+/** The web's `--music-flow-*` numbers for a cover `offset` places from the selected one. */
+export function flowPlacement(offset: number): {x: number; rotate: number; scale: number; z: number} {
+  const distance = Math.abs(offset);
+  return {
+    x: offset * 0.61 * CARD,
+    rotate: offset === 0 ? 0 : offset < 0 ? 55 : -55,
+    scale: offset === 0 ? 1.12 : Math.max(0.7, 0.91 - distance * 0.055),
+    z: offset === 0 ? 40 : Math.max(1, 20 - distance),
+  };
 }
 
-export function MusicDetailScreen({route, onPlay}: MusicDetailScreenProps): JSX.Element {
+export function MusicDetailScreen({route, navigation, onPlay}: MusicDetailScreenProps): React.ReactElement {
   const client = useApiClient();
   const accessToken = useAccessToken(client);
+  const {colour, scheme} = useTheme();
+  const {t} = useLanguage();
   const workId = route.params.workId;
   const state = useWorkDetail(client, workId);
+  const progress = useAsyncData<WatchProgress[]>(() => client.listWatchProgress().catch(() => [] as WatchProgress[]), [client]);
+  const albums = useMemo(() => (state.status === 'ready' ? artistChildren(state.data.children).filter((entry) => playableTracks(entry).length > 0) : []), [state]);
+  const [albumIndex, setAlbumIndex] = useState(0);
+  const [trackIndex, setTrackIndex] = useState(0);
+  const selectedAlbum = albums[Math.min(albumIndex, Math.max(0, albums.length - 1))] ?? null;
+  const tracks = selectedAlbum ? playableTracks(selectedAlbum) : [];
+  const trackRows = useRef(new Map<string, number>()).current;
+  const tracksScroll = useScrollReveal({viewport: 1080 - TRACKS_CLIP_TOP, content: tracks.length * TRACK_PITCH + 40, margin: 14});
+  const progressByMedia = useMemo(() => new Map((progress.status === 'ready' ? progress.data : []).map((row) => [row.media_file_id, row])), [progress]);
+  const dark = scheme === 'dark';
 
-  const albums = useMemo(() => (state.status === 'ready' ? artistChildren(state.data.children) : []), [state]);
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
-
-  const selectedAlbum = useMemo(() => {
-    if (albums.length === 0) return null;
-    return albums.find((entry) => entry.album.id === selectedAlbumId) ?? albums[0] ?? null;
-  }, [albums, selectedAlbumId]);
-
-  if (state.status === 'loading' || state.status === 'idle') {
+  if (state.status !== 'ready') {
     return (
-      <View style={[layout.appScreen, {alignItems: 'center', justifyContent: 'center'}]}>
-        <ActivityIndicator size="large" color={colour.accent} />
-        <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(12)}]}>Loading artist details</Text>
-      </View>
-    );
-  }
-
-  if (state.status === 'error') {
-    return (
-      <View style={[layout.appScreen, {alignItems: 'center', justifyContent: 'center'}]}>
-        <Text style={[text.subtitle, {color: colour.ink}]}>This artist could not be loaded</Text>
-        <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(8)}]}>{state.message}</Text>
-      </View>
-    );
-  }
-
-  // See WorkDetailScreen.tsx's identical guard: `useWorkDetail` never
-  // actually reaches "empty" (no `isEmpty` option is passed internally),
-  // but TypeScript's `AsyncState<WorkDetail>` still includes it.
-  if (state.status === 'empty') {
-    return (
-      <View style={[layout.appScreen, {alignItems: 'center', justifyContent: 'center'}]}>
-        <Text style={[text.subtitle, {color: colour.ink}]}>This artist could not be loaded</Text>
-      </View>
+      <Stage>
+        <PageHeader title={t('pages.musicDetail.music')} onBack={() => navigation.navigate('home' as RouteName)} />
+        <Box x={783} y={200} w={700}>
+          <T size={17} weight={610} color={colour.ink}>
+            {state.status === 'error' ? t('pages.musicDetail.loadErrorTitle') : t('pages.musicDetail.loadingArtistDetails')}
+          </T>
+        </Box>
+      </Stage>
     );
   }
 
   const artist: Work = state.data.work;
   const baseUrl = client.resolveUrl('/');
+  const selectedTrack = tracks[trackIndex] ?? tracks[0] ?? null;
+  const albumMeta = selectedAlbum
+    ? [artist.title, albumLabel(selectedAlbum.album), `${tracks.length} ${tracks.length === 1 ? t('pages.musicDetail.trackSingular') : t('pages.musicDetail.trackPlural')}`, ...artist.genres.slice(0, 3)].filter(Boolean)
+    : [];
 
   return (
-    <ScrollView style={layout.appScreen} showsVerticalScrollIndicator={false}>
-      <Text style={[text.caption, {color: colour.stageKicker, textTransform: 'uppercase', letterSpacing: sw(2)}]}>
-        Artist
-      </Text>
-      <Text style={[text.title, {color: colour.ink, marginTop: sh(4), marginBottom: sh(24)}]}>{artist.title}</Text>
-
-      {albums.length === 0 ? (
-        <Text style={[text.body, {color: colour.inkSoft}]}>No albums are available for this artist yet.</Text>
+    <Stage artUri={stageArtUrl(baseUrl, artist)} accessToken={accessToken}>
+      <PageHeader title={t('pages.musicDetail.music')} detail={artist.title} onBack={() => navigation.navigate('music' as RouteName)} />
+      <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} x={776} />
+      {selectedAlbum ? (
+        <Box x={153.6} y={259.2} w={540}>
+          <T size={12.288} weight={820} ls={0.983} lh={18.4} color="#cf3157" upper>
+            {selectedAlbum.album.album_type.replace(/_/g, ' ')}
+          </T>
+          <View style={{marginTop: u(25.9)}}>
+            <BalancedT key={selectedAlbum.album.id} width={373.2} size={69.12} weight={560} ls={-4.9766} lh={62.2} color={colour.ink}>
+              {selectedAlbum.album.title}
+            </BalancedT>
+          </View>
+          <View style={{marginTop: u(27), flexDirection: 'row', flexWrap: 'wrap', width: u(455)}}>
+            {albumMeta.map((entry, index) => (
+              <View key={`${index}:${entry}`} style={{marginRight: u(13.6)}}>
+                <T size={10.56} weight={index === 0 ? 680 : 400} lh={15.8} color={index === 0 ? colour.inkSoft : colour.inkMuted}>
+                  {entry}
+                </T>
+              </View>
+            ))}
+          </View>
+          {selectedTrack ? (
+            <View style={{marginTop: u(21.6), width: u(304)}}>
+              <T size={21.12} weight={570} ls={-0.7392} lh={24.3} color={colour.inkSoft} lines={2}>
+                {`${selectedTrack.track.title}${formatDuration(selectedTrack.track.duration_seconds) ? ` · ${formatDuration(selectedTrack.track.duration_seconds)}` : ''}`}
+              </T>
+            </View>
+          ) : null}
+          <View style={{marginTop: u(21.6), width: u(324)}}>
+            <T size={12.864} weight={400} lh={20.3} color={colour.inkMuted}>
+              {artist.overview ?? t('pages.musicDetail.overviewFallback')}
+            </T>
+          </View>
+        </Box>
       ) : (
-        <>
-          <Text style={[text.subtitle, {color: colour.ink, marginBottom: sh(16)}]}>Albums</Text>
-          <FlatList
-            data={albums}
-            horizontal
-            keyExtractor={(entry) => entry.album.id}
-            showsHorizontalScrollIndicator={false}
-            style={{marginBottom: sh(28)}}
-            renderItem={({item}) => (
-              <AlbumCover
-                album={item.album}
-                artistWorkId={artist.id}
-                baseUrl={baseUrl}
-                accessToken={accessToken}
-                selected={selectedAlbum?.album.id === item.album.id}
-                onSelect={() => setSelectedAlbumId(item.album.id)}
-              />
-            )}
-          />
+        <Box x={153.6} y={259.2} w={540}>
+          <T size={12.864} weight={400} lh={20.3} color={colour.inkMuted}>
+            {t('pages.musicDetail.noAlbumsTitle')}
+          </T>
+        </Box>
+      )}
 
-          {selectedAlbum ? (
-            <>
-              <Text style={[text.subtitle, {color: colour.ink, marginBottom: sh(12)}]}>{selectedAlbum.album.title}</Text>
-              {selectedAlbum.tracks.map((trackDetail, index) => (
+      {albums.map((entry, index) => {
+        const offset = circularOffset(index, albumIndex, albums.length);
+        if (Math.abs(offset) > 4) return null;
+        return (
+          <FlowCover
+            key={entry.album.id}
+            entry={entry}
+            artistId={artist.id}
+            baseUrl={baseUrl}
+            token={accessToken}
+            offset={offset}
+            selected={offset === 0}
+            onFocus={() => {
+              setAlbumIndex(index);
+              setTrackIndex(0);
+            }}
+            onPress={() => {
+              const first = playableTracks(entry)[0];
+              if (first?.media_file_id && onPlay) onPlay(first.media_file_id);
+            }}
+          />
+        );
+      })}
+
+      {selectedAlbum ? (
+        <>
+          <Box x={TRACK_X - 6} y={TRACKS_CLIP_TOP} w={TRACK_W + 12} h={1080 - TRACKS_CLIP_TOP} style={{overflow: 'hidden'}} pointerEvents="box-none">
+            <Animated.View style={{position: 'absolute', left: u(6), top: Animated.add(new Animated.Value(u(TRACK_Y - TRACKS_CLIP_TOP)), tracksScroll.offset), width: u(TRACK_W)}} pointerEvents="box-none">
+              {tracks.map((trackDetail, index) => (
                 <TrackRow
                   key={trackDetail.track.id}
-                  track={trackDetail.track}
-                  index={index}
-                  onPlay={
-                    onPlay && trackDetail.media_file_id
-                      ? () => onPlay(trackDetail.media_file_id as string)
-                      : undefined
-                  }
+                  number={index + 1}
+                  title={trackDetail.track.title}
+                  duration={formatDuration(trackDetail.track.duration_seconds)}
+                  y={index * TRACK_PITCH}
+                  selected={index === trackIndex}
+                  unseen={progress.status === 'ready' && !progressByMedia.has(trackDetail.media_file_id as string)}
+                  onFocus={() => {
+                    setTrackIndex(index);
+                    trackRows.set(trackDetail.track.id, index);
+                    tracksScroll.reveal(index * TRACK_PITCH, TRACK_H);
+                  }}
+                  onPress={() => {
+                    if (trackDetail.media_file_id && onPlay) onPlay(trackDetail.media_file_id);
+                  }}
                 />
               ))}
-              {playableTracks(selectedAlbum).length === 0 ? (
-                <Text style={[text.caption, {color: colour.inkMuted, marginTop: sh(8)}]}>
-                  None of this album's tracks have finished syncing yet.
-                </Text>
-              ) : null}
-            </>
-          ) : null}
+            </Animated.View>
+          </Box>
+          <EdgeFade side="top" active={tracksScroll.scrolled > 0} x={TRACK_X - 6} y={TRACKS_CLIP_TOP} w={TRACK_W + 12} h={1080 - TRACKS_CLIP_TOP} />
+          <EdgeFade side="bottom" active={tracksScroll.scrolled < tracksScroll.max - 1} x={TRACK_X - 6} y={TRACKS_CLIP_TOP} w={TRACK_W + 12} h={1080 - TRACKS_CLIP_TOP} />
         </>
-      )}
-    </ScrollView>
+      ) : null}
+    </Stage>
+  );
+}
+
+/** One cover of the flow: turned and scaled by its distance from the selected one; the selected cover carries its caption. */
+function FlowCover({entry, artistId, baseUrl, token, offset, selected, onFocus, onPress}: {entry: AlbumDetail; artistId: string; baseUrl: string; token: string | undefined; offset: number; selected: boolean; onFocus: () => void; onPress: () => void}): React.ReactElement {
+  const {colour, scheme} = useTheme();
+  const place = flowPlacement(offset);
+  const kind = entry.album.images.some((image) => image.kind === 'poster') ? 'poster' : 'thumb';
+  const uri = albumArtworkUrl(baseUrl, artistId, entry.album.id, kind as 'poster');
+  const [focused, setFocused] = useState(false);
+  const slide = useRef(new Animated.Value(offset)).current;
+  const last = useRef(offset);
+  if (last.current !== offset) {
+    last.current = offset;
+    Animated.timing(slide, {toValue: offset, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: false}).start();
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={entry.album.title}
+      hasTVPreferredFocus={selected}
+      onFocus={() => {
+        setFocused(true);
+        onFocus();
+      }}
+      onBlur={() => setFocused(false)}
+      onPress={onPress}
+      style={{
+        position: 'absolute',
+        left: u(FLOW_CENTRE_X - CARD / 2),
+        top: u(FLOW_CENTRE_Y - CARD / 2),
+        width: u(CARD),
+        height: u(CARD),
+        zIndex: place.z,
+        transform: [{perspective: u(1200)}, {translateX: u(place.x)}, {rotateY: `${place.rotate}deg`}, {scale: place.scale}],
+      }}
+    >
+      <View style={{width: u(CARD), height: u(CARD), borderRadius: u(12.48), overflow: 'hidden', backgroundColor: colour.surfaceSoft}}>
+        <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+        {selected ? null : <View pointerEvents="none" style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.22)'}} />}
+      </View>
+      {/* The reflection: the cover's lower half, flipped, fading out. */}
+      <View pointerEvents="none" style={{position: 'absolute', left: 0, top: u(CARD + 8), width: u(CARD), height: u(CARD * 0.42), overflow: 'hidden', borderRadius: u(12.48)}}>
+        <View style={{width: u(CARD), height: u(CARD), transform: [{scaleY: -1}]}}>
+          <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+        </View>
+        <LinearGradient style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0}} start={{x: 0, y: 0}} end={{x: 0, y: 1}} colors={[mix(colour.surface, 0.74), colour.surface]} />
+      </View>
+      {selected ? (
+        <View style={{position: 'absolute', left: 0, top: u(CARD + 8), width: u(CARD), alignItems: 'center'}}>
+          <T size={11.52} weight={610} ls={-0.1728} lh={19.3} color={colour.ink} lines={1}>
+            {entry.album.title}
+          </T>
+          <T size={8.832} weight={700} lh={14.8} color={colour.inkMuted}>
+            {albumLabel(entry.album)}
+          </T>
+        </View>
+      ) : null}
+      {focused ? <View pointerEvents="none" style={{position: 'absolute', left: u(-3), top: u(-3), width: u(CARD + 6), height: u(CARD * 1.58), borderWidth: u(2.7), borderColor: colour.ink}} /> : null}
+    </Pressable>
+  );
+}
+
+function TrackRow({number, title, duration, y, selected, unseen, onFocus, onPress}: {number: number; title: string; duration: string; y: number; selected: boolean; unseen: boolean; onFocus: () => void; onPress: () => void}): React.ReactElement {
+  const {colour} = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onFocus={() => {
+        setFocused(true);
+        onFocus();
+      }}
+      onBlur={() => setFocused(false)}
+      onPress={onPress}
+      style={{position: 'absolute', left: 0, top: u(y), width: u(TRACK_W), height: u(TRACK_H), borderRadius: u(10.56), backgroundColor: mix(colour.surfaceStrong, 0.68), borderWidth: focused ? u(2) : 0, borderColor: colour.ink, justifyContent: 'center'}}
+    >
+      <View style={{position: 'absolute', left: u(22)}}>
+        <T size={9.6} weight={400} lh={14.4} color={colour.inkMuted}>
+          {String(number).padStart(2, '0')}
+        </T>
+      </View>
+      <View style={{position: 'absolute', left: u(84), width: u(942)}}>
+        <T size={11.136} weight={610} lh={16.7} color={colour.ink} lines={1}>
+          {title}
+        </T>
+      </View>
+      <View style={{position: 'absolute', right: u(41)}}>
+        <T size={9.6} weight={400} lh={14.4} color={colour.inkMuted}>
+          {duration}
+        </T>
+      </View>
+      {unseen ? <View style={{position: 'absolute', right: u(15), top: u(23.2), width: u(9), height: u(9), borderRadius: 999, backgroundColor: '#cf3157'}} /> : null}
+      {selected && !focused ? <View pointerEvents="none" style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: u(10.56), borderWidth: 1, borderColor: colour.lineStrong}} /> : null}
+    </Pressable>
   );
 }

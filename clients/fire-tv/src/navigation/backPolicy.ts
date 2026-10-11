@@ -148,6 +148,14 @@ export function tvBackNavigationTarget(
  * one.
  */
 const backLayers: Array<() => void> = [];
+/**
+ * When the last press closed a layer. Every mounted screen subscribes to Back (screens under the top one stay mounted in
+ * the stack), and the remote's press reaches them through two paths, so a handler that runs after the layer has already
+ * closed must treat the same press as handled rather than walk the screen back.
+ */
+let lastLayerClosedAt = 0;
+// The second delivery of one press arrives up to ~0.5 s later on a loaded device (seen on the Vega Virtual Device).
+const LAYER_PRESS_WINDOW_MS = 700;
 
 /**
  * An open drawer, menu or dialog owns Back while it is `active` (web's layered Back): the press closes the topmost layer
@@ -176,15 +184,20 @@ export function useTvBackNavigation(fallbackBackTo?: RouteName): void {
   useBackHandler(() => {
     const layer = backLayers[backLayers.length - 1];
     if (layer) {
+      lastLayerClosedAt = Date.now();
       layer();
       return true;
     }
+    if (Date.now() - lastLayerClosedAt < LAYER_PRESS_WINDOW_MS) return true;
     const target = tvBackNavigationTarget(
       routeName,
       routeBackTo ?? fallbackBackTo,
       navigation.canGoBack()
     );
     if (target === null) return false;
+    // The same press also reaches the screen under this one (screens stay mounted): mark it handled so that screen
+    // does not walk back a second level (Calendar -> Home -> profile picker on one Back).
+    lastLayerClosedAt = Date.now();
     if (target === -1) {
       navigation.goBack();
     } else {

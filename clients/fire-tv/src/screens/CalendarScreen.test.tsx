@@ -1,13 +1,14 @@
 /** The calendar's agenda: entries under their day, the selected release's details and the unreadable-source banner. */
 import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
-import {Text} from 'react-native';
+import {Pressable, Text} from 'react-native';
 import {ApiClientProvider} from '../api/ApiClientProvider';
 import {LanguageProvider} from '../i18n/LanguageProvider';
 import {CalendarScreen} from './CalendarScreen';
 
 (globalThis as unknown as {React: typeof React}).React = React;
 
+jest.mock('../platform/focus', () => ({TvFocusScope: ({children}: {children: unknown}) => children, focusNode: jest.fn(), useDefaultFocus: jest.fn(), focusDefaultTarget: jest.fn(), getFocusedTag: jest.fn()}));
 jest.mock('../navigation/backPolicy', () => ({useTvBackNavigation: jest.fn(), useBackLayer: jest.fn()}));
 jest.mock('@amazon-devices/react-navigation__native', () => ({useNavigation: () => ({navigate: jest.fn()})}));
 
@@ -51,7 +52,7 @@ const response = {
 describe('CalendarScreen', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('lists a release with its state and warns about an unreadable source', async () => {
+  it('lists a release with its state and shows no source banner or source names', async () => {
     jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(JSON.stringify(response), {status: 200, headers: {'Content-Type': 'application/json'}}));
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -69,7 +70,56 @@ describe('CalendarScreen', () => {
     expect(text).toContain('Calendar');
     expect(text).toContain('A Film');
     expect(text).toContain('In library');
-    expect(text).toContain('1 source(s) could not be read');
-    expect(text).toContain('Sonarr');
+    // Users never see source health or source-provider names (owner rule): no banner, no "reported by" line.
+    expect(text).not.toContain('could not be read');
+    expect(text).not.toContain('Sonarr');
+  });
+
+  async function mount(): Promise<ReactTestRenderer> {
+    jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(JSON.stringify(response), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <ApiClientProvider>
+          <LanguageProvider>
+            <CalendarScreen />
+          </LanguageProvider>
+        </ApiClientProvider>,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return renderer;
+  }
+
+  function press(renderer: ReactTestRenderer, label: string): void {
+    const node = renderer.root.findAllByType(Pressable).find((item) => item.props.accessibilityLabel === label);
+    if (!node) throw new Error(`no control labelled ${label}`);
+    act(() => node.props.onPress());
+  }
+
+  it('opens the filters drawer from its tile and switches to the week and month views', async () => {
+    const renderer = await mount();
+    expect(allText(renderer)).not.toContain('Agenda');
+    press(renderer, 'Filters');
+    const drawer = allText(renderer);
+    expect(drawer).toContain('Agenda');
+    expect(drawer).toContain('Week');
+    expect(drawer).toContain('Month');
+    press(renderer, 'Month');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // The month grid names the weekdays (the text is upper-cased by style, not in the string).
+    expect(allText(renderer)).toContain('Oct 2026');
+    expect(allText(renderer)).toContain('Mon | Tue | Wed');
+  });
+
+  it('shows a type chip as selected after it is pressed and counts it as an active filter', async () => {
+    const renderer = await mount();
+    press(renderer, 'Filters');
+    press(renderer, 'Movies');
+    const chip = renderer.root.findAllByType(Pressable).find((item) => item.props.accessibilityLabel === 'Movies')!;
+    expect(chip.props.accessibilityState).toEqual({selected: true});
   });
 });

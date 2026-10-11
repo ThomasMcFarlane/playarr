@@ -13,9 +13,10 @@ import {mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/ar
 import {ArtworkImage} from '../components/ArtworkImage';
 import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
+import {useOnTop} from '../navigation/useOnTop';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
-import {focusNode, getFocusedTag, useDefaultFocus} from '../platform';
+import {focusNode, getFocusedTag, useDefaultFocus, useRemoteKey} from '../platform';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
 import {runtimeLabel} from '../lib/runtimeLabel';
 import {blend} from '../theme/color';
@@ -24,6 +25,8 @@ import {MediaFocus} from '../tv/mediaFocus';
 import {BalancedT, Box, T, u} from '../tv/kit';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {RailFrost, Stage} from '../tv/Stage';
+import {ActionsDrawer} from '../tv/ActionsDrawer';
+import {PlaylistSheet} from '../tv/PlaylistSheet';
 import {useAccessToken} from './LibraryScreen';
 
 interface HomeRail {
@@ -158,6 +161,15 @@ export function HomeScreen(): React.ReactElement {
   }, [railsState, siteState, onDeck, t]);
 
   const [focus, setFocus] = useState<{rail: number; item: number}>({rail: 0, item: 0});
+  const [actionsWork, setActionsWork] = useState<Work | null>(null);
+  const [playlistWork, setPlaylistWork] = useState<Work | null>(null);
+  const onTop = useOnTop();
+  useRemoteKey((key, raw) => {
+    if (onTop && key === 'menu' && raw.eventKeyAction === 0 && !actionsWork) {
+      const work = rails[focus.rail]?.items[focus.item];
+      if (work) setActionsWork(work);
+    }
+  });
   const selected = rails[focus.rail]?.items[focus.item] ?? rails[0]?.items[0];
   // A late On Deck answer rebuilds the rails and unmounts the focused card, which leaves nothing focused and the remote
   // dead. Put focus back on the selected card whenever the rails change and focus was lost (web keeps it in place).
@@ -279,6 +291,7 @@ export function HomeScreen(): React.ReactElement {
                       selected={active && itemIndex === focus.item}
                       onFocus={() => focusItem(railIndex, itemIndex)}
                       onPress={() => navigation.navigate(ROUTES.workDetail, {workId: work.id, backTo: ROUTES.home})}
+                      onLongPress={() => setActionsWork(work)}
                       subtitle={subtitle}
                     />
                     );
@@ -311,6 +324,18 @@ export function HomeScreen(): React.ReactElement {
           })}
         </Animated.View>
       </Box>
+      {actionsWork ? (
+        <ActionsDrawer
+          work={actionsWork}
+          onClose={() => setActionsWork(null)}
+          onOpen={() => navigation.navigate(ROUTES.workDetail, {workId: actionsWork.id, backTo: ROUTES.home})}
+          onAddToPlaylist={() => {
+            setPlaylistWork(actionsWork);
+            setActionsWork(null);
+          }}
+        />
+      ) : null}
+      {playlistWork ? <PlaylistSheet workId={playlistWork.id} onClose={() => setPlaylistWork(null)} onAdded={() => setPlaylistWork(null)} /> : null}
     </Stage>
   );
 }
@@ -367,8 +392,9 @@ function HomeCard(props: {
   subtitle: string;
   onFocus: () => void;
   onPress: () => void;
+  onLongPress: () => void;
 }): React.ReactElement {
-  const {work, mediaFileId, title, progress, progressReady, first, cardRef, index, baseUrl, token, selected, subtitle, onFocus, onPress} = props;
+  const {work, mediaFileId, title, progress, progressReady, first, cardRef, index, baseUrl, token, selected, subtitle, onFocus, onPress, onLongPress} = props;
   const {colour} = useTheme();
   const kind = preferredArtworkKind(work, ['backdrop', 'poster']);
   const uri = mediaFileId ? mediaThumbnailUrl(baseUrl, mediaFileId) : kind ? workArtworkUrl(baseUrl, work.id, kind) : undefined;
@@ -380,6 +406,7 @@ function HomeCard(props: {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={{position: 'absolute', top: 0, left: u(cardLeft(index)), width: u(CARD_W)}}
     >
       <MediaFocus variant="home" focused={selected} width={CARD_W} height={ART_H} radius={12.48}>

@@ -17,6 +17,7 @@ import {ROUTES} from '../navigation/routes';
 
 // The screen registers a BACK policy with the navigator; these tests render it outside a NavigationContainer.
 jest.mock('../navigation/backPolicy', () => ({useTvBackNavigation: jest.fn()}));
+jest.mock('../platform/remote', () => ({useRemoteKey: jest.fn()}));
 
 /**
  * WORKAROUND, not a fix: `../api/ApiClientProvider.tsx` (built by the

@@ -145,10 +145,13 @@ function Rail({
   active,
   onSelect,
   groups,
+  children,
 }: {
   active: RailTarget | null;
   onSelect: (target: RailTarget) => void;
   groups: readonly RailGroup[];
+  /** The profile group: inside the rail's focus scope, so LEFT from low content still lands on the page's own item. */
+  children?: React.ReactNode;
 }): React.ReactElement {
   const {colour} = useTheme();
   let y = RAIL_TOP;
@@ -195,6 +198,7 @@ function Rail({
           </View>
         );
       })}
+      {children}
     </TvFocusScope>
   );
 }
@@ -315,8 +319,9 @@ export function ShellChrome(props: ShellChromeProps): React.ReactElement {
         <PlayarrLogo size={sw(42)} />
       </View>
       {clockRight === null ? null : <ShellClock right={clockRight} />}
-      <Rail active={active} onSelect={onSelect} groups={visibleRailGroups(availableWorkKinds)} />
-      <ProfileChip profileId={profileId} name={profileName} version={version} onPress={onOpenProfiles} />
+      <Rail active={active} onSelect={onSelect} groups={visibleRailGroups(availableWorkKinds)}>
+        <ProfileChip profileId={profileId} name={profileName} version={version} onPress={onOpenProfiles} />
+      </Rail>
     </View>
   );
 }

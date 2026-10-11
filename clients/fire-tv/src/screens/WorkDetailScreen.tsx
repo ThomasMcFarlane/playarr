@@ -9,7 +9,7 @@
  */
 import React, {useCallback, useMemo, useState} from 'react';
 import {Pressable, View} from 'react-native';
-import type {CreditResponse, EpisodeDetail, MediaChapter, PlaylistResponse, ResumePlan, SeasonDetail, Work, WorkDetail} from '@playarr-tv/api-client';
+import type {CreditResponse, EpisodeDetail, MediaChapter, ResumePlan, SeasonDetail, Work, WorkDetail} from '@playarr-tv/api-client';
 import {useAsyncData, useWorkDetail} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {episodeArtworkUrl, mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
@@ -24,7 +24,9 @@ import {yearRangeLabel} from '../lib/workYear';
 import {BalancedT, Box, T, u} from '../tv/kit';
 import {FocusRing} from '../tv/FocusRing';
 import {PageHeader} from '../tv/PageHeader';
-import {Sheet, SheetOption} from '../tv/Sheet';
+import {PlaylistSheet} from '../tv/PlaylistSheet';
+import {PlaybackSettingsDrawer, launchQuality} from './PlaybackSettingsDrawer';
+import type {MediaPlaybackOptions} from '@playarr-tv/api-client';
 import {RailFrost, Stage} from '../tv/Stage';
 import {TrackStack, type Track} from '../tv/TrackStack';
 import {useAccessToken} from './LibraryScreen';
@@ -50,6 +52,9 @@ export interface WorkDetailRouteParams {
 export interface PlayOptions {
   startPositionSeconds?: number;
   title?: string;
+  /** The saved quality for the file: its id and the transcoding profile (`null` plays the original). */
+  qualityId?: string;
+  profile?: string | null;
 }
 
 export interface WorkDetailScreenProps {
@@ -156,7 +161,12 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
   const [selection, setSelection] = useState<{season: number; episode: string | null} | null>(null);
   const [focus, setFocus] = useState<{track: number; item: number} | null>(null);
   const [playlistSheet, setPlaylistSheet] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocused, setSettingsFocused] = useState(false);
+  const [savedOptions, setSavedOptions] = useState<MediaPlaybackOptions | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const playbackOptions = useAsyncData<MediaPlaybackOptions>(() => client.getMediaPlaybackOptions(movieMediaFileId as string), [client, movieMediaFileId], {enabled: movieMediaFileId !== null});
+  const effectiveOptions = savedOptions ?? (playbackOptions.status === 'ready' ? playbackOptions.data : null);
 
   const play = useCallback(
     (mediaFileId: string | null | undefined, options?: PlayOptions) => {
@@ -350,8 +360,9 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
           movieActions={
             work.kind === 'movie' ? (
               <PillRow top={37.8}>
+                {playMediaFileId ? <Pill glyph={'\u2637'} label={t('pages.workDetail.playbackButtonLabel')} onPress={() => setSettingsOpen(true)} focusable={!settingsFocused} /> : null}
                 {playMediaFileId ? (
-                  <Pill primary glyph="play" label={moviePlayLabel} onPress={() => play(playMediaFileId, {title: work.title})} hasTVPreferredFocus />
+                  <Pill primary glyph="play" label={moviePlayLabel} onPress={() => play(playMediaFileId, {title: work.title, ...launchQuality(effectiveOptions)})} hasTVPreferredFocus focusable={!settingsFocused} />
                 ) : (
                   <Pill primary disabled label={t('pages.workDetail.unavailable')} />
                 )}
@@ -380,6 +391,19 @@ export function WorkDetailScreen({route, navigation, onPlay}: WorkDetailScreenPr
       onFocus={setFocus}
       initial={initialTrack >= 0 ? {track: initialTrack, item: initialItem} : null}
     >
+      {settingsOpen && movieMediaFileId ? (
+        <PlaybackSettingsDrawer
+          mediaFileId={movieMediaFileId}
+          options={effectiveOptions}
+          state={playbackOptions.status === 'ready' ? {status: 'ready', options: playbackOptions.data} : playbackOptions.status === 'error' ? {status: 'error', message: playbackOptions.message} : {status: 'loading'}}
+          onSaved={setSavedOptions}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsFocused(false);
+          }}
+          onFocused={() => setSettingsFocused(true)}
+        />
+      ) : null}
       {playlistSheet ? (
         <PlaylistSheet
           workId={work.id}
@@ -465,7 +489,7 @@ function PillRow({top, children}: {top: number; children: React.ReactNode}): Rea
 }
 
 /** The web's `.tv-detail-play` (primary) and `.tv-detail-download` (secondary) pills. */
-function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {label: string; glyph?: string; primary?: boolean; disabled?: boolean; onPress?: () => void; hasTVPreferredFocus?: boolean}): React.ReactElement {
+function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus, focusable = true}: {label: string; glyph?: string; primary?: boolean; disabled?: boolean; onPress?: () => void; hasTVPreferredFocus?: boolean; focusable?: boolean}): React.ReactElement {
   const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
   // Focus is the control ring only (owner rule; web .tv-detail-play keeps its ink fill when focused).
@@ -477,6 +501,7 @@ function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
+      focusable={focusable}
       hasTVPreferredFocus={hasTVPreferredFocus}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
@@ -513,36 +538,6 @@ function Pill({label, glyph, primary, disabled, onPress, hasTVPreferredFocus}: {
   );
 }
 
-function PlaylistSheet({workId, onClose, onAdded}: {workId: string; onClose: () => void; onAdded: (name: string) => void}): React.ReactElement {
-  const client = useApiClient();
-  const {t} = useLanguage();
-  const {colour} = useTheme();
-  const lists = useAsyncData<PlaylistResponse[]>(() => client.listPlaylists(), [client]);
-  const [failed, setFailed] = useState(false);
-  const own = lists.status === 'ready' ? lists.data.filter((list) => !list.is_system) : [];
-  return (
-    <Sheet title={t('components.mediaContextMenu.addToPlaylist')} onClose={onClose}>
-      {own.map((list, index) => (
-        <SheetOption
-          key={list.id}
-          label={list.name}
-          hasTVPreferredFocus={index === 0}
-          onPress={() => {
-            client
-              .addPlaylistItem(list.id, {work_id: workId})
-              .then(() => onAdded(list.name))
-              .catch(() => setFailed(true));
-          }}
-        />
-      ))}
-      {failed ? (
-        <T size={12} weight={400} color={colour.accent}>
-          {t('pages.workDetail.playbackOptionsLoadError')}
-        </T>
-      ) : null}
-    </Sheet>
-  );
-}
 
 // ----------------------------------------------------------------------------------------------- tracks view
 function DetailBody(props: {
