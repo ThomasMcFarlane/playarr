@@ -228,6 +228,8 @@ namespace Playarr.Core.Models
         [JsonProperty("episode")] public Episode Episode { get; set; } = new Episode();
 
         [JsonProperty("media_file_id")] public Guid? MediaFileId { get; set; }
+
+        [JsonProperty("runtime_ms")] public long? RuntimeMs { get; set; }
     }
 
     public sealed class SeasonDetail
@@ -314,6 +316,34 @@ namespace Playarr.Core.Models
         /// <c>null</c> for a film too until a file has synced for it.
         /// </summary>
         [JsonProperty("media_file_id")] public Guid? MediaFileId { get; set; }
+
+        [JsonProperty("runtime_ms")] public long? RuntimeMs { get; set; }
+
+        /// <summary>
+        /// Every playable file of the work with its runtime: the film itself, or each episode with a file. What the
+        /// web's "Mark as Watched/Unwatched" updates (MediaContextMenu <c>playableLeaves</c>).
+        /// </summary>
+        public IList<(Guid MediaFileId, long RuntimeMs)> PlayableLeaves()
+        {
+            var leaves = new List<(Guid, long)>();
+            if (MediaFileId is { } film)
+            {
+                leaves.Add((film, RuntimeMs ?? 0));
+            }
+
+            foreach (var season in Children.Seasons)
+            {
+                foreach (var episode in season.Episodes)
+                {
+                    if (episode.MediaFileId is { } file)
+                    {
+                        leaves.Add((file, episode.RuntimeMs ?? 0));
+                    }
+                }
+            }
+
+            return leaves;
+        }
     }
 
     public sealed class AvailableProfile

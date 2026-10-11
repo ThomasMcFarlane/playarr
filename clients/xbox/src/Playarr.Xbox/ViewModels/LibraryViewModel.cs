@@ -136,6 +136,20 @@ namespace Playarr.Xbox.ViewModels
             _ = LoadWorksAsync();
         }
 
+        /// <summary>Z-A / oldest first instead of the default A-Z / newest first (web Filters "Order").</summary>
+        public bool Reversed { get; private set; }
+
+        public void SelectOrder(bool reversed)
+        {
+            if (Reversed == reversed)
+            {
+                return;
+            }
+
+            Reversed = reversed;
+            _ = LoadWorksAsync();
+        }
+
         /// <summary>Retries a failed load. Wired to LibraryPage's retry button.</summary>
         public void Retry() => _ = LoadWorksAsync();
 
@@ -179,12 +193,16 @@ namespace Playarr.Xbox.ViewModels
                     sort: byTitle ? "title" : "date_added",
                     limit: PageLimit,
                     availableOnly: true,
-                    order: byTitle ? "asc" : "desc");
+                    order: byTitle != Reversed ? "asc" : "desc");
                 Total = page.Total;
                 var works = new List<Work>(page.Items);
                 if (byTitle)
                 {
                     works.Sort(WorkLabels.CompareTitles);
+                    if (Reversed)
+                    {
+                        works.Reverse();
+                    }
                 }
 
                 Works = works;

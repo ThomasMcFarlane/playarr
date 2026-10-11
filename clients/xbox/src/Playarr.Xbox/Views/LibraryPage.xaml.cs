@@ -38,6 +38,7 @@ namespace Playarr.Xbox.Views
             WorksGridView.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
             WorksGridView.GotFocus += WorksGridView_GotFocus;
             CardFocus.Attach(WorksGridView);
+            CardActions.Attach(WorksGridView, id => _worksById.TryGetValue(id, out var work) ? work : null);
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -175,6 +176,22 @@ namespace Playarr.Xbox.Views
                     }
                 }
             }
+        }
+
+        private void FiltersButton_Click(object sender, RoutedEventArgs e)
+        {
+            var body = new StackPanel();
+            body.Children.Add(Drawer.Segmented("Sort by", new[] { "Title", "Date Added" }, _viewModel.SelectedSort == null ? 0 : 1, i =>
+            {
+                _viewModel.SelectSort(i == 0 ? null : LibraryViewModel.SortRecentlyAdded);
+                Drawer.TryCloseCurrent();
+            }));
+            body.Children.Add(Drawer.Segmented("Order", _viewModel.SelectedSort == null ? new[] { "A\u2013Z", "Z\u2013A" } : new[] { "Newest", "Oldest" }, _viewModel.Reversed ? 1 : 0, i =>
+            {
+                _viewModel.SelectOrder(i == 1);
+                Drawer.TryCloseCurrent();
+            }));
+            Drawer.Open((Panel)Content, "Library controls", "Filters", body);
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
