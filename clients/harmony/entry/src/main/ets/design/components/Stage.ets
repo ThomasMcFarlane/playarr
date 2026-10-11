@@ -143,6 +143,14 @@ export struct Stage {
   private emptyRailsSlot(): void {}
 
   @BuilderParam railsSlot: () => void = this.emptyRailsSlot;
+  /** `false` when the slot scrolls itself (the library grid); the slot then gets the full column height. */
+  @Prop scrollRails: boolean = true;
+
+  @Builder
+  private emptyHeroExtraSlot(): void {}
+
+  /** Shown under the hero copy (web details panel pills and actions). */
+  @BuilderParam heroExtraSlot: () => void = this.emptyHeroExtraSlot;
 
   aboutToAppear(): void {
     this.getUIContext().animateTo({ duration: ENTRY_KEY_ART_MS, curve: ENTRY_CURVE }, () => {
@@ -284,7 +292,9 @@ export struct Stage {
         metaLines: this.metaLines,
         synopsis: this.synopsis,
       })
+      this.heroExtraSlot()
     }
+    .alignItems(HorizontalAlign.Start)
     .width(tv(TvGeometry.titlePanelWidth))
     .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.titlePanelTop) })
     .opacity(this.copyEntry)
@@ -294,21 +304,33 @@ export struct Stage {
   // Web TV Home has no panel behind the rails: a plain, natively scrollable full-height column (`.tv-home-rails`).
   @Builder
   private railPanelLayer(): void {
-    Scroll() {
+    if (this.scrollRails) {
+      Scroll() {
+        Column() {
+          this.railsSlot()
+        }
+        .alignItems(HorizontalAlign.Start)
+        .padding({ left: tv(TvGeometry.homeRailsInsetLeft), top: tv(TvGeometry.homeRailsTop), bottom: tv(TvGeometry.homeRailsTop) })
+      }
+      .width(tv(TvGeometry.homeRailsWidth))
+      .height('100%')
+      .align(Alignment.TopStart)
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.None)
+      .position({ x: tv(TvGeometry.homeRailsLeft), y: 0 })
+      .opacity(this.railsEntry)
+      .translate({ x: tv(RAILS_ENTRY_TRANSLATE_X) * (1 - this.railsEntry) })
+    } else {
       Column() {
         this.railsSlot()
       }
+      .width(tv(TvGeometry.homeRailsWidth))
+      .height('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: tv(TvGeometry.homeRailsInsetLeft), top: tv(TvGeometry.homeRailsTop), bottom: tv(TvGeometry.homeRailsTop) })
+      .position({ x: tv(TvGeometry.homeRailsLeft), y: 0 })
+      .opacity(this.railsEntry)
+      .translate({ x: tv(RAILS_ENTRY_TRANSLATE_X) * (1 - this.railsEntry) })
     }
-    .width(tv(TvGeometry.homeRailsWidth))
-    .height('100%')
-    .align(Alignment.TopStart)
-    .scrollBar(BarState.Off)
-    .edgeEffect(EdgeEffect.None)
-    .position({ x: tv(TvGeometry.homeRailsLeft), y: 0 })
-    .opacity(this.railsEntry)
-    .translate({ x: tv(RAILS_ENTRY_TRANSLATE_X) * (1 - this.railsEntry) })
   }
 
   build() {

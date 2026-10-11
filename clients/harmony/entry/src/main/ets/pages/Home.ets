@@ -113,6 +113,9 @@ import { MediaRail } from '../design/components/MediaRail';
 import type { MediaRailItem } from '../design/components/MediaRail';
 import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
+import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { PlayarrLogo } from '../design/components/PlayarrLogo';
+import { Clock } from '../design/components/Clock';
 import { NavPill } from '../design/components/NavPill';
 import type { NavPillItem } from '../design/components/NavPill';
 import { PosterCard } from '../design/components/PosterCard';
@@ -122,6 +125,7 @@ import {
   getContinueWatching,
   getCatalog,
   getCatalogKinds,
+  getHomeRails,
 } from '../data/CatalogRepository';
 import type { ContinueWatchingEntry } from '../data/CatalogRepository';
 import {
@@ -158,10 +162,6 @@ const SORT_RECENT: string = 'recent';
  * `Library` route this page bounces to always has SOME `kind` to open on. */
 const DEFAULT_LIBRARY_FALLBACK_KIND: string = 'movie';
 
-/** The nav item id for "this page" -- also the `NavRailItem`/`NavPillItem`
- * always prepended ahead of every kind-derived tile, so a user can always
- * get back to Home from the nav even when the kinds fetch fails. */
-const HOME_NAV_ID: string = 'home';
 
 /** Discriminants for "which rail rendered first" -- see `topRailFocusUpId`'s
  * wiring below. Plain string constants rather than an enum: `HomeCardItem`
@@ -196,13 +196,6 @@ const TOUCH_RAIL_GAP: number = Spacing.xl;
  * tight bounding box. */
 const TOUCH_BOTTOM_NAV_CLEARANCE: number =
   TouchGeometry.navItemHeight + TouchGeometry.navPaddingV * 2 + Spacing.xxl;
-
-/** Only shipped icon asset today (`resources/base/media/playarr_logo.svg`)
- * -- the same documented placeholder choice `design/components/NavRail.ets`/
- * `NavPill.ets`'s own default items and `pages/DesignGallery.ets`'s gallery
- * nav demo already make, reused here for every real nav tile until per-kind
- * icon assets ship. */
-const PLACEHOLDER_NAV_ICON: ResourceStr = $r('app.media.playarr_logo');
 
 /**
  * This page's own local view-model shape for one rail/hero card (brief
@@ -256,7 +249,7 @@ function cardCaption(kind: WorkKind, releaseDate: string | null): string {
 }
 
 /** The hero kicker: the featured work's OWN kind, singular ("Movie",
- * "Series", ...) -- distinct from `catalogKindNavLabel` below, which names a
+ * "Series", ...) -- distinct from the nav label (navigation/NavItems.ets), which names a
  * whole LIBRARY SECTION rather than one work. */
 function workKindKicker(kind: WorkKind): string {
   if (kind === 'movie') {
@@ -274,48 +267,11 @@ function workKindKicker(kind: WorkKind): string {
   return 'Author';
 }
 
-/** Nav tile label for a `getCatalogKinds()` kind -- names the library
- * section it opens (brief 9: "Nav destinations are driven by GET
- * /api/v1/catalog/kinds"), plural, distinct from `workKindKicker` above. */
-/** Web's library nav order (`PRODUCT_NAV_GROUPS`): Series, Movies, Sites, Music; anything else after. */
-const NAV_KIND_ORDER: WorkKind[] = ['series', 'movie', 'site', 'artist'];
-
-function navKindRank(kind: WorkKind): number {
-  const rank = NAV_KIND_ORDER.indexOf(kind);
-  return rank < 0 ? NAV_KIND_ORDER.length : rank;
-}
-
-/** The web nav icon for a nav id (generated from web `NavIcons.tsx`); the logo only for kinds web has no icon for. */
-function navIconFor(id: string): ResourceStr {
-  if (id === HOME_NAV_ID) {
-    return $r('app.media.nav_home');
-  }
-  if (id === 'series') {
-    return $r('app.media.nav_series');
-  }
-  if (id === 'movie') {
-    return $r('app.media.nav_movies');
-  }
-  if (id === 'artist') {
-    return $r('app.media.nav_music');
-  }
-  return PLACEHOLDER_NAV_ICON;
-}
-
-function catalogKindNavLabel(kind: WorkKind): string {
-  if (kind === 'movie') {
-    return 'Movies';
-  }
-  if (kind === 'series') {
-    return 'Series';
-  }
-  if (kind === 'site') {
-    return 'Sites';
-  }
-  if (kind === 'artist') {
-    return 'Music';
-  }
-  return 'Books';
+/** One server-curated Home rail (`GET /api/v1/home/rails`), as web TV Home renders it. */
+interface HomeServerRail {
+  id: string;
+  title: string;
+  items: HomeCardItem[];
 }
 
 /** Builds one rail's card list from a plain catalogue `Work[]` (the new/more
@@ -457,6 +413,9 @@ export struct Home {
   @State private newSeriesItems: HomeCardItem[] = [];
   @State private moreMovieItems: HomeCardItem[] = [];
   @State private moreSeriesItems: HomeCardItem[] = [];
+  /** Server rails for the TV Home (web's rails); empty when the call failed, and the TV Home then shows
+   * the catalogue rails above instead. */
+  @State private serverRails: HomeServerRail[] = [];
 
   @State private hero: HomeCardItem | undefined = undefined;
   /** Only non-null when `this.hero` came from continue-watching -- see this
@@ -499,6 +458,7 @@ export struct Home {
     const moreMoviesPromise = getCatalog({ kind: 'movie', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const moreSeriesPromise = getCatalog({ kind: 'series', sort: SORT_RECENT, limit: RAIL_LIMIT, offset: RAIL_OFFSET_MORE });
     const kindsPromise = getCatalogKinds();
+    const homeRailsPromise = getHomeRails();
 
     const continueWatchingResult = await continueWatchingPromise;
     const newMoviesResult = await newMoviesPromise;
@@ -506,6 +466,7 @@ export struct Home {
     const moreMoviesResult = await moreMoviesPromise;
     const moreSeriesResult = await moreSeriesPromise;
     const kindsResult = await kindsPromise;
+    const homeRailsResult = await homeRailsPromise;
 
     // A genuine connectivity failure across every rail-shaped call -- see
     // this file's header comment on why this is a distinct, deliberate
@@ -534,14 +495,7 @@ export struct Home {
     const moreMovieWorks: Work[] = moreMoviesResult.kind === 'ok' ? moreMoviesResult.value.items : [];
     const moreSeriesWorks: Work[] = moreSeriesResult.kind === 'ok' ? moreSeriesResult.value.items : [];
 
-    const navRailItems: NavRailItem[] = [{ id: HOME_NAV_ID, icon: navIconFor(HOME_NAV_ID), label: 'Home' }];
-    if (kindsResult.kind === 'ok') {
-      const kinds: WorkKind[] = kindsResult.value.slice();
-      kinds.sort((a: WorkKind, b: WorkKind): number => navKindRank(a) - navKindRank(b));
-      for (const kind of kinds) {
-        navRailItems.push({ id: kind, icon: navIconFor(kind), label: catalogKindNavLabel(kind) });
-      }
-    }
+    const navRailItems: NavRailItem[] = buildNavRailItems(kindsResult.kind === 'ok' ? kindsResult.value : []);
     this.navItems = navRailItems;
     const firstNavItem = navRailItems[0];
     this.topRailFocusUpId = firstNavItem !== undefined ? `${firstNavItem.id}-nav-tile` : '';
@@ -589,6 +543,17 @@ export struct Home {
     this.newSeriesItems = buildCardItems(newSeriesWorks, topRailKey === TOP_RAIL_NEW_SERIES);
     this.moreMovieItems = buildCardItems(moreMovieWorks, topRailKey === TOP_RAIL_MORE_MOVIES);
     this.moreSeriesItems = buildCardItems(moreSeriesWorks, topRailKey === TOP_RAIL_MORE_SERIES);
+    const serverRails: HomeServerRail[] = [];
+    if (homeRailsResult.kind === 'ok') {
+      for (const rail of homeRailsResult.value.rails) {
+        if (rail.items.length > 0) {
+          // The first server rail carries the up-focus wiring when there is no On deck rail above it.
+          const isTopRail = continueWatchingEntries.length === 0 && serverRails.length === 0;
+          serverRails.push({ id: rail.id, title: rail.title, items: buildCardItems(rail.items, isTopRail) });
+        }
+      }
+    }
+    this.serverRails = serverRails;
 
     this.hero =
       this.continueWatchingItems[0] ??
@@ -625,6 +590,16 @@ export struct Home {
     const hero = this.hero;
     if (hero !== undefined) {
       this.loadHeroArtwork(hero.id);
+    }
+    for (const rail of this.serverRails) {
+      const railId = rail.id;
+      this.loadRailArtwork(
+        (): HomeCardItem[] => this.serverRailItems(railId),
+        (items: HomeCardItem[]): void => {
+          this.serverRails = this.serverRails.map((current: HomeServerRail): HomeServerRail =>
+            current.id === railId ? { id: current.id, title: current.title, items: items } : current);
+        }
+      );
     }
     this.loadRailArtwork(
       (): HomeCardItem[] => this.continueWatchingItems,
@@ -663,6 +638,11 @@ export struct Home {
    * resolves -- never a stale snapshot, since `getOneCardArtwork` re-reads
    * `getItems()` fresh inside its own (single, synchronous-until-`await`)
    * continuation. */
+  private serverRailItems(railId: string): HomeCardItem[] {
+    const rail = this.serverRails.find((candidate: HomeServerRail): boolean => candidate.id === railId);
+    return rail !== undefined ? rail.items : [];
+  }
+
   private loadRailArtwork(getItems: () => HomeCardItem[], setItems: (items: HomeCardItem[]) => void): void {
     const items = getItems();
     for (const item of items) {
@@ -694,6 +674,15 @@ export struct Home {
     }
   }
 
+  /** Web TV Home: the hero shows the focused card's work. */
+  private focusHero(item: HomeCardItem): void {
+    if (this.hero !== undefined && this.hero.id === item.id) {
+      return;
+    }
+    this.hero = item;
+    this.loadHeroArtwork(item.id);
+  }
+
   private openDetail(workId: string): void {
     const detailParams: DetailRouteParams = { workId: workId };
     pushRoute(getNavStack(), ROUTES.Detail, detailParams);
@@ -701,6 +690,10 @@ export struct Home {
 
   private handleNavSelect(id: string): void {
     if (id === HOME_NAV_ID) {
+      return;
+    }
+    if (id === CALENDAR_NAV_ID) {
+      pushRoute(getNavStack(), ROUTES.Calendar);
       return;
     }
     const libraryParams: LibraryRouteParams = { kind: id };
@@ -730,6 +723,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
         .nextFocus({ up: this.topRailFocusUpId })
     } else {
@@ -743,6 +739,9 @@ export struct Home {
         onSelect: ((): void => {
       this.openDetail(((item as HomeCardItem).id));
     }),
+        onFocused: (): void => {
+          this.focusHero(item as HomeCardItem);
+        },
       })
     }
   }
@@ -787,14 +786,26 @@ export struct Home {
           railId: 'home-continue-watching-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
           listHeight: tv(TvGeometry.homeRailsListHeight),
-          heading: 'Continue Watching',
+          heading: 'On deck',
           items: this.continueWatchingItems,
           itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
             this.tvCardItemBuilder(item, index, activeRailFactor);
           },
         })
       }
-      if (this.newMovieItems.length > 0) {
+      ForEach(this.serverRails, (rail: HomeServerRail) => {
+        MediaRail({
+          railId: `home-${rail.id}-tv`,
+          headingGap: tv(TvGeometry.homeRailsHeadingGap),
+          listHeight: tv(TvGeometry.homeRailsListHeight),
+          heading: rail.title,
+          items: rail.items,
+          itemBuilder: (item: MediaRailItem, index: number, activeRailFactor: number): void => {
+            this.tvCardItemBuilder(item, index, activeRailFactor);
+          },
+        })
+      }, (rail: HomeServerRail): string => rail.id)
+      if (this.serverRails.length === 0 && this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -806,7 +817,7 @@ export struct Home {
           },
         })
       }
-      if (this.newSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -818,7 +829,7 @@ export struct Home {
           },
         })
       }
-      if (this.moreMovieItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -830,7 +841,7 @@ export struct Home {
           },
         })
       }
-      if (this.moreSeriesItems.length > 0) {
+      if (this.serverRails.length === 0 && this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-tv',
           headingGap: tv(TvGeometry.homeRailsHeadingGap),
@@ -939,11 +950,21 @@ export struct Home {
       })
       NavRail({
         items: this.navItems,
+        secondaryItems: buildSecondaryNavItems(),
         selectedId: HOME_NAV_ID,
         onSelect: ((id: string): void => {
       this.handleNavSelect(id);
     }),
       })
+      // Web TV shell chrome: the logo above the rail and the clock row.
+      PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+        .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Row() {
+        Clock()
+      }
+      .height(tv(TvGeometry.utilityRowHeight))
+      .alignItems(VerticalAlign.Center)
+      .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
     }
     .width('100%')
     .height('100%')

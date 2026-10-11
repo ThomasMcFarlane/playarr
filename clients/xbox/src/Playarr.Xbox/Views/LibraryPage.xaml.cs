@@ -93,6 +93,7 @@ namespace Playarr.Xbox.Views
             }
 
             ShowFocused(_viewModel.Works.Count > 0 ? _viewModel.Works[0] : null);
+            RenderLetterRail();
         }
 
         private void WorksGridView_GotFocus(object sender, RoutedEventArgs e)
@@ -113,7 +114,10 @@ namespace Playarr.Xbox.Views
                 return;
             }
 
-            FocusEyebrow.Text = work.Genres.Count > 0 ? work.Genres[0].ToUpperInvariant() : string.Empty;
+            var backdrop = work.Image(ImageKind.Backdrop)?.Url;
+            var backdropUri = string.IsNullOrEmpty(backdrop) ? null : App.Environment.ApiClient.ResolveUrl(backdrop!);
+            FocusBackdrop.Source = backdropUri == null ? null : new Windows.UI.Xaml.Media.Imaging.BitmapImage(backdropUri) { DecodePixelWidth = 960 };
+                        FocusEyebrow.Text = work.Genres.Count > 0 ? work.Genres[0].ToUpperInvariant() : string.Empty;
             FocusTitle.Text = work.Title;
             var meta = new List<string>();
             if (WorkLabels.YearRange(work) is { } years)
@@ -128,6 +132,48 @@ namespace Playarr.Xbox.Views
 
             FocusMeta.Text = string.Join("   ", meta);
             FocusOverview.Text = work.Overview ?? string.Empty;
+        }
+
+        /// <summary>Web A-Z rail: "#" then A-Z; a letter jumps to the first title starting with it.</summary>
+        private void RenderLetterRail()
+        {
+            LetterRail.Children.Clear();
+            foreach (var letter in "#ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            {
+                var button = new Button
+                {
+                    Content = new TextBlock { Text = letter.ToString(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = (Windows.UI.Xaml.Media.Brush)Application.Current.Resources["PlayarrInkSoft"] },
+                    Width = 40,
+                    Height = 44,
+                    Padding = new Thickness(0),
+                    CornerRadius = new CornerRadius(20),
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Tag = letter,
+                };
+                button.Click += LetterButton_Click;
+                LetterRail.Children.Add(button);
+            }
+        }
+
+        private void LetterButton_Click(object sender, RoutedEventArgs e)
+        {
+            var letter = (char)((Button)sender).Tag;
+            foreach (var item in WorksGridView.Items)
+            {
+                if (item is FrameworkElement { Tag: Guid id } && _worksById.TryGetValue(id, out var work))
+                {
+                    var title = string.IsNullOrEmpty(work.SortTitle) ? work.Title : work.SortTitle;
+                    var first = title.Length > 0 ? char.ToUpperInvariant(title[0]) : '#';
+                    if (letter == '#' ? !char.IsLetter(first) : first == letter)
+                    {
+                        WorksGridView.ScrollIntoView(item, ScrollIntoViewAlignment.Leading);
+                        ShowFocused(work);
+                        return;
+                    }
+                }
+            }
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();

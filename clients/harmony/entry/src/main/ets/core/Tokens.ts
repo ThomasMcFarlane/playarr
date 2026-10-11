@@ -260,6 +260,7 @@ export interface TvGeometryTokens {
   logoSize: number;
   logoLeft: number;
   logoTop: number;
+  clockLeft: number;
 
   // 5.10 card and rail metrics, TV column.
   homeRailCardWidthLandscape: number;
@@ -270,6 +271,10 @@ export interface TvGeometryTokens {
   railHeadingSize: number;
   railHeadingWeight: number;
   libraryGridColumns: number;
+  libraryGridInsetLeft: number;
+  libraryGridTop: number;
+  libraryGridCardWidth: number;
+  libraryGridCardHeight: number;
   libraryGridRowGap: number;
   libraryGridColumnGap: number;
   libraryGridCardRadius: number;
@@ -302,6 +307,7 @@ export interface TvGeometryTokens {
   navTileLabelSize: number;
   navTileLabelWeight: number;
   navGroupTop: number;
+  navGroupGap: number;
   navGroupShadowOffsetY: number;
   playerControlBarPaddingH: number;
   playerControlBarTitleSize: number;
@@ -370,8 +376,10 @@ export const TvGeometry: TvGeometryTokens = {
   utilityRowHeight: 50,
 
   logoSize: 42,
-  logoLeft: 59,
-  logoTop: 34,
+  // Web TV shell: logo at (61, 60), clock row starting at x=478, 56..106 high.
+  logoLeft: 61,
+  logoTop: 60,
+  clockLeft: 478,
 
   homeRailCardWidthLandscape: 327,
   homeRailCardWidthCover: 172,
@@ -382,9 +390,16 @@ export const TvGeometry: TvGeometryTokens = {
   // ArkUI takes weights in steps of 100; web uses 610.
   railHeadingWeight: 600,
   libraryGridColumns: 3,
-  libraryGridRowGap: 36,
-  libraryGridColumnGap: 28,
-  libraryGridCardRadius: 12,
+  // Web `.tv-title-grid`: 327x184 cards from x=783 (53 into the x=730 column), first row at y=162,
+  // columns 353.5 apart and rows 240.5 apart.
+  libraryGridInsetLeft: 53,
+  libraryGridTop: 162,
+  libraryGridCardWidth: 327,
+  libraryGridCardHeight: 184,
+  // Web row pitch is 240.5; its caption box sits 12 below the art where PosterCard's sits 5 below.
+  libraryGridRowGap: 38,
+  libraryGridColumnGap: 26.5,
+  libraryGridCardRadius: 12.48,
   azIndexRailRight: 22,
   azIndexRailHeightVhPct: 66,
   azIndexRailHeightMaxPx: 720,
@@ -416,6 +431,8 @@ export const TvGeometry: TvGeometryTokens = {
   navTileLabelWeight: 700,
   // Web TV library group (Home, Series, Movies, Music) top edge; the Downloads/Search group sits above it on web.
   navGroupTop: 286,
+  // Web gap between nav groups (586 -> 600).
+  navGroupGap: 14,
   navGroupShadowOffsetY: 14,
   playerControlBarPaddingH: 48,
   playerControlBarTitleSize: 19,

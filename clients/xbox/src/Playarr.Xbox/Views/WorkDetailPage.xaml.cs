@@ -107,84 +107,159 @@ namespace Playarr.Xbox.Views
             PlayButton.IsEnabled = _viewModel.CanPlay;
 
             SeriesPanel.Visibility = _viewModel.IsSeries ? Visibility.Visible : Visibility.Collapsed;
+            EpisodeTitleText.Visibility = Visibility.Collapsed;
             if (_viewModel.IsSeries)
             {
-                RenderSeasons();
-                RenderEpisodes();
+                RenderSeasonRails();
+                ShowEpisode(_viewModel.SelectedEpisode);
             }
         }
 
-        private void RenderSeasons()
+        /// <summary>Web series page: one rail per season of 268x151 episode thumbnails with the number overlaid.</summary>
+        private void RenderSeasonRails()
         {
-            SeasonsPanel.Children.Clear();
-
-            var seasons = _viewModel.Seasons;
-            for (var i = 0; i < seasons.Count; i++)
+            SeriesPanel.Children.Clear();
+            foreach (var season in _viewModel.Seasons)
             {
-                var button = new Button
+                var list = new ListView
                 {
-                    Content = SeasonLabel(seasons[i]),
-                    Tag = i,
-                    FontWeight = i == _viewModel.SelectedSeasonIndex ? FontWeights.Bold : FontWeights.Normal,
+                    SelectionMode = ListViewSelectionMode.None,
+                    IsItemClickEnabled = true,
+                    Height = 210,
+                    ItemContainerStyle = CatalogTileFactory.CardContainerStyle,
+                };
+                ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Hidden);
+                ScrollViewer.SetHorizontalScrollMode(list, ScrollMode.Enabled);
+                ScrollViewer.SetVerticalScrollMode(list, ScrollMode.Disabled);
+                list.ItemsPanel = (ItemsPanelTemplate)Windows.UI.Xaml.Markup.XamlReader.Load(
+                    "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
+                    "<ItemsStackPanel Orientation='Horizontal' /></ItemsPanelTemplate>");
+                foreach (var episode in season.Episodes)
+                {
+                    list.Items.Add(EpisodeCard(season.Season.SeasonNumber, episode));
+                }
+
+                list.ItemClick += (s, e) =>
+                {
+                    if (e.ClickedItem is FrameworkElement { Tag: EpisodeDetail episode })
+                    {
+                        _viewModel.SelectEpisode(episode);
+                        PlayButton_Click(this, new RoutedEventArgs());
+                    }
+                };
+                list.GotFocus += (s, e) =>
+                {
+                    if (e.OriginalSource is ListViewItem { Content: FrameworkElement { Tag: EpisodeDetail episode } })
+                    {
+                        ShowEpisode(episode);
+                    }
                 };
 
-                button.Click += SeasonButton_Click;
-                SeasonsPanel.Children.Add(button);
-            }
-        }
-
-        private void RenderEpisodes()
-        {
-            EpisodesPanel.Children.Clear();
-
-            foreach (var episodeDetail in _viewModel.Episodes)
-            {
-                var isSelected = ReferenceEquals(episodeDetail, _viewModel.SelectedEpisode);
-                var isPlayable = episodeDetail.MediaFileId.HasValue;
-
-                var button = new Button
+                var section = new StackPanel();
+                section.Children.Add(new TextBlock { Text = SeasonLabel(season), Style = (Style)Application.Current.Resources["PlayarrRailTitle"] });
+                section.Children.Add(new TextBlock
                 {
-                    Content = EpisodeLabel(episodeDetail, isPlayable),
-                    Tag = episodeDetail,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Left,
-                    Opacity = isPlayable ? 1.0 : 0.5,
-                    FontWeight = isSelected ? FontWeights.Bold : FontWeights.Normal,
-                };
-
-                button.Click += EpisodeButton_Click;
-                EpisodesPanel.Children.Add(button);
+                    Text = $"{season.Episodes.Count} episodes",
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Windows.UI.Xaml.Media.Brush)Application.Current.Resources["PlayarrInkSoft"],
+                    Margin = new Thickness(0, 6, 0, 22),
+                });
+                section.Children.Add(list);
+                SeriesPanel.Children.Add(section);
             }
         }
+
+        private static FrameworkElement EpisodeCard(int seasonNumber, EpisodeDetail detail)
+        {
+            var episode = detail.Episode;
+            var art = new Grid
+            {
+                Width = 268,
+                Height = 151,
+                CornerRadius = new CornerRadius(12),
+                Background = (Windows.UI.Xaml.Media.Brush)Application.Current.Resources["PlayarrSurfaceSoft"],
+            };
+            var url = episode.Images.Count > 0 ? episode.Images[0].Url : null;
+            var uri = string.IsNullOrEmpty(url) ? null : App.Environment.ApiClient.ResolveUrl(url!);
+            if (uri != null)
+            {
+                art.Children.Add(new Image { Source = new BitmapImage(uri) { DecodePixelWidth = 268 }, Stretch = Windows.UI.Xaml.Media.Stretch.UniformToFill });
+            }
+
+            art.Children.Add(new TextBlock
+            {
+                Text = episode.EpisodeNumber.ToString("00", System.Globalization.CultureInfo.InvariantCulture),
+                FontSize = 22,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 12, 8),
+            });
+
+            var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 10, 0, 0) };
+            caption.Children.Add(new TextBlock { Text = EpisodeCode(seasonNumber, episode.EpisodeNumber), FontSize = 9, FontWeight = FontWeights.SemiBold, Foreground = (Windows.UI.Xaml.Media.Brush)Application.Current.Resources["PlayarrInkSoft"], VerticalAlignment = VerticalAlignment.Center });
+            caption.Children.Add(new TextBlock { Text = episode.Title ?? string.Empty, FontSize = 12, FontWeight = FontWeights.SemiBold, MaxWidth = 200, TextTrimming = TextTrimming.CharacterEllipsis });
+
+            var root = new StackPanel { Width = 268, Tag = detail };
+            root.Children.Add(art);
+            root.Children.Add(caption);
+            return root;
+        }
+
+        /// <summary>The web series header follows the focused (or next) episode: "S01 · E01" eyebrow, episode title, meta.</summary>
+        private void ShowEpisode(EpisodeDetail? detail)
+        {
+            var work = _viewModel.Work;
+            if (detail == null || work == null)
+            {
+                return;
+            }
+
+            var seasonNumber = 0;
+            foreach (var season in _viewModel.Seasons)
+            {
+                if (season.Episodes.Contains(detail))
+                {
+                    seasonNumber = season.Season.SeasonNumber;
+                }
+            }
+
+            var episode = detail.Episode;
+            EyebrowText.Text = EpisodeCode(seasonNumber, episode.EpisodeNumber);
+            EpisodeTitleText.Text = episode.Title ?? string.Empty;
+            EpisodeTitleText.Visibility = string.IsNullOrEmpty(episode.Title) ? Visibility.Collapsed : Visibility.Visible;
+            var meta = new System.Collections.Generic.List<string> { $"Season {seasonNumber}", EpisodeCode(seasonNumber, episode.EpisodeNumber) };
+            if (episode.RuntimeMinutes is { } minutes)
+            {
+                meta.Add($"{minutes} min");
+            }
+
+            if (WorkLabels.YearRange(work) is { } years)
+            {
+                meta.Add(years);
+            }
+
+            if (DateTimeOffset.TryParse(episode.AirDate, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var aired))
+            {
+                meta.Add("Aired " + aired.ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")));
+            }
+
+            meta.AddRange(work.Genres);
+            MetaText.Text = string.Join("      ", meta);
+            if (!string.IsNullOrEmpty(episode.Overview))
+            {
+                OverviewText.Text = episode.Overview;
+            }
+        }
+
+        private static string EpisodeCode(int season, int episode) =>
+            $"S{season.ToString("00", System.Globalization.CultureInfo.InvariantCulture)} \u00b7 E{episode.ToString("00", System.Globalization.CultureInfo.InvariantCulture)}";
 
         private static string SeasonLabel(SeasonDetail season) =>
             string.IsNullOrEmpty(season.Season.Title)
                 ? $"Season {season.Season.SeasonNumber}"
                 : season.Season.Title!;
-
-        private static string EpisodeLabel(EpisodeDetail episode, bool isPlayable)
-        {
-            var prefix = isPlayable ? "▶ " : string.Empty;
-            var number = $"E{episode.Episode.EpisodeNumber}";
-            var title = string.IsNullOrEmpty(episode.Episode.Title) ? number : $"{number} — {episode.Episode.Title}";
-            return prefix + title;
-        }
-
-        private void SeasonButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is int index)
-            {
-                _viewModel.SelectSeason(index);
-            }
-        }
-
-        private void EpisodeButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is EpisodeDetail episode)
-            {
-                _viewModel.SelectEpisode(episode);
-            }
-        }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) => App.Navigation.GoBack();
 

@@ -212,6 +212,8 @@ namespace Playarr.Core.Models
 
         [JsonProperty("runtime_minutes")] public int? RuntimeMinutes { get; set; }
 
+        [JsonProperty("images")] public IList<ImageAsset> Images { get; set; } = new List<ImageAsset>();
+
         [JsonProperty("monitored")] public bool Monitored { get; set; }
 
         [JsonProperty("availability")] public Availability Availability { get; set; }
@@ -366,6 +368,41 @@ namespace Playarr.Core.Models
             var label = KindLabel(work.Kind);
             var years = YearRange(work);
             return years == null ? label : label.Length == 0 ? years : $"{label} \u00b7 {years}";
+        }
+
+        /// <summary>
+        /// Library title order, as the web's <c>Intl.Collator(undefined, {numeric: true, sensitivity: "base"})</c> on
+        /// <c>sort_title || title</c>: case-insensitive, digit runs compared as numbers ("2 …" before "10 …").
+        /// </summary>
+        public static int CompareTitles(Work a, Work b) =>
+            NaturalCompare(
+                string.IsNullOrEmpty(a.SortTitle) ? a.Title : a.SortTitle,
+                string.IsNullOrEmpty(b.SortTitle) ? b.Title : b.SortTitle);
+
+        public static int NaturalCompare(string x, string y)
+        {
+            int i = 0, j = 0;
+            while (i < x.Length && j < y.Length)
+            {
+                if (char.IsDigit(x[i]) && char.IsDigit(y[j]))
+                {
+                    int si = i, sj = j;
+                    while (i < x.Length && char.IsDigit(x[i])) i++;
+                    while (j < y.Length && char.IsDigit(y[j])) j++;
+                    var nx = x.Substring(si, i - si).TrimStart('0');
+                    var ny = y.Substring(sj, j - sj).TrimStart('0');
+                    var c = nx.Length != ny.Length ? nx.Length.CompareTo(ny.Length) : string.CompareOrdinal(nx, ny);
+                    if (c != 0) return c;
+                    continue;
+                }
+
+                var d = string.Compare(x[i].ToString(), y[j].ToString(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace);
+                if (d != 0) return d;
+                i++; j++;
+            }
+
+            return (x.Length - i).CompareTo(y.Length - j);
         }
 
         /// <summary>Singular kind label ("Movie", "Series"); empty for kinds the web does not label.</summary>

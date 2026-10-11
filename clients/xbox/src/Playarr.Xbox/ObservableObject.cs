@@ -39,7 +39,26 @@ namespace Playarr.Xbox
             return true;
         }
 
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            var handler = PropertyChanged;
+            if (handler == null)
+            {
+                return;
+            }
+
+            var args = new PropertyChangedEventArgs(propertyName);
+            // Pages re-render from these events, so they must run on the UI thread. Async work that resumed elsewhere
+            // (ConfigureAwait(false), e.g. pairing) otherwise touches XAML from a worker thread and the page freezes.
+            var dispatcher = Windows.ApplicationModel.Core.CoreApplication.MainView?.CoreWindow?.Dispatcher;
+            if (dispatcher == null || dispatcher.HasThreadAccess)
+            {
+                handler(this, args);
+            }
+            else
+            {
+                _ = dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => handler(this, args));
+            }
+        }
     }
 }

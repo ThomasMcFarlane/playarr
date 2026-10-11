@@ -331,6 +331,7 @@ private struct TVProductionShell<Stage: View>: View {
                         }
                 }
                 .environment(\.openRoute) { path.append($0) }
+                .disabled(actionsWork != nil) // the actions drawer is modal
                 .onChange(of: tab) { _, _ in path = [] }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .environment(\.setShellChromeHidden) { chromeHidden = $0 }

@@ -80,6 +80,7 @@
                 TextWrapping="WrapWholeWords"
                 MaxLines="3"
                 Margin="0,22,0,0" />
+            <TextBlock x:Name="EpisodeTitleText" FontSize="22" Foreground="{StaticResource PlayarrInkSoft}" Margin="0,8,0,0" Visibility="Collapsed" />
             <TextBlock x:Name="MetaText" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PlayarrInkSoft}" Margin="0,26,0,0" />
             <TextBlock
                 x:Name="OverviewText"
@@ -115,12 +116,9 @@
             <TextBlock x:Name="ErrorText" Style="{StaticResource PlayarrRailTitle}" Visibility="Collapsed" />
         </StackPanel>
 
-        <ScrollViewer Margin="881,140,0,0" Padding="0,0,48,48" VerticalScrollBarVisibility="Hidden">
-            <StackPanel x:Name="SeriesPanel" Spacing="22" Visibility="Collapsed">
-                <TextBlock Text="Episodes" Style="{StaticResource PlayarrRailTitle}" />
-                <StackPanel x:Name="SeasonsPanel" Orientation="Horizontal" Spacing="8" />
-                <StackPanel x:Name="EpisodesPanel" Spacing="4" />
-            </StackPanel>
+        <!-- Series: one rail per season (web "Season N" + "N episodes" + episode thumbnails), from x=881. -->
+        <ScrollViewer Margin="881,0,0,0" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
+            <StackPanel x:Name="SeriesPanel" Margin="0,345,0,48" Spacing="44" Visibility="Collapsed" />
         </ScrollViewer>
     </Grid>
 </Page>

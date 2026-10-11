@@ -471,6 +471,9 @@ internal var parityPauseAtMs: Long? = null
  */
 internal var parityClock: java.time.Instant? = null
 
+/** Debug builds: the route the app opens on (`parity_route` launch extra), for D-pad-only parity captures. */
+internal var parityRoute: String? = null
+
 internal fun playarrNow(zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): java.time.LocalDateTime =
     parityClock?.let { java.time.LocalDateTime.ofInstant(it, zone) } ?: java.time.LocalDateTime.now(zone)
 

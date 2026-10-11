@@ -41,6 +41,8 @@ data class CalendarEntry(
     val posterUrl: String? = null,
     val workId: String? = null,
     val averageLagSeconds: Long? = null,
+    /** The release's synopsis when the source gave one (web shows it for a single release in the agenda details). */
+    val overview: String? = null,
     val sources: List<CalendarEntrySource> = emptyList(),
     /** Title identity to post unchanged to the request and watchlist endpoints. */
     val snapshot: TitleSnapshot? = null,

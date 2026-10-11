@@ -52,7 +52,7 @@ namespace Playarr.Core.Networking
                 DateTimeZoneHandling = DateTimeZoneHandling.Utc,
             };
 
-            settings.Converters.Add(new IsoDateTimeConverter
+            settings.Converters.Add(new Rfc3339DateTimeConverter
             {
                 DateTimeStyles = System.Globalization.DateTimeStyles.AdjustToUniversal,
                 DateTimeFormat = "yyyy-MM-ddTHH:mm:ss.FFFFFFFzzz",
@@ -80,6 +80,30 @@ namespace Playarr.Core.Networking
     /// wrapped value. See that type's remarks for why redaction is a
     /// logging concern rather than a serialization one.
     /// </summary>
+    /// <summary>
+    /// Reads RFC 3339 timestamps with any offset form (<c>Z</c>, <c>+00:00</c>, with or without fractions) via
+    /// <see cref="DateTimeOffset.Parse(string, IFormatProvider, System.Globalization.DateTimeStyles)"/>, and writes
+    /// them with the base converter's fixed format. The base converter parses with its format exactly, and the
+    /// .NET Native runtime rejects <c>Z</c> against <c>zzz</c>.
+    /// </summary>
+    internal sealed class Rfc3339DateTimeConverter : IsoDateTimeConverter
+    {
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+        {
+            if (reader.TokenType != JsonToken.String)
+            {
+                return base.ReadJson(reader, objectType, existingValue, serializer);
+            }
+
+            var parsed = DateTimeOffset.Parse(
+                (string)reader.Value!,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal);
+            var target = Nullable.GetUnderlyingType(objectType) ?? objectType;
+            return target == typeof(DateTimeOffset) ? (object)parsed.ToUniversalTime() : parsed.UtcDateTime;
+        }
+    }
+
     internal sealed class SensitiveConverter : JsonConverter
     {
         public override bool CanConvert(Type objectType) =>
@@ -92,6 +116,13 @@ namespace Playarr.Core.Networking
             object? existingValue,
             JsonSerializer serializer)
         {
+            // Direct construction for the wrapped types in use: Activator needs constructor metadata that the
+            // .NET Native release build strips.
+            if (objectType == typeof(Sensitive<string>))
+            {
+                return new Sensitive<string>(serializer.Deserialize<string>(reader)!);
+            }
+
             var wrapped = objectType.GetGenericArguments()[0];
             var value = serializer.Deserialize(reader, wrapped);
             return Activator.CreateInstance(objectType, value);
@@ -105,8 +136,7 @@ namespace Playarr.Core.Networking
                 return;
             }
 
-            var expose = value.GetType().GetMethod(nameof(Sensitive<object>.ExposeSecret));
-            serializer.Serialize(writer, expose!.Invoke(value, null));
+            serializer.Serialize(writer, ((ISensitive)value).ExposeBoxed());
         }
     }
 

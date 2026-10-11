@@ -1,0 +1,12 @@
+<!--
+  .NET Native runtime directives. The release build strips reflection metadata by default; Newtonsoft.Json and the
+  Playarr.Core JSON converters reflect over the model types, so keep full metadata for the app, Playarr.Core and
+  Newtonsoft.Json.
+-->
+<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="*Application*" Dynamic="Required All" />
+    <Assembly Name="Playarr.Core" Dynamic="Required All" />
+    <Assembly Name="Newtonsoft.Json" Dynamic="Required All" />
+  </Application>
+</Directives>

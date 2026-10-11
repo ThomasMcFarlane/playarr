@@ -6,6 +6,7 @@ import io.playarr.shared.designsystem.page.PlayarrPageBody
 import io.playarr.shared.designsystem.page.PlayarrPageLayout
 import io.playarr.shared.designsystem.page.PlayarrPageId
 import io.playarr.shared.designsystem.page.playarrPageMetrics
+import io.playarr.shared.designsystem.page.PlayarrEmptyArt
 import io.playarr.shared.designsystem.page.PlayarrEmptySpec
 import io.playarr.shared.designsystem.page.PlayarrPageState
 import io.playarr.shared.designsystem.page.PlayarrEmptyState
@@ -269,6 +270,7 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -901,6 +903,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 
     fun reloadForProfile() {
+        // Libraries a screen has already asked for are reloaded for the new profile; otherwise a library opened as the
+        // first screen (a restored route) was left without data.
+        val openLibraries = (libraryJobs.keys + _libraries.value.keys).toSet()
         libraryJobs.values.forEach(Job::cancel)
         libraryJobs.clear()
         _availableKinds.value = null
@@ -915,6 +920,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _searchViews.value = emptyList()
         loadAvailableKinds()
         loadHome()
+        openLibraries.forEach(::loadLibrary)
         viewModelScope.launch {
             refreshCapabilities()
             refreshProfileAvatar()
@@ -991,6 +997,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                         if (page.size < LIBRARY_PAGE_SIZE) break
                     }
                     is PlayarrResult.Failure -> {
+                        // A cancelled load (profile reload) is not an error; the replacement load reports its own result.
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         // Keep whatever has loaded; only a failed first page is an error.
                         if (loaded.isEmpty()) {
                             _libraries.value = _libraries.value + (
@@ -2812,6 +2820,8 @@ private fun ExperienceHomeScreen(
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
+                    preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
         }
@@ -3113,7 +3123,8 @@ internal fun ExperienceMediaRail(
                     onSelected = { onSelected(work) },
                     onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
-                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
+                    // Web Home: a frame thumbnail only for an episode (and an artist's track); films keep their backdrop.
+                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId?.takeIf { work.kind == WorkKind.Artist },
                     stackCount = onDeck?.resumePlan?.takeIf { it.isStacked }?.options?.size ?: 0,
                     webTvStyle = isTelevision,
                     displayTitle = episode?.title?.takeIf(String::isNotBlank)
@@ -3405,7 +3416,8 @@ internal fun LibraryResults(
     // Web phone: first row 20 px under the 38 px header, which starts 2 px under the status bar inset.
     val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 60.dp, bottom = 104.dp)
     // Web `.tv-title-grid-content` at 1920: 51.3 px start, 105.7 px end, 162 px first row, 25.92 x 27 gaps.
-    val screenPadding = if (isTelevision) PaddingValues(start = 51.3.dp, end = 105.7.dp, top = 22.dp, bottom = 104.dp) else padding
+    // Television: web's first column starts at x 783.4 (measured on the live grid).
+    val screenPadding = if (isTelevision) PaddingValues(start = 53.7.dp, end = 103.3.dp, top = 22.dp, bottom = 104.dp) else padding
     when (viewMode) {
         LibraryViewMode.Screen -> LazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: if (isTelevision) GridCells.Adaptive(landscapeWidth) else GridCells.Fixed(2),
@@ -3713,8 +3725,10 @@ private fun ExperienceLibraryScreen(
         ExperienceLoad.Loading -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
-            state = PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
-        ) {}
+            // Television: skeletons with the final geometry (owner rule), never a centred "Loading" screen.
+            state = if (isTelevision) null else PlayarrPageState.Loading(playarrString(PlayarrString.LibraryLoading, "label" to plural)),
+            body = if (isTelevision) PlayarrPageBody.Bleed else PlayarrPageBody.Panel,
+        ) { if (isTelevision) TvLibrarySkeleton(playarrString(PlayarrString.LibraryLoading, "label" to plural)) }
         is ExperienceLoad.Failed -> PlayarrPageLayout(
             pageId = PlayarrPageId.Library,
             header = playarrPageHeader(title = plural, onBack = { navController.openExperienceTopLevel("home") }),
@@ -3840,17 +3854,18 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     )
                     if (isTelevision) {
                         // Web default focus: the selected card, else the first.
-                        TvDefaultFocusEffect(kind) {
+                        TvDefaultFocusEffect(kind, takeFirst = true) {
                             tvGrid.focus(0, filteredWorks.indexOfFirst { it.id == selectedId }.coerceAtLeast(0))
                         }
                     }
                     }
                 }
                 if (isTelevision && sortMode == "title") {
-                    // Web `.tv-alphabet`: 62 x 690 at (1845.5, 270), 27 buttons of 24, spread evenly.
+                    // Web `.tv-alphabet`: 56 dp wide from y 270 to the bottom (8 dp top, 64.8 dp bottom padding), 27 buttons of
+                    // 44 x 44 (WCAG 2.5.5 targets) in a column that scrolls; the 24 dp circle marks the active letter.
                     Column(
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 270.dp, end = 12.5.dp).width(62.dp).height(690.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 278.dp, end = 18.5.dp, bottom = 64.8.dp).width(44.dp).fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         (listOf("#") + ('A'..'Z').map(Char::toString)).forEach { letter ->
@@ -3858,6 +3873,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                             val shownLetter = if (activeLetter == "#") selected.sortTitle.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' }?.toString() ?: "#" else activeLetter
                             val active = shownLetter == letter
                             var letterFocused by remember { mutableStateOf(false) }
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
@@ -3875,6 +3891,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                                     fontSize = 9.216.sp,
                                     fontWeight = FontWeight.Normal,
                                 )
+                            }
                             }
                         }
                     }
@@ -3911,6 +3928,8 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
                     canDownload = canDownload,
+                    preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
+                    onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
                 )
             }
         }
@@ -4115,6 +4134,8 @@ private fun ExperienceSearchScreen(
             onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
             onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
             canDownload = canDownload,
+            preferredMediaFileId = viewModel.progress.collectAsState().value.firstOrNull { it.workId == work.id }?.mediaFileId,
+            onPlay = { id -> contextWork = null; navController.navigate("experience-player/${Uri.encode(id)}") },
         )
     }
 }
@@ -4409,6 +4430,13 @@ private fun TelevisionSearchBody(
                 }
             }
         }
+        if (query.isBlank() && !filtersOpen) {
+            // Web `.tv-search-prompt`: the hint under the field while nothing is typed.
+            Text(
+                playarrString(PlayarrString.SearchEmptyPrompt), color = WebInkSoft, fontSize = 13.824.sp, lineHeight = 21.427.sp,
+                style = WebTextStyle, modifier = Modifier.offset(x = 153.6.dp, y = 303.dp).width(282.dp),
+            )
+        }
         if (showPreview && !filtersOpen) {
             Column(Modifier.offset(x = 153.6.dp, y = 362.dp).width(517.6.dp)) {
                 val kicker = if (selectedWork != null) {
@@ -4454,11 +4482,12 @@ private fun TelevisionSearchBody(
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                     is ExperienceLoad.Failed -> PlayarrErrorState(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query.isBlank()) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                        // Web: the idle title beside the search art; the prompt sits under the search field.
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchIdleTitle), art = PlayarrEmptyArt.Search))
                     } else if (mediaFilter == PlayarrSearchMediaType.Game) {
                         DiscoveryExtrasSection(query = query.trim(), gamesOnly = true, navController = navController, modifier = Modifier.fillMaxSize())
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
-                        PlayarrEmptyState(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                        PlayarrEmptyState(PlayarrEmptySpec(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription), PlayarrEmptyArt.Search))
                     } else {
                         // Web `data-tv-grid` with `data-tv-grid-edge-left=".tv-search input"`: index navigation over three columns, LEFT in
                         // the first column goes to the search field.
@@ -4658,6 +4687,8 @@ private fun MediaContextDialog(
     onOpen: () -> Unit,
     onMark: (Boolean) -> Unit,
     canDownload: Boolean,
+    preferredMediaFileId: String? = null,
+    onPlay: ((String) -> Unit)? = null,
     viewModel: MediaContextDownloadViewModel = hiltViewModel(),
 ) {
     val language = LocalPlayarrLanguage.current
@@ -4680,9 +4711,19 @@ private fun MediaContextDialog(
             onClose = onDismiss,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // shortcut: Open stands in for web's Play (a bare Work has no media file to start); add Play when the
-                // context menu can start playback from the work.
-                TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
+                // Web `play`: resolve the title's playable leaves, prefer the one with progress, else the first.
+                if (onPlay != null) {
+                    var resolvingPlay by remember(work.id) { mutableStateOf(false) }
+                    TvDrawerActionRow("\u25B6", playarrString(if (resolvingPlay) PlayarrString.ContextResolving else PlayarrString.DetailPlay), {
+                        resolvingPlay = true
+                        viewModel.resolveDownloadCandidates(work, language) { leaves ->
+                            resolvingPlay = false
+                            (leaves.firstOrNull { it.mediaFileId == preferredMediaFileId } ?: leaves.firstOrNull())?.let { onPlay(it.mediaFileId) }
+                        }
+                    }, enabled = !resolvingPlay)
+                }
+                // Web lists no Open row (OK on the card opens the title); kept only when there is nothing to play.
+                if (onPlay == null) TvDrawerActionRow("\u25B6", playarrString(PlayarrString.ContextOpen), onOpen)
                 if (canDownload) {
                     TvDrawerActionRow("\u21E9", playarrString(if (resolvingDownload) PlayarrString.ContextResolving else PlayarrString.ContextDownload), download, enabled = !resolvingDownload)
                 }
@@ -4737,6 +4778,38 @@ private fun MediaContextDialog(
     downloadCandidates?.let { candidates ->
         DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
     }
+}
+
+
+/** The TV library while its first page loads: hero copy at the left, the poster grid in the rail panel (web `SkeletonState`). */
+@Composable
+private fun TvLibrarySkeleton(loadingLabel: String) {
+    Box(Modifier.fillMaxSize().background(WebSurface).semantics { contentDescription = loadingLabel }) {
+        Column(Modifier.padding(start = playarrPageMetrics(true).start, top = 259.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PlayarrSkeleton(Modifier.size(110.dp, 14.dp))
+            PlayarrSkeleton(Modifier.size(340.dp, 54.dp))
+            PlayarrSkeleton(Modifier.size(240.dp, 54.dp))
+            Spacer(Modifier.height(12.dp))
+            repeat(4) { PlayarrSkeleton(Modifier.size(330.dp, 13.dp)) }
+        }
+        Column(
+            Modifier.width(1190.4.dp).fillMaxHeight().align(Alignment.CenterEnd).background(webRailSurfaceBrush())
+                .padding(start = 51.3.dp, top = 140.dp, end = 105.7.dp),
+            verticalArrangement = Arrangement.spacedBy(27.dp),
+        ) {
+            repeat(4) {
+                Row(horizontalArrangement = Arrangement.spacedBy(25.92.dp)) {
+                    repeat(3) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PlayarrSkeleton(Modifier.size(327.2.dp, 184.dp), RoundedCornerShape(12.48.dp))
+                            PlayarrSkeleton(Modifier.size(140.dp, 11.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 /** Web drawer action row: 68 dp, 14 dp radius, `--surface-soft`, a 19.52 px crimson glyph in a 42 dp slot, a bold 19.2 px label; focus is the ring. */
@@ -7888,7 +7961,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                             automaticRecoveryUrl = activePlaybackUrl
                             recoverExpiredHlsSession(currentError.message)
                         } else if (shouldFallBackToTranscodeAfterDecodeFailure(
-                                activeDirectPlay,
+                                playarrPlaysSourceVideo(activeDirectPlay, _controls.value.activeQualityId),
                                 currentError.message,
                                 decoderFallbackAttempted,
                             )
@@ -8346,7 +8419,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         stallJob?.cancel()
         retryJob?.cancel()
         val resumeAt = if (playbackReached) currentSourcePositionMs() else null
-        val launchSettings = activeRequest?.launchSettings
+        val launchSettings = playarrAutoRetryLaunchSettings(activeRequest?.launchSettings, decoderFallbackAttempted)
         _state.value = ExperienceLoad.Loading
         retryJob = viewModelScope.launch {
             delay(delayMs)

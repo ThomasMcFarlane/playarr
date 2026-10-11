@@ -48,6 +48,7 @@ import { ApiOk, ApiResult } from '../net/ApiResult';
 import {
   catalogUrl,
   catalogKindsUrl,
+  homeRailsUrl,
   catalogSearchUrl,
   catalogDetailUrl,
   catalogSimilarUrl,
@@ -68,6 +69,7 @@ import { WorkDetail } from '../core/Types/WorkDetail.ts';
 import {
   BrowseQuery,
   CatalogPage,
+  HomeRailsResponse,
   SearchResult,
   ViewSummary,
   WorkKind,
@@ -218,6 +220,11 @@ export async function getCatalog(query: BrowseQuery): Promise<ApiResult<CatalogP
  */
 export function getCatalogKinds(): Promise<ApiResult<WorkKind[]>> {
   return getPlayarrClient().getJson<WorkKind[]>(catalogKindsUrl());
+}
+
+/** `GET /api/v1/home/rails`: the server-curated Home rails (web TV Home renders these). */
+export function getHomeRails(): Promise<ApiResult<HomeRailsResponse>> {
+  return getPlayarrClient().getJson<HomeRailsResponse>(homeRailsUrl());
 }
 
 /**

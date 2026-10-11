@@ -173,6 +173,8 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
         kind: WorkKind?,
         sort: String?,
         order: String?,
+        audioLang: [String],
+        subtitleLang: [String],
         limit: Int?,
         offset: Int?
     ) async throws -> CatalogPage
@@ -406,6 +408,8 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
         kind: WorkKind?,
         sort: String?,
         order: String?,
+        audioLang: [String],
+        subtitleLang: [String],
         limit: Int?,
         offset: Int?
     ) async throws -> CatalogPage {
@@ -415,6 +419,9 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
         if let order { query.append(URLQueryItem(name: "order", value: order)) }
         // The library lists what can be played, as the web does (`available_only`).
         query.append(URLQueryItem(name: "available_only", value: "true"))
+        // Web `formatLanguageParam`: comma-separated codes, any of them matches.
+        if !audioLang.isEmpty { query.append(URLQueryItem(name: "audio_lang", value: audioLang.joined(separator: ","))) }
+        if !subtitleLang.isEmpty { query.append(URLQueryItem(name: "subtitle_lang", value: subtitleLang.joined(separator: ","))) }
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
         if let offset { query.append(URLQueryItem(name: "offset", value: String(offset))) }
         return try await get("/api/v1/catalog", query: query)
@@ -1278,7 +1285,8 @@ public struct RequestSummary: Decodable, Sendable, Identifiable, Equatable {
 
 public extension PlayarrAPIClient {
     /// Default for test doubles: the order is ignored.
-    func browseCatalog(kind: WorkKind?, sort: String?, order: String?, limit: Int?, offset: Int?) async throws -> CatalogPage {
+    func browseCatalog(kind: WorkKind?, sort: String?, order: String?, audioLang: [String], subtitleLang: [String],
+                       limit: Int?, offset: Int?) async throws -> CatalogPage {
         try await browseCatalog(kind: kind, genre: nil, tag: nil, sort: sort, limit: limit, offset: offset)
     }
 }

@@ -12,9 +12,10 @@ import { vidaaOtaEnabled } from "./featureFlags";
  * supports MSE + EME), but is packaged/installed as a PWA rather than a
  * platform-native app -- see `manifest.json` and `featureFlags.ts`.
  */
+// No HEVC claim until fragmented-MP4 HEVC HLS is verified on VIDAA (TASKS 20.260).
 const PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
   containers: "mp4,webm",
-  videoCodecs: "h264,h265,vp9",
+  videoCodecs: "h264,vp9",
   audioCodecs: "aac,opus",
 };
 

@@ -24,6 +24,8 @@ import {
   playerPreferencesUrl,
   catalogUrl,
   catalogKindsUrl,
+  homeRailsUrl,
+  calendarUrl,
   catalogSearchUrl,
   catalogDetailUrl,
   catalogSimilarUrl,
@@ -105,6 +107,8 @@ describe('Endpoints - 4.8 catalog', () => {
 
   it('catalogKindsUrl', () => {
     assert.equal(catalogKindsUrl(), '/api/v1/catalog/kinds');
+    assert.equal(homeRailsUrl(), '/api/v1/home/rails');
+    assert.equal(calendarUrl('2026-10-10', '2026-11-10'), '/api/v1/calendar?start=2026-10-10&end=2026-11-10');
   });
 
   it('catalogSearchUrl (query string is left to the caller)', () => {

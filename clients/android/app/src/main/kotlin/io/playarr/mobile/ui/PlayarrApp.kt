@@ -509,7 +509,7 @@ fun PlayarrApp(
                     )
                 }
                 is RootState.SignedIn -> {
-                    val initialRoute = remember(current.serverUrl) { current.initialRoute }
+                    val initialRoute = remember(current.serverUrl) { parityRoute ?: current.initialRoute }
                     // Fully native on every form factor (phone, tablet, TV).
                     // Never mount a WebView shell for television "parity".
                     // Policy: docs/architecture/client-principles.md and

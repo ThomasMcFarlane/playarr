@@ -53,6 +53,12 @@
       "pageSourceFile": "src/main/ets/pages/Player.ets",
       "buildFunction": "PlayerBuilder",
       "data": {}
+    },
+    {
+      "name": "Calendar",
+      "pageSourceFile": "src/main/ets/pages/Calendar.ets",
+      "buildFunction": "CalendarBuilder",
+      "data": {}
     }
   ]
 }

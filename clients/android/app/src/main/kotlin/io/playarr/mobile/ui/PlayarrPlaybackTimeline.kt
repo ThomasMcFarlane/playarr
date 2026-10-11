@@ -34,15 +34,21 @@ internal fun shouldRecoverPlayarrHlsSession(
 
 internal const val DECODE_FALLBACK_PROFILE = "h264-1080p-8mbps"
 
+/** Direct play, or an original-quality HLS session whose video the server copied; a forced transcode is not. */
+internal fun playarrPlaysSourceVideo(activeDirectPlay: Boolean, activeQualityId: String?): Boolean =
+    activeDirectPlay || activeQualityId == "original"
+
 /**
- * A direct-played source that no device decoder can handle should be retried
- * once as a server transcode. [errorMessage] is the player's error code name.
+ * A session that plays the source video ([playarrPlaysSourceVideo]) that no
+ * device decoder can handle should be retried once as a server transcode. A
+ * forced transcode is excluded: it already is the converted stream.
+ * [errorMessage] is the player's error code name.
  */
 internal fun shouldFallBackToTranscodeAfterDecodeFailure(
-    activeDirectPlay: Boolean,
+    playsSourceVideo: Boolean,
     errorMessage: String,
     alreadyAttempted: Boolean,
-): Boolean = activeDirectPlay && !alreadyAttempted && errorMessage.uppercase() in setOf(
+): Boolean = playsSourceVideo && !alreadyAttempted && errorMessage.uppercase() in setOf(
     "ERROR_CODE_DECODING_FAILED",
     "ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES",
     "ERROR_CODE_DECODING_FORMAT_UNSUPPORTED",

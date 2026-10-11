@@ -181,7 +181,7 @@ internal val LocalTvNavHasFocus = compositionLocalOf<() -> Boolean> { { false } 
  * content instead of on the first navigation item.
  */
 @Composable
-internal fun TvDefaultFocusEffect(key: Any?, block: suspend () -> Unit) {
+internal fun TvDefaultFocusEffect(key: Any?, takeFirst: Boolean = false, block: suspend () -> Unit) {
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val hasFocus = LocalTvHasFocus.current
     val navHasFocus = LocalTvNavHasFocus.current
@@ -193,7 +193,8 @@ internal fun TvDefaultFocusEffect(key: Any?, block: suspend () -> Unit) {
         if (!windowFocused) return@LaunchedEffect
         val first = firstRun[0]
         firstRun[0] = false
-        if (!hasFocus()) {
+        // [takeFirst]: the page's content replaced a loading skeleton, where Android parked focus on the header Back.
+        if (!hasFocus() || (first && takeFirst)) {
             block()
         } else if (first) {
             // Watch the rail for a short settle window; if it takes focus without the user having pressed anything, move it back.

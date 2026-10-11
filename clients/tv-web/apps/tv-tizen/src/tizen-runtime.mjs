@@ -141,7 +141,8 @@ function registerRemoteKeys(tizenObject) {
   if (!input) return;
   try {
     if (typeof input.registerKeyBatch === "function") {
-      input.registerKeyBatch(TIZEN_REMOTE_KEYS, undefined, (error) => {
+      // Pass a copy: the Samsung validator writes to its argument, and the shared list is frozen.
+      input.registerKeyBatch([...TIZEN_REMOTE_KEYS], undefined, (error) => {
         console.warn("Could not register all Samsung remote keys", error);
       });
       return;
@@ -303,6 +304,26 @@ function createExitDialog(documentObject, exitApplication, onClosed) {
   };
 }
 
+/**
+ * The http(s) URL a click on `target` would leave the packaged app for, or undefined.
+ * In-app routes are hash or relative links, so every http(s) link points outside the app.
+ */
+export function externalLinkUrl(target) {
+  const href = target?.closest?.("a[href]")?.href;
+  return typeof href === "string" && /^https?:/i.test(href) ? href : undefined;
+}
+
+/** Opens an external URL in the TV's browser app; never inside Playarr's own view. */
+export function openTizenExternalUrl(url, tizenObject) {
+  try {
+    const control = new tizenObject.ApplicationControl("http://tizen.org/appcontrol/operation/view", url);
+    tizenObject.application.launchAppControl(control, null, () => undefined, () => undefined);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function installTizenPlatformRuntime({
   windowObject = window,
   documentObject = document,
@@ -370,14 +391,34 @@ export function installTizenPlatformRuntime({
     if (normalizedEvent.defaultPrevented) event.preventDefault();
   };
   const handlePageHide = () => terminateAvplay(webapisObject);
+  // A packaged app has no tabs: following a target=_blank or external link would replace Playarr
+  // with the page and leave no way back. Hand those URLs to the TV browser instead.
+  const handleClick = (event) => {
+    const url = externalLinkUrl(event.target);
+    if (!url) return;
+    event.preventDefault();
+    openTizenExternalUrl(url, tizenObject);
+  };
+  const originalOpen = windowObject.open;
+  windowObject.open = (url, ...rest) => {
+    const resolved = typeof url === "string" ? new URL(url, windowObject.location.href).href : "";
+    if (/^https?:/i.test(resolved)) {
+      openTizenExternalUrl(resolved, tizenObject);
+      return null;
+    }
+    return originalOpen?.call(windowObject, url, ...rest) ?? null;
+  };
   windowObject.addEventListener("keydown", handleKeyDown, true);
   windowObject.addEventListener("pagehide", handlePageHide);
+  documentObject.addEventListener("click", handleClick, true);
 
   return () => {
     exitDialog?.close();
     stopDisplayRectSync();
     windowObject.removeEventListener("keydown", handleKeyDown, true);
     windowObject.removeEventListener("pagehide", handlePageHide);
+    documentObject.removeEventListener("click", handleClick, true);
+    windowObject.open = originalOpen;
   };
 }
 
