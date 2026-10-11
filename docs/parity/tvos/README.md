@@ -15,36 +15,43 @@ The captures here are the native frames at half size (960x540, 64 colours); the 
 native, reference and diff images and an HTML report. `shared-summary.md` and `{dark,light}/summary.md (the tabs outside the shared list)` are the
 raw tables.
 
-Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37606853654 (against the #147 TV-identity references).
+Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/38099323955 (2026-10-11, branch with #695 on main after
+#590-#672). The table diffs each native capture against the web capture of the same run on the same fixture database
+(the committed `docs/parity/web` references predate the web's 10-11 October changes); the two player screens use the
+workflow's `--chrome-only` diff (decoded video masked).
 
-## Mismatch per screen (percent, against the shared references)
+## Mismatch per screen (percent, against the same run's web capture)
 
 | Screen | Dark | Light |
 | --- | --- | --- |
-| home | 0.80 | 0.93 |
-| movies library | 0.51 | 0.62 |
-| series library | 0.80 | 0.87 |
-| title detail (film) | 0.53 | 0.60 |
-| title detail (series, seasons) | 0.85 | 0.85 |
-| search with results | 0.46 | 0.62 |
-| release calendar (agenda) | 0.71 | 0.72 |
-| settings | 0.77 | 0.76 |
-| Preferences: profile avatar | 0.78 | 0.83 |
-| Preferences: language | 0.55 | 0.54 |
-| Preferences: player | 0.96 | 1.22 |
-| Preferences: server connection (address masked) | 0.70 | 0.82 |
-| Preferences: profile lock | 0.50 | 0.58 |
-| Preferences: invite a friend | 0.67 | 0.67 |
-| Preferences: phone remote | 0.82 | 0.81 |
-| Preferences: request latency | 0.62 | 0.62 |
-| Preferences: your data | 1.51 | 1.50 |
-| profile switcher | 0.70 | 0.80 |
-| household blocked (fx-child-locked) | 0.41 | 0.39 |
-| player, controls visible (video masked) | 0.19 | 0.19 |
-| player, quality menu open (video masked) | 0.92 | 0.92 |
-| Downloads, Watchlist, Requests (local capture) | 0.27 to 0.36 | 0.27 to 0.38 |
+| home | 0.94 | 1.70 |
+| movies | 1.25 | 1.48 |
+| series | 1.37 | 1.58 |
+| film-detail | 4.00 | 6.75 |
+| series-detail | 1.15 | 1.49 |
+| search | 1.03 | 1.14 |
+| calendar | 1.93 | 1.83 |
+| settings | 3.79 | 4.30 |
+| settings-avatar | 0.68 | 0.75 |
+| settings-language | 0.63 | 0.65 |
+| settings-player | 2.26 | 2.69 |
+| settings-server | 2.87 | 3.10 |
+| settings-lock | 1.49 | 1.63 |
+| settings-invite | 0.86 | 0.92 |
+| settings-remote | 1.43 | 5.52 |
+| settings-latency | 0.69 | 4.77 |
+| settings-your-data | 1.16 | 5.22 |
+| downloads | 0.57 | 0.66 |
+| watchlist | 0.52 | 0.58 |
+| requests | 0.48 | 0.54 |
+| player-controls | 0.79 | 0.79 |
+| player-quality-menu | 1.32 | 1.32 |
+| profile-switcher | 0.88 | 0.80 |
+| household-blocked | 0.55 | 0.54 |
 
-All 24 shared captures are at or under 1%.
+Over 1%: text-heavy settings panels (glyph anti-aliasing, the remote and your-data panels in light), film detail (the
+chapter frames are server thumbnails of a fixture clip), and the library grids (1.2-1.7%: caption glyphs). The live
+parity loop against the real server (device test account) is tracked in 17.470.
 
 ## Justified differences
 
