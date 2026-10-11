@@ -127,6 +127,11 @@ const VIEW_CHOICES: Choice[] = [
   { value: 'month', label: 'Month' },
 ];
 
+/** ForEach key: the day plus its entries, so a cell is rebuilt when its entries change. */
+function cellKey(cell: CalendarCell): string {
+  return cell.day + ':' + cell.entries.map((entry: CalendarEntry): string => entry.id).join(',');
+}
+
 /** Web `.status-pill` / `.calendar-dot` tones. */
 function toneColor(tone: EntryPillTone): RgbaColor {
   if (tone === 'available') {
@@ -340,7 +345,7 @@ export struct ReleaseCalendar {
             }
             .alignItems(HorizontalAlign.Start)
           }
-        }, (group: DayGroup): string => group.day)
+        }, (group: DayGroup): string => group.day + ':' + group.entries.map((entry: CalendarEntry): string => entry.id).join(','))
       }
       .width(tv(LIST_WIDTH))
       .height('100%')
@@ -377,7 +382,7 @@ export struct ReleaseCalendar {
           .width(tv(WEEK_COLUMN_WIDTH))
           .height('100%')
           .alignItems(HorizontalAlign.Start)
-        }, (cell: CalendarCell): string => cell.day)
+        }, (cell: CalendarCell): string => cellKey(cell))
       }
       .height('100%')
     }
@@ -463,10 +468,10 @@ export struct ReleaseCalendar {
         Row() {
           ForEach(week, (cell: CalendarCell) => {
             this.monthCell(cell, (GRID_HEIGHT - MONTH_HEAD_HEIGHT) / buildMonthGrid(this.anchor, [], this.today).length)
-          }, (cell: CalendarCell): string => cell.day)
+          }, (cell: CalendarCell): string => cellKey(cell))
         }
         .width('100%')
-      }, (week: CalendarCell[]): string => week[0].day)
+      }, (week: CalendarCell[]): string => week.map((cell: CalendarCell): string => cellKey(cell)).join('|'))
     }
     .width(tv(GRID_WIDTH))
     .height(tv(GRID_HEIGHT))
@@ -592,7 +597,16 @@ export struct ReleaseCalendar {
         .alignItems(VerticalAlign.Center)
         .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.utilityRowTop) })
         Row({ space: tv(HEADER_CONTROL_GAP) }) {
-          this.headerControl(rangeLabel(this.view, this.anchor), false, (): void => {})
+          Text(rangeLabel(this.view, this.anchor))
+            .fontSize(tv(HEADER_CONTROL_FONT))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .height(tv(HEADER_CONTROL_SIZE))
+            .padding({ left: tv(20), right: tv(20) })
+            .borderRadius(tv(HEADER_CONTROL_SIZE / 2))
+            .backgroundColor(toResourceColor(activeColors().bg))
+            .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.08) })
+            .focusable(true)
           this.headerControl('←', true, (): void => {
             this.page(-1);
           })
