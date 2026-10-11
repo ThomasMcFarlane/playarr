@@ -50,7 +50,35 @@ Home is highest because its rails show different live artwork per capture and th
 - Vega has no masking: scroll-edge fades are overlays tinted to the page colour (light is softened so no box shows over the art wash).
 - The focus engine measures layout frames, not transforms, so rails scroll through an animated `left` offset.
 
+## Vega Virtual Device run (2026-10-11)
+
+The wall's Fire TV slot runs the Vega Virtual Device at 1920x1080 at a fixed 1:1 window scale, signed in as the device test account in
+the dark theme. Candidates are captured from the emulator window, references from live web as the same account in the same session, and
+compared with `scripts/parity/diff.mjs --layout tv --theme dark` (clock and profile tile masked on both sides). Live data, so the figures
+are a ceiling on layout error.
+
+| Screen | Mismatch |
+| --- | --- |
+| Profile picker | 0.92 % |
+| Player controls | 1.15 % |
+| Settings | 1.55 % |
+| Series | 1.64 % |
+| Home | 1.85 % |
+| Movies | 2.06 % |
+| Title actions | 2.73 % |
+| Search | 2.91 % |
+| Series detail | 3.58 % |
+| Film detail | 4.33 % |
+| Calendar week | 6.21 % |
+| Calendar agenda | 8.28 % |
+
+Notes from the run:
+- The virtual device's own screenshot tool writes empty files, so captures come from the emulator window. Keys reach the app most
+  reliably through the window's keyboard (arrows, Return, Escape for Back, F2 for Menu), with at least 1.5 s between presses on the slower screens.
+- Resizing the emulator window kills its GL output; start it with `-fixed-scale` instead.
+- The calendar and Home commit thousands of view mutations per frame on Vega, so focus can lag the remote by seconds there.
+
 ## Open gaps
 
-Filters drawer; calendar week and month views and the calendar link; downloads (download support itself); music library and
-music detail restyle; Playback settings drawer; custom photo avatar; settings panels are not yet all pixel-matched.
+Calendar agenda details panel and entry pills in web's newer design; downloads (download support itself, hidden by ruling); music library and
+music detail restyle; the profile picker's focus state; settings panels are not yet all pixel-matched.
