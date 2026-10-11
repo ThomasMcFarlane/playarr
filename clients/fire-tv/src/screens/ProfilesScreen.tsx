@@ -45,6 +45,7 @@
  * plumbing around it do not need to change.
  */
 import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {focusDefaultTarget, focusNode, getFocusedTag, useDefaultFocus, useRemoteKey} from '../platform';
 import {
   ActivityIndicator,
   Modal,
@@ -156,8 +157,17 @@ function ProfileChoice({
 }) {
   const {colour} = useTheme();
   const {t} = useLanguage();
+  // The signed-in profile is the picker's default focus (web data-tv-focus-default), also after a lost focus.
+  const ref = useRef<View>(null);
+  useDefaultFocus(ref, profile.is_current);
+  useEffect(() => {
+    if (!profile.is_current) return undefined;
+    const timer = setTimeout(() => focusNode(ref), 300);
+    return () => clearTimeout(timer);
+  }, [profile.is_current]);
   return (
     <Pressable
+      ref={ref}
       hasTVPreferredFocus={profile.is_current}
       onFocus={onFocus}
       onPress={() => onSelect(profile)}
@@ -305,6 +315,10 @@ export function ProfilesScreen(): React.ReactElement {
   const navigation = useNavigation<ProfilesNavigation>();
   const [profiles, setProfiles] = useState<AvailableProfile[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({status: 'loading'});
+  // The picker is outside the shell, so it recovers a lost focus itself: a direction key lands on the default.
+  useRemoteKey((key, raw) => {
+    if (raw.eventKeyAction === 0 && ['up', 'down', 'left', 'right'].includes(key) && !getFocusedTag()) focusDefaultTarget();
+  });
   const [pinTarget, setPinTarget] = useState<AvailableProfile | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);

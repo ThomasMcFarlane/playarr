@@ -212,9 +212,14 @@ function TodayPill({label, onPress, settled}: {label: string; onPress: () => voi
   useEffect(() => {
     if (settledOnce.current) return; // later reloads (a view or filter change) must not pull focus out of a drawer
     if (settled) settledOnce.current = true;
-    focusNode(ref);
-    // Vega fires no onFocus for a programmatic focus, so draw the ring here; onBlur clears it as usual.
-    setFocused(true);
+    // After the native views of the freshly loaded list exist (the rail item that opened the page still holds focus
+    // until then), so the request is not lost.
+    const timer = setTimeout(() => {
+      focusNode(ref);
+      // Vega fires no onFocus for a programmatic focus, so draw the ring here; onBlur clears it as usual.
+      setFocused(true);
+    }, 400);
+    return () => clearTimeout(timer);
   }, [settled]);
   return (
     <Pressable
