@@ -18,7 +18,7 @@ namespace Playarr.Xbox.Views
         {
             list.ContextRequested += (s, e) =>
             {
-                if (e.OriginalSource is SelectorItem { ContentTemplateRoot: FrameworkElement { Tag: Guid id } }
+                if (ContainerOf(e.OriginalSource as DependencyObject) is { ContentTemplateRoot: FrameworkElement { Tag: Guid id } }
                     && workFor(id) is { } work
                     && FindHost(list) is { } host)
                 {
@@ -26,6 +26,16 @@ namespace Playarr.Xbox.Views
                     Open(host, work);
                 }
             };
+        }
+
+        private static SelectorItem? ContainerOf(DependencyObject? element)
+        {
+            while (element != null && !(element is SelectorItem))
+            {
+                element = Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(element);
+            }
+
+            return element as SelectorItem;
         }
 
         private static Panel? FindHost(DependencyObject element)
