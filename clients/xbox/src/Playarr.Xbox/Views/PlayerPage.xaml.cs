@@ -46,9 +46,89 @@ namespace Playarr.Xbox.Views
         private DisplayRequest? _displayRequest;
         private DispatcherTimer? _idleTimer;
 
+        private readonly DispatcherTimer _chromeTicker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        private readonly DispatcherTimer _chromeHide = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        private bool _updatingScrubber;
+
         public PlayerPage()
         {
             InitializeComponent();
+            _chromeTicker.Tick += (s, e) => UpdateChrome();
+            _chromeHide.Tick += (s, e) => HideChrome();
+            // Any key or pointer movement reveals the controls (web: arrows reveal while hidden).
+            AddHandler(KeyDownEvent, new Windows.UI.Xaml.Input.KeyEventHandler((s, e) => ShowChrome()), true);
+            PointerMoved += (s, e) => ShowChrome();
+        }
+
+        private void ShowChrome()
+        {
+            if (ChromePanel.Visibility != Visibility.Visible)
+            {
+                ChromePanel.Visibility = Visibility.Visible;
+                PlayPauseButton.Focus(FocusState.Programmatic);
+            }
+
+            _chromeHide.Stop();
+            _chromeHide.Start();
+        }
+
+        private void HideChrome()
+        {
+            _chromeHide.Stop();
+            if (TracksPanel.Visibility != Visibility.Visible)
+            {
+                ChromePanel.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateChrome()
+        {
+            var session = _viewModel?.Player.PlaybackSession;
+            if (session == null)
+            {
+                return;
+            }
+
+            var duration = session.NaturalDuration;
+            var position = session.Position;
+            _updatingScrubber = true;
+            Scrubber.Maximum = Math.Max(1, duration.TotalSeconds);
+            Scrubber.Value = Math.Min(Scrubber.Maximum, position.TotalSeconds);
+            _updatingScrubber = false;
+            TimeText.Text = $"{Clock(position)}  /  {Clock(duration)}";
+            PlayPauseIcon.Glyph = session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing ? "\uE769" : "\uE768";
+        }
+
+        private static string Clock(TimeSpan time) =>
+            time.TotalHours >= 1 ? $"{(int)time.TotalHours}:{time.Minutes:00}:{time.Seconds:00}" : $"{time.Minutes}:{time.Seconds:00}";
+
+        // Seeking keeps focus on the scrubber (owner rule).
+        private void Scrubber_ValueChanged(object sender, Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (!_updatingScrubber && _viewModel != null)
+            {
+                _viewModel.Player.PlaybackSession.Position = TimeSpan.FromSeconds(e.NewValue);
+            }
+        }
+
+        private void PlayPauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            var player = _viewModel?.Player;
+            if (player == null)
+            {
+                return;
+            }
+
+            if (player.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+            {
+                player.Pause();
+            }
+            else
+            {
+                player.Play();
+            }
+
+            UpdateChrome();
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -95,10 +175,14 @@ namespace Playarr.Xbox.Views
             _viewModel.ExitRequested += ViewModel_ExitRequested;
             _viewModel.RestartRequested += ViewModel_RestartRequested;
             Render();
+            _chromeTicker.Start();
+            ShowChrome();
         }
 
         private void TearDownSession()
         {
+            _chromeTicker.Stop();
+            _chromeHide.Stop();
             if (_viewModel is null)
             {
                 return;
@@ -429,6 +513,13 @@ namespace Playarr.Xbox.Views
             var panelOpen = TracksPanel.Visibility == Visibility.Visible;
             if (PlayerStagePolicy.BackAction(panelOpen) != PlayerBackAction.ClosePanel)
             {
+                // Then the controls overlay; only with everything hidden does BACK exit (owner rule).
+                if (ChromePanel.Visibility == Visibility.Visible)
+                {
+                    HideChrome();
+                    return true;
+                }
+
                 return false;
             }
 

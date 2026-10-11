@@ -24,7 +24,7 @@
             x:Name="PlayerElement"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
-            AreTransportControlsEnabled="True" />
+            AreTransportControlsEnabled="False" />
 
         <!-- Title overlay, hidden when PlayerNavigationParameter.Title was empty. -->
         <TextBlock
@@ -53,13 +53,99 @@
             </StackPanel>
         </Grid>
 
-        <Button
-            x:Name="TracksButton"
-            Content="Audio &amp; Subtitles"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Bottom"
-            Margin="0,0,48,140"
-            Click="TracksButton_Click" />
+        <!--
+            Web player chrome (owner rules): Close at the top right; a full-width scrubber over a bottom scrim; the large
+            play/pause, the time and the audio/subtitles control below it. Hides after 5 s without input; any key or
+            pointer move shows it again. BACK closes an open panel, then the controls, then exits.
+        -->
+        <Grid x:Name="ChromePanel">
+            <Rectangle Height="360" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#00000000" Offset="0" />
+                        <GradientStop Color="#D9000000" Offset="1" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Button
+                x:Name="CloseButton"
+                Width="46"
+                Height="46"
+                Margin="0,38,38,0"
+                Padding="0"
+                CornerRadius="23"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="#33000000"
+                BorderBrush="#40FFFFFF"
+                BorderThickness="1"
+                FocusVisualPrimaryBrush="White"
+                FocusVisualPrimaryThickness="3"
+                FocusVisualSecondaryThickness="0"
+                AutomationProperties.Name="Close"
+                Click="BackButton_Click">
+                <FontIcon Glyph="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="White" />
+            </Button>
+            <Slider
+                x:Name="Scrubber"
+                Margin="70,0,70,118"
+                VerticalAlignment="Bottom"
+                Minimum="0"
+                Maximum="1"
+                StepFrequency="1"
+                SmallChange="10"
+                LargeChange="10"
+                IsThumbToolTipEnabled="False"
+                Foreground="{StaticResource PlayarrBrand}"
+                Background="#4DFFFFFF"
+                FocusVisualPrimaryBrush="White"
+                FocusVisualPrimaryThickness="2"
+                FocusVisualSecondaryThickness="0"
+                AutomationProperties.Name="Seek"
+                ValueChanged="Scrubber_ValueChanged" />
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="30"
+                Margin="142,0,0,56"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Bottom">
+                <Button
+                    x:Name="PlayPauseButton"
+                    Width="72"
+                    Height="72"
+                    Padding="0"
+                    CornerRadius="36"
+                    Background="#33000000"
+                    BorderBrush="#40FFFFFF"
+                    BorderThickness="1"
+                    FocusVisualPrimaryBrush="White"
+                    FocusVisualPrimaryThickness="3"
+                    FocusVisualSecondaryThickness="0"
+                    AutomationProperties.Name="Play or pause"
+                    Click="PlayPauseButton_Click">
+                    <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE769;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="White" />
+                </Button>
+                <TextBlock x:Name="TimeText" FontSize="12" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button
+                x:Name="TracksButton"
+                Width="46"
+                Height="46"
+                Margin="0,0,94,69"
+                Padding="0"
+                CornerRadius="23"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Background="Transparent"
+                BorderThickness="0"
+                FocusVisualPrimaryBrush="White"
+                FocusVisualPrimaryThickness="3"
+                FocusVisualSecondaryThickness="0"
+                AutomationProperties.Name="Audio and subtitles"
+                Click="TracksButton_Click">
+                <FontIcon Glyph="&#xE7F0;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="White" />
+            </Button>
+        </Grid>
 
         <!--
             End-of-playback screen (docs/architecture/end-of-playback.md): shown over
