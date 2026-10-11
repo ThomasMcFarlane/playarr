@@ -129,6 +129,7 @@ import { Spacing, Radii } from '../core/Tokens';
 
 import { getCatalog, getCatalogKinds, listWatchProgress } from '../data/CatalogRepository';
 import { indexWatchProgressByWork, watchMarkFor } from '../core/WatchState';
+import { orderWorks } from '../core/LibraryOrder';
 import type { WatchMark } from '../core/WatchState';
 import type { WatchProgress } from '../core/Types/Playback';
 import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY, LANDSCAPE_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
@@ -657,10 +658,11 @@ export struct Library {
       }
       const total = page.total;
       const reachedTotal = total !== null && nextItems.length >= total;
-      this.items = nextItems;
+      // Web re-sorts every loaded title on the client (natural title order), so pages merge in web's order.
+      this.items = orderWorks(nextItems, sortValue, orderValue);
       if (offset === 0) {
         this.total = total !== null ? total : -1;
-        this.setHero(nextItems[0]);
+        this.setHero(this.items[0]);
       }
       this.hasMore = page.items.length >= catalogPageSize && !reachedTotal;
       this.errorMessage = '';
