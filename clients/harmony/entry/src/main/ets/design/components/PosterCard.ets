@@ -151,6 +151,9 @@ const PROGRESS_BAR_HEIGHT: number = 3;
  * real radius token is non-negative, so `-1` can never collide with one. */
 const ARTWORK_RADIUS_UNSET: number = -1;
 
+const UNSEEN_DOT_SIZE: number = 13;
+const UNSEEN_DOT_INSET: number = 10.56;
+
 @Component
 export struct PosterCard {
   /** Selects the focus delta / shadow pair / interaction duration. */
@@ -179,6 +182,9 @@ export struct PosterCard {
   /** Continue-watching fraction in `[0, 1]`. A negative value (the
    * default) hides the progress-bar overlay entirely. */
   @Prop progress: number = -1;
+
+  /** Web `.tv-watch-unseen`: a 13 px brand dot with a white ring, 10.56 px in from the top right. */
+  @Prop unseen: boolean = false;
 
   @Prop title: string = '';
   @Prop subtitle: string = '';
@@ -309,6 +315,17 @@ export struct PosterCard {
           .height(PROGRESS_BAR_HEIGHT)
           .backgroundColor(toResourceColor(activeColors().line))
           .justifyContent(FlexAlign.Start)
+        }
+
+        if (this.unseen) {
+          Column()
+            .width(tv(UNSEEN_DOT_SIZE))
+            .height(tv(UNSEEN_DOT_SIZE))
+            .borderRadius(tv(UNSEEN_DOT_SIZE / 2))
+            .backgroundColor(toResourceColor(BRAND_PINK))
+            .border({ width: 2, color: 'rgba(255, 255, 255, 0.94)' })
+            .shadow({ radius: tv(9), color: 'rgba(31, 14, 20, 0.45)', offsetY: tv(2) })
+            .position({ x: this.cardWidth - tv(UNSEEN_DOT_INSET + UNSEEN_DOT_SIZE), y: tv(UNSEEN_DOT_INSET) })
         }
       }
       .width(this.cardWidth)

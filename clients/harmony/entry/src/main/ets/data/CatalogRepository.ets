@@ -352,6 +352,11 @@ export async function getSimilarWorks(target: Work, limit?: number): Promise<Api
   return result;
 }
 
+/** `GET /api/v1/playback/progress`: every watch-progress row, for the cards' watch marks (web `listWatchProgress`). */
+export function listWatchProgress(): Promise<ApiResult<WatchProgress[]>> {
+  return getPlayarrClient().getJson<WatchProgress[]>(playbackProgressListUrl());
+}
+
 /**
  * The Home screen's continue-watching rail (brief 4.8 / 4.12): lists
  * `GET /api/v1/playback/progress`, selects/dedupes/caps it via

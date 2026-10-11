@@ -3,7 +3,7 @@
  * pill with its prompt on the left, and on the right either the empty state or a 3-column grid of landscape
  * results. Typing searches after a short pause, as web. Geometry copies the live web TV DOM at 1920x1080.
  *
- * Not yet here (13.10017): the Filters tile and drawer, recent searches, unseen dots on results.
+ * Not yet here (13.10017): the Filters tile and drawer, recent searches.
  */
 
 import { image } from '@kit.ImageKit';
@@ -18,7 +18,10 @@ import { Clock } from '../design/components/Clock';
 import { PosterCard } from '../design/components/PosterCard';
 import { BRAND_PINK } from '../core/Tokens';
 
-import { getCatalogKinds, searchCatalog } from '../data/CatalogRepository';
+import { getCatalogKinds, listWatchProgress, searchCatalog } from '../data/CatalogRepository';
+import { indexWatchProgressByWork, watchMarkFor } from '../core/WatchState';
+import type { WatchMark } from '../core/WatchState';
+import type { WatchProgress } from '../core/Types/Playback';
 import { fetchWorkArtworkByPriority, LANDSCAPE_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
 import type { Work } from '../core/Types/Work';
 
@@ -80,6 +83,9 @@ function resultCaption(work: Work): string {
 @Component
 struct SearchResultCard {
   work: Work | undefined = undefined;
+  /** Web `WatchStateOverlay` (`core/WatchState.ts`). */
+  @Prop unseen: boolean = false;
+  @Prop progress: number = -1;
   onSelect: (workId: string) => void = () => {};
 
   @State private artwork: image.PixelMap | undefined = undefined;
@@ -105,6 +111,8 @@ struct SearchResultCard {
       cardHeight: tv(CARD_HEIGHT),
       title: this.work !== undefined ? this.work.title : '',
       subtitle: this.work !== undefined ? resultCaption(this.work) : '',
+      unseen: this.unseen,
+      progress: this.progress,
       onSelect: () => {
         if (this.work !== undefined) {
           this.onSelect(this.work.id);
@@ -124,12 +132,28 @@ export struct SearchScreen {
   @State private results: Work[] = [];
   @State private searched: boolean = false;
   @State private navItems: NavRailItem[] = [];
+  @State private watchIndex: Map<string, WatchProgress> = new Map<string, WatchProgress>();
+  @State private watchLoaded: boolean = false;
   private debounce: number = -1;
   /** Only the latest search may set results (an earlier, slower one must not overwrite them). */
   private searchSerial: number = 0;
 
   aboutToAppear(): void {
     this.loadNav();
+    this.loadWatchProgress();
+  }
+
+  /** Web Search: the watch list once; until it loads, results draw no marks. */
+  private async loadWatchProgress(): Promise<void> {
+    const result = await listWatchProgress();
+    if (result.kind === 'ok') {
+      this.watchIndex = indexWatchProgressByWork(result.value);
+      this.watchLoaded = true;
+    }
+  }
+
+  private markFor(work: Work): WatchMark {
+    return watchMarkFor(this.watchIndex.get(work.id), this.watchLoaded);
   }
 
   aboutToDisappear(): void {
@@ -200,6 +224,8 @@ export struct SearchScreen {
         GridItem() {
           SearchResultCard({
             work: work,
+            unseen: this.markFor(work).unseen,
+            progress: this.markFor(work).progress,
             onSelect: (workId: string) => {
               this.openDetail(workId);
             },
