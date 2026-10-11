@@ -21,7 +21,10 @@
  *    `net/`/`auth/` directly, per this project's `pages/` layering rule).
  *    On failure, advance to the next known address in `ServerDirectory`
  *    and probe again, until either one succeeds or every known address has
- *    been tried once.
+ *    been tried once. If none answers, stay on the address that was active
+ *    and carry on, as web does (`ApiClientProvider`): a network blip at
+ *    start must not strand the TV on an error page; a request that still
+ *    fails surfaces through that page's own error handling and retry.
  * 3. Once connected: no access token (`AppContainer#getSessionManager().
  *    getAccessToken()` is `null`) -> push `ROUTES.Pairing`. A token is
  *    present -> push `ROUTES.Profiles` directly, proceeding optimistically
@@ -34,18 +37,11 @@
  *    slice's `Home` page is the eventual destination from `Profiles`, not
  *    from here.
  *
- * The ONLY step that can fail is step 2, the connectivity probe (steps 1
- * and 3 are synchronous, local decisions that never fail). A failed probe
- * renders `design/components/AsyncState.ets`'s `Error` state, whose retry
- * re-runs exactly that step (probe again, then continue into step 3),
- * never the whole boot sequence over again, per this slice's acceptance
- * criteria.
- *
  * On the TV profile (`device/DeviceProfileService.ets`'s published
  * `DeviceProfile.inputMode === 'dpad'`), `getUIContext().
  * getFocusController().activate(true, false)` runs in `aboutToAppear()`,
- * before the first frame, so the retry button's focus ring is visible from
- * the very first D-pad press (brief section 6.3), matching the same
+ * before the first frame, so the focus ring is visible from the very first
+ * D-pad press (brief section 6.3), matching the same
  * pattern `pages/Pairing.ets` already establishes.
  */
 
@@ -68,22 +64,6 @@ import { logWarn } from '../util/Log';
 
 const LOG_TAG: string = 'Index';
 
-/** Shown once every known server address has failed the connectivity
- * probe. Kept as one named constant, rather than repeated inline, so the
- * rendered message never drifts from what actually happened. */
-const CONNECTIVITY_ERROR_MESSAGE: string =
-  'Could not reach your Playarr Server. Check your connection and try again.';
-
-/** The two states this page's own boot sequence ever renders. `Working`
- * covers every synchronous decision plus the in-flight connectivity probe;
- * there is no separate "connecting" visual, both share one spinner.
- * `Error` is reached only when step 2 (the connectivity probe) exhausts
- * every known address, see this file's header comment. */
-enum BootPhase {
-  Working,
-  Error,
-}
-
 @Entry
 @Component
 struct Index {
@@ -98,8 +78,6 @@ struct Index {
   // ever called.
   private navPathStack: NavPathStack = installNavStack();
 
-  @State private bootPhase: BootPhase = BootPhase.Working;
-  @State private errorMessage: string = '';
 
   aboutToAppear(): void {
     savedThemeChoice().then((mode: ThemeModeSetting) => {
@@ -117,11 +95,8 @@ struct Index {
   }
 
   /** Step 1, and the entry point into step 2, see this file's header
-   * comment for the full boot sequence. Never re-run directly by a retry;
-   * `retryConnectivity` below re-runs only the failed step. */
+   * comment for the full boot sequence. */
   private async runBoot(): Promise<void> {
-    this.bootPhase = BootPhase.Working;
-    this.errorMessage = '';
 
     const directory = getServerDirectory();
     const activeBaseUrl = directory.getActiveBaseUrl();
@@ -130,22 +105,19 @@ struct Index {
       return;
     }
 
-    const connected = await this.probeConnectivity();
-    if (!connected) {
-      // probeConnectivity has already switched this.bootPhase to Error.
-      return;
+    if (await this.probeConnectivity()) {
+      this.continueAfterConnectivity();
     }
-    this.continueAfterConnectivity();
   }
 
   /**
    * Step 2: `GET /api/system/version` against the currently active server
    * address. On any failure (network or HTTP), advances `ServerDirectory`
    * to the next known address and probes again, until either a probe
-   * succeeds (leaving that address selected, returns `true`) or every
-   * known address has been tried exactly once (restores whichever address
-   * was active when this call started, sets `bootPhase` to `Error`,
-   * returns `false`).
+   * succeeds (leaving that address selected) or every known address has
+   * been tried exactly once (restores whichever address was active when
+   * this call started). Returns `false` only when there is no address at
+   * all (it has then routed to server setup).
    */
   private async probeConnectivity(): Promise<boolean> {
     const directory = getServerDirectory();
@@ -177,9 +149,7 @@ struct Index {
     if (directory.getActiveIndex() !== startIndex) {
       await directory.selectServer(startIndex);
     }
-    this.errorMessage = CONNECTIVITY_ERROR_MESSAGE;
-    this.bootPhase = BootPhase.Error;
-    return false;
+    return true;
   }
 
   /** Step 3, see this file's header comment for why this pushes
@@ -193,35 +163,10 @@ struct Index {
     pushRoute(this.navPathStack, ROUTES.Profiles);
   }
 
-  /** The `AsyncState` `Error` state's retry: re-runs exactly the failed
-   * step (the connectivity probe), then resumes the rest of the boot
-   * sequence on success, never `runBoot()` itself, so step 1's decision is
-   * not redone. */
-  private async retryConnectivity(): Promise<void> {
-    this.bootPhase = BootPhase.Working;
-    this.errorMessage = '';
-    const connected = await this.probeConnectivity();
-    if (!connected) {
-      return;
-    }
-    this.continueAfterConnectivity();
-  }
-
   build() {
     Navigation(this.navPathStack) {
       Column({ space: Spacing.lg }) {
-        if (this.bootPhase === BootPhase.Error) {
-          AsyncState({
-            kind: AsyncStateKind.Error,
-            message: this.errorMessage,
-            retryLabel: 'Try again',
-            retry: (): void => {
-              this.retryConnectivity();
-            },
-          })
-        } else {
-          AsyncState({ kind: AsyncStateKind.Loading })
-        }
+        AsyncState({ kind: AsyncStateKind.Loading })
       }
       .width('100%')
       .height('100%')
