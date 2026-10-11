@@ -1,0 +1,10 @@
+<!-- Generated from clients/tv-web/web/src/components/ProfileAvatar.tsx (web is the reference). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <path d="m28 29-9-14 17 4 5-12 10 13 12-9 2 17c14 5 23 16 23 29 0 18-16 31-38 31S12 75 12 57c0-12 6-22 16-28Z" fill="#bde78b" />
+  <circle cx="38" cy="49" r="5" fill="#254b45" />
+  <circle cx="65" cy="49" r="5" fill="#254b45" />
+  <circle cx="39" cy="47" r="1.5" fill="#fff" />
+  <circle cx="66" cy="47" r="1.5" fill="#fff" />
+  <path d="M38 66c8 7 17 7 25 0" fill="none" stroke="#254b45" stroke-width="4" stroke-linecap="round" />
+  <path d="m45 67 3 7 4-6 4 6 3-7" fill="#fff" />
+</svg>
