@@ -79,7 +79,9 @@ export function compareEntries(a: CalendarEntry, b: CalendarEntry): number {
   if (ak !== bk) {
     return ak < bk ? -1 : 1;
   }
-  const title = compareText(a.title, b.title);
+  // Web uses `localeCompare`: case-insensitive first ("Family Guy" before "FBI"), then exact.
+  const folded = compareText(a.title.toLowerCase(), b.title.toLowerCase());
+  const title = folded !== 0 ? folded : compareText(a.title, b.title);
   if (title !== 0) {
     return title;
   }

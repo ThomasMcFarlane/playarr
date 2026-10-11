@@ -29,6 +29,7 @@ test("all-day entries sort first, then by title", () => {
   const allDay = entry({ id: "b", title: "Zulu" });
   assert.ok(compareEntries(allDay, timed) < 0);
   assert.ok(compareEntries(entry({ title: "A" }), entry({ title: "B" })) < 0);
+  assert.ok(compareEntries(entry({ title: "Family Guy" }), entry({ title: "FBI" })) < 0);
 });
 
 test("groups by day within the range, ascending", () => {
