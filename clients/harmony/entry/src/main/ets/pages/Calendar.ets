@@ -39,7 +39,11 @@ import {
   startOfMonth,
   visibleRange,
   WEEKDAY_SHORT,
-  entryAvailable,
+  groupSeriesEpisodes,
+  itemAvailable,
+  itemLineText,
+  itemPillTone,
+  itemSubtitle,
   entryPillTone,
   entrySubtitle,
   entryTimeLabel,
@@ -50,7 +54,7 @@ import {
   pillLabel,
   releaseTypeLabel,
 } from '../core/CalendarAgenda';
-import type { CalendarCell, CalendarView, DayGroup, EntryPillTone } from '../core/CalendarAgenda';
+import type { CalendarCell, CalendarItem, CalendarView, DayGroup, EntryPillTone } from '../core/CalendarAgenda';
 import type { CalendarEntry } from '../core/Types/Calendar';
 
 import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
@@ -235,31 +239,33 @@ export struct ReleaseCalendar {
   }
 
   @Builder
-  private entryCard(entry: CalendarEntry, width: number): void {
+  private entryCard(item: CalendarItem, width: number): void {
     Row({ space: tv(POSTER_GAP) }) {
-      Image(entry.poster_url !== undefined && entry.poster_url !== null ? entry.poster_url : '')
+      Image(item.entries[0].poster_url !== undefined && item.entries[0].poster_url !== null ? item.entries[0].poster_url : '')
         .width(tv(POSTER_WIDTH))
         .height(tv(POSTER_HEIGHT))
         .borderRadius(tv(POSTER_RADIUS))
         .objectFit(ImageFit.Cover)
         .backgroundColor(toResourceColor(activeColors().surfaceSoft))
       Column() {
-        Text(entry.title)
+        Text(item.title)
           .fontSize(tv(ENTRY_TITLE_SIZE))
           .fontWeight(FontWeight.Medium)
           .fontColor(toResourceColor(activeColors().ink))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(entrySubtitle(entry))
+        Text(itemSubtitle(item))
           .fontSize(tv(ENTRY_TITLE_SIZE))
           .fontColor(toResourceColor(activeColors().inkSoft))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Row({ space: tv(ENTRY_META_GAP) }) {
-          Text(entryTimeLabel(entry)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          Text(releaseTypeLabel(entry.release_type)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          Text(mediaKindLabel(entry.media_kind)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          this.statusPill(entryPillTone(entry, this.today))
+          Text(entryTimeLabel(item.entries[0])).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          Text(releaseTypeLabel(item.entries[0].release_type)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          if (!item.grouped) {
+            Text(mediaKindLabel(item.entries[0].media_kind)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          }
+          this.statusPill(itemPillTone(item, this.today))
         }
         .alignItems(VerticalAlign.Center)
       }
@@ -274,7 +280,7 @@ export struct ReleaseCalendar {
     .border({
       width: { left: tv(ENTRY_EDGE), top: 1, right: 1, bottom: 1 },
       color: {
-        left: toResourceColor(entryAvailable(entry) ? activeColors().success : activeColors().inkMuted),
+        left: toResourceColor(itemAvailable(item) ? activeColors().success : activeColors().inkMuted),
         top: toResourceColorWithAlpha(activeColors().ink, 0.08),
         right: toResourceColorWithAlpha(activeColors().ink, 0.08),
         bottom: toResourceColorWithAlpha(activeColors().ink, 0.08),
@@ -282,11 +288,11 @@ export struct ReleaseCalendar {
     })
     .focusable(true)
     .onFocus(() => {
-      this.selected = entry;
+      this.selected = item.entries[0];
     })
     .onClick(() => {
-      this.selected = entry;
-      this.openEntry(entry);
+      this.selected = item.entries[0];
+      this.openEntry(item.entries[0]);
     })
   }
 
@@ -337,9 +343,9 @@ export struct ReleaseCalendar {
             Column({ space: tv(ENTRY_GAP) }) {
               this.dayHeader(group.day)
               Column({ space: tv(ENTRY_GAP) }) {
-                ForEach(group.entries, (entry: CalendarEntry) => {
-                  this.entryCard(entry, LIST_WIDTH)
-                }, (entry: CalendarEntry): string => entry.id)
+                ForEach(groupSeriesEpisodes(group.entries), (item: CalendarItem) => {
+                  this.entryCard(item, LIST_WIDTH)
+                }, (item: CalendarItem): string => item.key)
               }
               .margin({ top: tv(DAY_HEADING_GAP - ENTRY_GAP) })
             }
@@ -369,9 +375,9 @@ export struct ReleaseCalendar {
               .height(tv(WEEK_HEADING_HEIGHT))
             Scroll() {
               Column({ space: tv(ENTRY_GAP + 1) }) {
-                ForEach(cell.entries, (entry: CalendarEntry) => {
-                  this.entryCard(entry, WEEK_COLUMN_WIDTH)
-                }, (entry: CalendarEntry): string => entry.id)
+                ForEach(groupSeriesEpisodes(cell.entries), (item: CalendarItem) => {
+                  this.entryCard(item, WEEK_COLUMN_WIDTH)
+                }, (item: CalendarItem): string => item.key)
               }
             }
             .layoutWeight(1)
@@ -399,14 +405,15 @@ export struct ReleaseCalendar {
   private monthCell(cell: CalendarCell, cellHeight: number): void {
     Column() {
       Column() {
-        ForEach(cell.entries.slice(0, this.monthLinesFor(cellHeight)), (entry: CalendarEntry) => {
+        ForEach(groupSeriesEpisodes(cell.entries).slice(0, this.monthLinesFor(cellHeight)), (item: CalendarItem) => {
           Row({ space: tv(7) }) {
             Circle()
               .width(tv(MONTH_DOT_SIZE))
               .height(tv(MONTH_DOT_SIZE))
-              .fill(toResourceColor(toneColor(entryPillTone(entry, this.today))))
-            Text(entry.title)
+              .fill(toResourceColor(toneColor(itemPillTone(item, this.today))))
+            Text(itemLineText(item))
               .fontSize(tv(MONTH_LINE_SIZE))
+              .fontWeight(item.grouped ? FontWeight.Bold : FontWeight.Normal)
               .fontColor(toResourceColor(activeColors().ink))
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -415,7 +422,7 @@ export struct ReleaseCalendar {
           .height(tv(MONTH_LINE_HEIGHT))
           .width('100%')
           .padding({ left: tv(6) })
-        }, (entry: CalendarEntry): string => entry.id)
+        }, (item: CalendarItem): string => item.key)
       }
       .layoutWeight(1)
       .width('100%')
@@ -424,8 +431,8 @@ export struct ReleaseCalendar {
           .fontSize(tv(MONTH_DAY_SIZE))
           .fontWeight(FontWeight.Medium)
           .fontColor(toResourceColor(activeColors().inkSoft))
-        if (cell.entries.length > this.monthLinesFor(cellHeight)) {
-          Text(`+${cell.entries.length - this.monthLinesFor(cellHeight)} more`)
+        if (groupSeriesEpisodes(cell.entries).length > this.monthLinesFor(cellHeight)) {
+          Text(`+${groupSeriesEpisodes(cell.entries).length - this.monthLinesFor(cellHeight)} more`)
             .fontSize(tv(MONTH_LINE_SIZE))
             .fontColor(toResourceColor(activeColors().inkSoft))
         }

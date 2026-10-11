@@ -84,3 +84,25 @@ test("month grid is whole weeks; week has seven days", () => {
   assert.equal(grid[1][6].isToday, true);
   assert.equal(buildWeekDays("2026-10-11", [], "2026-10-11").length, 7);
 });
+
+import { formatEpisodeCodes, groupSeriesEpisodes, itemLineText, itemPillTone, itemSubtitle } from "../main/ets/core/CalendarAgenda";
+
+test("episode codes collapse runs and list gaps", () => {
+  const ep = (s: number, e: number) => entry({ id: `${s}-${e}`, season_number: s, episode_number: e });
+  assert.equal(formatEpisodeCodes([ep(2, 4), ep(2, 5), ep(2, 6)]), "S02E04–E06");
+  assert.equal(formatEpisodeCodes([ep(2, 1), ep(2, 3)]), "S02E01, E03");
+  assert.equal(formatEpisodeCodes([ep(1, 8), ep(0, 15)]), "S00E15, S01E08");
+});
+
+test("same series, day and time group; others stay single", () => {
+  const a = entry({ id: "a", work_id: "w", season_number: 1, episode_number: 8, release_at: "2026-10-05T08:00:00Z" });
+  const b = entry({ id: "b", work_id: "w", season_number: 0, episode_number: 15, release_at: "2026-10-05T08:00:00Z" });
+  const c = entry({ id: "c", media_kind: "movie", title: "Test Movie A" });
+  const items = groupSeriesEpisodes([a, c, b]);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].grouped, true);
+  assert.equal(itemSubtitle(items[0]), "2 episodes · S00E15, S01E08");
+  assert.equal(itemLineText(items[0]), "Sample Series 1 · 2×");
+  assert.equal(items[1].grouped, false);
+  assert.equal(itemPillTone(items[0], "2026-10-11"), "missing");
+});
