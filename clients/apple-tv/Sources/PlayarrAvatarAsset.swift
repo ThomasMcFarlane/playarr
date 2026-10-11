@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Profile avatar raster cropped from the authenticated SPA suite reference.
 enum PlayarrAvatarAsset {

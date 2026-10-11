@@ -1,7 +1,9 @@
 import Foundation
 import Observation
 import PlayarrKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 protocol TVDeviceAuthorizing: Sendable {
     /// The server this authorizer talks to — lets the retry-across-known-

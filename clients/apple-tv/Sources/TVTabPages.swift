@@ -1,6 +1,8 @@
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The web's `TvEmptyState` page variant: a disc with the "details" graphic and a title with a
 /// short explanation, centred as a group at x 1127 on the 1920 stage.

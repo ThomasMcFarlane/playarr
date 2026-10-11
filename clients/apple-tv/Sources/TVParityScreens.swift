@@ -1,6 +1,8 @@
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Deterministic fixture screens for the visual parity suite.
 /// Activated with launch argument:

@@ -3,7 +3,9 @@ import Combine
 import Foundation
 import Observation
 import PlayarrKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 @MainActor
 @Observable

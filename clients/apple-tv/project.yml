@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.playarr
   deploymentTarget:
     tvOS: "17.0"
+    macOS: "14.0"
   createIntermediateGroups: true
 packages:
   Playarr Server:
@@ -61,6 +62,66 @@ targets:
         SWIFT_VERSION: 5.0
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: YES
+  # macOS: the same tvOS sources and PlayarrKit, the TV 10-foot layout in a 16:9 window. The macOS-only
+  # shims (UIKit names, keyboard/mouse focus, window) live in macOS/ so the tvOS target is unchanged.
+  PlayarrMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+        excludes:
+          - PlayarrTVApp.swift
+      - path: macOS
+        excludes:
+          - Info.plist
+      - path: ../ios/Sources/PlayarrApp/DesignFont.swift
+      - path: Supporting/Assets.xcassets
+      - path: ../../docs/parity/fonts/NunitoSans-wght-web.ttf
+      - path: ../ios/Resources/Fonts/JetBrainsMono-Variable.ttf
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Playarr
+        CFBundleName: Playarr
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.entertainment
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        # The fonts are copied to Resources/ (macOS reads ATSApplicationFontsPath, not UIAppFonts).
+        ATSApplicationFontsPath: .
+        ITSAppUsesNonExemptEncryption: false
+        NSLocalNetworkUsageDescription: Playarr connects to the Playarr Server on your network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
+    dependencies:
+      - package: Playarr Server
+        product: PlayarrKit
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "-"
+        PRODUCT_BUNDLE_IDENTIFIER: app.playarr.macos
+        # Same module name as tvOS so the shared tests' `@testable import PlayarrTV` works unchanged.
+        PRODUCT_MODULE_NAME: PlayarrTV
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        ENABLE_HARDENED_RUNTIME: NO
+  PlayarrMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: PlayarrMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.playarr.playarr.macos.tests
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
 schemes:
   PlayarrTV:
     build:
@@ -70,3 +131,11 @@ schemes:
     test:
       targets:
         - PlayarrTVTests
+  PlayarrMac:
+    build:
+      targets:
+        PlayarrMac: all
+        PlayarrMacTests: [test]
+    test:
+      targets:
+        - PlayarrMacTests

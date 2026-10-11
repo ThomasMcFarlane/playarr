@@ -1,0 +1,1 @@
+- Playarr for Mac: a macOS app built from the Apple TV sources and PlayarrKit, showing the TV layout in a resizable 16:9 window with keyboard, mouse and hover control (57.10024). Its build and unit tests run on hosted macOS for pull requests that touch it.

@@ -1,7 +1,9 @@
 import AVFoundation
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Everything the player chrome shows, so playback and the parity route draw the same view.
 struct TVPlayerChromeState {
@@ -13,7 +15,9 @@ struct TVPlayerChromeState {
     var menuOpen: Bool
 }
 
+#if canImport(UIKit)
 /// Renders an `AVPlayer` without any system transport controls (the chrome is drawn in SwiftUI).
+/// The macOS app's version (an `AVPlayerView`) is in macOS/PlatformShims.swift.
 struct TVVideoSurface: UIViewRepresentable {
     let player: AVPlayer?
 
@@ -33,6 +37,7 @@ struct TVVideoSurface: UIViewRepresentable {
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
     }
 }
+#endif
 
 /// The web TV player chrome (`.player-controls`): minimise and close at the top right, scrubber,
 /// transport row and the quality matrix, laid out from the web client's measured geometry.

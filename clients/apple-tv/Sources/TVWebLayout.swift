@@ -2,7 +2,9 @@ import PlayarrKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Building blocks for screens laid out on the web TV grid (1920x1080 stage, CSS pixels
 /// measured from the web client's layout). Elements are placed by their CSS box (x, y, w, h);
@@ -466,6 +468,9 @@ struct TVDrawer<Content: View>: View {
         .frame(width: 360, height: 1080, alignment: .topLeading)
         .background(DesignTokens.Stage.surfaceStrong.opacity(0.94))
         .focusSection()
+        #if os(macOS)
+        .macFocusLayer() // every drawer keeps keyboard focus inside it on the Mac (macOS/MacFocus.swift)
+        #endif
         .onExitCommand(perform: onClose)
         .task { closeFocused = true }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -574,6 +579,10 @@ struct TVCardButton<Label: View>: View {
             longPressed = true
             openActions(work)
         })
+        #if os(macOS)
+        // The Mac's long press: a right click, or Shift+Return (macOS/MacFocus.swift).
+        .macSecondaryAction { openActions(work) }
+        #endif
         // Web: closing the actions drawer returns focus to the card that opened it.
         .onChange(of: actionsWorkID) { previous, current in
             if previous == work.id, current == nil { focused = true }

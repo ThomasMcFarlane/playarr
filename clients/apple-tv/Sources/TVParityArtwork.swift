@@ -1,6 +1,8 @@
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Neutral placeholder artwork for the Apple TV visual parity suite.
 ///

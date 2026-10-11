@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The web's design fonts, Nunito Sans and JetBrains Mono (SIL Open Font License 1.1, variable builds in
 /// `Resources/Fonts`, registered through `UIAppFonts`), built at an exact CSS weight like the web does.
@@ -35,10 +37,11 @@ enum DesignFont {
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): variation,
         ]
         if let postScriptName { attributes[.name] = postScriptName } else { attributes[.family] = family }
-        let font = UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
+        // `as UIFont?`: AppKit's initialiser (the macOS app aliases UIFont to NSFont) is failable.
+        guard let font = UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size) as UIFont? else { return nil }
         // An unregistered name makes UIKit answer with a substitute (system font or Helvetica).
         // The typographic family may carry an optical-size suffix ("Nunito Sans 12pt").
-        return font.familyName.hasPrefix(family) ? font : nil
+        return (font.familyName as String?)?.hasPrefix(family) == true ? font : nil
     }
 }
 

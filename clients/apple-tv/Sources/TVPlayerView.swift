@@ -1,7 +1,9 @@
 import AVKit
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct TVPlayerView: View {
     @Environment(\.setShellChromeHidden) private var setShellChromeHidden
@@ -16,7 +18,12 @@ struct TVPlayerView: View {
     let parity: (position: Double, duration: Double, menuOpen: Bool)?
     @State private var interaction = TVPlayerInteraction()
     @FocusState private var focusedControl: TVPlayerControl?
+    #if os(macOS)
+    /// The Mac shows covers as a window layer, not a presentation (macOS/PlatformShims.swift).
+    @Environment(\.macCoverDismiss) private var dismiss
+    #else
     @Environment(\.dismiss) private var dismiss
+    #endif
     @Environment(\.scenePhase) private var scenePhase
 
     init(

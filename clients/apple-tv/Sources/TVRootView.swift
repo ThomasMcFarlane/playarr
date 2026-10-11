@@ -2,7 +2,9 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import PlayarrKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment

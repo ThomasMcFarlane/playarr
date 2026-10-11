@@ -1,11 +1,15 @@
 name: iOS tests
 
 # Compiles the iOS app and runs its unit tests on a hosted macOS simulator whenever a pull
-# request touches clients/ios. The tvOS leg and manual runs stay in simulator-tests.yml.
+# request touches clients/ios, and builds and tests the macOS app (clients/apple-tv, PlayarrMac
+# target: the tvOS sources plus PlayarrKit) whenever a pull request touches what it compiles.
+# Each job runs only for its own paths. The tvOS leg and manual runs stay in simulator-tests.yml.
 on:
   pull_request:
     paths:
       - clients/ios/**
+      - clients/apple-tv/**
+      - docs/parity/fonts/**
       - .github/workflows/ios-tests.yml
       - .github/scripts/apple-test-simulator/**
 
@@ -17,8 +21,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed Apple clients
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+      macos: ${{ steps.filter.outputs.macos }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'clients/ios/**'
+              - '.github/workflows/ios-tests.yml'
+              - '.github/scripts/apple-test-simulator/**'
+            macos:
+              - 'clients/apple-tv/**'
+              - 'clients/ios/Package.swift'
+              - 'clients/ios/Sources/PlayarrKit/**'
+              - 'clients/ios/Sources/PlayarrApp/DesignFont.swift'
+              - 'clients/ios/Resources/Fonts/**'
+              - 'docs/parity/fonts/**'
+              - '.github/workflows/ios-tests.yml'
+
   ios-tests:
     name: Test Playarr iOS on iPhone Simulator
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -67,5 +100,38 @@ jobs:
         with:
           name: ios-log-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ios-log.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  macos-tests:
+    name: Build and test Playarr for Mac
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record the toolchain
+        shell: bash
+        run: xcodebuild -version
+
+      - name: Build the macOS app and run its unit tests
+        shell: bash
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          xcodebuild test -project clients/apple-tv/PlayarrTV.xcodeproj -scheme PlayarrMac -configuration Debug \
+            -destination 'platform=macOS' -resultBundlePath "$RUNNER_TEMP/macos.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/macos-log.txt"
+
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-log-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/macos-log.txt
           if-no-files-found: ignore
           retention-days: 7
