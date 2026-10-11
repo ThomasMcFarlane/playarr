@@ -278,6 +278,10 @@ export struct SearchScreen {
             .fontColor(toResourceColor(activeColors().ink))
             .placeholderColor(toResourceColor(activeColors().inkMuted))
             .backgroundColor(Color.Transparent)
+            // The pill is the field (web): no inner box or focus border on the input itself.
+            .border({ width: 0 })
+            .borderRadius(0)
+            .padding(0)
             .caretColor(toResourceColor(activeColors().ink))
             .layoutWeight(1)
             .defaultFocus(true)
