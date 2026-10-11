@@ -76,6 +76,8 @@ import {useCatalogBrowse} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {artworkAuthHeaders, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
 import {CAPABILITIES} from '../platform/capabilities';
+import {useRemoteKey} from '../platform/remote';
+import {useOnTop} from '../navigation/useOnTop';
 import {colour} from '../theme/tokens';
 import {layout, text} from '../theme/styles';
 import {sh, sw} from '../theme/scale';
@@ -404,6 +406,11 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   }, [client, items, query, total, arrange]);
 
   const selected = items?.[focusIndex] ?? items?.[0];
+  // The remote's Menu key opens the focused title's actions (web: long press or the context menu key).
+  const onTop = useOnTop();
+  useRemoteKey((key, raw) => {
+    if (onTop && key === 'menu' && raw.eventKeyAction === 0 && selected && !filtersOpen && !actionsWork) setActionsWork(selected);
+  });
   const row = Math.floor(focusIndex / cols);
   useEffect(() => {
     // Keep the focused row inside the panel: the web scrolls the grid so the row stays visible.

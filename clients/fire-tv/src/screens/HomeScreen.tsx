@@ -13,9 +13,10 @@ import {mediaThumbnailUrl, preferredArtworkKind, workArtworkUrl} from '../api/ar
 import {ArtworkImage} from '../components/ArtworkImage';
 import {useLanguage} from '../i18n/LanguageProvider';
 import {useTvBackNavigation} from '../navigation/backPolicy';
+import {useOnTop} from '../navigation/useOnTop';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
-import {focusNode, getFocusedTag, useDefaultFocus} from '../platform';
+import {focusNode, getFocusedTag, useDefaultFocus, useRemoteKey} from '../platform';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
 import {runtimeLabel} from '../lib/runtimeLabel';
 import {blend} from '../theme/color';
@@ -162,6 +163,13 @@ export function HomeScreen(): React.ReactElement {
   const [focus, setFocus] = useState<{rail: number; item: number}>({rail: 0, item: 0});
   const [actionsWork, setActionsWork] = useState<Work | null>(null);
   const [playlistWork, setPlaylistWork] = useState<Work | null>(null);
+  const onTop = useOnTop();
+  useRemoteKey((key, raw) => {
+    if (onTop && key === 'menu' && raw.eventKeyAction === 0 && !actionsWork) {
+      const work = rails[focus.rail]?.items[focus.item];
+      if (work) setActionsWork(work);
+    }
+  });
   const selected = rails[focus.rail]?.items[focus.item] ?? rails[0]?.items[0];
   // A late On Deck answer rebuilds the rails and unmounts the focused card, which leaves nothing focused and the remote
   // dead. Put focus back on the selected card whenever the rails change and focus was lost (web keeps it in place).
