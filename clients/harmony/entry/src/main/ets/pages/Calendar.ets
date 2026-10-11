@@ -27,6 +27,9 @@ import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
 
 import { getCatalogKinds } from '../data/CatalogRepository';
 import { getCalendar } from '../data/CalendarRepository';
+import { addToWatchlist, removeFromWatchlist, resolveTitle } from '../data/WatchlistRepository';
+import { planItemActions } from '../core/CalendarActions';
+import type { CalendarActionPlan } from '../core/CalendarActions';
 
 import {
   addDays,
@@ -59,7 +62,7 @@ import type { CalendarEntry } from '../core/Types/Calendar';
 
 import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
 import { ROUTES } from '../navigation/Routes';
-import type { DetailRouteParams, LibraryRouteParams } from '../navigation/Routes';
+import type { DetailRouteParams, LibraryRouteParams, PlayerRouteParams } from '../navigation/Routes';
 import { getNavStack, popRoute, pushRoute, replaceRoute } from '../navigation/NavStack';
 
 // Web `.calendar-days-agenda`: from x=783 (53 into the x=730 column), first day heading at y=162, 1033 wide.
@@ -106,6 +109,11 @@ const OVERVIEW_SIZE: number = 13.824;
 const OVERVIEW_LINE_HEIGHT: number = 22;
 const OVERVIEW_MAX_LINES: number = 5;
 const OVERVIEW_WIDTH: number = 348;
+// Web details panel buttons: 58 high pills, 14.72/720.
+const PANEL_BUTTON_HEIGHT: number = 58;
+const PANEL_BUTTON_FONT: number = 14.72;
+const PANEL_BUTTON_PADDING: number = 21;
+const PANEL_BUTTON_GAP: number = 10;
 
 // Web `.calendar-days-week` and `.calendar-month`: from (154, 174), 1663 wide, 787 high.
 const GRID_LEFT: number = 154;
@@ -159,6 +167,10 @@ export struct ReleaseCalendar {
   @State private filtersOpen: boolean = false;
   @State private groups: DayGroup[] = [];
   @State private selected: CalendarEntry | undefined = undefined;
+  @State private selectedItem: CalendarItem | undefined = undefined;
+  /** Watchlist state of the selected title: from the server's action at selection, then the toggle. */
+  @State private listed: boolean = false;
+  @State private watchlistBusy: boolean = false;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private navItems: NavRailItem[] = [];
@@ -180,14 +192,72 @@ export struct ReleaseCalendar {
     const result = await getCalendar(addDays(range.start, -1), addDays(range.end, 1));
     if (result.kind === 'ok') {
       this.groups = groupByLocalDay(result.value.entries, range.start, range.end);
-      this.selected = this.groups.length > 0 ? this.groups[0].entries[0] : undefined;
+      const first = this.groups.length > 0 ? groupSeriesEpisodes(this.groups[0].entries)[0] : undefined;
+      this.select(first);
       this.errorMessage = '';
     } else {
       this.groups = [];
-      this.selected = undefined;
+      this.select(undefined);
       this.errorMessage = 'Could not load the calendar.';
     }
     this.loading = false;
+  }
+
+  private select(item: CalendarItem | undefined): void {
+    this.selectedItem = item;
+    this.selected = item !== undefined ? item.entries[0] : undefined;
+    const plan = item !== undefined ? planItemActions(item) : undefined;
+    this.listed = plan !== undefined && plan.watchlist !== null && plan.watchlist.listed;
+  }
+
+  private plan(): CalendarActionPlan | undefined {
+    return this.selectedItem !== undefined ? planItemActions(this.selectedItem) : undefined;
+  }
+
+  /** Web `WatchlistToggle`: add the snapshot, or resolve it for its key and remove. */
+  private async toggleWatchlist(): Promise<void> {
+    const plan = this.plan();
+    if (plan === undefined || plan.snapshot === null || this.watchlistBusy) {
+      return;
+    }
+    this.watchlistBusy = true;
+    if (this.listed) {
+      const resolved = await resolveTitle(plan.snapshot);
+      if (resolved.kind === 'ok') {
+        const removed = await removeFromWatchlist(resolved.value.title.title_key);
+        if (removed.kind === 'ok') {
+          this.listed = false;
+        }
+      }
+    } else {
+      const added = await addToWatchlist(plan.snapshot);
+      if (added.kind === 'ok') {
+        this.listed = true;
+      }
+    }
+    this.watchlistBusy = false;
+  }
+
+  private playSelected(): void {
+    const plan = this.plan();
+    if (plan === undefined || plan.play === null) {
+      return;
+    }
+    const params: PlayerRouteParams = {
+      mediaFileId: plan.play.mediaFileId,
+      workId: plan.play.workId,
+      startPositionMs: plan.play.positionMs,
+    };
+    pushRoute(getNavStack(), ROUTES.Player, params);
+  }
+
+  private openSelected(): void {
+    const plan = this.plan();
+    if (plan === undefined || plan.openWorkId === null) {
+      return;
+    }
+    const params: DetailRouteParams = { workId: plan.openWorkId };
+    pushRoute(getNavStack(), ROUTES.Detail, params);
   }
 
   private page(direction: number): void {
@@ -288,10 +358,10 @@ export struct ReleaseCalendar {
     })
     .focusable(true)
     .onFocus(() => {
-      this.selected = item.entries[0];
+      this.select(item);
     })
     .onClick(() => {
-      this.selected = item.entries[0];
+      this.select(item);
       this.openEntry(item.entries[0]);
     })
   }
@@ -498,6 +568,59 @@ export struct ReleaseCalendar {
   }
 
   @Builder
+  private panelButton(label: string, primary: boolean, onTap: () => void): void {
+    Text(label)
+      .fontSize(tv(PANEL_BUTTON_FONT))
+      .fontWeight(FontWeight.Bold)
+      .fontColor(toResourceColor(primary ? activeColors().bg : activeColors().ink))
+      .height(tv(PANEL_BUTTON_HEIGHT))
+      .padding({ left: tv(PANEL_BUTTON_PADDING), right: tv(PANEL_BUTTON_PADDING) })
+      .borderRadius(tv(PANEL_BUTTON_HEIGHT / 2))
+      .backgroundColor(primary ? toResourceColor(activeColors().ink) : Color.Transparent)
+      .border({ width: primary ? 0 : 1, color: toResourceColor(activeColors().lineStrong) })
+      .focusable(true)
+      .onClick(() => {
+        onTap();
+      })
+  }
+
+  /** Web details panel actions: Play/Resume, Open series (or Open), the watchlist toggle. */
+  @Builder
+  private panelActions(): void {
+    if (this.plan() !== undefined) {
+      Row({ space: tv(PANEL_BUTTON_GAP) }) {
+        if (this.plan()!.play !== null) {
+          this.panelButton(this.plan()!.play!.resume ? 'Resume' : 'Play', true, (): void => {
+            this.playSelected();
+          })
+        }
+        if (this.plan()!.openWorkId !== null) {
+          this.panelButton(this.selected !== undefined && this.selected.media_kind === 'episode' ? 'Open series' : 'Open',
+            this.plan()!.play === null, (): void => {
+              this.openSelected();
+            })
+        }
+        if (this.plan()!.watchlist !== null && this.plan()!.watchlist!.enabled && this.plan()!.snapshot !== null) {
+          Text(this.listed ? '✓  Remove from watchlist' : '+  Add to watchlist')
+            .fontSize(tv(PANEL_BUTTON_FONT))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().ink))
+            .height(tv(PANEL_BUTTON_HEIGHT))
+            .padding({ left: tv(PANEL_BUTTON_PADDING), right: tv(PANEL_BUTTON_PADDING) })
+            .borderRadius(tv(PANEL_BUTTON_HEIGHT / 2))
+            .border({ width: 1, color: toResourceColor(activeColors().lineStrong) })
+            .opacity(this.watchlistBusy ? 0.6 : 1)
+            .focusable(true)
+            .onClick(() => {
+              this.toggleWatchlist();
+            })
+        }
+      }
+      .margin({ top: tv(PANEL_GAP) })
+    }
+  }
+
+  @Builder
   private panelExtras(): void {
     if (this.selected !== undefined) {
       Column({ space: tv(PANEL_GAP) }) {
@@ -512,6 +635,7 @@ export struct ReleaseCalendar {
             .maxLines(OVERVIEW_MAX_LINES)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
+        this.panelActions()
       }
       .alignItems(HorizontalAlign.Start)
       .margin({ top: tv(PANEL_GAP) })

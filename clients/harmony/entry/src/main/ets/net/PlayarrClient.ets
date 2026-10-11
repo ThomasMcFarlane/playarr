@@ -247,9 +247,14 @@ export class PlayarrClient {
   /** A 2xx response: the body is always JSON on every documented Playarr
    * success response (brief section 4). An empty or invalid body here is
    * treated as a network-shaped failure rather than a crash -- there is no
-   * documented endpoint in this contract that returns 2xx with no body. */
+   * documented endpoint in this contract that returns 2xx with no body other than 204, which is success. */
   private decodeOk<T>(response: HttpTransportResponse): ApiResult<T> {
     const bodyText = response.bodyText ?? '';
+    if (response.status === 204) {
+      // 204 No Content (for example `DELETE /api/v1/watchlist/{title_key}`): success with no body.
+      const empty: ApiOk<T> = { kind: 'ok', status: response.status, value: new Object() as T };
+      return empty;
+    }
     let parsed: T;
     try {
       parsed = JSON.parse(bodyText) as T;
