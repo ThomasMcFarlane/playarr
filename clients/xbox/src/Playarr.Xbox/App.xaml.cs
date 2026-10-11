@@ -44,6 +44,18 @@ namespace Playarr.Xbox
         {
             InitializeComponent();
             Suspending += OnSuspending;
+            // Keep the last crash on disk (LocalState\last-crash.txt): the wall VM and testers can read why it closed.
+            UnhandledException += (sender, args) =>
+            {
+                try
+                {
+                    var path = System.IO.Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "last-crash.txt");
+                    System.IO.File.WriteAllText(path, DateTimeOffset.Now.ToString("o") + "\n" + args.Exception);
+                }
+                catch (Exception)
+                {
+                }
+            };
 
             // Constructed here rather than lazily: XboxAppEnvironment's own
             // constructor only touches ApplicationData.LocalSettings (cheap,
