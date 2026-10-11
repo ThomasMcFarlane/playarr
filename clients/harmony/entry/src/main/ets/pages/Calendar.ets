@@ -14,6 +14,16 @@ import { ActionTile } from '../design/components/ActionTile';
 import { Drawer } from '../design/components/Drawer';
 import { ChoiceSegments } from '../design/components/ChoiceSegments';
 import type { Choice } from '../design/components/ChoiceSegments';
+import { MultiSelect } from '../design/components/MultiSelect';
+import {
+  CALENDAR_STATUSES,
+  CALENDAR_TYPE_PARAMS,
+  activeFilterCount,
+  applyCalendarFilters,
+  calendarStatusLabel,
+  calendarTypeLabel,
+} from '../core/CalendarFilters';
+import type { CalendarFilters } from '../core/CalendarFilters';
 import { BRAND_PINK } from '../core/Tokens';
 import type { RgbaColor } from '../core/Tokens';
 import type { ThemeModeSetting } from '../design/Theme';
@@ -133,6 +143,20 @@ const MONTH_FOOT_HEIGHT: number = 44;
 const MONTH_CELL_PADDING: number = 5;
 const MONTH_DAY_SIZE: number = 12.8;
 
+// Web drawer: 30 px between filter sections; choice tiles 56 px, 12 px radius, 10.56 px labels, 268 wide.
+const FILTER_SECTION_GAP: number = 30;
+const FILTER_WIDTH: number = 268;
+const CHOICE_HEIGHT: number = 56;
+const CHOICE_RADIUS: number = 12;
+const CHOICE_FONT: number = 10.56;
+const TYPE_CHOICES: Choice[] = CALENDAR_TYPE_PARAMS.map((value: string): Choice => {
+  const choice: Choice = { value: value, label: calendarTypeLabel(value) };
+  return choice;
+});
+const STATUS_CHOICES: Choice[] = CALENDAR_STATUSES.map((value: string): Choice => {
+  const choice: Choice = { value: value, label: calendarStatusLabel(value) };
+  return choice;
+});
 const VIEW_CHOICES: Choice[] = [
   { value: 'agenda', label: 'Agenda' },
   { value: 'week', label: 'Week' },
@@ -166,6 +190,9 @@ export struct ReleaseCalendar {
   @State private view: CalendarView = 'agenda';
   @State private filtersOpen: boolean = false;
   @State private groups: DayGroup[] = [];
+  /** The loaded window before filtering; `regroup` applies the filters (web filters on the client). */
+  private entries: CalendarEntry[] = [];
+  @State private filters: CalendarFilters = { types: [], statuses: [], monitoredOnly: false };
   @State private selected: CalendarEntry | undefined = undefined;
   @State private selectedItem: CalendarItem | undefined = undefined;
   /** Watchlist state of the selected title: from the server's action at selection, then the toggle. */
@@ -191,16 +218,29 @@ export struct ReleaseCalendar {
     // Entries are bucketed by local day, up to a day either side of UTC: pad the window by a day.
     const result = await getCalendar(addDays(range.start, -1), addDays(range.end, 1));
     if (result.kind === 'ok') {
-      this.groups = groupByLocalDay(result.value.entries, range.start, range.end);
-      const first = this.groups.length > 0 ? groupSeriesEpisodes(this.groups[0].entries)[0] : undefined;
-      this.select(first);
+      this.entries = result.value.entries;
+      this.regroup();
       this.errorMessage = '';
     } else {
+      this.entries = [];
       this.groups = [];
       this.select(undefined);
       this.errorMessage = 'Could not load the calendar.';
     }
     this.loading = false;
+  }
+
+  /** Filters the loaded window into day groups and selects the first item, as web on a filter change. */
+  private regroup(): void {
+    const range = visibleRange(this.view, this.anchor);
+    this.groups = groupByLocalDay(applyCalendarFilters(this.entries, this.filters, this.today), range.start, range.end);
+    const first = this.groups.length > 0 ? groupSeriesEpisodes(this.groups[0].entries)[0] : undefined;
+    this.select(first);
+  }
+
+  private setFilters(filters: CalendarFilters): void {
+    this.filters = filters;
+    this.regroup();
   }
 
   private select(item: CalendarItem | undefined): void {
@@ -550,14 +590,89 @@ export struct ReleaseCalendar {
 
   @Builder
   private filtersBody(): void {
-    ChoiceSegments({
-      heading: 'View',
-      choices: VIEW_CHOICES,
-      selected: this.view,
-      onChoose: (value: string): void => {
-        this.changeView(value);
-      },
-    })
+    Column({ space: tv(FILTER_SECTION_GAP) }) {
+      ChoiceSegments({
+        heading: 'View',
+        choices: VIEW_CHOICES,
+        selected: this.view,
+        onChoose: (value: string): void => {
+          this.changeView(value);
+        },
+      })
+      MultiSelect({
+        heading: 'Type',
+        options: TYPE_CHOICES,
+        selected: this.filters.types,
+        noneLabel: 'Any type',
+        addLabel: 'Add type',
+        onChange: (values: string[]): void => {
+          this.setFilters({ types: values, statuses: this.filters.statuses, monitoredOnly: this.filters.monitoredOnly });
+        },
+      })
+      MultiSelect({
+        heading: 'Status',
+        options: STATUS_CHOICES,
+        selected: this.filters.statuses,
+        noneLabel: 'Any status',
+        addLabel: 'Add status',
+        onChange: (values: string[]): void => {
+          this.setFilters({ types: this.filters.types, statuses: values, monitoredOnly: this.filters.monitoredOnly });
+        },
+      })
+      this.monitoringToggle()
+      if (activeFilterCount(this.filters) > 0) {
+        Text('Clear filters')
+          .fontSize(tv(CHOICE_FONT))
+          .fontWeight(FontWeight.Bold)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+          .textAlign(TextAlign.Center)
+          .width(tv(FILTER_WIDTH))
+          .height(tv(CHOICE_HEIGHT))
+          .borderRadius(tv(CHOICE_RADIUS))
+          .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceSoft, 0.64))
+          .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.083) })
+          .focusable(true)
+          .onClick(() => {
+            this.setFilters({ types: [], statuses: [], monitoredOnly: false });
+          })
+      }
+    }
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /** Web `.remote-toggle` "Monitored only": a 22 px box (2 px ink-soft border, filled with a tick when on). */
+  @Builder
+  private monitoringToggle(): void {
+    Column({ space: tv(12) }) {
+      Text('Monitoring')
+        .fontSize(tv(9.6))
+        .fontWeight(FontWeight.Bold)
+        .letterSpacing(tv(0.672))
+        .textCase(TextCase.UpperCase)
+        .fontColor(toResourceColor(activeColors().inkSoft))
+      Row({ space: tv(27) }) {
+        Text(this.filters.monitoredOnly ? '✓' : '')
+          .fontSize(tv(14))
+          .fontWeight(FontWeight.Bold)
+          .fontColor(toResourceColor(activeColors().surface))
+          .textAlign(TextAlign.Center)
+          .width(tv(22))
+          .height(tv(22))
+          .borderRadius(tv(4))
+          .border({ width: 2, color: toResourceColor(activeColors().inkSoft) })
+          .backgroundColor(toResourceColor(this.filters.monitoredOnly ? activeColors().inkSoft : activeColors().surface))
+        Text('Monitored only')
+          .fontSize(tv(19.2))
+          .fontColor(toResourceColor(activeColors().ink))
+      }
+      .height(tv(44))
+      .focusable(true)
+      .onClick(() => {
+        this.setFilters({ types: this.filters.types, statuses: this.filters.statuses,
+          monitoredOnly: !this.filters.monitoredOnly });
+      })
+    }
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
