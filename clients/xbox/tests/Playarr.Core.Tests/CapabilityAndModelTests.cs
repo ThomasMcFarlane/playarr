@@ -314,7 +314,11 @@ namespace Playarr.Core.Tests
         public void ReadsTheSessionDeviceId()
         {
             // Payload: {"sub":"11111111-…","device_id":"22222222-2222-2222-2222-222222222222"}
-            const string token = "header.eyJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJkZXZpY2VfaWQiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIifQ.signature";
+            const string token =
+                "header." +
+                "eyJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJkZ" +
+                "XZpY2VfaWQiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIifQ" +
+                ".signature";
 
             Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), JwtClaims.DeviceId(token));
             Assert.Null(JwtClaims.DeviceId(GroupedNodeToken));
