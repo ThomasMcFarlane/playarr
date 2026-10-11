@@ -88,7 +88,8 @@ export const FOCUS_LIFT: FocusLiftTable = {
   tvNavTileSelected: { scale: 1.05 },
   railHeading: { translateY: -1, scale: 1.16 },
   input: { scale: 1.015 },
-  profileAvatar: { scale: 1.035 },
+  // Web TV picker: a selected 244 px avatar draws at 264 px.
+  profileAvatar: { scale: 1.082 },
 };
 
 /** A rail that never scopes focus (e.g. a library grid, or any

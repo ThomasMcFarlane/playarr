@@ -28,27 +28,24 @@
  * ArkUI-radius conversion is an approximation, documented here rather than
  * silently guessed.
  *
- * The `rgba(255,255,255,·)` highlight/foreground colours have no matching
+ * The `rgba(255,255,255,·)` highlight colour have no matching
  * `core/Tokens.ts` `ColorTokens` entry (no role is "pure white, alpha
  * varies") -- the same documented exception `design/components/Skeleton.ets`
  * already establishes for its own `rgba(255,255,255,·)` shimmer highlight.
  *
- * There is **no real per-preset illustration asset in this repo yet** (the
- * `avatar_<id>.svg` files brief section 2's component tree lists do not
- * exist under `resources/base/media/` -- confirmed by directory listing).
- * Per this slice's brief, the inner-illustration slot renders a plain
- * coloured glyph (the preset id's first letter, uppercased) instead of
- * blocking on missing art; swapping in a real `Image($r('app.media.avatar_
- * <id>'))` later only touches this one render branch.
+ * The inner illustration is `media/avatar_<id>.svg`, generated from web's
+ * `components/ProfileAvatar.tsx` drawings (web is the reference).
  *
  * ## Focus treatment (brief 5.8)
  *
- * "profile avatar | ring opacity → 1, `scale(1.035)`" -- the ONE component
+ * Web is the reference: on focus the ring is 3 px brand-pink-soft and the
+ * avatar scales by `FOCUS_LIFT.profileAvatar` (244 px to 264 px on the TV
+ * picker). Brief 5.8 said "profile avatar | ring opacity → 1, `scale(1.035)`"
+ * at `focusOutline`; web differs, and web wins. This is the ONE component
  * in this design system with a genuine focus RING (every content card
  * explicitly has none, brief 5.8's "a lift, not a ring"; the avatar's own
  * table row is the documented exception). The ring is drawn via `.border()`
- * at `activeColors().focusOutline` -- `core/Tokens.ts`'s colour role built
- * for exactly this purpose -- with its alpha animated from `0` at rest to
+ * with its alpha animated from `0` at rest to
  * `1` at full focus. `FOCUS_LIFT.profileAvatar` has no `translateY` (it
  * only ever scales in place, like the primary play action), so only
  * `.scale(...)` is applied alongside the ring. Per `FocusLift.ets`'s own
@@ -60,9 +57,10 @@
 import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../Theme';
 import type { ThemeModeSetting } from '../Theme';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
-import { AvatarPresets, Radii } from '../../core/Tokens';
+import { AvatarPresets, BRAND_PINK_SOFT } from '../../core/Tokens';
 import type { AvatarPreset } from '../../core/Tokens';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from './FocusLift';
+import { CircleShape } from '@kit.ArkUI';
 
 /** Brief 5.11 gradient recipe literals -- see this file's header comment
  * for why these (and not a `core/Tokens.ts` field) are the source. */
@@ -71,20 +69,16 @@ const HIGHLIGHT_CENTER_X_PCT: string = '34%';
 const HIGHLIGHT_CENTER_Y_PCT: string = '26%';
 const HIGHLIGHT_ALPHA: number = 0.28;
 const HIGHLIGHT_STOP: number = 0.27;
-const FOREGROUND_ALPHA: number = 0.94;
 
 /** Brief 5.11: "inner illustration at 84% of the circle". */
 const ILLUSTRATION_SLOT_RATIO: number = 0.84;
 
-/** Not in the brief -- a readable glyph size relative to its 84% slot
- * (roughly half the slot's own side length), named here rather than an
- * inline magic number. */
-const GLYPH_FONT_RATIO: number = 0.42;
 
 /** Brief 5.8's focus ring stroke width. No matching `core/Tokens.ts` field
  * (there is no border-width table) -- same documented-exception pattern as
  * `design/components/AsyncState.ets`'s `SPINNER_BORDER_WIDTH`. */
-const RING_WIDTH: number = 2;
+// Web `.circle-focus-target` on focus: a 3 px brand-pink-soft ring.
+const RING_WIDTH: number = 3;
 
 /** No matching `core/Tokens.ts` field (there is no avatar-diameter token
  * yet) -- same documented exception as this file's other named constants.
@@ -97,6 +91,24 @@ const DEFAULT_AVATAR_DIAMETER: number = 64;
 /** Looks up a preset by id, falling back to the first preset (`astronaut`,
  * matching `core/AvatarPreset.ts`'s own fallback ordering) if `presetId`
  * does not match any entry -- e.g. before the caller has resolved one. */
+/** Web `ProfileAvatar.tsx`'s per-preset drawing (`media/avatar_<id>.svg`); astronaut for an unknown id. */
+function avatarArt(presetId: string): Resource {
+  switch (presetId) {
+    case 'cat':
+      return $r('app.media.avatar_cat');
+    case 'dinosaur':
+      return $r('app.media.avatar_dinosaur');
+    case 'robot':
+      return $r('app.media.avatar_robot');
+    case 'pirate':
+      return $r('app.media.avatar_pirate');
+    case 'alien':
+      return $r('app.media.avatar_alien');
+    default:
+      return $r('app.media.avatar_astronaut');
+  }
+}
+
 function resolvePreset(presetId: string): AvatarPreset {
   const found = AvatarPresets.find((preset: AvatarPreset) => preset.id === presetId);
   if (found !== undefined) {
@@ -119,6 +131,9 @@ export struct ProfileAvatar {
   /** Called when the avatar is activated (D-pad OK / Enter / tap). Plain
    * (non-reactive) callback field, same pattern as `AsyncState.ets`'s
    * `retry` / `PosterCard.ets`'s `onSelect`. */
+  /** Takes the first D-pad focus (web focuses the current profile on open). */
+  @Prop initialFocus: boolean = false;
+
   onSelect: () => void = () => {};
 
   // Tracked purely to force a re-render when the theme changes; the actual
@@ -133,12 +148,6 @@ export struct ProfileAvatar {
     return resolvePreset(this.presetId);
   }
 
-  private glyph(): string {
-    if (this.presetId.length === 0) {
-      return '?';
-    }
-    return this.presetId.charAt(0).toUpperCase();
-  }
 
   private setFocused(focused: boolean): void {
     this.getUIContext().animateTo({ duration: INTERACTION_CARD_MS, curve: INTERACTION_CURVE }, () => {
@@ -191,28 +200,28 @@ export struct ProfileAvatar {
         })
 
       // Inner illustration slot at 84% of the circle -- a plain coloured
-      // glyph placeholder until real per-preset art ships (see this file's
-      // header comment).
+      // The preset's illustration, generated from web's `ProfileAvatar.tsx`.
       Stack() {
-        Text(this.glyph())
-          .fontSize((this.diameter * GLYPH_FONT_RATIO))
-          .fontWeight(FontWeight.Bold)
-          .fontColor(toResourceColor({ r: 255, g: 255, b: 255, a: FOREGROUND_ALPHA }))
+        Image(avatarArt(this.presetId))
+          .width('100%')
+          .height('100%')
       }
       .width((this.diameter * ILLUSTRATION_SLOT_RATIO))
       .height((this.diameter * ILLUSTRATION_SLOT_RATIO))
     }
     .width(this.diameter)
     .height(this.diameter)
-    .borderRadius(Radii.circleFull)
-    .clip(true)
+    .borderRadius(this.diameter / 2)
+    // A circle clip: the rounded-rect clip left the drawing's sides flat in the Previewer.
+    .clipShape(new CircleShape({ width: this.diameter, height: this.diameter }))
     .border({
       width: RING_WIDTH,
-      color: toResourceColorWithAlpha(activeColors().focusOutline, this.ringOpacity()),
-      radius: Radii.circleFull,
+      color: toResourceColorWithAlpha(BRAND_PINK_SOFT, this.ringOpacity()),
+      radius: this.diameter / 2,
     })
     .scale({ x: this.avatarScale(), y: this.avatarScale() })
     .focusable(true)
+    .defaultFocus(this.initialFocus)
     .onFocus(() => {
       this.setFocused(true);
     })

@@ -13,6 +13,8 @@
             -->
             <Color x:Key="PlayarrBgColor">#151315</Color>
             <Color x:Key="PlayarrBrandColor">#CF3157</Color>
+            <!-- The system accent (sliders, progress, selection) is the web brand pink. -->
+            <Color x:Key="SystemAccentColor">#CF3157</Color>
             <SolidColorBrush x:Key="PlayarrBg" Color="#151315" />
             <SolidColorBrush x:Key="PlayarrSurface" Color="#1B181B" />
             <SolidColorBrush x:Key="PlayarrSurfaceStrong" Color="#211D21" />
