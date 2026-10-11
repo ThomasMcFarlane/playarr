@@ -72,6 +72,9 @@ export const ROUTE_PLAYER: string = 'Player';
 /** `pages/Calendar.ets`. The release calendar (TV agenda). No navigation parameters. */
 export const ROUTE_CALENDAR: string = 'Calendar';
 
+/** `pages/Search.ets`. Catalogue search. No navigation parameters. */
+export const ROUTE_SEARCH: string = 'Search';
+
 /**
  * Every route name a page may push, replace or pop by, keyed the same way
  * `router_map.json` names them. Import this object rather than any of the
@@ -89,6 +92,7 @@ export class RouteNames {
   readonly Detail: string = ROUTE_DETAIL;
   readonly Player: string = ROUTE_PLAYER;
   readonly Calendar: string = ROUTE_CALENDAR;
+  readonly Search: string = ROUTE_SEARCH;
 }
 
 export const ROUTES: RouteNames = new RouteNames();

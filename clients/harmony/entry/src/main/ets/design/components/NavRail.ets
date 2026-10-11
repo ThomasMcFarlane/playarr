@@ -217,6 +217,14 @@ export struct NavRail {
   /** Web's next group (Playlists, Watchlist, Requests, Calendar), below the library group. Plain field,
    * like `items`. */
   secondaryItems: NavRailItem[] = [];
+  /** Web's Downloads/Search group, above the library group (which stays at `navGroupTop`). Plain field. */
+  primaryItems: NavRailItem[] = [];
+
+  /** Height of one group with `count` tiles: tiles, gaps, padding and border. */
+  private groupHeight(count: number): number {
+    return count * TvGeometry.navTileSize + (count - 1) * TvGeometry.navGroupItemGap +
+      2 * TvGeometry.navGroupPaddingV + 2 * TvGeometry.navGroupBorderWidth;
+  }
 
   @Builder
   private group(items: NavRailItem[]): void {
@@ -252,12 +260,19 @@ export struct NavRail {
 
   build() {
     Column({ space: tv(TvGeometry.navGroupGap) }) {
+      if (this.primaryItems.length > 0) {
+        this.group(this.primaryItems)
+      }
       this.group(this.items)
       if (this.secondaryItems.length > 0) {
         this.group(this.secondaryItems)
       }
     }
     .alignItems(HorizontalAlign.Start)
-    .position({ x: tv(TvGeometry.navStart), y: tv(TvGeometry.navGroupTop) })
+    .position({
+      x: tv(TvGeometry.navStart),
+      y: tv(TvGeometry.navGroupTop - (this.primaryItems.length > 0 ?
+        this.groupHeight(this.primaryItems.length) + TvGeometry.navGroupGap : 0)),
+    })
   }
 }

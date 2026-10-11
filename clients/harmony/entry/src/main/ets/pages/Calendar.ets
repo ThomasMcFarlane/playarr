@@ -60,10 +60,10 @@ import {
 import type { CalendarCell, CalendarItem, CalendarView, DayGroup, EntryPillTone } from '../core/CalendarAgenda';
 import type { CalendarEntry } from '../core/Types/Calendar';
 
-import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { CALENDAR_NAV_ID, buildNavRailItems, buildPrimaryNavItems, buildSecondaryNavItems, navigateFromRail } from '../navigation/NavItems';
 import { ROUTES } from '../navigation/Routes';
-import type { DetailRouteParams, LibraryRouteParams, PlayerRouteParams } from '../navigation/Routes';
-import { getNavStack, popRoute, pushRoute, replaceRoute } from '../navigation/NavStack';
+import type { DetailRouteParams, PlayerRouteParams } from '../navigation/Routes';
+import { getNavStack, popRoute, pushRoute } from '../navigation/NavStack';
 
 // Web `.calendar-days-agenda`: from x=783 (53 into the x=730 column), first day heading at y=162, 1033 wide.
 const LIST_INSET_LEFT: number = 53;
@@ -276,16 +276,9 @@ export struct ReleaseCalendar {
   }
 
   private handleNavSelect(id: string): void {
-    if (id === CALENDAR_NAV_ID) {
-      return;
-    }
-    if (id === HOME_NAV_ID) {
-      popRoute(getNavStack());
-      return;
-    }
-    const params: LibraryRouteParams = { kind: id };
-    replaceRoute(getNavStack(), ROUTES.Library, params);
+    navigateFromRail(id, CALENDAR_NAV_ID);
   }
+
 
   private openEntry(entry: CalendarEntry): void {
     if (entry.work_id === undefined || entry.work_id === null) {
@@ -689,7 +682,8 @@ export struct ReleaseCalendar {
         if (this.navItems.length > 0) {
           NavRail({
             items: this.navItems,
-            secondaryItems: buildSecondaryNavItems(),
+            primaryItems: buildPrimaryNavItems(),
+          secondaryItems: buildSecondaryNavItems(),
             selectedId: CALENDAR_NAV_ID,
             onSelect: (id: string): void => {
               this.handleNavSelect(id);
