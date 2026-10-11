@@ -5,8 +5,12 @@ import { ApiResult } from '../net/ApiResult';
 import { discoverResolveUrl, watchlistItemUrl, watchlistUrl } from '../core/Endpoints.ts';
 import { TitleSnapshot } from '../core/Types/Calendar.ts';
 
+export interface TitleRef {
+  title_key: string;
+}
+
 export interface ResolvedTitleKey {
-  title: { title_key: string };
+  title: TitleRef;
 }
 
 export function addToWatchlist(snapshot: TitleSnapshot): Promise<ApiResult<ResolvedTitleKey>> {

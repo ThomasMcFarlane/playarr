@@ -13,12 +13,17 @@ export interface PlayPlan {
   positionMs: number;
 }
 
+export interface WatchlistPlan {
+  enabled: boolean;
+  listed: boolean;
+}
+
 export interface CalendarActionPlan {
   /** The library work to open, when the server enabled `open` (or play/resume). */
   openWorkId: string | null;
   play: PlayPlan | null;
   /** The server's watchlist action; `listed` is the state at load time. */
-  watchlist: { enabled: boolean; listed: boolean } | null;
+  watchlist: WatchlistPlan | null;
   snapshot: TitleSnapshot | null;
 }
 
