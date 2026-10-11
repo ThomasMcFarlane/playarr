@@ -339,13 +339,14 @@ struct Profiles {
         .letterSpacing(tv(-5.806))
         .fontColor(toResourceColor(activeColors().ink))
         .height(tv(77))
-        .margin({ top: tv(7) })
+        .margin({ top: tv(-13) })
       Row({ space: tv(TV_CHOICE_GAP) }) {
         ForEach(this.profiles, (profile: AvailableProfileResponse) => {
           Column() {
             ProfileAvatar({
               presetId: resolveAvatarPreset(profile.id),
               diameter: tv(TV_CHOICE_WIDTH),
+              initialFocus: profile.is_current,
               onSelect: () => {
                 this.selectProfile(profile);
               },
@@ -375,6 +376,7 @@ struct Profiles {
             }
           }
           .width(tv(TV_CHOICE_WIDTH))
+          .clip(false)
         }, (profile: AvailableProfileResponse): string => profile.id)
         // No create-profile endpoint exists (brief 4.7): the add tile stays a disabled placeholder.
         Column() {

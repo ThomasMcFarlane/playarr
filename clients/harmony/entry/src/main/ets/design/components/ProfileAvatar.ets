@@ -38,12 +38,14 @@
  *
  * ## Focus treatment (brief 5.8)
  *
- * "profile avatar | ring opacity → 1, `scale(1.035)`" -- the ONE component
+ * Web is the reference: on focus the ring is 3 px brand-pink-soft and the
+ * avatar scales by `FOCUS_LIFT.profileAvatar` (244 px to 264 px on the TV
+ * picker). Brief 5.8 said "profile avatar | ring opacity → 1, `scale(1.035)`"
+ * at `focusOutline`; web differs, and web wins. This is the ONE component
  * in this design system with a genuine focus RING (every content card
  * explicitly has none, brief 5.8's "a lift, not a ring"; the avatar's own
  * table row is the documented exception). The ring is drawn via `.border()`
- * at `activeColors().focusOutline` -- `core/Tokens.ts`'s colour role built
- * for exactly this purpose -- with its alpha animated from `0` at rest to
+ * with its alpha animated from `0` at rest to
  * `1` at full focus. `FOCUS_LIFT.profileAvatar` has no `translateY` (it
  * only ever scales in place, like the primary play action), so only
  * `.scale(...)` is applied alongside the ring. Per `FocusLift.ets`'s own
@@ -55,7 +57,7 @@
 import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../Theme';
 import type { ThemeModeSetting } from '../Theme';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../Motion';
-import { AvatarPresets, Radii } from '../../core/Tokens';
+import { AvatarPresets, BRAND_PINK_SOFT, Radii } from '../../core/Tokens';
 import type { AvatarPreset } from '../../core/Tokens';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from './FocusLift';
 
@@ -74,7 +76,8 @@ const ILLUSTRATION_SLOT_RATIO: number = 0.84;
 /** Brief 5.8's focus ring stroke width. No matching `core/Tokens.ts` field
  * (there is no border-width table) -- same documented-exception pattern as
  * `design/components/AsyncState.ets`'s `SPINNER_BORDER_WIDTH`. */
-const RING_WIDTH: number = 2;
+// Web `.circle-focus-target` on focus: a 3 px brand-pink-soft ring.
+const RING_WIDTH: number = 3;
 
 /** No matching `core/Tokens.ts` field (there is no avatar-diameter token
  * yet) -- same documented exception as this file's other named constants.
@@ -127,6 +130,9 @@ export struct ProfileAvatar {
   /** Called when the avatar is activated (D-pad OK / Enter / tap). Plain
    * (non-reactive) callback field, same pattern as `AsyncState.ets`'s
    * `retry` / `PosterCard.ets`'s `onSelect`. */
+  /** Takes the first D-pad focus (web focuses the current profile on open). */
+  @Prop initialFocus: boolean = false;
+
   onSelect: () => void = () => {};
 
   // Tracked purely to force a re-render when the theme changes; the actual
@@ -208,11 +214,12 @@ export struct ProfileAvatar {
     .clip(true)
     .border({
       width: RING_WIDTH,
-      color: toResourceColorWithAlpha(activeColors().focusOutline, this.ringOpacity()),
+      color: toResourceColorWithAlpha(BRAND_PINK_SOFT, this.ringOpacity()),
       radius: Radii.circleFull,
     })
     .scale({ x: this.avatarScale(), y: this.avatarScale() })
     .focusable(true)
+    .defaultFocus(this.initialFocus)
     .onFocus(() => {
       this.setFocused(true);
     })
