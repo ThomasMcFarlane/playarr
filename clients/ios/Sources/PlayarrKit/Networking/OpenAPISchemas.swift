@@ -572,6 +572,8 @@ public struct Episode: Codable, Identifiable, Hashable, Sendable {
     public var runtimeMinutes: Int32?
     public var monitored: Bool
     public var availability: Availability
+    /// The episode's own artwork (a `thumb` is its still); absent on servers that predate it.
+    public var images: [ImageAsset]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -583,6 +585,7 @@ public struct Episode: Codable, Identifiable, Hashable, Sendable {
         case runtimeMinutes = "runtime_minutes"
         case monitored
         case availability
+        case images
     }
 
     public init(

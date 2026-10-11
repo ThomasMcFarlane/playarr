@@ -540,12 +540,12 @@ struct TVWorkDetailView: View {
         // The focused episode (the next-up one until focus moves) decides which season is scrolled into view.
         let activeID = frozen ? nextUp : (focusedEpisodeID ?? nextUp)
         let activeSeason = ordered.firstIndex { season in season.episodes.contains { $0.episode.id == activeID } } ?? 0
-        let shift = max(0, 410 + CGFloat(activeSeason) * 314.3 + 270 - 1020)
+        let shift = max(0, 358 + CGFloat(activeSeason) * 314.3 + 270 - 1020)
         return ZStack(alignment: .topLeading) {
             TVRailPanelGradient(width: 1190.4)
             Group {
                 ForEach(Array(ordered.enumerated()), id: \.element.season.id) { seasonIndex, season in
-                    let top = 410 + CGFloat(seasonIndex) * 314.3
+                    let top = 358 + CGFloat(seasonIndex) * 314.3
                     railHeading(
                         season.season.title ?? "Season \(season.season.seasonNumber)",
                         count: "\(season.episodes.count) episodes",
@@ -590,8 +590,13 @@ struct TVWorkDetailView: View {
         let code = "S \(String(format: "%02d", season.season.seasonNumber)) \u{00B7} E \(String(format: "%02d", ep.episodeNumber))"
         let card = ZStack(alignment: .topLeading) {
             episodeArt(width: 268, height: 150.8, heavy: selected) {
-                // Web `MediaThumbnailArtwork`: the episode's own frame at 30 s; the series art until it loads.
-                if let mediaFileID = episode.mediaFileID {
+                // Web `MediaThumbnailArtwork`: the episode's still when it has one, else its own frame at 30 s; the
+                // series art until it loads.
+                if ep.images?.contains(where: { $0.kind == .thumb }) == true {
+                    TVAuthedImage(load: {
+                        try await apiClient.fetchEpisodeArtwork(seriesWorkID: detail.work.id, episodeID: ep.id)
+                    }) { TVWorkArt(work: detail.work, apiClient: apiClient) }
+                } else if let mediaFileID = episode.mediaFileID {
                     TVAuthedImage(load: {
                         try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: 30_000)
                     }) { TVWorkArt(work: detail.work, apiClient: apiClient) }

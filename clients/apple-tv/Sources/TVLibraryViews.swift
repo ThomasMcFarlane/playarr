@@ -49,7 +49,8 @@ struct TVHomeView: View {
             )
             .foregroundStyle(DesignTokens.Color.textPrimary)
         case .loaded:
-            if TVParityLaunch.frozen {
+            // Live parity routes (real server data, e.g. the fixture run) capture the production Home.
+            if TVParityLaunch.requestedScreen != nil {
                 parityHomeLoaded(viewModel)
             } else {
                 productionHomeLoaded(viewModel)
