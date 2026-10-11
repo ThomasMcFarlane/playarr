@@ -225,6 +225,7 @@
 
     <Compile Include="Views\CatalogTileFactory.cs" />
     <Compile Include="Views\ShellChrome.cs" />
+    <Compile Include="Views\Ui.cs" />
     <Compile Include="Views\CardFocus.cs" />
 
     <Page Include="Views\ProfilesPage.xaml">
@@ -259,6 +260,13 @@
       <DependentUpon>WorkDetailPage.xaml</DependentUpon>
     </Compile>
 
+    <Page Include="Views\CalendarPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\CalendarPage.xaml.cs">
+      <DependentUpon>CalendarPage.xaml</DependentUpon>
+    </Compile>
     <Page Include="Views\SettingsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

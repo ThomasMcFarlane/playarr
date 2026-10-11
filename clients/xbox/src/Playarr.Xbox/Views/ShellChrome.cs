@@ -81,7 +81,7 @@ namespace Playarr.Xbox.Views
                 Item("", "Playlists", null, null),
                 Item("", "Watchlist", null, null),
                 Item("", "Requests", null, null),
-                Item("", "Calendar", null, null)));
+                Item("", "Calendar", typeof(CalendarPage), null)));
             _chrome.Children.Add(groups);
 
             var avatar = new Border
@@ -176,8 +176,8 @@ namespace Playarr.Xbox.Views
                 FocusVisualPrimaryBrush = new SolidColorBrush(Colors.White),
                 FocusVisualPrimaryThickness = new Thickness(2),
                 FocusVisualSecondaryThickness = new Thickness(0),
-                // shortcut: pages without an Xbox screen yet (Downloads, Playlists, Watchlist, Requests,
-                // Calendar) keep their place in the rail but do nothing; wire them as their screens land.
+                // shortcut: pages without an Xbox screen yet (Downloads, Playlists, Watchlist, Requests)
+                // keep their place in the rail but do nothing; wire them as their screens land.
                 IsTabStop = page != null,
             };
             if (page != null)
