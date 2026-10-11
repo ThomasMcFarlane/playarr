@@ -37,7 +37,7 @@ namespace Playarr.Xbox.Views
                 XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Enabled,
                 TabFocusNavigation = KeyboardNavigationMode.Cycle,
             };
-            var header = new StackPanel { Margin = new Thickness(0, 0, 56, 0) };
+            var header = new StackPanel { Margin = new Thickness(0, 0, 56, 0), VerticalAlignment = VerticalAlignment.Top };
             var eyebrowText = Ui.Text(eyebrow.ToUpperInvariant(), 9, FontWeights.Bold, "PlayarrInkSoft");
             eyebrowText.CharacterSpacing = 120;
             header.Children.Add(eyebrowText);
