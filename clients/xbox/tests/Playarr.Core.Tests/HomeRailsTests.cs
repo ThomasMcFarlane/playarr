@@ -35,5 +35,13 @@ namespace Playarr.Core.Tests
             Assert.Equal(new System.DateTimeOffset(2026, 8, 16, 11, 43, 46, System.TimeSpan.Zero), z!.AddedAt);
             Assert.Equal(new System.DateTimeOffset(2026, 8, 16, 11, 43, 46, 500, System.TimeSpan.Zero), offset!.AddedAt);
         }
+
+        [Fact]
+        public void LibraryTitleOrderIsNaturalAndCaseInsensitive()
+        {
+            var titles = new System.Collections.Generic.List<string> { "10 Test Movie", "2 Test Movie", "test movie b", "Test Movie A", "100 Test Movie" };
+            titles.Sort(WorkLabels.NaturalCompare);
+            Assert.Equal(new[] { "2 Test Movie", "10 Test Movie", "100 Test Movie", "Test Movie A", "test movie b" }, titles);
+        }
     }
 }
