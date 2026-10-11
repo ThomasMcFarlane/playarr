@@ -127,7 +127,11 @@ import type { Choice } from '../design/components/ChoiceSegments';
 import { alphabetFor, firstIndexAtOrAfter, workLetter } from '../core/AlphabetIndex';
 import { Spacing, Radii } from '../core/Tokens';
 
-import { getCatalog, getCatalogKinds } from '../data/CatalogRepository';
+import { getCatalog, getCatalogKinds, listWatchProgress } from '../data/CatalogRepository';
+import { indexWatchProgressByWork, watchMarkFor } from '../core/WatchState';
+import { orderWorks } from '../core/LibraryOrder';
+import type { WatchMark } from '../core/WatchState';
+import type { WatchProgress } from '../core/Types/Playback';
 import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY, LANDSCAPE_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
 
 import { catalogPageSize } from '../core/AppConfig';
@@ -379,6 +383,9 @@ struct LibraryGridCell {
   cardRadius: number = 0;
   /** TV: landscape art and a title-only caption, as web `.tv-title-card`. */
   landscape: boolean = false;
+  /** Web `WatchStateOverlay` (`core/WatchState.ts`); the watch list loads after the cards. */
+  @Prop unseen: boolean = false;
+  @Prop progress: number = -1;
 
   /** Plain (non-reactive) callback field, called with the activated card's
    * `Work.id`. */
@@ -412,6 +419,8 @@ struct LibraryGridCell {
       artworkRadius: this.cardRadius,
       title: this.work.title,
       subtitle: this.landscape ? '' : releaseYearOf(this.work),
+      unseen: this.unseen,
+      progress: this.progress,
       onSelect: () => {
         this.onSelect(this.work.id);
       },
@@ -446,6 +455,8 @@ export struct Library {
   @State private activeLetter: string = '#';
   /** The Filters drawer (web `?panel=filters`). */
   @State private filtersOpen: boolean = false;
+  @State private watchIndex: Map<string, WatchProgress> = new Map<string, WatchProgress>();
+  @State private watchLoaded: boolean = false;
   private gridScroller: Scroller = new Scroller();
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
@@ -460,6 +471,20 @@ export struct Library {
   aboutToAppear(): void {
     this.loadPage(0);
     this.loadNav();
+    this.loadWatchProgress();
+  }
+
+  /** Web Library: the watch list once; until it loads, cards draw no marks. */
+  private async loadWatchProgress(): Promise<void> {
+    const result = await listWatchProgress();
+    if (result.kind === 'ok') {
+      this.watchIndex = indexWatchProgressByWork(result.value);
+      this.watchLoaded = true;
+    }
+  }
+
+  private markFor(work: Work): WatchMark {
+    return watchMarkFor(this.watchIndex.get(work.id), this.watchLoaded);
   }
 
   private setHero(work: Work | undefined): void {
@@ -633,10 +658,11 @@ export struct Library {
       }
       const total = page.total;
       const reachedTotal = total !== null && nextItems.length >= total;
-      this.items = nextItems;
+      // Web re-sorts every loaded title on the client (natural title order), so pages merge in web's order.
+      this.items = orderWorks(nextItems, sortValue, orderValue);
       if (offset === 0) {
         this.total = total !== null ? total : -1;
-        this.setHero(nextItems[0]);
+        this.setHero(this.items[0]);
       }
       this.hasMore = page.items.length >= catalogPageSize && !reachedTotal;
       this.errorMessage = '';
@@ -773,6 +799,8 @@ export struct Library {
                     cardWidth: this.gridCardWidthVp(),
                     cardHeight: this.gridCardHeightVp(),
                     cardRadius: this.gridCardRadiusVp(),
+                    unseen: this.markFor(work).unseen,
+                    progress: this.markFor(work).progress,
                     onSelect: (workId: string) => {
                       this.openDetail(workId);
                     },
@@ -819,6 +847,8 @@ export struct Library {
               cardHeight: tv(TvGeometry.libraryGridCardHeight),
               cardRadius: tv(TvGeometry.libraryGridCardRadius),
               landscape: true,
+              unseen: this.markFor(work).unseen,
+              progress: this.markFor(work).progress,
               onSelect: (workId: string) => {
                 this.openDetail(workId);
               },
