@@ -86,6 +86,7 @@ namespace Playarr.Core.Networking
                     {
                         var rotated = await RefreshAsync(
                             existing.RefreshToken.ExposeSecret(),
+                            JwtClaims.DeviceId(existing.AccessToken.ExposeSecret()) ?? _configuration.DeviceId,
                             baseUrl,
                             cancellationToken).ConfigureAwait(false);
                         await _tokenStore.StoreSessionAsync(rotated, cancellationToken).ConfigureAwait(false);
@@ -193,12 +194,13 @@ namespace Playarr.Core.Networking
 
         private async Task<StoredAuthSession> RefreshAsync(
             string refreshToken,
+            Guid deviceId,
             Uri baseUrl,
             CancellationToken cancellationToken)
         {
             var body = new RefreshRequest
             {
-                DeviceId = _configuration.DeviceId,
+                DeviceId = deviceId,
                 RefreshToken = refreshToken,
             };
 

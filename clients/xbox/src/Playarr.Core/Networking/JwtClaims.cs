@@ -43,6 +43,12 @@ namespace Playarr.Core.Networking
         /// </remarks>
         public static Guid? IssuerPeerId(string? accessToken) => ClaimAsGuid(accessToken, "iss");
 
+        /// <summary>
+        /// The device the session is bound to. A device-flow session gets a server-assigned device id, so refreshing
+        /// it must send this id, not the client's own (the server answers 401 otherwise).
+        /// </summary>
+        public static Guid? DeviceId(string? accessToken) => ClaimAsGuid(accessToken, "device_id");
+
         private static Guid? ClaimAsGuid(string? token, string claim)
         {
             if (string.IsNullOrEmpty(token))
