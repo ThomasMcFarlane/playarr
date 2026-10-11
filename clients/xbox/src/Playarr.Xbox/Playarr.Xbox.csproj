@@ -225,6 +225,7 @@
 
     <Compile Include="Views\CatalogTileFactory.cs" />
     <Compile Include="Views\ShellChrome.cs" />
+    <Compile Include="Views\CardFocus.cs" />
 
     <Page Include="Views\ProfilesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
