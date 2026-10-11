@@ -8,7 +8,7 @@
  * use). The other web sections land with 13.10018's later steps.
  */
 
-import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
+import { activeColors, setThemeModeSetting, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
 import type { ThemeModeSetting } from '../design/Theme';
 import { tv, TvGeometry } from '../design/Metrics';
 import { NavRail } from '../design/components/NavRail';
@@ -135,6 +135,7 @@ export struct SettingsScreen {
       large: true,
       sectionWidth: PANEL_WIDTH,
       onChoose: (value: string) => {
+        setThemeModeSetting(value as ThemeModeSetting);
         saveThemeChoice(value as ThemeModeSetting);
       },
     })

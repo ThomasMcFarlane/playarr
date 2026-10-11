@@ -56,7 +56,6 @@ import { DeviceProfile } from './core/DeviceProfile.ts';
 
 import { getThemeOverride, initSettingsStore, setThemeOverride } from './auth/SettingsStore';
 import type { ThemeOverride } from './auth/SettingsStore';
-import { setThemeModeSetting } from './design/Theme';
 import { ServerDirectory } from './auth/ServerDirectory';
 import { SessionManager } from './auth/SessionManager';
 import { PlayarrClient } from './net/PlayarrClient';
@@ -105,8 +104,6 @@ export async function bootstrapAppContainer(context: common.Context, windowStage
 
   await directory.initialize();
   await session.initialize();
-  // The theme choice persists (web keeps it in storage); restore it before pages render with the default.
-  setThemeModeSetting(await getThemeOverride());
   session.startProactiveRefreshTimer();
 }
 
@@ -139,9 +136,14 @@ export function getDeviceAuthService(): DeviceAuthService {
   return requireInstance(deviceAuthServiceInstance, 'getDeviceAuthService');
 }
 
-/** Settings > Appearance > Colour theme: apply at once and keep it for the next start. Pages may not import
- * `auth/`, so the persistence goes through here. */
+/** Settings > Appearance > Colour theme, kept for the next start (web keeps it in storage). Pages may not
+ * import `auth/`, so the persistence goes through here. This module must not import `design/Theme`: it loads
+ * before the UI exists, and Theme's `Environment.envProp` would then miss the live colour mode. */
 export async function saveThemeChoice(mode: ThemeOverride): Promise<void> {
-  setThemeModeSetting(mode);
   await setThemeOverride(mode);
+}
+
+/** The saved colour theme choice (`'system'` until one is saved). */
+export function savedThemeChoice(): Promise<ThemeOverride> {
+  return getThemeOverride();
 }
