@@ -65,6 +65,7 @@ namespace Playarr.Xbox.Views
             if (ChromePanel.Visibility != Visibility.Visible)
             {
                 ChromePanel.Visibility = Visibility.Visible;
+                AnimateScrim(Scrim.Height, 0, null);
                 PlayPauseButton.Focus(FocusState.Programmatic);
             }
 
@@ -75,10 +76,32 @@ namespace Playarr.Xbox.Views
         private void HideChrome()
         {
             _chromeHide.Stop();
-            if (TracksPanel.Visibility != Visibility.Visible)
+            if (TracksPanel.Visibility != Visibility.Visible && ChromePanel.Visibility == Visibility.Visible)
             {
-                ChromePanel.Visibility = Visibility.Collapsed;
+                AnimateScrim(0, Scrim.Height, () => ChromePanel.Visibility = Visibility.Collapsed);
             }
+        }
+
+        /// <summary>240 ms ease, as the web's .player-scrim transition.</summary>
+        private void AnimateScrim(double from, double to, Action? done)
+        {
+            var animation = new Windows.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                From = from,
+                To = to,
+                Duration = TimeSpan.FromMilliseconds(240),
+                EasingFunction = new Windows.UI.Xaml.Media.Animation.QuadraticEase(),
+            };
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(animation, ScrimMove);
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(animation, "Y");
+            var story = new Windows.UI.Xaml.Media.Animation.Storyboard();
+            story.Children.Add(animation);
+            if (done != null)
+            {
+                story.Completed += (s, e) => done();
+            }
+
+            story.Begin();
         }
 
         private void UpdateChrome()
