@@ -119,6 +119,13 @@ namespace Playarr.Xbox
         /// </summary>
         private void OnBackRequested(object sender, BackRequestedEventArgs e)
         {
+            // An open drawer closes first, one level per press (owner rule).
+            if (Views.Drawer.TryCloseCurrent())
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (RootFrame is { Content: Views.PlayerPage player } && player.TryHandleBack())
             {
                 e.Handled = true;

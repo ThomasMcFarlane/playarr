@@ -33,6 +33,29 @@
             </Rectangle.Fill>
         </Rectangle>
 
+        <!-- Shell action column: Filters (web .tv-filter-launcher tile). -->
+        <Button
+            x:Name="FiltersButton"
+            Width="58"
+            Height="70"
+            Margin="0,152,14,0"
+            Padding="0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            CornerRadius="12"
+            Background="{StaticResource PlayarrSurface}"
+            BorderBrush="{StaticResource PlayarrLine}"
+            BorderThickness="1"
+            FocusVisualPrimaryBrush="White"
+            FocusVisualPrimaryThickness="3"
+            FocusVisualSecondaryThickness="0"
+            Click="FiltersButton_Click">
+            <StackPanel Spacing="8">
+                <FontIcon Glyph="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="15" />
+                <TextBlock Text="Filters" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Button>
+
         <!-- Web A-Z jump rail at the right edge. -->
         <StackPanel x:Name="LetterRail" Width="40" Margin="0,280,21,0" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="0" />
 

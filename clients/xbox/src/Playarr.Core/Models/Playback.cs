@@ -139,5 +139,8 @@ namespace Playarr.Core.Models
         [JsonProperty("position_ms")] public long PositionMs { get; set; }
 
         [JsonProperty("duration_ms")] public long DurationMs { get; set; }
+
+        /// <summary>Marks the file watched (true) or unwatched (false); omitted for ordinary progress reports.</summary>
+        [JsonProperty("completed")] public bool? Completed { get; set; }
     }
 }

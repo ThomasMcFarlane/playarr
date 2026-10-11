@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.ComponentModel;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -93,6 +94,7 @@ namespace Playarr.Xbox.Views
             list.ItemContainerStyle = CatalogTileFactory.CardContainerStyle;
             list.ItemClick += RailItem_Click;
             CardFocus.Attach(list);
+            CardActions.Attach(list, id => rail.Items.FirstOrDefault(w => w.Id == id));
             list.GotFocus += (s, e) =>
             {
                 if (e.OriginalSource is ListViewItem { Content: FrameworkElement { Tag: Guid id } })

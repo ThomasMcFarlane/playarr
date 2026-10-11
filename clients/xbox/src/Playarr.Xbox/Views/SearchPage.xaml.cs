@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.ComponentModel;
 using Windows.System;
 using Windows.UI.Xaml;
@@ -30,6 +31,7 @@ namespace Playarr.Xbox.Views
             InitializeComponent();
             ResultsGrid.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
             CardFocus.Attach(ResultsGrid);
+            CardActions.Attach(ResultsGrid, id => _viewModel.Results.FirstOrDefault(w => w.Id == id));
             _viewModel = new SearchViewModel(App.Environment);
         }
 
