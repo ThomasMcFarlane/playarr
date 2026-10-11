@@ -117,7 +117,7 @@ import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
 import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
-import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { buildNavRailItems, buildPrimaryNavItems, buildSecondaryNavItems, navigateFromRail } from '../navigation/NavItems';
 import { titleCountLabel } from '../core/CountFormat';
 import { AlphabetRail } from '../design/components/AlphabetRail';
 import { ActionTile } from '../design/components/ActionTile';
@@ -136,7 +136,7 @@ import type { Work } from '../core/Types/Work';
 
 import { ROUTES } from '../navigation/Routes';
 import type { LibraryRouteParams, DetailRouteParams } from '../navigation/Routes';
-import { getNavStack, pushRoute, popRoute, replaceRoute } from '../navigation/NavStack';
+import { getNavStack, pushRoute, popRoute } from '../navigation/NavStack';
 
 import { logWarn } from '../util/Log';
 
@@ -513,20 +513,9 @@ export struct Library {
   }
 
   private handleNavSelect(id: string): void {
-    if (id === this.kind) {
-      return;
-    }
-    if (id === HOME_NAV_ID) {
-      popRoute(getNavStack());
-      return;
-    }
-    if (id === CALENDAR_NAV_ID) {
-      replaceRoute(getNavStack(), ROUTES.Calendar);
-      return;
-    }
-    const params: LibraryRouteParams = { kind: id };
-    replaceRoute(getNavStack(), ROUTES.Library, params);
+    navigateFromRail(id, this.kind);
   }
+
 
   private availableGridWidthVp(): number {
     const measured = this.measuredWidthVp > 0
@@ -880,6 +869,7 @@ export struct Library {
       if (this.navItems.length > 0) {
         NavRail({
           items: this.navItems,
+          primaryItems: buildPrimaryNavItems(),
           secondaryItems: buildSecondaryNavItems(),
           selectedId: this.kind,
           onSelect: (id: string): void => {
