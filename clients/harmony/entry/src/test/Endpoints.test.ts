@@ -26,6 +26,9 @@ import {
   catalogKindsUrl,
   homeRailsUrl,
   calendarUrl,
+  watchlistUrl,
+  watchlistItemUrl,
+  discoverResolveUrl,
   catalogSearchUrl,
   catalogDetailUrl,
   catalogSimilarUrl,
@@ -109,6 +112,9 @@ describe('Endpoints - 4.8 catalog', () => {
     assert.equal(catalogKindsUrl(), '/api/v1/catalog/kinds');
     assert.equal(homeRailsUrl(), '/api/v1/home/rails');
     assert.equal(calendarUrl('2026-10-10', '2026-11-10'), '/api/v1/calendar?start=2026-10-10&end=2026-11-10');
+    assert.equal(watchlistUrl(), '/api/v1/watchlist');
+    assert.equal(watchlistItemUrl('movie:abc'), '/api/v1/watchlist/movie%3Aabc');
+    assert.equal(discoverResolveUrl(), '/api/v1/discover/resolve');
   });
 
   it('catalogSearchUrl (query string is left to the caller)', () => {

@@ -66,6 +66,21 @@ export function catalogUrl(): string {
   return "/api/v1/catalog";
 }
 
+/** `POST /api/v1/watchlist` (add a title snapshot). */
+export function watchlistUrl(): string {
+  return "/api/v1/watchlist";
+}
+
+/** `DELETE /api/v1/watchlist/{title_key}`. */
+export function watchlistItemUrl(titleKey: string): string {
+  return `/api/v1/watchlist/${encodeURIComponent(titleKey)}`;
+}
+
+/** `POST /api/v1/discover/resolve`: a title snapshot resolved for the caller (its `title_key`). */
+export function discoverResolveUrl(): string {
+  return "/api/v1/discover/resolve";
+}
+
 /** `GET /api/v1/calendar?start=&end=` (inclusive UTC days, at most 92 apart). */
 export function calendarUrl(start: string, end: string): string {
   return `/api/v1/calendar?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
