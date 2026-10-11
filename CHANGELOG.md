@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- On-demand HLS audio is folded onto 5.1, stereo or mono before AAC encoding: a DTS 5.1(side) or 7.1 source produced AAC with channel configuration 0, which Android TV failed to decode after the transcode fallback and Chrome rejected (20.260).
 - Fire TV: fixed a render loop in the nav rail that froze the remote on Home; a direction key with nothing focused lands on the page default (the selected Home card) before the rail; the profile list retries silently after a network blip; balanced titles stop after a few layout passes (18.462).
 - Samsung Tizen and LG webOS: external links (for example the platform guides on the Clients page) open in the TV's browser instead of replacing Playarr with the web page and leaving no way back. Tizen asks for the `application.launch` privilege for this.
 - On-demand HLS now copies the source video (encoding only the audio) whenever the client can play the video codec at original quality, so a 1080p H.264 Matroska file in a browser is remuxed instead of re-encoded in real time; the re-encode missed the first-segment wait and played nothing (20.260).

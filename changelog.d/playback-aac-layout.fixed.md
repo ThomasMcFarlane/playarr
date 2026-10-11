@@ -1,1 +1,0 @@
-- On-demand HLS audio is folded onto 5.1, stereo or mono before AAC encoding: a DTS 5.1(side) or 7.1 source produced AAC with channel configuration 0, which Android TV failed to decode after the transcode fallback and Chrome rejected (20.260).
