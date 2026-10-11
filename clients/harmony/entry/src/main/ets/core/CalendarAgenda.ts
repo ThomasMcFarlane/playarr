@@ -79,7 +79,9 @@ export function compareEntries(a: CalendarEntry, b: CalendarEntry): number {
   if (ak !== bk) {
     return ak < bk ? -1 : 1;
   }
-  const title = compareText(a.title, b.title);
+  // Web uses `localeCompare`: case-insensitive first ("Family Guy" before "FBI"), then exact.
+  const folded = compareText(a.title.toLowerCase(), b.title.toLowerCase());
+  const title = folded !== 0 ? folded : compareText(a.title, b.title);
   if (title !== 0) {
     return title;
   }
@@ -231,4 +233,125 @@ export function agendaRangeLabel(start: string): string {
     return `${from.getUTCDate()} – ${to.getUTCDate()} ${MONTHS_SHORT[to.getUTCMonth()]}`;
   }
   return `${from.getUTCDate()} ${MONTHS_SHORT[from.getUTCMonth()]} – ${to.getUTCDate()} ${MONTHS_SHORT[to.getUTCMonth()]}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Week and month views (web `visibleRange`, `startOfWeek`, `buildMonthGrid`, `buildWeekDays`, `shiftAnchor`).
+// ---------------------------------------------------------------------------------------------------------
+
+export type CalendarView = "agenda" | "week" | "month";
+
+/** en-GB weeks start on Monday (web `weekStartsOn` for the TV locale). */
+export const FIRST_DAY_OF_WEEK = 1;
+
+export function startOfWeek(day: string, firstDay: number): string {
+  const weekday = parseDay(day).getUTCDay();
+  return addDays(day, -((weekday - firstDay + 7) % 7));
+}
+
+export function startOfMonth(day: string): string {
+  return day.slice(0, 8) + "01";
+}
+
+/** Adds calendar months, clamping the day of month. */
+export function addMonths(day: string, count: number): string {
+  const date = parseDay(day);
+  const dayOfMonth = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + count);
+  const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(dayOfMonth, last));
+  return formatDay(date);
+}
+
+export interface DayRange {
+  start: string;
+  end: string;
+}
+
+/** The local days a view shows for an anchor day. */
+export function visibleRange(view: CalendarView, anchor: string): DayRange {
+  if (view === "month") {
+    const start = startOfWeek(startOfMonth(anchor), FIRST_DAY_OF_WEEK);
+    const monthEnd = addDays(addMonths(startOfMonth(anchor), 1), -1);
+    return { start: start, end: addDays(startOfWeek(monthEnd, FIRST_DAY_OF_WEEK), 6) };
+  }
+  if (view === "week") {
+    const start = startOfWeek(anchor, FIRST_DAY_OF_WEEK);
+    return { start: start, end: addDays(start, 6) };
+  }
+  return { start: anchor, end: addDays(anchor, AGENDA_DAYS - 1) };
+}
+
+/** One page back (-1) or forward (1). */
+export function shiftAnchor(view: CalendarView, anchor: string, direction: number): string {
+  if (view === "month") {
+    return addMonths(startOfMonth(anchor), direction);
+  }
+  return addDays(anchor, (view === "week" ? 7 : AGENDA_DAYS) * direction);
+}
+
+/** The range button text: "11 Oct – 9 Nov" (agenda), "5 – 11 Oct" (week), "Oct 2026" (month). */
+export function rangeLabel(view: CalendarView, anchor: string): string {
+  if (view === "month") {
+    const date = parseDay(startOfMonth(anchor));
+    return `${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  }
+  const range = visibleRange(view, anchor);
+  const from = parseDay(range.start);
+  const to = parseDay(range.end);
+  if (from.getUTCMonth() === to.getUTCMonth() && from.getUTCFullYear() === to.getUTCFullYear()) {
+    return `${from.getUTCDate()} – ${to.getUTCDate()} ${MONTHS_SHORT[to.getUTCMonth()]}`;
+  }
+  return `${from.getUTCDate()} ${MONTHS_SHORT[from.getUTCMonth()]} – ${to.getUTCDate()} ${MONTHS_SHORT[to.getUTCMonth()]}`;
+}
+
+export interface CalendarCell {
+  day: string;
+  inMonth: boolean;
+  isToday: boolean;
+  entries: CalendarEntry[];
+}
+
+function entriesFor(groups: DayGroup[], day: string): CalendarEntry[] {
+  for (const group of groups) {
+    if (group.day === day) {
+      return group.entries;
+    }
+  }
+  return [];
+}
+
+/** Rows of seven cells covering the month view's range. */
+export function buildMonthGrid(anchor: string, groups: DayGroup[], today: string): CalendarCell[][] {
+  const range = visibleRange("month", anchor);
+  const month = anchor.slice(0, 7);
+  const weeks: CalendarCell[][] = [];
+  for (let day = range.start; day <= range.end; day = addDays(day, 7)) {
+    const week: CalendarCell[] = [];
+    for (let i = 0; i < 7; i++) {
+      const cellDay = addDays(day, i);
+      week.push({ day: cellDay, inMonth: cellDay.startsWith(month), isToday: cellDay === today,
+        entries: entriesFor(groups, cellDay) });
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+/** The seven days of the week view, empty ones included. */
+export function buildWeekDays(anchor: string, groups: DayGroup[], today: string): CalendarCell[] {
+  const start = visibleRange("week", anchor).start;
+  const days: CalendarCell[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(start, i);
+    days.push({ day: day, inMonth: true, isToday: day === today, entries: entriesFor(groups, day) });
+  }
+  return days;
+}
+
+export const WEEKDAY_SHORT: string[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function dayOfMonth(day: string): number {
+  return parseDay(day).getUTCDate();
 }

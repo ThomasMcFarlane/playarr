@@ -29,6 +29,7 @@ test("all-day entries sort first, then by title", () => {
   const allDay = entry({ id: "b", title: "Zulu" });
   assert.ok(compareEntries(allDay, timed) < 0);
   assert.ok(compareEntries(entry({ title: "A" }), entry({ title: "B" })) < 0);
+  assert.ok(compareEntries(entry({ title: "Family Guy" }), entry({ title: "FBI" })) < 0);
 });
 
 test("groups by day within the range, ascending", () => {
@@ -54,4 +55,32 @@ test("labels match web", () => {
   assert.equal(agendaRangeLabel("2026-10-11"), "11 Oct – 9 Nov");
   assert.equal(agendaRangeLabel("2026-10-01"), "1 – 30 Oct");
   assert.equal(entryWhenLabel(entry({ date: "2026-10-11" })), "Sunday, 11 October 2026");
+});
+
+import {
+  buildMonthGrid, buildWeekDays, rangeLabel, shiftAnchor, startOfWeek, visibleRange,
+} from "../main/ets/core/CalendarAgenda";
+
+test("weeks start on Monday", () => {
+  assert.equal(startOfWeek("2026-10-11", 1), "2026-10-05");
+  assert.equal(startOfWeek("2026-10-05", 1), "2026-10-05");
+});
+
+test("view ranges and paging match web", () => {
+  assert.deepEqual(visibleRange("week", "2026-10-11"), { start: "2026-10-05", end: "2026-10-11" });
+  assert.deepEqual(visibleRange("month", "2026-10-11"), { start: "2026-09-28", end: "2026-11-01" });
+  assert.equal(shiftAnchor("month", "2026-10-11", 1), "2026-11-01");
+  assert.equal(shiftAnchor("week", "2026-10-11", -1), "2026-10-04");
+  assert.equal(rangeLabel("week", "2026-10-11"), "5 – 11 Oct");
+  assert.equal(rangeLabel("month", "2026-10-11"), "Oct 2026");
+  assert.equal(rangeLabel("agenda", "2026-10-11"), "11 Oct – 9 Nov");
+});
+
+test("month grid is whole weeks; week has seven days", () => {
+  const grid = buildMonthGrid("2026-10-11", [], "2026-10-11");
+  assert.equal(grid.length, 5);
+  assert.equal(grid[0][0].day, "2026-09-28");
+  assert.equal(grid[0][0].inMonth, false);
+  assert.equal(grid[1][6].isToday, true);
+  assert.equal(buildWeekDays("2026-10-11", [], "2026-10-11").length, 7);
 });

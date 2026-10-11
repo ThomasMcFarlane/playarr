@@ -1,14 +1,21 @@
 /**
- * The release calendar, TV agenda view (web `pages/Calendar.tsx`, which TV opens on the agenda): 30 days from
- * today grouped by local day, each entry a card whose left border shows availability (have it versus not,
- * never the library), and a details panel on the left that follows focus. Previous/Today/Next page by 30
- * days, as web. Rules live in `core/CalendarAgenda.ts`; geometry copies the live web TV DOM at 1920x1080.
+ * The release calendar (web `pages/Calendar.tsx`). TV opens on the agenda: 30 days from today grouped by local
+ * day, each entry a card whose left border shows availability (have it versus not, never the library), with a
+ * details panel on the left that follows focus. The Filters drawer switches to the week view (seven day
+ * columns) or the month view (a grid of whole weeks with one line per entry). Previous/Today/Next page by
+ * the view's period, as web. Rules live in `core/CalendarAgenda.ts`; geometry copies the live web TV DOM.
  *
- * Not yet here (13.10016): the month and week views and the range picker, the Filters and Calendar link
- * tiles (13.10019), the details panel's actions.
+ * Not yet here (13.10016): the range picker, series-per-day grouping, type/status filters, the details
+ * panel's actions and the Calendar link tile.
  */
 
 import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
+import { ActionTile } from '../design/components/ActionTile';
+import { Drawer } from '../design/components/Drawer';
+import { ChoiceSegments } from '../design/components/ChoiceSegments';
+import type { Choice } from '../design/components/ChoiceSegments';
+import { BRAND_PINK } from '../core/Tokens';
+import type { RgbaColor } from '../core/Tokens';
 import type { ThemeModeSetting } from '../design/Theme';
 import { tv, TvGeometry } from '../design/Metrics';
 import { Stage } from '../design/components/Stage';
@@ -22,10 +29,16 @@ import { getCatalogKinds } from '../data/CatalogRepository';
 import { getCalendar } from '../data/CalendarRepository';
 
 import {
-  AGENDA_DAYS,
   addDays,
-  agendaRangeLabel,
+  buildMonthGrid,
+  buildWeekDays,
   dayHeading,
+  dayOfMonth,
+  rangeLabel,
+  shiftAnchor,
+  startOfMonth,
+  visibleRange,
+  WEEKDAY_SHORT,
   entryAvailable,
   entryPillTone,
   entrySubtitle,
@@ -37,7 +50,7 @@ import {
   pillLabel,
   releaseTypeLabel,
 } from '../core/CalendarAgenda';
-import type { DayGroup, EntryPillTone } from '../core/CalendarAgenda';
+import type { CalendarCell, CalendarView, DayGroup, EntryPillTone } from '../core/CalendarAgenda';
 import type { CalendarEntry } from '../core/Types/Calendar';
 
 import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
@@ -90,32 +103,44 @@ const OVERVIEW_LINE_HEIGHT: number = 22;
 const OVERVIEW_MAX_LINES: number = 5;
 const OVERVIEW_WIDTH: number = 348;
 
-const SUCCESS: string = 'rgba(57, 181, 120, 1)';
+// Web `.calendar-days-week` and `.calendar-month`: from (154, 174), 1663 wide, 787 high.
+const GRID_LEFT: number = 154;
+const GRID_TOP: number = 174;
+const GRID_WIDTH: number = 1663;
+const GRID_HEIGHT: number = 787;
+const WEEK_COLUMN_WIDTH: number = 440;
+const WEEK_COLUMN_GAP: number = 20;
+const WEEK_HEADING_HEIGHT: number = 28;
+const WEEK_HEADING_GAP: number = 6;
+const MONTH_HEAD_HEIGHT: number = 31;
+const MONTH_WEEKDAY_SIZE: number = 12;
+const MONTH_LINE_HEIGHT: number = 25;
+const MONTH_LINE_SIZE: number = 12.48;
+const MONTH_DOT_SIZE: number = 9;
+const MONTH_FOOT_HEIGHT: number = 44;
+const MONTH_CELL_PADDING: number = 5;
+const MONTH_DAY_SIZE: number = 12.8;
 
-function pillToneColor(tone: EntryPillTone): string {
-  if (tone === 'available') {
-    return SUCCESS;
-  }
-  if (tone === 'upcoming') {
-    return 'rgba(207, 49, 87, 1)';
-  }
-  if (tone === 'missing') {
-    return 'rgba(220, 80, 80, 1)';
-  }
-  return 'rgba(194, 181, 187, 1)';
+const VIEW_CHOICES: Choice[] = [
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+];
+
+/** ForEach key: the day plus its entries, so a cell is rebuilt when its entries change. */
+function cellKey(cell: CalendarCell): string {
+  return cell.day + ':' + cell.entries.map((entry: CalendarEntry): string => entry.id).join(',');
 }
 
-function pillToneFill(tone: EntryPillTone): string {
+/** Web `.status-pill` / `.calendar-dot` tones. */
+function toneColor(tone: EntryPillTone): RgbaColor {
   if (tone === 'available') {
-    return 'rgba(42, 52, 46, 1)';
+    return activeColors().success;
   }
   if (tone === 'upcoming') {
-    return 'rgba(52, 28, 35, 1)';
+    return BRAND_PINK;
   }
-  if (tone === 'missing') {
-    return 'rgba(57, 44, 47, 1)';
-  }
-  return 'rgba(48, 44, 47, 1)';
+  return tone === 'missing' ? activeColors().danger : activeColors().inkSoft;
 }
 
 @Component
@@ -125,7 +150,9 @@ export struct ReleaseCalendar {
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
   @State private today: string = localDayOf(new Date());
-  @State private start: string = localDayOf(new Date());
+  @State private anchor: string = localDayOf(new Date());
+  @State private view: CalendarView = 'agenda';
+  @State private filtersOpen: boolean = false;
   @State private groups: DayGroup[] = [];
   @State private selected: CalendarEntry | undefined = undefined;
   @State private loading: boolean = true;
@@ -144,11 +171,11 @@ export struct ReleaseCalendar {
 
   private async load(): Promise<void> {
     this.loading = true;
-    const end = addDays(this.start, AGENDA_DAYS - 1);
+    const range = visibleRange(this.view, this.anchor);
     // Entries are bucketed by local day, up to a day either side of UTC: pad the window by a day.
-    const result = await getCalendar(addDays(this.start, -1), addDays(end, 1));
+    const result = await getCalendar(addDays(range.start, -1), addDays(range.end, 1));
     if (result.kind === 'ok') {
-      this.groups = groupByLocalDay(result.value.entries, this.start, end);
+      this.groups = groupByLocalDay(result.value.entries, range.start, range.end);
       this.selected = this.groups.length > 0 ? this.groups[0].entries[0] : undefined;
       this.errorMessage = '';
     } else {
@@ -160,7 +187,17 @@ export struct ReleaseCalendar {
   }
 
   private page(direction: number): void {
-    this.start = direction === 0 ? this.today : addDays(this.start, AGENDA_DAYS * direction);
+    this.anchor = direction === 0 ? this.today : shiftAnchor(this.view, this.anchor, direction);
+    this.load();
+  }
+
+  private changeView(view: string): void {
+    const next = view as CalendarView;
+    if (next === this.view) {
+      return;
+    }
+    this.view = next;
+    this.anchor = next === 'month' ? startOfMonth(this.anchor) : this.anchor;
     this.load();
   }
 
@@ -193,12 +230,12 @@ export struct ReleaseCalendar {
       .height(tv(PILL_HEIGHT))
       .padding({ left: tv(PILL_PADDING_H), right: tv(PILL_PADDING_H) })
       .borderRadius(tv(PILL_HEIGHT / 2))
-      .backgroundColor(pillToneFill(tone))
-      .border({ width: 1, color: pillToneColor(tone) })
+      .backgroundColor(toResourceColorWithAlpha(toneColor(tone), 0.14))
+      .border({ width: 1, color: toResourceColorWithAlpha(toneColor(tone), 0.6) })
   }
 
   @Builder
-  private entryCard(entry: CalendarEntry): void {
+  private entryCard(entry: CalendarEntry, width: number): void {
     Row({ space: tv(POSTER_GAP) }) {
       Image(entry.poster_url !== undefined && entry.poster_url !== null ? entry.poster_url : '')
         .width(tv(POSTER_WIDTH))
@@ -229,7 +266,7 @@ export struct ReleaseCalendar {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
     }
-    .width(tv(LIST_WIDTH))
+    .width(tv(width))
     .height(tv(ENTRY_HEIGHT))
     .padding({ left: tv(ENTRY_PADDING_LEFT) })
     .borderRadius(tv(ENTRY_RADIUS))
@@ -237,7 +274,7 @@ export struct ReleaseCalendar {
     .border({
       width: { left: tv(ENTRY_EDGE), top: 1, right: 1, bottom: 1 },
       color: {
-        left: entryAvailable(entry) ? SUCCESS : toResourceColor(activeColors().inkMuted),
+        left: toResourceColor(entryAvailable(entry) ? activeColors().success : activeColors().inkMuted),
         top: toResourceColorWithAlpha(activeColors().ink, 0.08),
         right: toResourceColorWithAlpha(activeColors().ink, 0.08),
         bottom: toResourceColorWithAlpha(activeColors().ink, 0.08),
@@ -301,14 +338,14 @@ export struct ReleaseCalendar {
               this.dayHeader(group.day)
               Column({ space: tv(ENTRY_GAP) }) {
                 ForEach(group.entries, (entry: CalendarEntry) => {
-                  this.entryCard(entry)
+                  this.entryCard(entry, LIST_WIDTH)
                 }, (entry: CalendarEntry): string => entry.id)
               }
               .margin({ top: tv(DAY_HEADING_GAP - ENTRY_GAP) })
             }
             .alignItems(HorizontalAlign.Start)
           }
-        }, (group: DayGroup): string => group.day)
+        }, (group: DayGroup): string => group.day + ':' + group.entries.map((entry: CalendarEntry): string => entry.id).join(','))
       }
       .width(tv(LIST_WIDTH))
       .height('100%')
@@ -317,6 +354,140 @@ export struct ReleaseCalendar {
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
     }
+  }
+
+  @Builder
+  private weekView(): void {
+    Scroll() {
+      Row({ space: tv(WEEK_COLUMN_GAP) }) {
+        ForEach(buildWeekDays(this.anchor, this.groups, this.today), (cell: CalendarCell) => {
+          Column({ space: tv(WEEK_HEADING_GAP) }) {
+            Text(dayHeading(cell.day))
+              .fontSize(tv(DAY_HEADING_SIZE))
+              .fontWeight(FontWeight.Medium)
+              .fontColor(toResourceColor(activeColors().ink))
+              .height(tv(WEEK_HEADING_HEIGHT))
+            Scroll() {
+              Column({ space: tv(ENTRY_GAP + 1) }) {
+                ForEach(cell.entries, (entry: CalendarEntry) => {
+                  this.entryCard(entry, WEEK_COLUMN_WIDTH)
+                }, (entry: CalendarEntry): string => entry.id)
+              }
+            }
+            .layoutWeight(1)
+            .align(Alignment.Top)
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.None)
+          }
+          .width(tv(WEEK_COLUMN_WIDTH))
+          .height('100%')
+          .alignItems(HorizontalAlign.Start)
+        }, (cell: CalendarCell): string => cellKey(cell))
+      }
+      .height('100%')
+    }
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
+    .align(Alignment.TopStart)
+    .width(tv(GRID_WIDTH))
+    .height(tv(GRID_HEIGHT))
+    .position({ x: tv(GRID_LEFT), y: tv(GRID_TOP) })
+  }
+
+  @Builder
+  private monthCell(cell: CalendarCell, cellHeight: number): void {
+    Column() {
+      Column() {
+        ForEach(cell.entries.slice(0, this.monthLinesFor(cellHeight)), (entry: CalendarEntry) => {
+          Row({ space: tv(7) }) {
+            Circle()
+              .width(tv(MONTH_DOT_SIZE))
+              .height(tv(MONTH_DOT_SIZE))
+              .fill(toResourceColor(toneColor(entryPillTone(entry, this.today))))
+            Text(entry.title)
+              .fontSize(tv(MONTH_LINE_SIZE))
+              .fontColor(toResourceColor(activeColors().ink))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
+          .height(tv(MONTH_LINE_HEIGHT))
+          .width('100%')
+          .padding({ left: tv(6) })
+        }, (entry: CalendarEntry): string => entry.id)
+      }
+      .layoutWeight(1)
+      .width('100%')
+      Row({ space: tv(6) }) {
+        Text(String(dayOfMonth(cell.day)))
+          .fontSize(tv(MONTH_DAY_SIZE))
+          .fontWeight(FontWeight.Medium)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+        if (cell.entries.length > this.monthLinesFor(cellHeight)) {
+          Text(`+${cell.entries.length - this.monthLinesFor(cellHeight)} more`)
+            .fontSize(tv(MONTH_LINE_SIZE))
+            .fontColor(toResourceColor(activeColors().inkSoft))
+        }
+      }
+      .height(tv(MONTH_FOOT_HEIGHT))
+      .width('100%')
+      .padding({ left: tv(6) })
+    }
+    .layoutWeight(1)
+    .height(tv(cellHeight))
+    .padding({ left: tv(MONTH_CELL_PADDING), right: tv(MONTH_CELL_PADDING), top: tv(2) })
+    .backgroundColor(cell.inMonth ? Color.Transparent : toResourceColorWithAlpha(activeColors().surfaceSoft, 0.4))
+    .border({
+      width: cell.isToday ? 2 : 1,
+      color: cell.isToday ? toResourceColor(activeColors().ink) : toResourceColor(activeColors().line),
+    })
+  }
+
+  private monthLinesFor(cellHeight: number): number {
+    return Math.max(1, Math.floor((cellHeight - MONTH_FOOT_HEIGHT - 2) / MONTH_LINE_HEIGHT));
+  }
+
+  @Builder
+  private monthView(): void {
+    Column() {
+      Row() {
+        ForEach(WEEKDAY_SHORT, (name: string) => {
+          Text(name)
+            .fontSize(tv(MONTH_WEEKDAY_SIZE))
+            .letterSpacing(tv(0.96))
+            .textCase(TextCase.UpperCase)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+        }, (name: string): string => name)
+      }
+      .width('100%')
+      .height(tv(MONTH_HEAD_HEIGHT))
+      ForEach(buildMonthGrid(this.anchor, this.groups, this.today), (week: CalendarCell[]) => {
+        Row() {
+          ForEach(week, (cell: CalendarCell) => {
+            this.monthCell(cell, (GRID_HEIGHT - MONTH_HEAD_HEIGHT) / buildMonthGrid(this.anchor, [], this.today).length)
+          }, (cell: CalendarCell): string => cellKey(cell))
+        }
+        .width('100%')
+      }, (week: CalendarCell[]): string => week.map((cell: CalendarCell): string => cellKey(cell)).join('|'))
+    }
+    .width(tv(GRID_WIDTH))
+    .height(tv(GRID_HEIGHT))
+    .position({ x: tv(GRID_LEFT), y: tv(GRID_TOP) })
+  }
+
+  @Builder
+  private filtersBody(): void {
+    ChoiceSegments({
+      heading: 'View',
+      choices: VIEW_CHOICES,
+      selected: this.view,
+      onChoose: (value: string): void => {
+        this.changeView(value);
+      },
+    })
   }
 
   @Builder
@@ -362,6 +533,11 @@ export struct ReleaseCalendar {
   build() {
     NavDestination() {
       Stack() {
+        if (this.view === 'week') {
+          this.weekView()
+        } else if (this.view === 'month') {
+          this.monthView()
+        } else {
         Stage({
           keyArt: '',
           kicker: this.selected !== undefined ?
@@ -378,6 +554,7 @@ export struct ReleaseCalendar {
             this.panelExtras();
           },
         })
+        }
         if (this.navItems.length > 0) {
           NavRail({
             items: this.navItems,
@@ -420,7 +597,16 @@ export struct ReleaseCalendar {
         .alignItems(VerticalAlign.Center)
         .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.utilityRowTop) })
         Row({ space: tv(HEADER_CONTROL_GAP) }) {
-          this.headerControl(agendaRangeLabel(this.start), false, (): void => {})
+          Text(rangeLabel(this.view, this.anchor))
+            .fontSize(tv(HEADER_CONTROL_FONT))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .height(tv(HEADER_CONTROL_SIZE))
+            .padding({ left: tv(20), right: tv(20) })
+            .borderRadius(tv(HEADER_CONTROL_SIZE / 2))
+            .backgroundColor(toResourceColor(activeColors().bg))
+            .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.08) })
+            .focusable(true)
           this.headerControl('←', true, (): void => {
             this.page(-1);
           })
@@ -433,6 +619,27 @@ export struct ReleaseCalendar {
         }
         .position({ x: tv(HEADER_RIGHT), y: tv(TvGeometry.utilityRowTop) })
         .markAnchor({ x: '100%', y: 0 })
+        // Web keeps slot 0 for the Calendar link tile (not in this client yet); Filters is the second tile.
+        ActionTile({
+          icon: $r('app.media.action_filters'),
+          label: 'Filters',
+          slot: 1,
+          onActivate: (): void => {
+            this.filtersOpen = true;
+          },
+        })
+        if (this.filtersOpen) {
+          Drawer({
+            kicker: 'Calendar',
+            title: 'Filters',
+            onClose: (): void => {
+              this.filtersOpen = false;
+            },
+            body: (): void => {
+              this.filtersBody();
+            },
+          })
+        }
       }
       .width('100%')
       .height('100%')
