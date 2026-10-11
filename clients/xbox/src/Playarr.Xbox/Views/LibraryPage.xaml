@@ -22,6 +22,20 @@
         focused title's details on the left, and a 3-column grid of 328x184 landscape cards from x=783.
     -->
     <Grid>
+        <!-- The focused title's backdrop behind the left column, faded into the page like the web. -->
+        <Image x:Name="FocusBackdrop" Width="960" HorizontalAlignment="Left" Stretch="UniformToFill" Opacity="0.35" />
+        <Rectangle Width="960" HorizontalAlignment="Left">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#99151315" Offset="0" />
+                    <GradientStop Color="#FF151315" Offset="1" />
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!-- Web A-Z jump rail at the right edge. -->
+        <StackPanel x:Name="LetterRail" Width="40" Margin="0,280,21,0" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="0" />
+
         <Button
             x:Name="BackButton"
             Width="50"
