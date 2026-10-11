@@ -25,28 +25,15 @@ namespace Playarr.Xbox.Views
         private static readonly Color Available = Color.FromArgb(0xFF, 0x8A, 0xC5, 0xA5); // dark --success
         private static readonly Color Absent = Color.FromArgb(0xFF, 0xCF, 0x31, 0x57);    // --brand
 
-        private Grid _root = null!;
+        private readonly Grid _root;
         private readonly Grid _content = new Grid();
-        private Button _rangeButton = null!;
+        private readonly Button _rangeButton;
         private CalendarView _view = CalendarView.Agenda;
         private DateTime _anchor = DateTime.Today;
         private IList<CalendarEntry> _entries = new List<CalendarEntry>();
         private int _loadVersion;
 
         public CalendarPage()
-        {
-            try
-            {
-                Build();
-            }
-            catch (Exception error)
-            {
-                App.LogCrash(error);
-                throw;
-            }
-        }
-
-        private void Build()
         {
             InitializeComponent();
             _root = RootGrid;
@@ -101,16 +88,8 @@ namespace Playarr.Xbox.Views
         {
             var version = ++_loadVersion;
             var (start, end) = CalendarRules.VisibleRange(_view, _anchor);
-            try
-            {
-                Ui.SetPillText(_rangeButton, RangeLabel(start, end));
-                Render();
-            }
-            catch (Exception error)
-            {
-                App.LogCrash(error);
-                throw;
-            }
+            Ui.SetPillText(_rangeButton, RangeLabel(start, end));
+            Render();
 
             try
             {
@@ -134,15 +113,7 @@ namespace Playarr.Xbox.Views
                 _entries = new List<CalendarEntry>();
             }
 
-            try
-            {
-                Render();
-            }
-            catch (Exception error)
-            {
-                App.LogCrash(error);
-                throw;
-            }
+            Render();
         }
 
         private string RangeLabel(DateTime start, DateTime end) => _view == CalendarView.Month
@@ -153,9 +124,10 @@ namespace Playarr.Xbox.Views
         {
             _content.Children.Clear();
             var (start, end) = CalendarRules.VisibleRange(_view, _anchor);
+            // All-day entries first within their day, then by time (web entrySortKey).
             var byDay = _entries
                 .GroupBy(CalendarRules.LocalDay)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(g => g.Key, g => g.OrderBy(e => CalendarRules.ReleaseInstant(e)?.UtcTicks ?? long.MinValue).ToList());
             switch (_view)
             {
                 case CalendarView.Month:
@@ -449,8 +421,7 @@ namespace Playarr.Xbox.Views
             string.IsNullOrEmpty(a) ? b : string.IsNullOrEmpty(b) ? a : $"{a} · {b}";
 
         private static string TimeLabel(CalendarEntry entry) =>
-            !string.IsNullOrEmpty(entry.ReleaseAt)
-            && DateTimeOffset.TryParse(entry.ReleaseAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at)
+            CalendarRules.ReleaseInstant(entry) is { } at
                 ? at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)
                 : "All day";
 

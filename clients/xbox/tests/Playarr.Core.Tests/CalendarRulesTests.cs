@@ -45,5 +45,13 @@ namespace Playarr.Core.Tests
             Assert.Equal(2, entry.Members!.Count);
             Assert.Equal("S01E02", CalendarRules.EpisodeCode(entry.Members[0].SeasonNumber, entry.Members[0].EpisodeNumber));
         }
+
+        [Fact]
+        public void MidnightUtcIsAllDay()
+        {
+            Assert.Null(CalendarRules.ReleaseInstant(new CalendarEntry { ReleaseAt = "2026-10-12T00:00:00Z" }));
+            Assert.NotNull(CalendarRules.ReleaseInstant(new CalendarEntry { ReleaseAt = "2026-10-12T01:00:00Z" }));
+            Assert.Equal(new DateTime(2026, 10, 12), CalendarRules.LocalDay(new CalendarEntry { Date = "2026-10-12", ReleaseAt = "2026-10-12T00:00:00Z" }));
+        }
     }
 }

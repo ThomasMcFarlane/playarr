@@ -80,6 +80,7 @@ namespace Playarr.Xbox.Views
             BorderBrush = new SolidColorBrush(color),
             BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Child = new TextBlock { Text = text, FontSize = 9, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color) },
         };
     }

@@ -105,11 +105,25 @@ namespace Playarr.Core.Models
 
         public static DateTime StartOfWeek(DateTime day) => day.Date.AddDays(-(((int)day.DayOfWeek + 6) % 7));
 
+        /// <summary>
+        /// The instant a release happens, or null for an all-day release. The server stores date-only releases as
+        /// midnight UTC: a date, not a moment, so it never shifts day or shows a time (web <c>releaseInstant</c>).
+        /// </summary>
+        public static DateTimeOffset? ReleaseInstant(CalendarEntry entry)
+        {
+            if (string.IsNullOrEmpty(entry.ReleaseAt)
+                || !DateTimeOffset.TryParse(entry.ReleaseAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at))
+            {
+                return null;
+            }
+
+            return at.UtcDateTime.TimeOfDay == TimeSpan.Zero ? (DateTimeOffset?)null : at;
+        }
+
         /// <summary>The release's local calendar day (the exact instant when known, else the UTC date).</summary>
         public static DateTime LocalDay(CalendarEntry entry)
         {
-            if (!string.IsNullOrEmpty(entry.ReleaseAt)
-                && DateTimeOffset.TryParse(entry.ReleaseAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at))
+            if (ReleaseInstant(entry) is { } at)
             {
                 return at.ToLocalTime().Date;
             }
