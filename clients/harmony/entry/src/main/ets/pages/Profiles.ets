@@ -49,7 +49,8 @@
 
 import type { AvailableProfileResponse } from '../core/Types/Profiles.ts';
 import { resolveAvatarPreset } from '../core/AvatarPreset.ts';
-import { BRAND_PINK, Spacing, Radii } from '../core/Tokens';
+import { BRAND_PINK, BRAND_PINK_SOFT, Spacing, Radii } from '../core/Tokens';
+import type { RgbaColor } from '../core/Tokens';
 
 import { listProfiles, verifyPin } from '../data/ProfileRepository';
 
@@ -59,11 +60,12 @@ import { ROUTES } from '../navigation/Routes';
 
 import { activeColors, tintFilter, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
 import type { ThemeModeSetting } from '../design/Theme';
-import { isTvMetrics, tv } from '../design/Metrics';
+import { isTvMetrics, tv, TvGeometry } from '../design/Metrics';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../design/Motion';
 import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from '../design/components/FocusLift';
 import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
 import { ProfileAvatar } from '../design/components/ProfileAvatar';
+import { PlayarrLogo } from '../design/components/PlayarrLogo';
 
 // Layout/typography literals with no matching `core/Tokens.ts` field (that
 // file has no typography table at all, per `design/components/
@@ -87,6 +89,13 @@ const ADD_PROFILE_GLYPH_FONT_SIZE: number = 32;
 // TV-geometry literal in this client is, and used as-is on the touch
 // profile.
 const TV_AVATAR_DIAMETER: number = 168;
+// Web TV picker geometry (live DOM, 1920x1080).
+const TV_CHOICES_TOP: number = 382;
+const TV_CHOICE_WIDTH: number = 244;
+const TV_CHOICE_GAP: number = 42;
+const TV_ACTION_HEIGHT: number = 44;
+const TV_ACTION_ICON: number = 18;
+const TV_ACTION_TEXT: number = 10.752;
 const TOUCH_AVATAR_DIAMETER: number = 104;
 const PIN_DIALOG_AVATAR_DIAMETER: number = 72;
 
@@ -272,6 +281,131 @@ struct Profiles {
     });
   }
 
+  private statusLabel(profile: AvailableProfileResponse): string {
+    if (profile.is_current) {
+      return 'Watching now';
+    }
+    return profile.pin_locked ? 'PIN required' : 'Ready';
+  }
+
+  /** Web `.profile-action-button`: a 44 px pill on surface-strong at 0.64. */
+  @Builder
+  private tvActionButton(icon: Resource, label: string, tint: RgbaColor, onTap: () => void): void {
+    Row({ space: tv(8) }) {
+      Image(icon)
+        .width(tv(TV_ACTION_ICON))
+        .height(tv(TV_ACTION_ICON))
+        .colorFilter(tintFilter(tint))
+      if (label.length > 0) {
+        Text(label)
+          .fontSize(tv(TV_ACTION_TEXT))
+          .fontWeight(FontWeight.Bold)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+      }
+    }
+    .height(tv(TV_ACTION_HEIGHT))
+    .constraintSize({ minWidth: tv(TV_ACTION_HEIGHT) })
+    .justifyContent(FlexAlign.Center)
+    .padding({ left: label.length > 0 ? tv(17) : 0, right: label.length > 0 ? tv(17) : 0 })
+    .borderRadius(tv(TV_ACTION_HEIGHT / 2))
+    .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, 0.64))
+    .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.16) })
+    .focusable(true)
+    .onClick(onTap)
+  }
+
+  /** Web TV profile picker (`pages/Profiles.tsx` at 1920x1080): the pink "Profiles" kicker, an 80.64 px
+   * "Who's watching?", 244 px avatars 42 px apart from y=382 with name and status, the current profile's
+   * settings and sign-out actions, and the add tile with a dashed ring. */
+  @Builder
+  private tvPicker(): void {
+    Stack({ alignContent: Alignment.Top }) {
+      PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+        .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Text('Profiles')
+        .fontSize(tv(10.368))
+        .fontWeight(FontWeight.Bolder)
+        .letterSpacing(tv(1.348))
+        .textCase(TextCase.UpperCase)
+        .fontColor(toResourceColor(BRAND_PINK_SOFT))
+        .position({ y: tv(162) })
+      Text('Who’s watching?')
+        .fontSize(tv(80.64))
+        .fontWeight(FontWeight.Medium)
+        .letterSpacing(tv(-5.806))
+        .fontColor(toResourceColor(activeColors().ink))
+        .position({ y: tv(176) })
+      Row({ space: tv(TV_CHOICE_GAP) }) {
+        ForEach(this.profiles, (profile: AvailableProfileResponse) => {
+          Column() {
+            ProfileAvatar({
+              presetId: resolveAvatarPreset(profile.id),
+              diameter: tv(TV_CHOICE_WIDTH),
+              onSelect: () => {
+                this.selectProfile(profile);
+              },
+            })
+            Text(profile.display_name)
+              .fontSize(tv(17.28))
+              .fontWeight(FontWeight.Bold)
+              .fontColor(toResourceColor(activeColors().ink))
+              .margin({ top: tv(6) })
+            Text(this.statusLabel(profile))
+              .fontSize(tv(9.408))
+              .fontWeight(FontWeight.Bold)
+              .letterSpacing(tv(0.423))
+              .textCase(TextCase.UpperCase)
+              .fontColor(toResourceColor(activeColors().inkSoft))
+              .margin({ top: tv(9) })
+            if (profile.is_current) {
+              Row({ space: tv(9) }) {
+                this.tvActionButton($r('app.media.nav_settings'), '', BRAND_PINK, () => {
+                  pushRoute(getNavStack(), ROUTES.Settings);
+                })
+                this.tvActionButton($r('app.media.action_sign_out'), 'Sign out', activeColors().inkSoft, () => {
+                  this.handleSignOut();
+                })
+              }
+              .margin({ top: tv(21) })
+            }
+          }
+          .width(tv(TV_CHOICE_WIDTH))
+        }, (profile: AvailableProfileResponse): string => profile.id)
+        // No create-profile endpoint exists (brief 4.7): the add tile stays a disabled placeholder.
+        Column() {
+          Text('+')
+            .fontSize(tv(76.8))
+            .fontWeight(FontWeight.Lighter)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .textAlign(TextAlign.Center)
+            .width(tv(TV_CHOICE_WIDTH))
+            .height(tv(TV_CHOICE_WIDTH))
+            .borderRadius(tv(TV_CHOICE_WIDTH / 2))
+            .border({ width: 1, style: BorderStyle.Dashed, color: toResourceColorWithAlpha(activeColors().ink, 0.15) })
+          Text($r('app.string.profiles_add_profile'))
+            .fontSize(tv(17.28))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .margin({ top: tv(9) })
+          Text($r('app.string.profiles_add_profile_hint'))
+            .fontSize(tv(9.408))
+            .fontWeight(FontWeight.Bold)
+            .letterSpacing(tv(0.423))
+            .textCase(TextCase.UpperCase)
+            .textAlign(TextAlign.Center)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .margin({ top: tv(9) })
+        }
+        .width(tv(TV_CHOICE_WIDTH))
+        .enabled(false)
+      }
+      .alignItems(VerticalAlign.Top)
+      .position({ y: tv(TV_CHOICES_TOP) })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
   private avatarDiameter(): number {
     return isTvMetrics() ? tv(TV_AVATAR_DIAMETER) : TOUCH_AVATAR_DIAMETER;
   }
@@ -287,6 +421,9 @@ struct Profiles {
   build() {
     NavDestination() {
       Stack() {
+        if (isTvMetrics() && this.viewState === ProfilesViewState.Ready && this.profiles.length > 0) {
+          this.tvPicker()
+        } else {
         Scroll() {
           Column({ space: Spacing.xl }) {
             Text($r('app.string.profiles_heading'))
@@ -419,6 +556,7 @@ struct Profiles {
         }
         .width('100%')
         .height('100%')
+        }
 
         if (this.pinTargetProfile !== null) {
           Stack({ alignContent: Alignment.Center }) {

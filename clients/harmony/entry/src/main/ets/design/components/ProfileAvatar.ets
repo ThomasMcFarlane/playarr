@@ -28,18 +28,13 @@
  * ArkUI-radius conversion is an approximation, documented here rather than
  * silently guessed.
  *
- * The `rgba(255,255,255,·)` highlight/foreground colours have no matching
+ * The `rgba(255,255,255,·)` highlight colour have no matching
  * `core/Tokens.ts` `ColorTokens` entry (no role is "pure white, alpha
  * varies") -- the same documented exception `design/components/Skeleton.ets`
  * already establishes for its own `rgba(255,255,255,·)` shimmer highlight.
  *
- * There is **no real per-preset illustration asset in this repo yet** (the
- * `avatar_<id>.svg` files brief section 2's component tree lists do not
- * exist under `resources/base/media/` -- confirmed by directory listing).
- * Per this slice's brief, the inner-illustration slot renders a plain
- * coloured glyph (the preset id's first letter, uppercased) instead of
- * blocking on missing art; swapping in a real `Image($r('app.media.avatar_
- * <id>'))` later only touches this one render branch.
+ * The inner illustration is `media/avatar_<id>.svg`, generated from web's
+ * `components/ProfileAvatar.tsx` drawings (web is the reference).
  *
  * ## Focus treatment (brief 5.8)
  *
@@ -71,15 +66,10 @@ const HIGHLIGHT_CENTER_X_PCT: string = '34%';
 const HIGHLIGHT_CENTER_Y_PCT: string = '26%';
 const HIGHLIGHT_ALPHA: number = 0.28;
 const HIGHLIGHT_STOP: number = 0.27;
-const FOREGROUND_ALPHA: number = 0.94;
 
 /** Brief 5.11: "inner illustration at 84% of the circle". */
 const ILLUSTRATION_SLOT_RATIO: number = 0.84;
 
-/** Not in the brief -- a readable glyph size relative to its 84% slot
- * (roughly half the slot's own side length), named here rather than an
- * inline magic number. */
-const GLYPH_FONT_RATIO: number = 0.42;
 
 /** Brief 5.8's focus ring stroke width. No matching `core/Tokens.ts` field
  * (there is no border-width table) -- same documented-exception pattern as
@@ -97,6 +87,24 @@ const DEFAULT_AVATAR_DIAMETER: number = 64;
 /** Looks up a preset by id, falling back to the first preset (`astronaut`,
  * matching `core/AvatarPreset.ts`'s own fallback ordering) if `presetId`
  * does not match any entry -- e.g. before the caller has resolved one. */
+/** Web `ProfileAvatar.tsx`'s per-preset drawing (`media/avatar_<id>.svg`); astronaut for an unknown id. */
+function avatarArt(presetId: string): Resource {
+  switch (presetId) {
+    case 'cat':
+      return $r('app.media.avatar_cat');
+    case 'dinosaur':
+      return $r('app.media.avatar_dinosaur');
+    case 'robot':
+      return $r('app.media.avatar_robot');
+    case 'pirate':
+      return $r('app.media.avatar_pirate');
+    case 'alien':
+      return $r('app.media.avatar_alien');
+    default:
+      return $r('app.media.avatar_astronaut');
+  }
+}
+
 function resolvePreset(presetId: string): AvatarPreset {
   const found = AvatarPresets.find((preset: AvatarPreset) => preset.id === presetId);
   if (found !== undefined) {
@@ -133,12 +141,6 @@ export struct ProfileAvatar {
     return resolvePreset(this.presetId);
   }
 
-  private glyph(): string {
-    if (this.presetId.length === 0) {
-      return '?';
-    }
-    return this.presetId.charAt(0).toUpperCase();
-  }
 
   private setFocused(focused: boolean): void {
     this.getUIContext().animateTo({ duration: INTERACTION_CARD_MS, curve: INTERACTION_CURVE }, () => {
@@ -191,13 +193,11 @@ export struct ProfileAvatar {
         })
 
       // Inner illustration slot at 84% of the circle -- a plain coloured
-      // glyph placeholder until real per-preset art ships (see this file's
-      // header comment).
+      // The preset's illustration, generated from web's `ProfileAvatar.tsx`.
       Stack() {
-        Text(this.glyph())
-          .fontSize((this.diameter * GLYPH_FONT_RATIO))
-          .fontWeight(FontWeight.Bold)
-          .fontColor(toResourceColor({ r: 255, g: 255, b: 255, a: FOREGROUND_ALPHA }))
+        Image(avatarArt(this.presetId))
+          .width('100%')
+          .height('100%')
       }
       .width((this.diameter * ILLUSTRATION_SLOT_RATIO))
       .height((this.diameter * ILLUSTRATION_SLOT_RATIO))
