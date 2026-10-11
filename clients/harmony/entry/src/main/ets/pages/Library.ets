@@ -117,9 +117,13 @@ import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
 import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
-import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { buildNavRailItems, buildPrimaryNavItems, buildSecondaryNavItems, navigateFromRail } from '../navigation/NavItems';
 import { titleCountLabel } from '../core/CountFormat';
 import { AlphabetRail } from '../design/components/AlphabetRail';
+import { ActionTile } from '../design/components/ActionTile';
+import { Drawer } from '../design/components/Drawer';
+import { ChoiceSegments } from '../design/components/ChoiceSegments';
+import type { Choice } from '../design/components/ChoiceSegments';
 import { alphabetFor, firstIndexAtOrAfter, workLetter } from '../core/AlphabetIndex';
 import { Spacing, Radii } from '../core/Tokens';
 
@@ -132,7 +136,7 @@ import type { Work } from '../core/Types/Work';
 
 import { ROUTES } from '../navigation/Routes';
 import type { LibraryRouteParams, DetailRouteParams } from '../navigation/Routes';
-import { getNavStack, pushRoute, popRoute, replaceRoute } from '../navigation/NavStack';
+import { getNavStack, pushRoute, popRoute } from '../navigation/NavStack';
 
 import { logWarn } from '../util/Log';
 
@@ -267,6 +271,16 @@ interface LibrarySortOption {
 
 /** Brief 4.8 / 9: `sort` is `"title"` (default) | `"date_added"` |
  * `"recent"`. Listed in the brief's own order. */
+// Web TV Filters drawer: Sort by Title or Date Added; Order A-Z or Z-A.
+const TV_SORT_CHOICES: Choice[] = [
+  { value: 'title', label: 'Title' },
+  { value: 'date_added', label: 'Date Added' },
+];
+const TV_ORDER_CHOICES: Choice[] = [
+  { value: 'asc', label: 'A-Z' },
+  { value: 'desc', label: 'Z-A' },
+];
+
 const SORT_OPTIONS: LibrarySortOption[] = [
   { value: 'title', label: 'Title' },
   { value: 'date_added', label: 'Date Added' },
@@ -430,6 +444,8 @@ export struct Library {
   @State private navItems: NavRailItem[] = [];
   /** The A-Z rail's current letter: the hero's (web `activeLetter`). */
   @State private activeLetter: string = '#';
+  /** The Filters drawer (web `?panel=filters`). */
+  @State private filtersOpen: boolean = false;
   private gridScroller: Scroller = new Scroller();
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
@@ -497,20 +513,9 @@ export struct Library {
   }
 
   private handleNavSelect(id: string): void {
-    if (id === this.kind) {
-      return;
-    }
-    if (id === HOME_NAV_ID) {
-      popRoute(getNavStack());
-      return;
-    }
-    if (id === CALENDAR_NAV_ID) {
-      replaceRoute(getNavStack(), ROUTES.Calendar);
-      return;
-    }
-    const params: LibraryRouteParams = { kind: id };
-    replaceRoute(getNavStack(), ROUTES.Library, params);
+    navigateFromRail(id, this.kind);
   }
+
 
   private availableGridWidthVp(): number {
     const measured = this.measuredWidthVp > 0
@@ -864,6 +869,7 @@ export struct Library {
       if (this.navItems.length > 0) {
         NavRail({
           items: this.navItems,
+          primaryItems: buildPrimaryNavItems(),
           secondaryItems: buildSecondaryNavItems(),
           selectedId: this.kind,
           onSelect: (id: string): void => {
@@ -879,6 +885,14 @@ export struct Library {
       .height(tv(TvGeometry.utilityRowHeight))
       .alignItems(VerticalAlign.Center)
       .position({ x: tv(TvGeometry.clockLeft), y: tv(TvGeometry.utilityRowTop) })
+      ActionTile({
+        icon: $r('app.media.action_filters'),
+        label: 'Filters',
+        slot: 0,
+        onActivate: (): void => {
+          this.filtersOpen = true;
+        },
+      })
       if (this.sort === 'title') {
         AlphabetRail({
           letters: alphabetFor(this.order),
@@ -922,10 +936,44 @@ export struct Library {
       }
       .alignItems(VerticalAlign.Top)
       .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.utilityRowTop) })
+      if (this.filtersOpen) {
+        Drawer({
+          kicker: 'Library controls',
+          title: 'Filters',
+          onClose: (): void => {
+            this.filtersOpen = false;
+          },
+          body: (): void => {
+            this.filtersBody();
+          },
+        })
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(toResourceColor(activeColors().bg))
+  }
+
+  @Builder
+  private filtersBody(): void {
+    ChoiceSegments({
+      heading: 'Sort by',
+      choices: TV_SORT_CHOICES,
+      selected: this.sort,
+      onChoose: (value: string): void => {
+        this.setSort(value);
+      },
+    })
+    ChoiceSegments({
+      heading: 'Order',
+      choices: TV_ORDER_CHOICES,
+      selected: this.order,
+      onChoose: (value: string): void => {
+        if (value !== this.order) {
+          this.toggleOrder();
+        }
+      },
+    })
   }
 }
 

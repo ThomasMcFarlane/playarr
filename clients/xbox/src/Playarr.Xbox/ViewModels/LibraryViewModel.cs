@@ -36,7 +36,7 @@ namespace Playarr.Xbox.ViewModels
         /// <summary>Wire value for "recently added first". See this type's remarks.</summary>
         public const string SortRecentlyAdded = "recent";
 
-        private const int PageLimit = 60;
+        private const int PageLimit = 200;
 
         private readonly XboxAppEnvironment _environment;
 
@@ -172,12 +172,22 @@ namespace Playarr.Xbox.ViewModels
 
             try
             {
+                // Same first page as the web library: available titles only, title ascending (or newest first).
+                var byTitle = SelectedSort == null;
                 var page = await _environment.ApiClient.BrowseCatalogAsync(
                     kind: SelectedKind,
-                    sort: SelectedSort,
-                    limit: PageLimit);
+                    sort: byTitle ? "title" : "date_added",
+                    limit: PageLimit,
+                    availableOnly: true,
+                    order: byTitle ? "asc" : "desc");
                 Total = page.Total;
-                Works = new List<Work>(page.Items);
+                var works = new List<Work>(page.Items);
+                if (byTitle)
+                {
+                    works.Sort(WorkLabels.CompareTitles);
+                }
+
+                Works = works;
             }
             catch (ApiException error)
             {

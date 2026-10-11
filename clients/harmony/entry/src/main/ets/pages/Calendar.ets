@@ -1,14 +1,21 @@
 /**
- * The release calendar, TV agenda view (web `pages/Calendar.tsx`, which TV opens on the agenda): 30 days from
- * today grouped by local day, each entry a card whose left border shows availability (have it versus not,
- * never the library), and a details panel on the left that follows focus. Previous/Today/Next page by 30
- * days, as web. Rules live in `core/CalendarAgenda.ts`; geometry copies the live web TV DOM at 1920x1080.
+ * The release calendar (web `pages/Calendar.tsx`). TV opens on the agenda: 30 days from today grouped by local
+ * day, each entry a card whose left border shows availability (have it versus not, never the library), with a
+ * details panel on the left that follows focus. The Filters drawer switches to the week view (seven day
+ * columns) or the month view (a grid of whole weeks with one line per entry). Previous/Today/Next page by
+ * the view's period, as web. Rules live in `core/CalendarAgenda.ts`; geometry copies the live web TV DOM.
  *
- * Not yet here (13.10016): the month and week views and the range picker, the Filters and Calendar link
- * tiles (13.10019), the details panel's actions.
+ * Not yet here (13.10016): the range picker, series-per-day grouping, type/status filters, the details
+ * panel's actions and the Calendar link tile.
  */
 
 import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
+import { ActionTile } from '../design/components/ActionTile';
+import { Drawer } from '../design/components/Drawer';
+import { ChoiceSegments } from '../design/components/ChoiceSegments';
+import type { Choice } from '../design/components/ChoiceSegments';
+import { BRAND_PINK } from '../core/Tokens';
+import type { RgbaColor } from '../core/Tokens';
 import type { ThemeModeSetting } from '../design/Theme';
 import { tv, TvGeometry } from '../design/Metrics';
 import { Stage } from '../design/components/Stage';
@@ -20,13 +27,26 @@ import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
 
 import { getCatalogKinds } from '../data/CatalogRepository';
 import { getCalendar } from '../data/CalendarRepository';
+import { addToWatchlist, removeFromWatchlist, resolveTitle } from '../data/WatchlistRepository';
+import { planItemActions } from '../core/CalendarActions';
+import type { CalendarActionPlan } from '../core/CalendarActions';
 
 import {
-  AGENDA_DAYS,
   addDays,
-  agendaRangeLabel,
+  buildMonthGrid,
+  buildWeekDays,
   dayHeading,
-  entryAvailable,
+  dayOfMonth,
+  rangeLabel,
+  shiftAnchor,
+  startOfMonth,
+  visibleRange,
+  WEEKDAY_SHORT,
+  groupSeriesEpisodes,
+  itemAvailable,
+  itemLineText,
+  itemPillTone,
+  itemSubtitle,
   entryPillTone,
   entrySubtitle,
   entryTimeLabel,
@@ -37,13 +57,13 @@ import {
   pillLabel,
   releaseTypeLabel,
 } from '../core/CalendarAgenda';
-import type { DayGroup, EntryPillTone } from '../core/CalendarAgenda';
+import type { CalendarCell, CalendarItem, CalendarView, DayGroup, EntryPillTone } from '../core/CalendarAgenda';
 import type { CalendarEntry } from '../core/Types/Calendar';
 
-import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { CALENDAR_NAV_ID, buildNavRailItems, buildPrimaryNavItems, buildSecondaryNavItems, navigateFromRail } from '../navigation/NavItems';
 import { ROUTES } from '../navigation/Routes';
-import type { DetailRouteParams, LibraryRouteParams } from '../navigation/Routes';
-import { getNavStack, popRoute, pushRoute, replaceRoute } from '../navigation/NavStack';
+import type { DetailRouteParams, PlayerRouteParams } from '../navigation/Routes';
+import { getNavStack, popRoute, pushRoute } from '../navigation/NavStack';
 
 // Web `.calendar-days-agenda`: from x=783 (53 into the x=730 column), first day heading at y=162, 1033 wide.
 const LIST_INSET_LEFT: number = 53;
@@ -89,33 +109,50 @@ const OVERVIEW_SIZE: number = 13.824;
 const OVERVIEW_LINE_HEIGHT: number = 22;
 const OVERVIEW_MAX_LINES: number = 5;
 const OVERVIEW_WIDTH: number = 348;
+// Web details panel buttons: 58 high pills, 14.72/720.
+const PANEL_BUTTON_HEIGHT: number = 58;
+const PANEL_BUTTON_FONT: number = 14.72;
+const PANEL_BUTTON_PADDING: number = 21;
+const PANEL_BUTTON_GAP: number = 10;
 
-const SUCCESS: string = 'rgba(57, 181, 120, 1)';
+// Web `.calendar-days-week` and `.calendar-month`: from (154, 174), 1663 wide, 787 high.
+const GRID_LEFT: number = 154;
+const GRID_TOP: number = 174;
+const GRID_WIDTH: number = 1663;
+const GRID_HEIGHT: number = 787;
+const WEEK_COLUMN_WIDTH: number = 440;
+const WEEK_COLUMN_GAP: number = 20;
+const WEEK_HEADING_HEIGHT: number = 28;
+const WEEK_HEADING_GAP: number = 6;
+const MONTH_HEAD_HEIGHT: number = 31;
+const MONTH_WEEKDAY_SIZE: number = 12;
+const MONTH_LINE_HEIGHT: number = 25;
+const MONTH_LINE_SIZE: number = 12.48;
+const MONTH_DOT_SIZE: number = 9;
+const MONTH_FOOT_HEIGHT: number = 44;
+const MONTH_CELL_PADDING: number = 5;
+const MONTH_DAY_SIZE: number = 12.8;
 
-function pillToneColor(tone: EntryPillTone): string {
-  if (tone === 'available') {
-    return SUCCESS;
-  }
-  if (tone === 'upcoming') {
-    return 'rgba(207, 49, 87, 1)';
-  }
-  if (tone === 'missing') {
-    return 'rgba(220, 80, 80, 1)';
-  }
-  return 'rgba(194, 181, 187, 1)';
+const VIEW_CHOICES: Choice[] = [
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+];
+
+/** ForEach key: the day plus its entries, so a cell is rebuilt when its entries change. */
+function cellKey(cell: CalendarCell): string {
+  return cell.day + ':' + cell.entries.map((entry: CalendarEntry): string => entry.id).join(',');
 }
 
-function pillToneFill(tone: EntryPillTone): string {
+/** Web `.status-pill` / `.calendar-dot` tones. */
+function toneColor(tone: EntryPillTone): RgbaColor {
   if (tone === 'available') {
-    return 'rgba(42, 52, 46, 1)';
+    return activeColors().success;
   }
   if (tone === 'upcoming') {
-    return 'rgba(52, 28, 35, 1)';
+    return BRAND_PINK;
   }
-  if (tone === 'missing') {
-    return 'rgba(57, 44, 47, 1)';
-  }
-  return 'rgba(48, 44, 47, 1)';
+  return tone === 'missing' ? activeColors().danger : activeColors().inkSoft;
 }
 
 @Component
@@ -125,9 +162,15 @@ export struct ReleaseCalendar {
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
   @State private today: string = localDayOf(new Date());
-  @State private start: string = localDayOf(new Date());
+  @State private anchor: string = localDayOf(new Date());
+  @State private view: CalendarView = 'agenda';
+  @State private filtersOpen: boolean = false;
   @State private groups: DayGroup[] = [];
   @State private selected: CalendarEntry | undefined = undefined;
+  @State private selectedItem: CalendarItem | undefined = undefined;
+  /** Watchlist state of the selected title: from the server's action at selection, then the toggle. */
+  @State private listed: boolean = false;
+  @State private watchlistBusy: boolean = false;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private navItems: NavRailItem[] = [];
@@ -144,37 +187,98 @@ export struct ReleaseCalendar {
 
   private async load(): Promise<void> {
     this.loading = true;
-    const end = addDays(this.start, AGENDA_DAYS - 1);
+    const range = visibleRange(this.view, this.anchor);
     // Entries are bucketed by local day, up to a day either side of UTC: pad the window by a day.
-    const result = await getCalendar(addDays(this.start, -1), addDays(end, 1));
+    const result = await getCalendar(addDays(range.start, -1), addDays(range.end, 1));
     if (result.kind === 'ok') {
-      this.groups = groupByLocalDay(result.value.entries, this.start, end);
-      this.selected = this.groups.length > 0 ? this.groups[0].entries[0] : undefined;
+      this.groups = groupByLocalDay(result.value.entries, range.start, range.end);
+      const first = this.groups.length > 0 ? groupSeriesEpisodes(this.groups[0].entries)[0] : undefined;
+      this.select(first);
       this.errorMessage = '';
     } else {
       this.groups = [];
-      this.selected = undefined;
+      this.select(undefined);
       this.errorMessage = 'Could not load the calendar.';
     }
     this.loading = false;
   }
 
+  private select(item: CalendarItem | undefined): void {
+    this.selectedItem = item;
+    this.selected = item !== undefined ? item.entries[0] : undefined;
+    const plan = item !== undefined ? planItemActions(item) : undefined;
+    this.listed = plan !== undefined && plan.watchlist !== null && plan.watchlist.listed;
+  }
+
+  private plan(): CalendarActionPlan | undefined {
+    return this.selectedItem !== undefined ? planItemActions(this.selectedItem) : undefined;
+  }
+
+  /** Web `WatchlistToggle`: add the snapshot, or resolve it for its key and remove. */
+  private async toggleWatchlist(): Promise<void> {
+    const plan = this.plan();
+    if (plan === undefined || plan.snapshot === null || this.watchlistBusy) {
+      return;
+    }
+    this.watchlistBusy = true;
+    if (this.listed) {
+      const resolved = await resolveTitle(plan.snapshot);
+      if (resolved.kind === 'ok') {
+        const removed = await removeFromWatchlist(resolved.value.title.title_key);
+        if (removed.kind === 'ok') {
+          this.listed = false;
+        }
+      }
+    } else {
+      const added = await addToWatchlist(plan.snapshot);
+      if (added.kind === 'ok') {
+        this.listed = true;
+      }
+    }
+    this.watchlistBusy = false;
+  }
+
+  private playSelected(): void {
+    const plan = this.plan();
+    if (plan === undefined || plan.play === null) {
+      return;
+    }
+    const params: PlayerRouteParams = {
+      mediaFileId: plan.play.mediaFileId,
+      workId: plan.play.workId,
+      startPositionMs: plan.play.positionMs,
+    };
+    pushRoute(getNavStack(), ROUTES.Player, params);
+  }
+
+  private openSelected(): void {
+    const plan = this.plan();
+    if (plan === undefined || plan.openWorkId === null) {
+      return;
+    }
+    const params: DetailRouteParams = { workId: plan.openWorkId };
+    pushRoute(getNavStack(), ROUTES.Detail, params);
+  }
+
   private page(direction: number): void {
-    this.start = direction === 0 ? this.today : addDays(this.start, AGENDA_DAYS * direction);
+    this.anchor = direction === 0 ? this.today : shiftAnchor(this.view, this.anchor, direction);
+    this.load();
+  }
+
+  private changeView(view: string): void {
+    const next = view as CalendarView;
+    if (next === this.view) {
+      return;
+    }
+    this.view = next;
+    this.anchor = next === 'month' ? startOfMonth(this.anchor) : this.anchor;
     this.load();
   }
 
   private handleNavSelect(id: string): void {
-    if (id === CALENDAR_NAV_ID) {
-      return;
-    }
-    if (id === HOME_NAV_ID) {
-      popRoute(getNavStack());
-      return;
-    }
-    const params: LibraryRouteParams = { kind: id };
-    replaceRoute(getNavStack(), ROUTES.Library, params);
+    navigateFromRail(id, CALENDAR_NAV_ID);
   }
+
 
   private openEntry(entry: CalendarEntry): void {
     if (entry.work_id === undefined || entry.work_id === null) {
@@ -193,43 +297,45 @@ export struct ReleaseCalendar {
       .height(tv(PILL_HEIGHT))
       .padding({ left: tv(PILL_PADDING_H), right: tv(PILL_PADDING_H) })
       .borderRadius(tv(PILL_HEIGHT / 2))
-      .backgroundColor(pillToneFill(tone))
-      .border({ width: 1, color: pillToneColor(tone) })
+      .backgroundColor(toResourceColorWithAlpha(toneColor(tone), 0.14))
+      .border({ width: 1, color: toResourceColorWithAlpha(toneColor(tone), 0.6) })
   }
 
   @Builder
-  private entryCard(entry: CalendarEntry): void {
+  private entryCard(item: CalendarItem, width: number): void {
     Row({ space: tv(POSTER_GAP) }) {
-      Image(entry.poster_url !== undefined && entry.poster_url !== null ? entry.poster_url : '')
+      Image(item.entries[0].poster_url !== undefined && item.entries[0].poster_url !== null ? item.entries[0].poster_url : '')
         .width(tv(POSTER_WIDTH))
         .height(tv(POSTER_HEIGHT))
         .borderRadius(tv(POSTER_RADIUS))
         .objectFit(ImageFit.Cover)
         .backgroundColor(toResourceColor(activeColors().surfaceSoft))
       Column() {
-        Text(entry.title)
+        Text(item.title)
           .fontSize(tv(ENTRY_TITLE_SIZE))
           .fontWeight(FontWeight.Medium)
           .fontColor(toResourceColor(activeColors().ink))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(entrySubtitle(entry))
+        Text(itemSubtitle(item))
           .fontSize(tv(ENTRY_TITLE_SIZE))
           .fontColor(toResourceColor(activeColors().inkSoft))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Row({ space: tv(ENTRY_META_GAP) }) {
-          Text(entryTimeLabel(entry)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          Text(releaseTypeLabel(entry.release_type)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          Text(mediaKindLabel(entry.media_kind)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
-          this.statusPill(entryPillTone(entry, this.today))
+          Text(entryTimeLabel(item.entries[0])).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          Text(releaseTypeLabel(item.entries[0].release_type)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          if (!item.grouped) {
+            Text(mediaKindLabel(item.entries[0].media_kind)).fontSize(tv(ENTRY_META_SIZE)).fontColor(toResourceColor(activeColors().inkMuted))
+          }
+          this.statusPill(itemPillTone(item, this.today))
         }
         .alignItems(VerticalAlign.Center)
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
     }
-    .width(tv(LIST_WIDTH))
+    .width(tv(width))
     .height(tv(ENTRY_HEIGHT))
     .padding({ left: tv(ENTRY_PADDING_LEFT) })
     .borderRadius(tv(ENTRY_RADIUS))
@@ -237,7 +343,7 @@ export struct ReleaseCalendar {
     .border({
       width: { left: tv(ENTRY_EDGE), top: 1, right: 1, bottom: 1 },
       color: {
-        left: entryAvailable(entry) ? SUCCESS : toResourceColor(activeColors().inkMuted),
+        left: toResourceColor(itemAvailable(item) ? activeColors().success : activeColors().inkMuted),
         top: toResourceColorWithAlpha(activeColors().ink, 0.08),
         right: toResourceColorWithAlpha(activeColors().ink, 0.08),
         bottom: toResourceColorWithAlpha(activeColors().ink, 0.08),
@@ -245,11 +351,11 @@ export struct ReleaseCalendar {
     })
     .focusable(true)
     .onFocus(() => {
-      this.selected = entry;
+      this.select(item);
     })
     .onClick(() => {
-      this.selected = entry;
-      this.openEntry(entry);
+      this.select(item);
+      this.openEntry(item.entries[0]);
     })
   }
 
@@ -300,15 +406,15 @@ export struct ReleaseCalendar {
             Column({ space: tv(ENTRY_GAP) }) {
               this.dayHeader(group.day)
               Column({ space: tv(ENTRY_GAP) }) {
-                ForEach(group.entries, (entry: CalendarEntry) => {
-                  this.entryCard(entry)
-                }, (entry: CalendarEntry): string => entry.id)
+                ForEach(groupSeriesEpisodes(group.entries), (item: CalendarItem) => {
+                  this.entryCard(item, LIST_WIDTH)
+                }, (item: CalendarItem): string => item.key)
               }
               .margin({ top: tv(DAY_HEADING_GAP - ENTRY_GAP) })
             }
             .alignItems(HorizontalAlign.Start)
           }
-        }, (group: DayGroup): string => group.day)
+        }, (group: DayGroup): string => group.day + ':' + group.entries.map((entry: CalendarEntry): string => entry.id).join(','))
       }
       .width(tv(LIST_WIDTH))
       .height('100%')
@@ -316,6 +422,194 @@ export struct ReleaseCalendar {
       .margin({ left: tv(LIST_INSET_LEFT) })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
+    }
+  }
+
+  @Builder
+  private weekView(): void {
+    Scroll() {
+      Row({ space: tv(WEEK_COLUMN_GAP) }) {
+        ForEach(buildWeekDays(this.anchor, this.groups, this.today), (cell: CalendarCell) => {
+          Column({ space: tv(WEEK_HEADING_GAP) }) {
+            Text(dayHeading(cell.day))
+              .fontSize(tv(DAY_HEADING_SIZE))
+              .fontWeight(FontWeight.Medium)
+              .fontColor(toResourceColor(activeColors().ink))
+              .height(tv(WEEK_HEADING_HEIGHT))
+            Scroll() {
+              Column({ space: tv(ENTRY_GAP + 1) }) {
+                ForEach(groupSeriesEpisodes(cell.entries), (item: CalendarItem) => {
+                  this.entryCard(item, WEEK_COLUMN_WIDTH)
+                }, (item: CalendarItem): string => item.key)
+              }
+            }
+            .layoutWeight(1)
+            .align(Alignment.Top)
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.None)
+          }
+          .width(tv(WEEK_COLUMN_WIDTH))
+          .height('100%')
+          .alignItems(HorizontalAlign.Start)
+        }, (cell: CalendarCell): string => cellKey(cell))
+      }
+      .height('100%')
+    }
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.None)
+    .align(Alignment.TopStart)
+    .width(tv(GRID_WIDTH))
+    .height(tv(GRID_HEIGHT))
+    .position({ x: tv(GRID_LEFT), y: tv(GRID_TOP) })
+  }
+
+  @Builder
+  private monthCell(cell: CalendarCell, cellHeight: number): void {
+    Column() {
+      Column() {
+        ForEach(groupSeriesEpisodes(cell.entries).slice(0, this.monthLinesFor(cellHeight)), (item: CalendarItem) => {
+          Row({ space: tv(7) }) {
+            Circle()
+              .width(tv(MONTH_DOT_SIZE))
+              .height(tv(MONTH_DOT_SIZE))
+              .fill(toResourceColor(toneColor(itemPillTone(item, this.today))))
+            Text(itemLineText(item))
+              .fontSize(tv(MONTH_LINE_SIZE))
+              .fontWeight(item.grouped ? FontWeight.Bold : FontWeight.Normal)
+              .fontColor(toResourceColor(activeColors().ink))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
+          .height(tv(MONTH_LINE_HEIGHT))
+          .width('100%')
+          .padding({ left: tv(6) })
+        }, (item: CalendarItem): string => item.key)
+      }
+      .layoutWeight(1)
+      .width('100%')
+      Row({ space: tv(6) }) {
+        Text(String(dayOfMonth(cell.day)))
+          .fontSize(tv(MONTH_DAY_SIZE))
+          .fontWeight(FontWeight.Medium)
+          .fontColor(toResourceColor(activeColors().inkSoft))
+        if (groupSeriesEpisodes(cell.entries).length > this.monthLinesFor(cellHeight)) {
+          Text(`+${groupSeriesEpisodes(cell.entries).length - this.monthLinesFor(cellHeight)} more`)
+            .fontSize(tv(MONTH_LINE_SIZE))
+            .fontColor(toResourceColor(activeColors().inkSoft))
+        }
+      }
+      .height(tv(MONTH_FOOT_HEIGHT))
+      .width('100%')
+      .padding({ left: tv(6) })
+    }
+    .layoutWeight(1)
+    .height(tv(cellHeight))
+    .padding({ left: tv(MONTH_CELL_PADDING), right: tv(MONTH_CELL_PADDING), top: tv(2) })
+    .backgroundColor(cell.inMonth ? Color.Transparent : toResourceColorWithAlpha(activeColors().surfaceSoft, 0.4))
+    .border({
+      width: cell.isToday ? 2 : 1,
+      color: cell.isToday ? toResourceColor(activeColors().ink) : toResourceColor(activeColors().line),
+    })
+  }
+
+  private monthLinesFor(cellHeight: number): number {
+    return Math.max(1, Math.floor((cellHeight - MONTH_FOOT_HEIGHT - 2) / MONTH_LINE_HEIGHT));
+  }
+
+  @Builder
+  private monthView(): void {
+    Column() {
+      Row() {
+        ForEach(WEEKDAY_SHORT, (name: string) => {
+          Text(name)
+            .fontSize(tv(MONTH_WEEKDAY_SIZE))
+            .letterSpacing(tv(0.96))
+            .textCase(TextCase.UpperCase)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+        }, (name: string): string => name)
+      }
+      .width('100%')
+      .height(tv(MONTH_HEAD_HEIGHT))
+      ForEach(buildMonthGrid(this.anchor, this.groups, this.today), (week: CalendarCell[]) => {
+        Row() {
+          ForEach(week, (cell: CalendarCell) => {
+            this.monthCell(cell, (GRID_HEIGHT - MONTH_HEAD_HEIGHT) / buildMonthGrid(this.anchor, [], this.today).length)
+          }, (cell: CalendarCell): string => cellKey(cell))
+        }
+        .width('100%')
+      }, (week: CalendarCell[]): string => week.map((cell: CalendarCell): string => cellKey(cell)).join('|'))
+    }
+    .width(tv(GRID_WIDTH))
+    .height(tv(GRID_HEIGHT))
+    .position({ x: tv(GRID_LEFT), y: tv(GRID_TOP) })
+  }
+
+  @Builder
+  private filtersBody(): void {
+    ChoiceSegments({
+      heading: 'View',
+      choices: VIEW_CHOICES,
+      selected: this.view,
+      onChoose: (value: string): void => {
+        this.changeView(value);
+      },
+    })
+  }
+
+  @Builder
+  private panelButton(label: string, primary: boolean, onTap: () => void): void {
+    Text(label)
+      .fontSize(tv(PANEL_BUTTON_FONT))
+      .fontWeight(FontWeight.Bold)
+      .fontColor(toResourceColor(primary ? activeColors().bg : activeColors().ink))
+      .height(tv(PANEL_BUTTON_HEIGHT))
+      .padding({ left: tv(PANEL_BUTTON_PADDING), right: tv(PANEL_BUTTON_PADDING) })
+      .borderRadius(tv(PANEL_BUTTON_HEIGHT / 2))
+      .backgroundColor(primary ? toResourceColor(activeColors().ink) : Color.Transparent)
+      .border({ width: primary ? 0 : 1, color: toResourceColor(activeColors().lineStrong) })
+      .focusable(true)
+      .onClick(() => {
+        onTap();
+      })
+  }
+
+  /** Web details panel actions: Play/Resume, Open series (or Open), the watchlist toggle. */
+  @Builder
+  private panelActions(): void {
+    if (this.plan() !== undefined) {
+      Row({ space: tv(PANEL_BUTTON_GAP) }) {
+        if (this.plan()!.play !== null) {
+          this.panelButton(this.plan()!.play!.resume ? 'Resume' : 'Play', true, (): void => {
+            this.playSelected();
+          })
+        }
+        if (this.plan()!.openWorkId !== null) {
+          this.panelButton(this.selected !== undefined && this.selected.media_kind === 'episode' ? 'Open series' : 'Open',
+            this.plan()!.play === null, (): void => {
+              this.openSelected();
+            })
+        }
+        if (this.plan()!.watchlist !== null && this.plan()!.watchlist!.enabled && this.plan()!.snapshot !== null) {
+          Text(this.listed ? '✓  Remove from watchlist' : '+  Add to watchlist')
+            .fontSize(tv(PANEL_BUTTON_FONT))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().ink))
+            .height(tv(PANEL_BUTTON_HEIGHT))
+            .padding({ left: tv(PANEL_BUTTON_PADDING), right: tv(PANEL_BUTTON_PADDING) })
+            .borderRadius(tv(PANEL_BUTTON_HEIGHT / 2))
+            .border({ width: 1, color: toResourceColor(activeColors().lineStrong) })
+            .opacity(this.watchlistBusy ? 0.6 : 1)
+            .focusable(true)
+            .onClick(() => {
+              this.toggleWatchlist();
+            })
+        }
+      }
+      .margin({ top: tv(PANEL_GAP) })
     }
   }
 
@@ -334,6 +628,7 @@ export struct ReleaseCalendar {
             .maxLines(OVERVIEW_MAX_LINES)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
+        this.panelActions()
       }
       .alignItems(HorizontalAlign.Start)
       .margin({ top: tv(PANEL_GAP) })
@@ -362,6 +657,11 @@ export struct ReleaseCalendar {
   build() {
     NavDestination() {
       Stack() {
+        if (this.view === 'week') {
+          this.weekView()
+        } else if (this.view === 'month') {
+          this.monthView()
+        } else {
         Stage({
           keyArt: '',
           kicker: this.selected !== undefined ?
@@ -378,10 +678,12 @@ export struct ReleaseCalendar {
             this.panelExtras();
           },
         })
+        }
         if (this.navItems.length > 0) {
           NavRail({
             items: this.navItems,
-            secondaryItems: buildSecondaryNavItems(),
+            primaryItems: buildPrimaryNavItems(),
+          secondaryItems: buildSecondaryNavItems(),
             selectedId: CALENDAR_NAV_ID,
             onSelect: (id: string): void => {
               this.handleNavSelect(id);
@@ -420,7 +722,16 @@ export struct ReleaseCalendar {
         .alignItems(VerticalAlign.Center)
         .position({ x: tv(TvGeometry.titlePanelLeft), y: tv(TvGeometry.utilityRowTop) })
         Row({ space: tv(HEADER_CONTROL_GAP) }) {
-          this.headerControl(agendaRangeLabel(this.start), false, (): void => {})
+          Text(rangeLabel(this.view, this.anchor))
+            .fontSize(tv(HEADER_CONTROL_FONT))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(toResourceColor(activeColors().inkSoft))
+            .height(tv(HEADER_CONTROL_SIZE))
+            .padding({ left: tv(20), right: tv(20) })
+            .borderRadius(tv(HEADER_CONTROL_SIZE / 2))
+            .backgroundColor(toResourceColor(activeColors().bg))
+            .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.08) })
+            .focusable(true)
           this.headerControl('←', true, (): void => {
             this.page(-1);
           })
@@ -433,6 +744,27 @@ export struct ReleaseCalendar {
         }
         .position({ x: tv(HEADER_RIGHT), y: tv(TvGeometry.utilityRowTop) })
         .markAnchor({ x: '100%', y: 0 })
+        // Web keeps slot 0 for the Calendar link tile (not in this client yet); Filters is the second tile.
+        ActionTile({
+          icon: $r('app.media.action_filters'),
+          label: 'Filters',
+          slot: 1,
+          onActivate: (): void => {
+            this.filtersOpen = true;
+          },
+        })
+        if (this.filtersOpen) {
+          Drawer({
+            kicker: 'Calendar',
+            title: 'Filters',
+            onClose: (): void => {
+              this.filtersOpen = false;
+            },
+            body: (): void => {
+              this.filtersBody();
+            },
+          })
+        }
       }
       .width('100%')
       .height('100%')

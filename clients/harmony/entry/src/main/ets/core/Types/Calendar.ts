@@ -8,7 +8,14 @@ export interface CalendarAction {
   enabled: boolean;
   reason?: string | null;
   work_id?: string | null;
+  media_file_id?: string | null;
+  position_ms?: number | null;
+  /** `watchlist`: already listed. `request`: already requested. */
+  active?: boolean;
 }
+
+/** The title identity the server hands out; posted back unchanged to the watchlist endpoints. */
+export type TitleSnapshot = Record<string, Object | null>;
 
 export interface CalendarEntry {
   id: string;
@@ -27,6 +34,7 @@ export interface CalendarEntry {
   work_id?: string | null;
   overview?: string | null;
   actions?: CalendarAction[];
+  snapshot?: TitleSnapshot | null;
 }
 
 export interface CalendarResponse {

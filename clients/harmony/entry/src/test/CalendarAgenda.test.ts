@@ -29,6 +29,7 @@ test("all-day entries sort first, then by title", () => {
   const allDay = entry({ id: "b", title: "Zulu" });
   assert.ok(compareEntries(allDay, timed) < 0);
   assert.ok(compareEntries(entry({ title: "A" }), entry({ title: "B" })) < 0);
+  assert.ok(compareEntries(entry({ title: "Family Guy" }), entry({ title: "FBI" })) < 0);
 });
 
 test("groups by day within the range, ascending", () => {
@@ -54,4 +55,54 @@ test("labels match web", () => {
   assert.equal(agendaRangeLabel("2026-10-11"), "11 Oct – 9 Nov");
   assert.equal(agendaRangeLabel("2026-10-01"), "1 – 30 Oct");
   assert.equal(entryWhenLabel(entry({ date: "2026-10-11" })), "Sunday, 11 October 2026");
+});
+
+import {
+  buildMonthGrid, buildWeekDays, rangeLabel, shiftAnchor, startOfWeek, visibleRange,
+} from "../main/ets/core/CalendarAgenda";
+
+test("weeks start on Monday", () => {
+  assert.equal(startOfWeek("2026-10-11", 1), "2026-10-05");
+  assert.equal(startOfWeek("2026-10-05", 1), "2026-10-05");
+});
+
+test("view ranges and paging match web", () => {
+  assert.deepEqual(visibleRange("week", "2026-10-11"), { start: "2026-10-05", end: "2026-10-11" });
+  assert.deepEqual(visibleRange("month", "2026-10-11"), { start: "2026-09-28", end: "2026-11-01" });
+  assert.equal(shiftAnchor("month", "2026-10-11", 1), "2026-11-01");
+  assert.equal(shiftAnchor("week", "2026-10-11", -1), "2026-10-04");
+  assert.equal(rangeLabel("week", "2026-10-11"), "5 – 11 Oct");
+  assert.equal(rangeLabel("month", "2026-10-11"), "Oct 2026");
+  assert.equal(rangeLabel("agenda", "2026-10-11"), "11 Oct – 9 Nov");
+});
+
+test("month grid is whole weeks; week has seven days", () => {
+  const grid = buildMonthGrid("2026-10-11", [], "2026-10-11");
+  assert.equal(grid.length, 5);
+  assert.equal(grid[0][0].day, "2026-09-28");
+  assert.equal(grid[0][0].inMonth, false);
+  assert.equal(grid[1][6].isToday, true);
+  assert.equal(buildWeekDays("2026-10-11", [], "2026-10-11").length, 7);
+});
+
+import { formatEpisodeCodes, groupSeriesEpisodes, itemLineText, itemPillTone, itemSubtitle } from "../main/ets/core/CalendarAgenda";
+
+test("episode codes collapse runs and list gaps", () => {
+  const ep = (s: number, e: number) => entry({ id: `${s}-${e}`, season_number: s, episode_number: e });
+  assert.equal(formatEpisodeCodes([ep(2, 4), ep(2, 5), ep(2, 6)]), "S02E04–E06");
+  assert.equal(formatEpisodeCodes([ep(2, 1), ep(2, 3)]), "S02E01, E03");
+  assert.equal(formatEpisodeCodes([ep(1, 8), ep(0, 15)]), "S00E15, S01E08");
+});
+
+test("same series, day and time group; others stay single", () => {
+  const a = entry({ id: "a", work_id: "w", season_number: 1, episode_number: 8, release_at: "2026-10-05T08:00:00Z" });
+  const b = entry({ id: "b", work_id: "w", season_number: 0, episode_number: 15, release_at: "2026-10-05T08:00:00Z" });
+  const c = entry({ id: "c", media_kind: "movie", title: "Test Movie A" });
+  const items = groupSeriesEpisodes([a, c, b]);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].grouped, true);
+  assert.equal(itemSubtitle(items[0]), "2 episodes · S00E15, S01E08");
+  assert.equal(itemLineText(items[0]), "Sample Series 1 · 2×");
+  assert.equal(items[1].grouped, false);
+  assert.equal(itemPillTone(items[0], "2026-10-11"), "missing");
 });

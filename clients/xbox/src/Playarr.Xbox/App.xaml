@@ -8,8 +8,8 @@
         <ResourceDictionary>
             <!--
                 Web TV dark tokens (clients/tv-web/web/src/styles/global.css, dark theme), the source of
-                truth for every client. Fonts are the web's embedded builds (docs/parity/fonts). The
-                Nunito Sans build's default weight is 200, so every text style sets its weight.
+                truth for every client. Fonts: static instances of the web builds (docs/parity/fonts) packed per family into a .ttc by clients/xbox/tools/make-fonts.py, because UWP XAML ignores the variable web fonts. The
+                text styles set their weight explicitly.
             -->
             <Color x:Key="PlayarrBgColor">#151315</Color>
             <Color x:Key="PlayarrBrandColor">#CF3157</Color>
@@ -25,12 +25,12 @@
             <SolidColorBrush x:Key="PlayarrBrand" Color="#CF3157" />
             <SolidColorBrush x:Key="PlayarrBrandInk" Color="#EAA6B6" />
 
-            <FontFamily x:Key="PlayarrFont">ms-appx:///Assets/Fonts/NunitoSans.ttf#Nunito Sans</FontFamily>
-            <FontFamily x:Key="PlayarrMonoFont">ms-appx:///Assets/Fonts/JetBrainsMono.ttf#JetBrains Mono</FontFamily>
+            <FontFamily x:Key="PlayarrFont">ms-appx:///Assets/Fonts/NunitoSans.ttc#Nunito Sans</FontFamily>
+            <FontFamily x:Key="PlayarrMonoFont">ms-appx:///Assets/Fonts/JetBrainsMono.ttc#JetBrains Mono</FontFamily>
 
             <!-- Every page and control picks these up instead of the stock theme. -->
             <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#151315" />
-            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/NunitoSans.ttf#Nunito Sans</FontFamily>
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/NunitoSans.ttc#Nunito Sans</FontFamily>
 
             <Style x:Key="PlayarrPageTitle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource PlayarrFont}" />

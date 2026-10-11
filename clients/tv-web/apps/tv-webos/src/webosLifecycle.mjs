@@ -81,6 +81,40 @@ export async function loadWebOsRuntimeConfig(
 }
 
 /**
+ * The http(s) URL a click on `target` would leave the packaged app for, or undefined.
+ * In-app routes are hash or relative links, so every http(s) link points outside the app.
+ *
+ * @param {EventTarget | null} target
+ * @returns {string | undefined}
+ */
+export function externalLinkUrl(target) {
+  const anchor = /** @type {{ closest?: (s: string) => { href?: string } | null }} */ (target)?.closest?.("a[href]");
+  const href = anchor?.href;
+  return typeof href === "string" && /^https?:/i.test(href) ? href : undefined;
+}
+
+/**
+ * Opens an external URL in the TV's web browser app through the webOS application manager.
+ *
+ * @param {string} url
+ * @param {Window} appWindow
+ */
+export function openWebOsExternalUrl(url, appWindow) {
+  try {
+    const Bridge = /** @type {{ PalmServiceBridge?: new () => { call: (uri: string, payload: string) => void } }} */ (appWindow)
+      .PalmServiceBridge;
+    if (!Bridge) return false;
+    new Bridge().call(
+      "luna://com.webos.applicationManager/launch",
+      JSON.stringify({ id: "com.webos.app.browser", params: { target: url } })
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Install the webOS remote-key and foreground/background lifecycle policy.
  *
  * `appinfo.json` deliberately leaves `handlesRelaunch` false, so webOS owns
@@ -148,8 +182,31 @@ export function installWebOsLifecycle(
   appDocument.addEventListener("webkitvisibilitychange", pauseIfHidden);
   appWindow.addEventListener("pagehide", pauseOnPageHide);
   appWindow.addEventListener("keydown", handleRemoteKey);
+  // A packaged app has no tabs: following a target=_blank or external link would replace Playarr
+  // with the page and leave no way back. Hand those URLs to the TV browser instead.
+  /** @param {MouseEvent} event */
+  const handleClick = (event) => {
+    const url = externalLinkUrl(event.target);
+    if (!url) return;
+    event.preventDefault();
+    openWebOsExternalUrl(url, appWindow);
+  };
+  const originalOpen = appWindow.open;
+  /** @type {(url?: string | URL, ...rest: unknown[]) => Window | null} */
+  const openExternal = (url, ...rest) => {
+    const resolved = url === undefined ? "" : new URL(String(url), appWindow.location.href).href;
+    if (/^https?:/i.test(resolved)) {
+      openWebOsExternalUrl(resolved, appWindow);
+      return null;
+    }
+    return originalOpen?.call(appWindow, url, .../** @type {[string?, string?]} */ (rest)) ?? null;
+  };
+  appWindow.open = /** @type {typeof window.open} */ (openExternal);
+  appDocument.addEventListener("click", handleClick, true);
 
   return () => {
+    appDocument.removeEventListener("click", handleClick, true);
+    appWindow.open = originalOpen;
     appDocument.removeEventListener("visibilitychange", pauseIfHidden);
     appDocument.removeEventListener("webkitvisibilitychange", pauseIfHidden);
     appWindow.removeEventListener("pagehide", pauseOnPageHide);

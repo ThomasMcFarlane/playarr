@@ -113,7 +113,7 @@ import { MediaRail } from '../design/components/MediaRail';
 import type { MediaRailItem } from '../design/components/MediaRail';
 import { NavRail } from '../design/components/NavRail';
 import type { NavRailItem } from '../design/components/NavRail';
-import { CALENDAR_NAV_ID, HOME_NAV_ID, buildNavRailItems, buildSecondaryNavItems } from '../navigation/NavItems';
+import { HOME_NAV_ID, buildNavRailItems, buildPrimaryNavItems, buildSecondaryNavItems, navigateFromRail } from '../navigation/NavItems';
 import { PlayarrLogo } from '../design/components/PlayarrLogo';
 import { Clock } from '../design/components/Clock';
 import { NavPill } from '../design/components/NavPill';
@@ -689,16 +689,9 @@ export struct Home {
   }
 
   private handleNavSelect(id: string): void {
-    if (id === HOME_NAV_ID) {
-      return;
-    }
-    if (id === CALENDAR_NAV_ID) {
-      pushRoute(getNavStack(), ROUTES.Calendar);
-      return;
-    }
-    const libraryParams: LibraryRouteParams = { kind: id };
-    pushRoute(getNavStack(), ROUTES.Library, libraryParams);
+    navigateFromRail(id, HOME_NAV_ID);
   }
+
 
   /** TV-profile card content: `PosterCard` sized from its own TV default
    * (brief 5.10's home-rail landscape width). Wires `.nextFocus({ up })` on
@@ -950,7 +943,8 @@ export struct Home {
       })
       NavRail({
         items: this.navItems,
-        secondaryItems: buildSecondaryNavItems(),
+        primaryItems: buildPrimaryNavItems(),
+          secondaryItems: buildSecondaryNavItems(),
         selectedId: HOME_NAV_ID,
         onSelect: ((id: string): void => {
       this.handleNavSelect(id);

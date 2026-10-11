@@ -35,7 +35,9 @@ namespace Playarr.Core.Networking
             string? sort = null,
             int? limit = null,
             int? offset = null,
-            CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default,
+            bool availableOnly = false,
+            string? order = null);
 
         Task<IList<Work>> SearchCatalogAsync(
             string query,
@@ -154,9 +156,13 @@ namespace Playarr.Core.Networking
             string? sort = null,
             int? limit = null,
             int? offset = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool availableOnly = false,
+            string? order = null)
         {
             var query = new Dictionary<string, string>();
+            if (availableOnly) query["available_only"] = "true";
+            if (!string.IsNullOrEmpty(order)) query["order"] = order!;
             if (kind is { } workKind && workKind != WorkKind.Unknown)
             {
                 query["kind"] = WireNameFor(workKind);
