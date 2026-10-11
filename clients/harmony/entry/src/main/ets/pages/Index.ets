@@ -50,14 +50,14 @@
  */
 
 
-import { getServerDirectory, getSessionManager } from '../AppContainer';
+import { getServerDirectory, getSessionManager, savedThemeChoice } from '../AppContainer';
 import type { DeviceProfile } from '../core/DeviceProfile';
 import { DEVICE_PROFILE_STORAGE_KEY } from '../device/DeviceProfileService';
 
 import { getSystemVersion } from '../data/SystemRepository';
 
 import { Spacing } from '../core/Tokens';
-import { activeColors, toResourceColor } from '../design/Theme';
+import { activeColors, setThemeModeSetting, toResourceColor } from '../design/Theme';
 import type { ThemeModeSetting } from '../design/Theme';
 import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
 
@@ -102,6 +102,9 @@ struct Index {
   @State private errorMessage: string = '';
 
   aboutToAppear(): void {
+    savedThemeChoice().then((mode: ThemeModeSetting) => {
+      setThemeModeSetting(mode);
+    });
     const profile = AppStorage.get<DeviceProfile>(DEVICE_PROFILE_STORAGE_KEY);
     if (profile !== undefined && profile.inputMode === 'dpad') {
       // brief section 6.3: the focus ring is hidden by default, and the

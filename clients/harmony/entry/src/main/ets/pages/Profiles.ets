@@ -49,15 +49,15 @@
 
 import type { AvailableProfileResponse } from '../core/Types/Profiles.ts';
 import { resolveAvatarPreset } from '../core/AvatarPreset.ts';
-import { Spacing, Radii } from '../core/Tokens';
+import { BRAND_PINK, Spacing, Radii } from '../core/Tokens';
 
 import { listProfiles, verifyPin } from '../data/ProfileRepository';
 
 import { getSessionManager, getServerDirectory } from '../AppContainer';
-import { getNavStack, replaceRoute } from '../navigation/NavStack';
+import { getNavStack, pushRoute, replaceRoute } from '../navigation/NavStack';
 import { ROUTES } from '../navigation/Routes';
 
-import { activeColors, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
+import { activeColors, tintFilter, toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
 import type { ThemeModeSetting } from '../design/Theme';
 import { isTvMetrics, tv } from '../design/Metrics';
 import { INTERACTION_CURVE, INTERACTION_CARD_MS } from '../design/Motion';
@@ -74,6 +74,9 @@ const HEADING_FONT_SIZE: number = 28;
 const PIN_TITLE_FONT_SIZE: number = 20;
 const SUBHEADING_FONT_SIZE: number = 15;
 const PROFILE_NAME_FONT_SIZE: number = 16;
+// Web `.profile-action-button` gear: 44 px round, 18 px pink icon.
+const SETTINGS_BUTTON_SIZE: number = 44;
+const SETTINGS_ICON_SIZE: number = 18;
 const PROFILE_STATUS_FONT_SIZE: number = 12;
 const ADD_PROFILE_GLYPH_FONT_SIZE: number = 32;
 
@@ -373,6 +376,23 @@ struct Profiles {
               .width('100%')
             }
 
+            Row({ space: Spacing.md }) {
+            // Web `.profile-settings-button`: a round gear in the selected profile's actions, opening Settings.
+            Stack() {
+              Image($r('app.media.nav_settings'))
+                .width(SETTINGS_ICON_SIZE)
+                .height(SETTINGS_ICON_SIZE)
+                .colorFilter(tintFilter(BRAND_PINK))
+            }
+            .width(SETTINGS_BUTTON_SIZE)
+            .height(SETTINGS_BUTTON_SIZE)
+            .borderRadius(SETTINGS_BUTTON_SIZE / 2)
+            .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, 0.7))
+            .border({ width: 1, color: toResourceColorWithAlpha(activeColors().ink, 0.15) })
+            .focusable(true)
+            .onClick(() => {
+              pushRoute(getNavStack(), ROUTES.Settings);
+            })
             Button($r('app.string.sign_out'))
               .fontSize(PROFILE_NAME_FONT_SIZE)
               .fontWeight(FontWeight.Bold)
@@ -391,6 +411,7 @@ struct Profiles {
               .onClick(() => {
                 this.handleSignOut();
               })
+            }
           }
           .width('100%')
           .padding(Spacing.xl)

@@ -54,7 +54,8 @@ import { window } from '@kit.ArkUI';
 import { resolveClientPlatform } from './core/AppConfig.ts';
 import { DeviceProfile } from './core/DeviceProfile.ts';
 
-import { initSettingsStore } from './auth/SettingsStore';
+import { getThemeOverride, initSettingsStore, setThemeOverride } from './auth/SettingsStore';
+import type { ThemeOverride } from './auth/SettingsStore';
 import { ServerDirectory } from './auth/ServerDirectory';
 import { SessionManager } from './auth/SessionManager';
 import { PlayarrClient } from './net/PlayarrClient';
@@ -133,4 +134,16 @@ export function getPlayarrClient(): PlayarrClient {
  * `auth/DeviceAuthService.ets` itself. */
 export function getDeviceAuthService(): DeviceAuthService {
   return requireInstance(deviceAuthServiceInstance, 'getDeviceAuthService');
+}
+
+/** Settings > Appearance > Colour theme, kept for the next start (web keeps it in storage). Pages may not
+ * import `auth/`, so the persistence goes through here. This module must not import `design/Theme`: it loads
+ * before the UI exists, and Theme's `Environment.envProp` would then miss the live colour mode. */
+export async function saveThemeChoice(mode: ThemeOverride): Promise<void> {
+  await setThemeOverride(mode);
+}
+
+/** The saved colour theme choice (`'system'` until one is saved). */
+export function savedThemeChoice(): Promise<ThemeOverride> {
+  return getThemeOverride();
 }

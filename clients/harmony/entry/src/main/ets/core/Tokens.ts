@@ -88,6 +88,8 @@ export const DarkColors: ColorTokens = {
  * reserved for a narrow kicker/highlight/player role. It is NOT the
  * button colour -- `.btn-primary` uses `accent`/`onAccent` instead. */
 export const BRAND_PINK: RgbaColor = { r: 207, g: 49, b: 87, a: 1 };
+/** Web page-header kicker (`.page-subtitle`), e.g. Settings' open section. */
+export const BRAND_PINK_SOFT: RgbaColor = { r: 234, g: 166, b: 182, a: 1 };
 
 /** Brief 5.5 -- spacing scale (unitless). */
 export interface SpacingTokens {
