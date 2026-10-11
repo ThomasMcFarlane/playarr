@@ -431,6 +431,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the release calendar has the week and month views, the filters drawer (view, type, status, monitored only) and the calendar link drawer with its QR code; entry cards, the details and the period picker follow the web.
+- Fire TV client: Movies, Series and Music have the Filters drawer (list, screen and cover views, sort and order, audio and subtitle language filters); a film's page has the Playback settings drawer (quality, audio, subtitles) and plays at the saved quality.
+- Fire TV client: the artist page has the album cover flow and the track list; headshots crop as the web's do.
+- Fire TV client: Back closes one layer at a time even when other screens stay mounted under the top one.
 - Fire TV: a series page opens on the next-up episode at web's track position, and title years show web's release-year range ("2011–2017" for an ended series) ; cast is web's circular person card; detail pills keep their fill and show the control ring on focus (18.462).
 - Fire TV: Settings shows the open section as the shared page subtitle, uses web's full-width segmented tiles, and lists Request latency for admins only, as web (18.462).
 - Fire TV: page subtitles sit under the title in the web's one subtitle style; Search uses the web's field, details panel and bigger result cards; balanced titles never break inside a word; a direction key with nothing focused lands on the nav rail (18.462).
