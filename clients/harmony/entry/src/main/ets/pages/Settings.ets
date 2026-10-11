@@ -159,6 +159,21 @@ export struct SettingsScreen {
 
   build() {
     NavDestination() {
+      // Colours come from `activeColors()`, which ArkUI does not track, so a theme change rebuilds this page
+      // (keyed by the theme) to repaint at once as web does. Pages below it repaint when next opened.
+      Stack() {
+        ForEach([this.themeSetting], (_theme: string) => {
+          this.page()
+        }, (theme: string): string => theme)
+      }
+      .width('100%')
+      .height('100%')
+    }
+    .hideTitleBar(true)
+  }
+
+  @Builder
+  private page(): void {
       Stack() {
         Column() {
           ForEach(SECTIONS, (section: SettingsSection) => {
@@ -227,8 +242,6 @@ export struct SettingsScreen {
       .width('100%')
       .height('100%')
       .backgroundColor(toResourceColor(activeColors().bg))
-    }
-    .hideTitleBar(true)
   }
 }
 
