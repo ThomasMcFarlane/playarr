@@ -47,14 +47,7 @@ namespace Playarr.Xbox
             // Keep the last crash on disk (LocalState\last-crash.txt): the wall VM and testers can read why it closed.
             UnhandledException += (sender, args) =>
             {
-                try
-                {
-                    var path = System.IO.Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "last-crash.txt");
-                    System.IO.File.WriteAllText(path, DateTimeOffset.Now.ToString("o") + "\n" + args.Exception);
-                }
-                catch (Exception)
-                {
-                }
+                LogCrash(args.Exception);
             };
 
             // Constructed here rather than lazily: XboxAppEnvironment's own
@@ -163,6 +156,19 @@ namespace Playarr.Xbox
             finally
             {
                 deferral.Complete();
+            }
+        }
+
+        /// <summary>Writes an exception to LocalState\\last-crash.txt (best effort).</summary>
+        public static void LogCrash(Exception error)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "last-crash.txt");
+                System.IO.File.WriteAllText(path, DateTimeOffset.Now.ToString("o") + "\n" + error);
+            }
+            catch (Exception)
+            {
             }
         }
 

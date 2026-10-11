@@ -27,13 +27,26 @@ namespace Playarr.Xbox.Views
 
         private readonly Grid _root = new Grid();
         private readonly Grid _content = new Grid();
-        private readonly Button _rangeButton;
+        private Button _rangeButton = null!;
         private CalendarView _view = CalendarView.Agenda;
         private DateTime _anchor = DateTime.Today;
         private IList<CalendarEntry> _entries = new List<CalendarEntry>();
         private int _loadVersion;
 
         public CalendarPage()
+        {
+            try
+            {
+                Build();
+            }
+            catch (Exception error)
+            {
+                App.LogCrash(error);
+                throw;
+            }
+        }
+
+        private void Build()
         {
             Background = (Brush)Application.Current.Resources["PlayarrBg"];
             Content = _root;
@@ -88,8 +101,17 @@ namespace Playarr.Xbox.Views
         {
             var version = ++_loadVersion;
             var (start, end) = CalendarRules.VisibleRange(_view, _anchor);
-            Ui.SetPillText(_rangeButton, RangeLabel(start, end));
-            Render();
+            try
+            {
+                Ui.SetPillText(_rangeButton, RangeLabel(start, end));
+                Render();
+            }
+            catch (Exception error)
+            {
+                App.LogCrash(error);
+                throw;
+            }
+
             try
             {
                 // Entries are bucketed by local day, which can differ from the UTC day: pad the window by a day.
@@ -112,7 +134,15 @@ namespace Playarr.Xbox.Views
                 _entries = new List<CalendarEntry>();
             }
 
-            Render();
+            try
+            {
+                Render();
+            }
+            catch (Exception error)
+            {
+                App.LogCrash(error);
+                throw;
+            }
         }
 
         private string RangeLabel(DateTime start, DateTime end) => _view == CalendarView.Month
