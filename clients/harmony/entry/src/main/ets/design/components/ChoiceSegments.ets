@@ -34,7 +34,7 @@ export struct ChoiceSegments {
   @Prop selected: string = '';
   /** Settings panels (web `.appearance-setting`): a 26.4 px heading over choices across `width`. */
   @Prop large: boolean = false;
-  @Prop width: number = SECTION_WIDTH;
+  @Prop sectionWidth: number = SECTION_WIDTH;
   onChoose: (value: string) => void = () => {};
 
   @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
@@ -43,7 +43,7 @@ export struct ChoiceSegments {
 
   private choiceWidth(): number {
     const count = Math.max(1, this.choices.length);
-    return (this.width - CHOICE_GAP * (count - 1)) / count;
+    return (this.sectionWidth - CHOICE_GAP * (count - 1)) / count;
   }
 
   build() {

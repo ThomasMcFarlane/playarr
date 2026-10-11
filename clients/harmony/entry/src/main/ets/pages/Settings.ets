@@ -133,7 +133,7 @@ export struct SettingsScreen {
       choices: THEME_CHOICES,
       selected: this.themeSetting,
       large: true,
-      width: PANEL_WIDTH,
+      sectionWidth: PANEL_WIDTH,
       onChoose: (value: string) => {
         saveThemeChoice(value as ThemeModeSetting);
       },
