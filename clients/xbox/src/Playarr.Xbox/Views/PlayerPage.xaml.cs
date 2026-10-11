@@ -89,8 +89,12 @@ namespace Playarr.Xbox.Views
                 return;
             }
 
-            var duration = session.NaturalDuration;
-            var position = session.Position;
+            // The source's duration and offset, as progress reporting uses: NaturalDuration is unknown (MaxValue) for
+            // streamed media and covers only the returned stream after a seek-ahead transcode.
+            var info = _viewModel!.PlaybackInfo;
+            var offset = TimeSpan.FromMilliseconds(info?.SourceOffsetMs ?? 0);
+            var duration = info != null && info.DurationMs > 0 ? TimeSpan.FromMilliseconds(info.DurationMs) : TimeSpan.Zero;
+            var position = session.Position + offset;
             _updatingScrubber = true;
             Scrubber.Maximum = Math.Max(1, duration.TotalSeconds);
             Scrubber.Value = Math.Min(Scrubber.Maximum, position.TotalSeconds);
@@ -107,7 +111,9 @@ namespace Playarr.Xbox.Views
         {
             if (!_updatingScrubber && _viewModel != null)
             {
-                _viewModel.Player.PlaybackSession.Position = TimeSpan.FromSeconds(e.NewValue);
+                var offset = TimeSpan.FromMilliseconds(_viewModel.PlaybackInfo?.SourceOffsetMs ?? 0);
+                var target = TimeSpan.FromSeconds(e.NewValue) - offset;
+                _viewModel.Player.PlaybackSession.Position = target < TimeSpan.Zero ? TimeSpan.Zero : target;
             }
         }
 
@@ -286,10 +292,6 @@ namespace Playarr.Xbox.Views
 
             ErrorText.Text = _viewModel.ErrorMessage ?? "Playback failed.";
 
-            TitleText.Text = _viewModel.Title;
-            TitleText.Visibility = string.IsNullOrEmpty(_viewModel.Title)
-                ? Visibility.Collapsed
-                : Visibility.Visible;
 
             RenderTrackLists();
             RenderEndPanel(isLoading || isFailed);

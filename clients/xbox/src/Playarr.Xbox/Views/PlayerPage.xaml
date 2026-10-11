@@ -26,15 +26,6 @@
             VerticalAlignment="Stretch"
             AreTransportControlsEnabled="False" />
 
-        <!-- Title overlay, hidden when PlayerNavigationParameter.Title was empty. -->
-        <TextBlock
-            x:Name="TitleText"
-            Margin="48,32,48,0"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Style="{StaticResource SubtitleTextBlockStyle}"
-            Foreground="White"
-            Visibility="Collapsed" />
 
         <!-- Audio/subtitle track picker, toggled by TracksButton. -->
         <Grid
