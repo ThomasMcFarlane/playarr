@@ -3852,7 +3852,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     )
                     if (isTelevision) {
                         // Web default focus: the selected card, else the first.
-                        TvDefaultFocusEffect(kind) {
+                        TvDefaultFocusEffect(kind, takeFirst = true) {
                             tvGrid.focus(0, filteredWorks.indexOfFirst { it.id == selectedId }.coerceAtLeast(0))
                         }
                     }
