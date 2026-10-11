@@ -19,13 +19,13 @@ namespace Playarr.Xbox.Views
     /// <c>GET /api/v1/calendar?group=series_day</c>, with the range button (view picker), Previous, Today and Next at the
     /// top right. Status colours and pills follow lib/calendar.ts. Built in code like the other card screens.
     /// </summary>
-    public sealed class CalendarPage : Page
+    public sealed partial class CalendarPage : Page
     {
         private static readonly CultureInfo Uk = CultureInfo.GetCultureInfo("en-GB");
         private static readonly Color Available = Color.FromArgb(0xFF, 0x8A, 0xC5, 0xA5); // dark --success
         private static readonly Color Absent = Color.FromArgb(0xFF, 0xCF, 0x31, 0x57);    // --brand
 
-        private readonly Grid _root = new Grid();
+        private Grid _root = null!;
         private readonly Grid _content = new Grid();
         private Button _rangeButton = null!;
         private CalendarView _view = CalendarView.Agenda;
@@ -48,8 +48,8 @@ namespace Playarr.Xbox.Views
 
         private void Build()
         {
-            Background = (Brush)Application.Current.Resources["PlayarrBg"];
-            Content = _root;
+            InitializeComponent();
+            _root = RootGrid;
             _root.Children.Add(_content);
             _root.Children.Add(Ui.BackButton(() => App.Navigation.GoBack()));
             _root.Children.Add(new TextBlock
