@@ -310,6 +310,16 @@ namespace Playarr.Core.Tests
                 JwtClaims.IssuerPeerId(GroupedNodeToken));
         }
 
+        [Fact]
+        public void ReadsTheSessionDeviceId()
+        {
+            // Payload: {"sub":"11111111-…","device_id":"22222222-2222-2222-2222-222222222222"}
+            const string token = "header.eyJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJkZXZpY2VfaWQiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIifQ.signature";
+
+            Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), JwtClaims.DeviceId(token));
+            Assert.Null(JwtClaims.DeviceId(GroupedNodeToken));
+        }
+
         /// <summary>
         /// A standalone node signs with a configured issuer string such as
         /// "playarr", which is not a GUID. That has to read as "don't know
