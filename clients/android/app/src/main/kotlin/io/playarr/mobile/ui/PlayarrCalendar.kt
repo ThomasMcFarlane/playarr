@@ -1937,6 +1937,16 @@ private fun TvCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneId, 
             }
         }
         Row(Modifier.padding(top = 17.dp)) { CalendarTonePill(calendarItemTone(item, today, zone)) }
+        // Web: a group of episodes has no single synopsis; a lone release shows its own when the source gave one.
+        if (item is CalendarItem.Single) {
+            entry.overview?.trim()?.takeIf(String::isNotEmpty)?.let {
+                Text(
+                    it, color = palette.detailsSoft, fontSize = 13.824.sp, lineHeight = 21.842.sp, fontWeight = FontWeight(600),
+                    style = WebTextStyle, maxLines = 5, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 21.7.dp).width(348.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(24.dp))
         CalendarDetailActions(item, onOpenWork, onPlay, actions)
     }
