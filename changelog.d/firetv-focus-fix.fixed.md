@@ -1,1 +1,0 @@
-- Fire TV: fixed a render loop in the nav rail that froze the remote on Home; a direction key with nothing focused lands on the page default (the selected Home card) before the rail; the profile list retries silently after a network blip; balanced titles stop after a few layout passes (18.462).
