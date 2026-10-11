@@ -51,7 +51,9 @@ enum MacDebugRemote {
                 return
             }
             target.focus()
-            if parts[0] == "tap" { target.activate?() } else { target.secondary?() }
+            if parts[0] == "hold" { target.secondary?() } else if let activate = target.activate { activate() } else {
+                MacFocusEngine.click(target.frame, in: window)
+            }
         case "state":
             let engine = MacFocusEngine.shared
             let focused = engine.focusedID.flatMap { engine.targets[$0] }

@@ -468,6 +468,9 @@ struct TVDrawer<Content: View>: View {
         .frame(width: 360, height: 1080, alignment: .topLeading)
         .background(DesignTokens.Stage.surfaceStrong.opacity(0.94))
         .focusSection()
+        #if os(macOS)
+        .macFocusLayer() // every drawer keeps keyboard focus inside it on the Mac (macOS/MacFocus.swift)
+        #endif
         .onExitCommand(perform: onClose)
         .task { closeFocused = true }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)

@@ -59,11 +59,26 @@ final class MacFocusEngine {
 
     var topLayer: Int { targets.values.map(\.layer).max() ?? 0 }
 
-    /// Return: the focused target's action.
-    func activateFocused() -> Bool {
-        guard let id = focusedID, let action = targets[id]?.activate else { return false }
-        action()
+    /// Return: the focused target's action, or a click on it when it has none (a navigation link).
+    func activateFocused(in window: NSWindow?) -> Bool {
+        guard let id = focusedID, let target = targets[id] else { return false }
+        if let action = target.activate { action() } else { Self.click(target.frame, in: window) }
         return true
+    }
+
+    /// Posts a click at the centre of a stage rect (MacTVStage scales 1920x1080 to the window, top-left anchored).
+    static func click(_ frame: CGRect, in window: NSWindow?) {
+        guard let window, let view = window.contentView else { return }
+        let scale = min(view.bounds.width / 1920, view.bounds.height / 1080)
+        let point = NSPoint(x: frame.midX * scale, y: view.bounds.height - frame.midY * scale)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: 1) {
+                NSApp.postEvent(event, atStart: false)
+            }
+        }
     }
 
     /// Right click (the hovered target) or Shift+Return (the focused one): the long press, if the target has one.
@@ -85,8 +100,9 @@ final class MacFocusEngine {
     func move(_ direction: MacMoveDirection) {
         let layer = topLayer
         let candidates = targets.filter { $0.value.layer == layer }
+        autoFocusedID = nil
         guard let fromID = focusedID, let from = candidates[fromID] else {
-            first(in: candidates)?.focus()
+            first(in: candidates)?.1.focus()
             return
         }
         if let next = Self.nearest(from: from.frame, direction: direction,
@@ -138,10 +154,27 @@ final class MacFocusEngine {
         }
     }
 
-    private func first(in candidates: [UUID: Target]) -> Target? {
-        if let layer = candidates.first?.value.layer, let id = lastFocused[layer], let t = candidates[id] { return t }
-        return candidates.values.min(by: { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) })
+    /// The page content of the 1920x1080 TV layout: right of the nav, below the header, left of the action column.
+    nonisolated static let contentArea = CGRect(x: 140, y: 130, width: 1700, height: 950)
+
+    nonisolated static func isContent(_ frame: CGRect) -> Bool { contentArea.contains(CGPoint(x: frame.midX, y: frame.midY)) }
+
+    /// Where focus starts in a layer: the last focused target there, else the first page content (web TV starts on
+    /// the content, not the header or the nav), else the top-left target.
+    private func first(in candidates: [UUID: Target], restore: Bool = false) -> (UUID, Target)? {
+        if restore, let layer = candidates.first?.value.layer, let id = lastFocused[layer], let t = candidates[id] {
+            return (id, t)
+        }
+        let order: ((UUID, Target), (UUID, Target)) -> Bool = {
+            ($0.1.frame.minY, $0.1.frame.minX) < ($1.1.frame.minY, $1.1.frame.minX)
+        }
+        let all = candidates.map { ($0.key, $0.value) }
+        return all.filter { Self.isContent($0.1.frame) }.min(by: order) ?? all.min(by: order)
     }
+
+    /// Focus the settle step chose; content that loads later may still take it until the user moves.
+    private var autoFocusedID: UUID?
+    private var settledLayer = 0
 
     private var settleScheduled = false
     /// After targets come and go (a cover opens or closes, a page loads), keep focus inside the top layer, as the
@@ -153,9 +186,18 @@ final class MacFocusEngine {
             guard let self else { return }
             self.settleScheduled = false
             let layer = self.topLayer
-            if let id = self.focusedID, self.targets[id]?.layer == layer { return }
+            // A cover or drawer closed: return to where focus was beneath it.
+            let restore = layer < self.settledLayer
+            self.settledLayer = layer
             let candidates = self.targets.filter { $0.value.layer == layer }
-            self.first(in: candidates)?.focus()
+            if let id = self.focusedID, let current = candidates[id] {
+                // Keep focus unless the settle step put it on a header tile and page content has since appeared.
+                guard id == self.autoFocusedID, !Self.isContent(current.frame),
+                      candidates.values.contains(where: { Self.isContent($0.frame) }) else { return }
+            }
+            guard let (id, target) = self.first(in: candidates, restore: restore) else { return }
+            self.autoFocusedID = id
+            target.focus()
         }
     }
 }
@@ -282,6 +324,22 @@ extension Button where Label == Text {
     }
 }
 
+/// The shared sources' closure `NavigationLink`s, likewise focus targets. Return clicks them (no public way to push).
+struct NavigationLink<Label: View, Destination: View>: View {
+    private let destination: Destination
+    private let label: Label
+
+    init(@ViewBuilder destination: () -> Destination, @ViewBuilder label: () -> Label) {
+        self.destination = destination()
+        self.label = label()
+    }
+
+    var body: some View {
+        SwiftUI.NavigationLink { destination } label: { label }
+            .macFocusTarget()
+    }
+}
+
 // MARK: Keyboard and mouse
 
 @MainActor
@@ -324,7 +382,7 @@ final class MacKeyboard {
             return event
         case 36, 76: // Return, keypad Enter
             if mods.contains(.shift) { return MacFocusEngine.shared.secondary(hovered: false) ? nil : event }
-            return MacFocusEngine.shared.activateFocused() ? nil : event
+            return MacFocusEngine.shared.activateFocused(in: event.window) ? nil : event
         case 49: // Space
             if let action = playPause.last?.1 { action(); return nil }
             return event
