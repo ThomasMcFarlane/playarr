@@ -207,7 +207,8 @@ struct MacFocusTarget: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .focusable(isEnabled, interactions: .activate)
+            // `.edit`, not `.activate`: activation focus needs the system "keyboard navigation" setting on.
+            .focusable(isEnabled, interactions: .edit)
             .focused($focused)
             .focusEffectDisabled()
             .onHover { inside in
