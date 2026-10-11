@@ -96,6 +96,8 @@ const TV_CHOICE_GAP: number = 42;
 const TV_ACTION_HEIGHT: number = 44;
 const TV_ACTION_ICON: number = 18;
 const TV_ACTION_TEXT: number = 10.752;
+const TV_ADD_START: string = '#3d202a';
+const TV_ADD_END: string = '#a82655';
 const TOUCH_AVATAR_DIAMETER: number = 104;
 const PIN_DIALOG_AVATAR_DIAMETER: number = 72;
 
@@ -322,19 +324,22 @@ struct Profiles {
     Stack({ alignContent: Alignment.Top }) {
       PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
         .position({ x: tv(TvGeometry.logoLeft), y: tv(TvGeometry.logoTop) })
+      Column() {
       Text('Profiles')
         .fontSize(tv(10.368))
         .fontWeight(FontWeight.Bolder)
         .letterSpacing(tv(1.348))
         .textCase(TextCase.UpperCase)
         .fontColor(toResourceColor(BRAND_PINK_SOFT))
-        .position({ y: tv(162) })
+        .height(tv(16))
+        .margin({ top: tv(162) })
       Text('Who’s watching?')
         .fontSize(tv(80.64))
         .fontWeight(FontWeight.Medium)
         .letterSpacing(tv(-5.806))
         .fontColor(toResourceColor(activeColors().ink))
-        .position({ y: tv(176) })
+        .height(tv(77))
+        .margin({ top: tv(7) })
       Row({ space: tv(TV_CHOICE_GAP) }) {
         ForEach(this.profiles, (profile: AvailableProfileResponse) => {
           Column() {
@@ -373,15 +378,31 @@ struct Profiles {
         }, (profile: AvailableProfileResponse): string => profile.id)
         // No create-profile endpoint exists (brief 4.7): the add tile stays a disabled placeholder.
         Column() {
-          Text('+')
-            .fontSize(tv(76.8))
-            .fontWeight(FontWeight.Lighter)
-            .fontColor(toResourceColor(activeColors().inkSoft))
-            .textAlign(TextAlign.Center)
-            .width(tv(TV_CHOICE_WIDTH))
-            .height(tv(TV_CHOICE_WIDTH))
-            .borderRadius(tv(TV_CHOICE_WIDTH / 2))
-            .border({ width: 1, style: BorderStyle.Dashed, color: toResourceColorWithAlpha(activeColors().ink, 0.15) })
+          // Web `.profile-add`: the avatar gradient from surface-strong mixed 16% with the brand to #a82655,
+          // under the avatar's top-left highlight, with a dashed ring.
+          Stack() {
+            Column()
+              .width('100%')
+              .height('100%')
+              .linearGradient({ angle: 145, colors: [[TV_ADD_START, 0], [TV_ADD_END, 1]] })
+            Column()
+              .width('100%')
+              .height('100%')
+              .radialGradient({
+                center: ['34%', '26%'],
+                radius: tv(TV_CHOICE_WIDTH * 0.27),
+                colors: [['rgba(255, 255, 255, 0.28)', 0], ['rgba(255, 255, 255, 0)', 1]],
+              })
+            Text('+')
+              .fontSize(tv(76.8))
+              .fontWeight(FontWeight.Lighter)
+              .fontColor(toResourceColor(activeColors().inkSoft))
+          }
+          .width(tv(TV_CHOICE_WIDTH))
+          .height(tv(TV_CHOICE_WIDTH))
+          .borderRadius(tv(TV_CHOICE_WIDTH / 2))
+          .clip(true)
+          .border({ width: 1, style: BorderStyle.Dashed, color: toResourceColorWithAlpha(activeColors().ink, 0.15) })
           Text($r('app.string.profiles_add_profile'))
             .fontSize(tv(17.28))
             .fontWeight(FontWeight.Bold)
@@ -400,7 +421,10 @@ struct Profiles {
         .enabled(false)
       }
       .alignItems(VerticalAlign.Top)
-      .position({ y: tv(TV_CHOICES_TOP) })
+      .margin({ top: tv(TV_CHOICES_TOP - 262) })
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
     .height('100%')
