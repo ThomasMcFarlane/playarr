@@ -50,11 +50,15 @@
             pointer move shows it again. BACK closes an open panel, then the controls, then exits.
         -->
         <Grid x:Name="ChromePanel">
-            <Rectangle Height="360" VerticalAlignment="Bottom" IsHitTestVisible="False">
+            <!-- Web .player-scrim: 48% of the height, black at 0.92 at the bottom edge; rises in and recedes downward. -->
+            <Rectangle x:Name="Scrim" Height="518" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                <Rectangle.RenderTransform>
+                    <TranslateTransform x:Name="ScrimMove" />
+                </Rectangle.RenderTransform>
                 <Rectangle.Fill>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                         <GradientStop Color="#00000000" Offset="0" />
-                        <GradientStop Color="#D9000000" Offset="1" />
+                        <GradientStop Color="#EB000000" Offset="1" />
                     </LinearGradientBrush>
                 </Rectangle.Fill>
             </Rectangle>
@@ -79,7 +83,7 @@
             </Button>
             <Slider
                 x:Name="Scrubber"
-                Margin="70,0,70,118"
+                Margin="70,0,70,132"
                 VerticalAlignment="Bottom"
                 Minimum="0"
                 Maximum="1"
