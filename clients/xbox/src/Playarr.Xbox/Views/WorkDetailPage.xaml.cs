@@ -147,6 +147,7 @@ namespace Playarr.Xbox.Views
                         PlayButton_Click(this, new RoutedEventArgs());
                     }
                 };
+                CardFocus.Attach(list);
                 list.GotFocus += (s, e) =>
                 {
                     if (e.OriginalSource is ListViewItem { Content: FrameworkElement { Tag: EpisodeDetail episode } })

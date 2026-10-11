@@ -92,6 +92,7 @@ namespace Playarr.Xbox.Views
                 "<ItemsStackPanel Orientation='Horizontal' /></ItemsPanelTemplate>");
             list.ItemContainerStyle = CatalogTileFactory.CardContainerStyle;
             list.ItemClick += RailItem_Click;
+            CardFocus.Attach(list);
             list.GotFocus += (s, e) =>
             {
                 if (e.OriginalSource is ListViewItem { Content: FrameworkElement { Tag: Guid id } })

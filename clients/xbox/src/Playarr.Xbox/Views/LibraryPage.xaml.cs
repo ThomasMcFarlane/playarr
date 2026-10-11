@@ -37,6 +37,7 @@ namespace Playarr.Xbox.Views
             _viewModel = new LibraryViewModel(App.Environment);
             WorksGridView.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
             WorksGridView.GotFocus += WorksGridView_GotFocus;
+            CardFocus.Attach(WorksGridView);
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)

@@ -29,6 +29,7 @@ namespace Playarr.Xbox.Views
         {
             InitializeComponent();
             ResultsGrid.ItemContainerStyle = CatalogTileFactory.GridCardContainerStyle;
+            CardFocus.Attach(ResultsGrid);
             _viewModel = new SearchViewModel(App.Environment);
         }
 

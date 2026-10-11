@@ -69,9 +69,8 @@ namespace Playarr.Xbox.Views
                     style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 0d));
                     style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 0d));
                     style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Top));
-                    style.Setters.Add(new Setter(FrameworkElement.FocusVisualPrimaryBrushProperty, Application.Current.Resources["PlayarrBrand"]));
-                    style.Setters.Add(new Setter(FrameworkElement.FocusVisualPrimaryThicknessProperty, new Thickness(2)));
-                    style.Setters.Add(new Setter(FrameworkElement.FocusVisualSecondaryThicknessProperty, new Thickness(0)));
+                    // CardFocus draws the web focus (lift and glow ring) instead of the system focus rectangle.
+                    style.Setters.Add(new Setter(Control.UseSystemFocusVisualsProperty, false));
                     _cardContainerStyle = style;
                 }
 
